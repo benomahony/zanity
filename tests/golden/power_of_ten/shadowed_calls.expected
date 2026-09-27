@@ -1,0 +1,3 @@
+rules: recursion
+exit: 0
+shadowed_calls.py:18:9: warning [recursion]

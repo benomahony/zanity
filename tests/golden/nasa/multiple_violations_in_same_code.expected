@@ -1,0 +1,5 @@
+rules: NASA01-A,NASA01-B,NASA02,NASA04,NASA05
+exit: 1
+multiple_violations_in_same_code.py:2:5: error [NASA05]
+multiple_violations_in_same_code.py:3:5: warning [NASA01-A]
+multiple_violations_in_same_code.py:4:5: warning [NASA02]

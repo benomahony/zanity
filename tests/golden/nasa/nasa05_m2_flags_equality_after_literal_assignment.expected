@@ -1,0 +1,3 @@
+rules: NASA05-M2
+exit: 1
+nasa05_m2_flags_equality_after_literal_assignment.py:5:9: error [NASA05-M2]

@@ -1,0 +1,3 @@
+rules: name-drift,duplicate-name
+exit: 0
+orders.py:1:5: warning [name-drift]

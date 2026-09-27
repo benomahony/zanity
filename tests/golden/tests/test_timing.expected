@@ -1,0 +1,9 @@
+rules: sleep-in-test,polling-loop,nondeterministic-test,test-double
+exit: 0
+test_timing.py:7:5: warning [sleep-in-test]
+test_timing.py:8:5: warning [polling-loop]
+test_timing.py:9:9: warning [sleep-in-test]
+test_timing.py:13:13: warning [nondeterministic-test]
+test_timing.py:14:13: warning [nondeterministic-test]
+test_timing.py:19:12: warning [test-double]
+test_timing.py:20:13: warning [test-double]

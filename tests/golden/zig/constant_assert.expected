@@ -1,0 +1,5 @@
+rules: NASA05-M2
+exit: 1
+constant_assert.zig:6:5: error [NASA05-M2]
+constant_assert.zig:8:5: error [NASA05-M2]
+constant_assert.zig:10:5: error [NASA05-M2]

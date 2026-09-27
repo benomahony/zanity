@@ -1,0 +1,4 @@
+rules: dynamic-allocation
+exit: 1
+allocation_zig.zig:13:13: error [dynamic-allocation]
+allocation_zig.zig:22:16: error [dynamic-allocation]

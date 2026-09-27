@@ -1,0 +1,3 @@
+rules: NASA01-A,NASA01-B,NASA02,NASA04,NASA05
+exit: 0
+nasa01a_detects_compile.py:5:5: warning [NASA01-A]

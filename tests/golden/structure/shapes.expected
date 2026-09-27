@@ -1,0 +1,8 @@
+rules: long-parameter-list,passthrough-wrapper,swallowed-error
+exit: 0
+shapes.py:1:5: warning [long-parameter-list]
+shapes.py:10:9: warning [long-parameter-list]
+shapes.py:14:5: warning [passthrough-wrapper]
+shapes.py:18:5: warning [passthrough-wrapper]
+shapes.py:35:5: warning [swallowed-error]
+shapes.py:39:5: warning [swallowed-error]

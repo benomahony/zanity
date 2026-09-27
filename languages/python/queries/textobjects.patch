@@ -1,0 +1,7 @@
+Removed from nvim-treesitter-textobjects 5c7b026 python/textobjects.scm, because zanity does not evaluate regular expressions and never uses @comment.inner:
+
+; leave space after comment marker if there is one
+((comment) @comment.inner @comment.outer
+  (#offset! @comment.inner 0 2 0 0)
+  (#lua-match? @comment.outer "# .*"))
+

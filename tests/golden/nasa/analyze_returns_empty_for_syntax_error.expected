@@ -1,0 +1,3 @@
+rules: parse-error
+exit: 0
+analyze_returns_empty_for_syntax_error.py:1:1: warning [parse-error]

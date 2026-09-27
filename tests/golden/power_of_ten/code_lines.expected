@@ -1,0 +1,3 @@
+rules: long-function
+exit: 0
+code_lines.py:76:5: warning [long-function]

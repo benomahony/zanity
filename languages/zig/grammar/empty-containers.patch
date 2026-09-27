@@ -1,0 +1,40 @@
+diff --git a/grammar.js b/grammar.js
+index e167748..084d660 100644
+--- a/grammar.js
++++ b/grammar.js
+@@ -243,7 +243,7 @@ module.exports = grammar({
+       'struct',
+       optional(seq('(', $.expression, ')')),
+       '{',
+-      $._container_members,
++      optional($._container_members),
+       '}',
+     ),
+ 
+@@ -251,7 +251,7 @@ module.exports = grammar({
+       optional(choice('extern', 'packed')),
+       'opaque',
+       '{',
+-      $._container_members,
++      optional($._container_members),
+       '}',
+     ),
+ 
+@@ -260,7 +260,7 @@ module.exports = grammar({
+       'enum',
+       optional(seq('(', $.expression, ')')),
+       '{',
+-      $._container_members,
++      optional($._container_members),
+       '}',
+     ),
+ 
+@@ -276,7 +276,7 @@ module.exports = grammar({
+         ')',
+       )),
+       '{',
+-      $._container_members,
++      optional($._container_members),
+       '}',
+     ),
+ 

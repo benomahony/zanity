@@ -1,0 +1,2 @@
+rules: parse-error
+exit: 0

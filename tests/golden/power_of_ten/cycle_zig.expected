@@ -1,0 +1,5 @@
+rules: recursion
+exit: 0
+cycle_zig.zig:1:4: warning [recursion]
+cycle_zig.zig:6:4: warning [recursion]
+cycle_zig.zig:14:8: warning [recursion]

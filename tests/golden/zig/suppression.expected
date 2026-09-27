@@ -1,0 +1,4 @@
+rules: NASA02,NASA05
+exit: 1
+suppression.zig:5:4: error [NASA05]
+suppression.zig:8:4: error [NASA05]

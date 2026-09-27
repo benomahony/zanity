@@ -1,0 +1,3 @@
+rules: NASA01-B,NASA05
+exit: 0
+recursion.zig:4:4: warning [NASA01-B]

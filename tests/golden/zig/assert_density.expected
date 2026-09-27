@@ -1,0 +1,6 @@
+rules: NASA05
+exit: 1
+assert_density.zig:4:4: error [NASA05]
+assert_density.zig:6:4: error [NASA05]
+assert_density.zig:22:4: error [NASA05]
+assert_density.zig:35:8: error [NASA05]

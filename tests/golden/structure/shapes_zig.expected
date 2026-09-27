@@ -1,0 +1,8 @@
+rules: long-parameter-list,passthrough-wrapper,swallowed-error
+exit: 0
+shapes_zig.zig:1:4: warning [long-parameter-list]
+shapes_zig.zig:9:4: warning [passthrough-wrapper]
+shapes_zig.zig:13:4: warning [passthrough-wrapper]
+shapes_zig.zig:17:4: warning [passthrough-wrapper]
+shapes_zig.zig:27:19: warning [swallowed-error]
+shapes_zig.zig:28:23: warning [swallowed-error]

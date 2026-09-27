@@ -1,0 +1,15 @@
+rules: recursion,unbounded-loop,long-parameter-list,passthrough-wrapper,swallowed-error,assertion-density,assertion-message,assertion-side-effect,constant-assertion,sleep-in-test,nondeterministic-test,test-double
+exit: 1
+rules_go.go:19:6: error [assertion-density]
+rules_go.go:20:2: warning [unbounded-loop]
+rules_go.go:24:6: error [assertion-density]
+rules_go.go:34:6: error [assertion-density]
+rules_go.go:34:6: warning [long-parameter-list]
+rules_go.go:38:6: error [assertion-density]
+rules_go.go:38:6: warning [passthrough-wrapper]
+rules_go.go:42:6: error [assertion-density]
+rules_go.go:44:2: warning [swallowed-error]
+rules_go.go:48:6: error [assertion-density]
+rules_go.go:49:2: warning [sleep-in-test]
+rules_go.go:50:6: warning [nondeterministic-test]
+rules_go.go:9:6: warning [recursion]

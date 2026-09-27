@@ -1,0 +1,3 @@
+rules: long-function
+exit: 0
+code_lines_zig.zig:77:4: warning [long-function]

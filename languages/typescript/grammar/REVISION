@@ -1,0 +1,2 @@
+https://github.com/tree-sitter/tree-sitter-typescript 75b3874edb2dc714fb1fd77a32013d0f8699989f (typescript/)
+common/scanner.h vendored as common_scanner.h; scanner.c include path changed to match

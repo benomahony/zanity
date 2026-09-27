@@ -1,0 +1,3 @@
+rules: NASA05-M1
+exit: 0
+nasa05_m1_flags_isinstance_restating_optional_annotation.py:4:5: warning [NASA05-M1]

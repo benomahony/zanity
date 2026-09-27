@@ -1,0 +1,3 @@
+rules: long-function
+exit: 0
+many_statements.zig:1:4: warning [long-function]

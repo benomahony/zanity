@@ -1,0 +1,5 @@
+rules: recursion
+exit: 0
+ping.py:1:5: warning [recursion]
+pong.py:4:5: warning [recursion]
+pong.py:9:9: warning [recursion]

@@ -1,0 +1,3 @@
+rules: NASA01-A,NASA01-B,NASA02,NASA04,NASA05
+exit: 1
+nasa05_ignores_asserts_in_nested_functions.py:2:5: error [NASA05]

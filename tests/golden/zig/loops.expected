@@ -1,0 +1,4 @@
+rules: NASA02
+exit: 0
+loops.zig:7:5: warning [NASA02]
+loops.zig:12:5: warning [NASA02]

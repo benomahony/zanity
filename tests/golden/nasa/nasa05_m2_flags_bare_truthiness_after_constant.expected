@@ -1,0 +1,3 @@
+rules: NASA05-M2
+exit: 1
+nasa05_m2_flags_bare_truthiness_after_constant.py:4:5: error [NASA05-M2]

@@ -1,0 +1,3 @@
+rules: NASA01-A,NASA01-B,NASA02,NASA04,NASA05
+exit: 0
+nasa04_detects_long_function.py:1:5: warning [NASA04]

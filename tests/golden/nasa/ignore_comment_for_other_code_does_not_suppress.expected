@@ -1,0 +1,3 @@
+rules: NASA05-M1
+exit: 0
+ignore_comment_for_other_code_does_not_suppress.py:3:5: warning [NASA05-M1]

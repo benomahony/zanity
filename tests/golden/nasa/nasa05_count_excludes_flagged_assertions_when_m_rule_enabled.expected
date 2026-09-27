@@ -1,0 +1,5 @@
+rules: NASA05,NASA05-M1
+exit: 1
+nasa05_count_excludes_flagged_assertions_when_m_rule_enabled.py:2:5: error [NASA05]
+nasa05_count_excludes_flagged_assertions_when_m_rule_enabled.py:3:5: warning [NASA05-M1]
+nasa05_count_excludes_flagged_assertions_when_m_rule_enabled.py:4:5: warning [NASA05-M1]

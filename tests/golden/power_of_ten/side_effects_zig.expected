@@ -1,0 +1,4 @@
+rules: assertion-side-effect
+exit: 1
+side_effects_zig.zig:5:12: error [assertion-side-effect]
+side_effects_zig.zig:6:12: error [assertion-side-effect]

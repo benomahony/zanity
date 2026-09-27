@@ -1,0 +1,3 @@
+rules: NASA01-A,NASA01-B,NASA02,NASA04,NASA05
+exit: 0
+nasa01b_detects_direct_recursion.py:2:5: warning [NASA01-B]

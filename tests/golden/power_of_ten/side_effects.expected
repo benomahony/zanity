@@ -1,0 +1,5 @@
+rules: assertion-side-effect
+exit: 1
+side_effects.py:2:12: error [assertion-side-effect]
+side_effects.py:3:13: error [assertion-side-effect]
+side_effects.py:4:12: error [assertion-side-effect]

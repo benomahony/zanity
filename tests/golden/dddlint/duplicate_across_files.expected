@@ -1,0 +1,4 @@
+rules: name-drift,duplicate-name
+exit: 0
+a.py:1:5: warning [duplicate-name]
+b.py:1:5: warning [duplicate-name]

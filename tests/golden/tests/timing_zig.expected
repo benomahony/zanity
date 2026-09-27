@@ -1,0 +1,7 @@
+rules: sleep-in-test,polling-loop,nondeterministic-test,test-double
+exit: 0
+timing_zig.zig:4:5: warning [sleep-in-test]
+timing_zig.zig:5:5: warning [polling-loop]
+timing_zig.zig:6:9: warning [sleep-in-test]
+timing_zig.zig:11:19: warning [nondeterministic-test]
+timing_zig.zig:12:19: warning [nondeterministic-test]

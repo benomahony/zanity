@@ -1,0 +1,4 @@
+rules: NASA01-A,NASA01-B,NASA02,NASA04,NASA05
+exit: 1
+nasa01b_detects_nested_function_recursion.py:5:9: warning [NASA01-B]
+nasa01b_detects_nested_function_recursion.py:5:9: error [NASA05]

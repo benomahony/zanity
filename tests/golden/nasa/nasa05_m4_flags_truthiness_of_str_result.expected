@@ -1,0 +1,3 @@
+rules: NASA05-M4
+exit: 0
+nasa05_m4_flags_truthiness_of_str_result.py:4:5: information [NASA05-M4]

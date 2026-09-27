@@ -1,0 +1,2 @@
+textobjects.scm: https://github.com/nvim-treesitter/nvim-treesitter-textobjects 5c7b026 (Apache-2.0)
+locals.scm: https://github.com/nvim-treesitter/nvim-treesitter 25a9b06 (Apache-2.0)

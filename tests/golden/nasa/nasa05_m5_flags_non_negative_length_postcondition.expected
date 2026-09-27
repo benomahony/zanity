@@ -1,0 +1,3 @@
+rules: NASA05-M5
+exit: 0
+nasa05_m5_flags_non_negative_length_postcondition.py:4:5: information [NASA05-M5]

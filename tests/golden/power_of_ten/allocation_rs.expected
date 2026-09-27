@@ -1,0 +1,4 @@
+rules: dynamic-allocation
+exit: 1
+allocation_rs.rs:11:9: error [dynamic-allocation]
+allocation_rs.rs:11:25: error [dynamic-allocation]

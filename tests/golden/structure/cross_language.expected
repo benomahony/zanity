@@ -1,0 +1,4 @@
+rules: duplicate-name,name-drift
+exit: 0
+credits.py:1:5: warning [duplicate-name]
+refunds.py:1:5: warning [duplicate-name]
