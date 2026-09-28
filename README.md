@@ -1,3 +1,5 @@
+<p align="center"><img src="zanity_logo.png" alt="zanity: zanity check" width="560"></p>
+
 # zanity
 
 Fast, deterministic sanity checks for code written by people and agents.
