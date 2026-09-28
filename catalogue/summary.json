@@ -1,16 +1,22 @@
 {
-  "catalogue_version": "0.2.0",
+  "catalogue_version": "0.3.0",
   "cwe_version": "4.20",
   "cwe_weaknesses": 969,
-  "extensions": 60,
-  "total_families": 1029,
+  "extensions": 66,
+  "total_families": 1035,
   "categories": 422,
   "views": 59,
   "deprecated_weaknesses": 25,
   "assessment_kinds": {
-    "defect": 966,
+    "defect": 972,
     "risk_indicator": 37,
     "policy_violation": 26
   },
-  "implemented_detectors": 41
+  "implemented_detectors": 41,
+  "iso25010_characteristics": 9,
+  "iso25010_subcharacteristics": 40,
+  "iso5055_pdf_memberships": 194,
+  "iso5055_pdf_distinct_cwes": 138,
+  "ascqm_xmi_patterns": 275,
+  "ascqm_xmi_distinct_cwes": 139
 }

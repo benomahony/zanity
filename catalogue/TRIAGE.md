@@ -12,9 +12,9 @@ unreviewed: a bucket is a starting point for review, not a claim about the weakn
 | hardware | 59 | Hardware design weaknesses; not in software source |
 | abstract | 116 | A class or pillar; covered through its more specific children |
 | deprecated | 25 | Deprecated upstream; do not build new rules on it |
-| runtime-or-process | 41 | Needs a running system, a specification or a person; not decidable from source |
+| runtime-or-process | 47 | Needs a running system, a specification or a person; not decidable from source |
 
-Total: 1029 families.
+Total: 1035 families.
 
 ## static: next candidates
 

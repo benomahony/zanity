@@ -1,4 +1,4 @@
-# Coverage audit — 0.2.0
+# Coverage audit — 0.3.0
 
 ## Closed ingestion gaps
 
@@ -16,7 +16,7 @@ All 969 weakness records in the pinned CWE 4.20 dictionary are imported. CWE-862
 | Privacy | collection minimisation; retention; deletion propagation; purpose restriction |
 | Agents | unsupported claims; delegated authority; tool-output trust; premature success reports |
 
-These 28 original families supplement the existing 32. All include definitions, positive/negative scenarios, detection approaches and evidence requirements. Scenarios are not executable test fixtures. Privacy entries refer to declared policy and contracts; they do not encode legal advice.
+These 28 original families supplement the existing 32; six further quality families are added in 0.3.0. All include definitions, positive/negative scenarios, detection approaches and evidence requirements. Scenarios are not executable test fixtures. Privacy entries refer to declared policy and contracts; they do not encode legal advice.
 
 ## Remaining work
 
@@ -31,3 +31,7 @@ These 28 original families supplement the existing 32. All include definitions, 
 9. Expand data engineering profiles where required (lineage, schema evolution, late events, missingness and sampling bias).
 
 Report catalogue membership, reviewed applicability, implemented rule coverage and measured detection performance separately. No single global coverage percentage is justified by the family count.
+
+## Standards update
+
+ISO 25010 quality characteristics and subcharacteristics, ISO 5055-linked PDF table memberships and OMG XMI pattern indexes are now represented. See standards-coverage.md for precise inventory coverage, partial mapping status and unresolved source inconsistencies. Further work is normative verification and detection implementation, not simply adding these standards as citations.

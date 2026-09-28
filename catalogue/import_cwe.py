@@ -46,9 +46,11 @@ def build():
  extensions=json.loads((P/'extensions.json').read_text())
  entries=sorted([r for r in records if r['record_type']=='weakness'],key=lambda r:int(r['id'][4:]))+extensions
  nav=[r for r in records if r['record_type']!='weakness']
- cat={'schema_version':'2.0','catalogue_version':'0.2.0','source':{'url':'https://cwe.mitre.org/data/xml/cwec_v4.20.xml.zip','version':root.attrib['Version'],'published':root.attrib['Date'],'retrieved':'2026-09-27','sha256':hashlib.sha256(data).hexdigest()},'scope':'All Weakness, Category and View records in the pinned CWE XML; original engineering extensions. Not an exhaustive inventory of every engineering failure.','entries':entries,'navigation':nav,'relationships':edges,'view_index':indexes}
+ cat={'schema_version':'2.0','catalogue_version':'0.3.0','source':{'url':'https://cwe.mitre.org/data/xml/cwec_v4.20.xml.zip','version':root.attrib['Version'],'published':root.attrib['Date'],'retrieved':'2026-09-27','sha256':hashlib.sha256(data).hexdigest()},'scope':'All Weakness, Category and View records in the pinned CWE XML; original engineering extensions. Not an exhaustive inventory of every engineering failure.','entries':entries,'navigation':nav,'relationships':edges,'view_index':indexes}
+ cat['standards_crosswalk']='standards-crosswalk.json'
  (P/'catalogue.json').write_text(json.dumps(cat,indent=2)+'\n')
  (P/'catalogue.yaml').write_text(yaml.safe_dump(cat,sort_keys=False,allow_unicode=True))
- summary={'catalogue_version':'0.2.0','cwe_version':root.attrib['Version'],'cwe_weaknesses':len(entries)-len(extensions),'extensions':len(extensions),'total_families':len(entries),'categories':sum(r['record_type']=='category' for r in nav),'views':len(indexes),'deprecated_weaknesses':sum(not r['active'] for r in entries),'assessment_kinds':dict(Counter(r['assessment_kind'] for r in entries)),'implemented_detectors':0}
+ summary={'catalogue_version':'0.3.0','cwe_version':root.attrib['Version'],'cwe_weaknesses':len(entries)-len(extensions),'extensions':len(extensions),'total_families':len(entries),'categories':sum(r['record_type']=='category' for r in nav),'views':len(indexes),'deprecated_weaknesses':sum(not r['active'] for r in entries),'assessment_kinds':dict(Counter(r['assessment_kind'] for r in entries)),'implemented_detectors':0}
+ summary.update({k:v for k,v in json.loads((P/'summary.json').read_text()).items() if k.startswith(('iso','ascqm'))})
  (P/'summary.json').write_text(json.dumps(summary,indent=2)+'\n');print(summary)
 if __name__=='__main__':build()

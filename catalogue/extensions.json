@@ -1725,5 +1725,173 @@
     "evidence_required": "Declared contract plus a reproducible violation or validated static proof; examples are scenarios, not executable fixtures.",
     "cwe_mapping_status": "not_reviewed",
     "active": true
+  },
+  {
+    "id": "EXT-QUALITY-001",
+    "title": "Users cannot determine whether the product supports their intended task",
+    "origin": "extension",
+    "record_type": "extension",
+    "definition": "Users cannot determine whether the product supports their intended task. Treat this as a violation only against an explicit product requirement and applicable user/context profile.",
+    "tags": [
+      "quality",
+      "interaction_capability"
+    ],
+    "source_views": [],
+    "detection_methods": [
+      "specification",
+      "manual",
+      "runtime"
+    ],
+    "detection_review": "proposed",
+    "implementation_status": "unsupported",
+    "rule_ids": [],
+    "assessment_kind": "defect",
+    "classification_review": "proposed",
+    "classification_basis": "Author-created requirement-dependent scenario; not an ISO definition.",
+    "positive_example": "Users cannot determine whether the product supports their intended task",
+    "negative_example": "The same declared scenario satisfies the explicit acceptance criterion.",
+    "evidence_required": "Representative users identifying supported and unsupported tasks",
+    "cwe_mapping_status": "not_reviewed",
+    "active": true
+  },
+  {
+    "id": "EXT-QUALITY-002",
+    "title": "Users cannot learn a required task within the agreed training budget",
+    "origin": "extension",
+    "record_type": "extension",
+    "definition": "Users cannot learn a required task within the agreed training budget. Treat this as a violation only against an explicit product requirement and applicable user/context profile.",
+    "tags": [
+      "quality",
+      "interaction_capability"
+    ],
+    "source_views": [],
+    "detection_methods": [
+      "specification",
+      "manual",
+      "runtime"
+    ],
+    "detection_review": "proposed",
+    "implementation_status": "unsupported",
+    "rule_ids": [],
+    "assessment_kind": "defect",
+    "classification_review": "proposed",
+    "classification_basis": "Author-created requirement-dependent scenario; not an ISO definition.",
+    "positive_example": "Users cannot learn a required task within the agreed training budget",
+    "negative_example": "The same declared scenario satisfies the explicit acceptance criterion.",
+    "evidence_required": "First-use task studies with explicit success criteria",
+    "cwe_mapping_status": "not_reviewed",
+    "active": true
+  },
+  {
+    "id": "EXT-QUALITY-003",
+    "title": "An interaction fails a declared engagement requirement",
+    "origin": "extension",
+    "record_type": "extension",
+    "definition": "An interaction fails a declared engagement requirement. Treat this as a violation only against an explicit product requirement and applicable user/context profile.",
+    "tags": [
+      "quality",
+      "interaction_capability"
+    ],
+    "source_views": [],
+    "detection_methods": [
+      "specification",
+      "manual",
+      "runtime"
+    ],
+    "detection_review": "proposed",
+    "implementation_status": "unsupported",
+    "rule_ids": [],
+    "assessment_kind": "defect",
+    "classification_review": "proposed",
+    "classification_basis": "Author-created requirement-dependent scenario; not an ISO definition.",
+    "positive_example": "An interaction fails a declared engagement requirement",
+    "negative_example": "The same declared scenario satisfies the explicit acceptance criterion.",
+    "evidence_required": "Defined engagement outcomes and representative-user evidence",
+    "cwe_mapping_status": "not_reviewed",
+    "active": true
+  },
+  {
+    "id": "EXT-QUALITY-004",
+    "title": "Help fails to guide a user out of a recoverable problem",
+    "origin": "extension",
+    "record_type": "extension",
+    "definition": "Help fails to guide a user out of a recoverable problem. Treat this as a violation only against an explicit product requirement and applicable user/context profile.",
+    "tags": [
+      "quality",
+      "interaction_capability"
+    ],
+    "source_views": [],
+    "detection_methods": [
+      "specification",
+      "manual",
+      "runtime"
+    ],
+    "detection_review": "proposed",
+    "implementation_status": "unsupported",
+    "rule_ids": [],
+    "assessment_kind": "defect",
+    "classification_review": "proposed",
+    "classification_basis": "Author-created requirement-dependent scenario; not an ISO definition.",
+    "positive_example": "Help fails to guide a user out of a recoverable problem",
+    "negative_example": "The same declared scenario satisfies the explicit acceptance criterion.",
+    "evidence_required": "Recovery journeys and contextual-help acceptance scenarios",
+    "cwe_mapping_status": "not_reviewed",
+    "active": true
+  },
+  {
+    "id": "EXT-QUALITY-005",
+    "title": "A component cannot be reused in an explicitly supported context",
+    "origin": "extension",
+    "record_type": "extension",
+    "definition": "A component cannot be reused in an explicitly supported context. Treat this as a violation only against an explicit product requirement and applicable user/context profile.",
+    "tags": [
+      "quality",
+      "maintainability"
+    ],
+    "source_views": [],
+    "detection_methods": [
+      "specification",
+      "manual",
+      "runtime"
+    ],
+    "detection_review": "proposed",
+    "implementation_status": "unsupported",
+    "rule_ids": [],
+    "assessment_kind": "defect",
+    "classification_review": "proposed",
+    "classification_basis": "Author-created requirement-dependent scenario; not an ISO definition.",
+    "positive_example": "A component cannot be reused in an explicitly supported context",
+    "negative_example": "The same declared scenario satisfies the explicit acceptance criterion.",
+    "evidence_required": "Independent second-context integration scenarios",
+    "cwe_mapping_status": "not_reviewed",
+    "active": true
+  },
+  {
+    "id": "EXT-QUALITY-006",
+    "title": "A required hazardous condition is not recognised in time",
+    "origin": "extension",
+    "record_type": "extension",
+    "definition": "A required hazardous condition is not recognised in time. Treat this as a violation only against an explicit product requirement and applicable user/context profile.",
+    "tags": [
+      "quality",
+      "safety"
+    ],
+    "source_views": [],
+    "detection_methods": [
+      "specification",
+      "manual",
+      "runtime"
+    ],
+    "detection_review": "proposed",
+    "implementation_status": "unsupported",
+    "rule_ids": [],
+    "assessment_kind": "defect",
+    "classification_review": "proposed",
+    "classification_basis": "Author-created requirement-dependent scenario; not an ISO definition.",
+    "positive_example": "A required hazardous condition is not recognised in time",
+    "negative_example": "The same declared scenario satisfies the explicit acceptance criterion.",
+    "evidence_required": "Hazard inventory and detection scenarios",
+    "cwe_mapping_status": "not_reviewed",
+    "active": true
   }
 ]

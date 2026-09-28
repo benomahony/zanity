@@ -1,6 +1,6 @@
-# Engineering error catalogue 0.2.0
+# Engineering error catalogue 0.3.0
 
-A broad, inspectable foundation for a checker: **969 CWE weaknesses + 60 original engineering families = 1,029 families**. Includes all 422 categories and 59 views separately as navigation. Categories and views are not defects. All records from the CWE 4.20 Weaknesses, Categories and Views sections are retained, including hardware and deprecated records.
+A broad, inspectable foundation for a checker: **969 CWE weaknesses + 66 original engineering families = 1,035 families**. Includes all 422 categories and 59 views separately as navigation. Categories and views are not defects. All records from the CWE 4.20 Weaknesses, Categories and Views sections are retained, including hardware and deprecated records.
 
 This package implements catalogue import, validation and inspection, not a source-code scanner. No detectors are claimed implemented. Complete ingestion of one dictionary is not exhaustive coverage of every engineering error.
 
@@ -30,7 +30,7 @@ Keep severity, confidence, applicability and evidence separate. Policies must be
 
 - `catalogue.json`: canonical inventory, navigation, edges and view indexes (schema 2.0).
 - `catalogue.yaml`: equivalent YAML export.
-- `extensions.json`: editable source for all 60 original engineering families.
+- `extensions.json`: editable source for all 66 original engineering families.
 - `cwe-4.20.xml.zip`: unchanged upstream snapshot, with original upstream content and attribution.
 - `import_cwe.py`: reproducible importer; requires Python 3.11+ and PyYAML.
 - `catalogue.py`: inspection and validation CLI; Python 3.11+ standard library only.
@@ -66,7 +66,7 @@ Version and publication date come from the XML root. Retrieval date and archive 
 
 Imported hardware weaknesses remain available and retain platform metadata. There is no guessed software-only default that could silently discard shared weaknesses. A target profile should make applicability decisions explicitly. Deprecated records remain available but should not become new rules without reviewing their mapping and replacement guidance.
 
-CWE-1305 is the CISQ **2020** view. This package does not claim ISO 5055 compliance. ISO 25010 and NIST BF remain reference frameworks, not fully imported taxonomies or normative mappings. Local extension overlap with CWE remains an explicit review task; adding an extension does not claim CWE lacks a related concept.
+CWE-1305 is the CISQ **2020** view. This package does not claim ISO 5055 compliance. ISO 25010 now has a separate quality crosswalk; see standards-coverage.md for source and verification limits. NIST BF remains a reference framework. Local extension overlap with CWE remains an explicit review task; adding an extension does not claim CWE lacks a related concept.
 
 ## Attribution
 
@@ -79,3 +79,17 @@ References:
 - https://www.it-cisq.org/standards/code-quality-standards/
 - https://www.iso.org/standard/78176.html
 - https://csrc.nist.gov/pubs/sp/800/231/final
+
+## Complementary standards perspectives (0.3.0)
+
+See `standards-coverage.md` for the readable coverage matrix and discrepancies, and `standards-crosswalk.json` / `.yaml` for machine-readable links. Product qualities, structural measures, weaknesses and detector patterns remain distinct records with many-to-many relationships. Classification labels do not restrict these relationships.
+
+```bash
+python standards.py validate
+python standards.py summary
+python standards.py quality safety
+python standards.py measure reliability
+python standards.py issues
+```
+
+Upstream standards PDFs and XMI are not bundled in this release; their source URLs and byte hashes are recorded. The crosswalk is a reviewed working inventory. Regenerating it from an updated standard requires source review, not automatic substitution. The CWE importer preserves the separate standards files. All 40 quality links remain partial and all actual detector implementations remain unsupported. This update does not claim all ISO standards are covered.
