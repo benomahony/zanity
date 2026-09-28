@@ -30,6 +30,15 @@ const Job = struct {
     diagnostics: tai.Client.Diagnostics = .{},
 };
 
+/// Reports how many functions TypeSafe has answered for, while the answers arrive.
+pub const Reporter = struct {
+    state: *anyopaque,
+    report: *const fn (state: *anyopaque, done: usize, total: usize) void,
+};
+
+/// What the last `judge` did: functions it had questions about, how many needed TypeSafe, and how long it took.
+pub const Stats = struct { functions: usize = 0, asked: usize = 0, seconds: i64 = 0 };
+
 /// Why the last `judge` failed, with the detail TypeSafe returned.
 pub var failure: []const u8 = "";
 
@@ -39,6 +48,9 @@ pub const Inference = struct {
     store: store.Store,
     jobs: memory.Bounded(Job),
     json: memory.Text,
+    reporter: ?Reporter = null,
+    answered: std.atomic.Value(usize) = .init(0),
+    stats: Stats = .{},
 
     /// Fails with `error.MissingApiKey` when `TYPESAFE_API_KEY` is not set.
     pub fn initInference(gpa: Allocator, io: Io, environ: *const std.process.Environ.Map, limits: memory.Limits) !Inference {
@@ -60,8 +72,10 @@ pub const Inference = struct {
         const before = findings.len;
         self.jobs.clear();
         self.json.used = 0;
+        const started = Io.Timestamp.now(self.io, .awake);
         for (units) |*unit| try self.plan(unit, findings.items()[0..before], enabled);
         try self.askAll();
+        self.stats.seconds = started.durationTo(Io.Timestamp.now(self.io, .awake)).toSeconds();
         for (self.jobs.items()) |*job| try self.record(job, findings);
         if (findings.len < before) std.debug.panic("--infer removed findings: {d} before, {d} after", .{ before, findings.len });
     }
@@ -87,13 +101,20 @@ pub const Inference = struct {
     fn askAll(self: *Inference) !void {
         if (self.jobs.len > self.jobs.buffer.len) std.debug.panic("{d} functions queued in room for {d}", .{ self.jobs.len, self.jobs.buffer.len });
         var pending: usize = 0;
+        var waiting: usize = 0;
         for (self.jobs.items()) |job| {
-            for (job.answers[0..job.count]) |a| pending += @intFromBool(a == null);
+            var missing: usize = 0;
+            for (job.answers[0..job.count]) |a| missing += @intFromBool(a == null);
+            pending += missing;
+            waiting += @intFromBool(missing > 0);
         }
+        self.stats = .{ .functions = self.jobs.len, .asked = waiting };
         if (pending == 0) return;
+        self.answered.store(0, .monotonic);
         var semaphore: Io.Semaphore = .{ .permits = concurrency };
         var group: Io.Group = .init;
         for (self.jobs.items()) |*job| group.async(self.io, askOne, .{ self, job, &semaphore });
+        if (self.reporter != null) group.async(self.io, watch, .{ self, self.jobs.len });
         try group.await(self.io);
         for (self.jobs.items()) |*job| {
             defer job.diagnostics.deinit();
@@ -104,9 +125,23 @@ pub const Inference = struct {
         if (pending > self.jobs.len * max_questions) std.debug.panic("{d} unanswered questions across {d} functions", .{ pending, self.jobs.len });
     }
 
+    /// Reports progress every 100 ms until every function is answered; the reporter decides what to redraw.
+    fn watch(self: *Inference, total: usize) void {
+        const reporter = self.reporter orelse std.debug.panic("watching --infer progress with no reporter; askAll only watches when one is set", .{});
+        if (total == 0) std.debug.panic("watching progress over no functions", .{});
+        if (total > self.jobs.len) std.debug.panic("watching {d} functions, but only {d} are queued", .{ total, self.jobs.len });
+        for (0..24 * 60 * 60 * 10) |_| {
+            const done = self.answered.load(.monotonic);
+            reporter.report(reporter.state, done, total);
+            if (done == total) return;
+            self.io.sleep(.fromMilliseconds(100), .awake) catch return;
+        }
+    }
+
     fn askOne(self: *Inference, job: *Job, semaphore: *Io.Semaphore) void {
         if (job.count == 0) std.debug.panic("{s}: queued '{s}' with no questions; plan() only queues functions with some", .{ job.unit.path, job.unit.name });
         if (job.failed != null) std.debug.panic("{s}: asking about '{s}' again after it failed", .{ job.unit.path, job.unit.name });
+        defer _ = self.answered.fetchAdd(1, .monotonic);
         self.ask(job, semaphore) catch |err| {
             job.failed = err;
         };

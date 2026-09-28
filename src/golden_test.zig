@@ -192,11 +192,16 @@ test "--infer asks only about functions that report errors, and caches every ans
     try env.put("ZANITY_STORE", try std.fs.path.join(arena, &.{ log, "store.db" }));
     try env.put("TYPESAFE_BASE_URL", try std.fmt.allocPrint(arena, "http://127.0.0.1:{s}", .{mock.port}));
     var outputs: [2][]const u8 = undefined;
-    for (&outputs) |*out| {
+    var timings: [2][]const u8 = undefined;
+    for (&outputs, &timings) |*out, *timing| {
         const run = try std.process.run(arena, io, .{ .argv = &.{ zanity, "check", ".", "--infer", "--plain" }, .cwd = .{ .path = work }, .environ_map = &env });
-        out.* = try std.fmt.allocPrint(arena, "{s}--- stderr\n{s}", .{ run.stdout, run.stderr });
+        out.* = run.stdout;
+        timing.* = run.stderr;
     }
     try std.testing.expectEqualStrings(outputs[0], outputs[1]);
+    if (std.mem.indexOf(u8, timings[1], ", 0 asked of TypeSafe") == null) std.debug.print("\nthe second run was not served from the store:\n{s}", .{timings[1]});
+    try std.testing.expect(std.mem.indexOf(u8, timings[1], ", 0 asked of TypeSafe") != null);
+    try std.testing.expect(std.mem.indexOf(u8, timings[0], ", 0 asked of TypeSafe") == null);
     for ([_][]const u8{ "rule=\"misleading-error\"", "rule=\"unconstructive-error\"", "'invalid input' doesn't say" }) |expected| {
         if (std.mem.indexOf(u8, outputs[0], expected) == null) std.debug.print("\nmissing {s} in:\n{s}", .{ expected, outputs[0] });
         try std.testing.expect(std.mem.indexOf(u8, outputs[0], expected) != null);

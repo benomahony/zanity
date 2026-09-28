@@ -7,6 +7,7 @@ test {
     _ = @import("graph.zig");
     _ = @import("memory.zig");
     _ = @import("store.zig");
+    _ = @import("live.zig");
     _ = @import("ignore.zig");
     _ = @import("catalogue_test.zig");
     _ = @import("infer.zig");

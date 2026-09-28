@@ -14,6 +14,7 @@ const memory = @import("memory.zig");
 const Ignore = @import("ignore.zig").Ignore;
 const infer = @import("infer.zig");
 const store = @import("store.zig");
+const Live = @import("live.zig").Live;
 const Facts = @import("facts.zig").Facts;
 const Finding = @import("facts.zig").Finding;
 
@@ -57,6 +58,7 @@ const app: zcli.App = .{
 
 /// Everything a run needs, allocated once at startup and reused for every file.
 const Workspace = struct {
+    live: ?*Live = null,
     limits: memory.Limits,
     text: memory.Text,
     facts: Facts,
@@ -147,6 +149,9 @@ fn runCheck(ctx: *zcli.Context, options: CheckOptions) ![]const Row {
     const ws = workspaceOf(ctx);
     var selected = if (options.rules) |list| try parseRules(ctx, ws, list) else rules.Set.defaults();
     if (options.infer) try connectInference(ctx, ws, &selected, options.rules == null);
+    var live = Live.initLive(console(ctx, ctx.runtime.err), ws.io, !ctx.quiet);
+    ws.live = &live;
+    defer ws.live = null;
     const counts = checkPaths(ctx, ws, options, selected) catch |e| switch (e) {
         error.LimitExceeded => return ctx.fail(.usage, try ws.text.format("This run has more {s} than zanity is built to hold.", .{memory.exceeded}), "Check fewer files at once, or report it if the input is ordinary."),
         else => return e,
@@ -201,11 +206,15 @@ fn checkPaths(ctx: *zcli.Context, ws: *Workspace, options: CheckOptions, selecte
     std.mem.sort([]const u8, ws.files.items(), {}, pathOrder);
     try ws.initCheckers(std.heap.page_allocator, selected);
     try checkFiles(ctx, ws, selected);
+    if (ws.inference) |*inference| if (ws.live) |live| {
+        inference.reporter = .{ .state = live, .report = reportInference };
+    };
     if (ws.inference) |*inference| inference.judge(ws.facts.units.items(), &ws.findings, selected) catch |e| switch (e) {
         error.AskFailed => return ctx.fail(.io, infer.failure, "Check TYPESAFE_API_KEY and TYPESAFE_BASE_URL, then run again; answers already received are cached."),
         error.StoreUnavailable => return ctx.fail(.io, try storeProblem(ws), "Check that the cache directory is writable and not full, then run again."),
         else => return e,
     };
+    if (ws.inference) |inference| try describeInference(ctx, ws, inference.stats);
     report.sortFindings(ws.findings.items());
     if (options.fix) try fixFiles(ctx, ws);
     const findings = ws.findings.items();
@@ -238,10 +247,35 @@ fn checkFiles(ctx: *zcli.Context, ws: *Workspace, selected: rules.Set) !void {
         for (result.diagnostics) |d| {
             try ws.findings.add(.{ .path = path, .line = d.line, .column = d.column, .rule = d.rule, .message = d.message, .fix = d.fix, .edit = d.edit });
         }
+        if (ws.live) |live| live.update("Checking files", ws.checked, ws.files.len);
     }
+    if (ws.live) |live| live.restart();
     try naming.crossCheck(&ws.naming, &ws.facts, selected, &ws.findings);
     if (selected.enabled("recursion")) try graph.recursion(&ws.graph, &ws.facts, &ws.findings);
     if (ws.checked > ws.files.len) std.debug.panic("checked {d} files out of {d} collected", .{ ws.checked, ws.files.len });
+}
+
+fn reportInference(state: *anyopaque, done: usize, total: usize) void {
+    const live: *Live = @ptrCast(@alignCast(state));
+    if (done > total) std.debug.panic("--infer reported {d} of {d} functions done", .{ done, total });
+    if (total == 0) std.debug.panic("--infer reported progress over no functions", .{});
+    live.update("Asking TypeSafe", done, total);
+}
+
+/// Says how much of --infer came from the store and how long TypeSafe took, so a slow run explains itself.
+fn describeInference(ctx: *zcli.Context, ws: *Workspace, stats: infer.Stats) !void {
+    if (stats.asked > stats.functions) std.debug.panic("--infer asked about {d} of {d} functions", .{ stats.asked, stats.functions });
+    if (stats.seconds < 0) std.debug.panic("--infer took {d} seconds", .{stats.seconds});
+    if (ctx.quiet or stats.functions == 0) return;
+    const line = try ws.text.format("zanity: --infer had questions about {d} {s}: {d} answered from the store, {d} asked of TypeSafe in {d}m{d:0>2}s.", .{
+        stats.functions,
+        if (stats.functions == 1) "function" else "functions",
+        stats.functions - stats.asked,
+        stats.asked,
+        @divTrunc(stats.seconds, 60),
+        @as(u64, @intCast(@mod(stats.seconds, 60))),
+    });
+    try ctx.diagnostic(line);
 }
 
 /// Says why the answer store could not be used, in SQLite's words when it gave some.
