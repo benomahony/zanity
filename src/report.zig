@@ -54,17 +54,16 @@ const FileTally = struct {
     end: usize,
     errors: u32 = 0,
     warnings: u32 = 0,
-    rules: []const u8 = "",
 };
 
 pub const TableScratch = struct {
     tallies: memory.Bounded(FileTally),
-    cells: [][4]zrich.Cell,
+    cells: [][3]zrich.Cell,
     rows: [][]const zrich.Cell,
 
     pub fn initTableScratch(gpa: std.mem.Allocator, files: u32) std.mem.Allocator.Error!TableScratch {
         if (files == 0) std.debug.panic("the report table was given room for 0 files; memory.Limits.files must be above 0", .{});
-        const cells = try gpa.alloc([4]zrich.Cell, files);
+        const cells = try gpa.alloc([3]zrich.Cell, files);
         if (cells.len != files) std.debug.panic("the report table asked for {d} rows and got {d}", .{ files, cells.len });
         return .{ .tallies = try .initBounded(gpa, files, "files with findings"), .cells = cells, .rows = try gpa.alloc([]const zrich.Cell, files) };
     }
@@ -72,13 +71,14 @@ pub const TableScratch = struct {
 
 pub const Sink = struct { console: zrich.Console, scratch: *TableScratch, text: *memory.Text };
 
-/// Each file's findings with their fixes, then a table of files, worst first.
+/// Each file's findings with their fixes, then a table of files, worst first, and a table of rules.
 pub fn render(sink: Sink, findings: []const Finding) !void {
     if (!std.sort.isSorted(Finding, findings, {}, findingOrder)) std.debug.panic("expected findings sorted by path and position, got {d} findings out of order", .{findings.len});
     if (findings.len >= std.math.maxInt(u32)) std.debug.panic("{d} findings is more than a report can number", .{findings.len});
     try summariseFiles(sink, findings);
     for (sink.scratch.tallies.items()) |t| try renderFile(sink.console, t, findings[t.start..t.end]);
     try renderTable(sink);
+    try renderRules(sink, findings);
 }
 
 fn summariseFiles(sink: Sink, findings: []const Finding) !void {
@@ -89,41 +89,25 @@ fn summariseFiles(sink: Sink, findings: []const Finding) !void {
         if (start == findings.len) break;
         var end = start;
         while (end < findings.len and std.mem.eql(u8, findings[end].path, findings[start].path)) end += 1;
-        try tallies.add(try summariseFile(sink.text, findings[start].path, findings[start..end], start));
+        try tallies.add(summariseFile(findings[start].path, findings[start..end], start));
         start = end;
     }
     if (start != findings.len) std.debug.panic("tallied files up to finding {d} of {d}; findings must be sorted by path so each file's run is contiguous", .{ start, findings.len });
     if (tallies.len > findings.len) std.debug.panic("{d} file tallies from {d} findings; each tally needs a finding", .{ tallies.len, findings.len });
 }
 
-/// Counts one file's findings and lists the rules that fired in it, worst first.
-fn summariseFile(text: *memory.Text, path: []const u8, findings: []const Finding, start: usize) !FileTally {
+/// Counts one file's errors and warnings.
+fn summariseFile(path: []const u8, findings: []const Finding, start: usize) FileTally {
     if (findings.len == 0) std.debug.panic("tallying {s} with no findings; only files with findings get a row", .{path});
     var tally: FileTally = .{ .path = path, .start = start, .end = start + findings.len };
-    var per_rule: [rules.all.len]u32 = @splat(0);
     for (findings) |f| {
-        const index = ruleIndex(f.rule);
-        per_rule[index] += 1;
-        switch (rules.all[index].severity) {
+        switch (rules.all[ruleIndex(f.rule)].severity) {
             .@"error" => tally.errors += 1,
             .warning, .information => tally.warnings += 1,
         }
     }
-    var order: [rules.all.len]usize = undefined;
-    var fired: usize = 0;
-    for (per_rule, 0..) |n, i| if (n > 0) {
-        order[fired] = i;
-        fired += 1;
-    };
-    std.mem.sort(usize, order[0..fired], &per_rule, ruleOrder);
-    const begin = text.used;
-    for (order[0..fired], 0..) |i, n| {
-        if (n > 0) _ = try text.copy("\n");
-        if (per_rule[i] == 1) _ = try text.copy(rules.all[i].name) else _ = try text.format("{s} ({d})", .{ rules.all[i].name, per_rule[i] });
-    }
-    tally.rules = text.buffer[begin..text.used];
     if (tally.errors + tally.warnings != findings.len) std.debug.panic("{s}: counted {d} errors and {d} warnings among {d} findings", .{ path, tally.errors, tally.warnings, findings.len });
-    if (fired == 0) std.debug.panic("{s} has {d} findings but no rule fired", .{ path, findings.len });
+    if (tally.end <= tally.start) std.debug.panic("{s}: tally covers findings {d}..{d}", .{ path, tally.start, tally.end });
     return tally;
 }
 
@@ -186,7 +170,6 @@ fn renderTable(sink: Sink) !void {
             .{ .text = t.path },
             .{ .text = try sink.text.format("{d}", .{t.errors}), .style = if (t.errors > 0) severityStyle(.@"error") else quiet },
             .{ .text = try sink.text.format("{d}", .{t.warnings}), .style = if (t.warnings > 0) severityStyle(.warning) else quiet },
-            .{ .text = t.rules, .style = quiet },
         };
         s.rows[row] = &s.cells[row];
     }
@@ -197,13 +180,63 @@ fn renderTable(sink: Sink) !void {
             .{ .header = "File" },
             .{ .header = "Errors", .alignment = .right },
             .{ .header = "Warnings", .alignment = .right },
-            .{ .header = "Rules" },
         },
         .rows = s.rows[0..tallies.len],
     };
     try sink.console.writer.writeByte('\n');
     try table.render(sink.console.context(), fixed.allocator());
     if (tallies.len > s.rows.len) std.debug.panic("{d} files have findings but the table has {d} rows; raise memory.Limits.files", .{ tallies.len, s.rows.len });
+}
+
+/// One row per rule that fired: errors first, then the rules that fired most, so the table says where to start.
+fn renderRules(sink: Sink, findings: []const Finding) !void {
+    if (findings.len == 0) return;
+    var per_rule: [rules.all.len]u32 = @splat(0);
+    var files: [rules.all.len]u32 = @splat(0);
+    var last_path: [rules.all.len][]const u8 = @splat("");
+    for (findings) |f| {
+        const index = ruleIndex(f.rule);
+        per_rule[index] += 1;
+        if (std.mem.eql(u8, last_path[index], f.path)) continue;
+        files[index] += 1;
+        last_path[index] = f.path;
+    }
+    var total: usize = 0;
+    for (per_rule) |n| total += n;
+    if (total != findings.len) std.debug.panic("the rule table counted {d} findings but was given {d}; every finding needs a known rule", .{ total, findings.len });
+    var order: [rules.all.len]usize = undefined;
+    var fired: usize = 0;
+    for (per_rule, 0..) |n, i| if (n > 0) {
+        order[fired] = i;
+        fired += 1;
+    };
+    std.mem.sort(usize, order[0..fired], &per_rule, ruleOrder);
+    var cells: [rules.all.len][4]zrich.Cell = undefined;
+    var rows: [rules.all.len][]const zrich.Cell = undefined;
+    for (order[0..fired], 0..) |i, row| {
+        const rule = rules.all[i];
+        cells[row] = .{
+            .{ .text = rule.name },
+            .{ .text = label(rule.severity), .style = severityStyle(rule.severity) },
+            .{ .text = try sink.text.format("{d}", .{per_rule[i]}) },
+            .{ .text = try sink.text.format("{d}", .{files[i]}), .style = quiet },
+        };
+        rows[row] = &cells[row];
+    }
+    var buffer: [4096]u8 = undefined;
+    var fixed: std.heap.FixedBufferAllocator = .init(&buffer);
+    const table: zrich.Table = .{
+        .columns = &.{
+            .{ .header = "Rule" },
+            .{ .header = "Severity" },
+            .{ .header = "Findings", .alignment = .right },
+            .{ .header = "Files", .alignment = .right },
+        },
+        .rows = rows[0..fired],
+    };
+    try sink.console.writer.writeByte('\n');
+    try table.render(sink.console.context(), fixed.allocator());
+    if (fired == 0) std.debug.panic("{d} findings but no rule fired", .{findings.len});
 }
 
 fn worstFirst(_: void, a: FileTally, b: FileTally) bool {
