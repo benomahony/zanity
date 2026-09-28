@@ -15,7 +15,8 @@ const store = @import("store.zig");
 
 /// How sure the model must be before a judgement becomes a finding, as in nouls.
 pub const threshold = 0.8;
-const concurrency = 8;
+/// Requests to TypeSafe at once when zanity.toml doesn't say, as in nouls.
+pub const default_concurrency = 8;
 const max_questions = 8;
 
 const Job = struct {
@@ -49,6 +50,7 @@ pub const Inference = struct {
     jobs: memory.Bounded(Job),
     json: memory.Text,
     reporter: ?Reporter = null,
+    concurrency: usize = default_concurrency,
     answered: std.atomic.Value(usize) = .init(0),
     stats: Stats = .{},
 
@@ -111,7 +113,8 @@ pub const Inference = struct {
         self.stats = .{ .functions = self.jobs.len, .asked = waiting };
         if (pending == 0) return;
         self.answered.store(0, .monotonic);
-        var semaphore: Io.Semaphore = .{ .permits = concurrency };
+        if (self.concurrency == 0) std.debug.panic("--infer would ask TypeSafe with no requests allowed at once", .{});
+        var semaphore: Io.Semaphore = .{ .permits = self.concurrency };
         var group: Io.Group = .init;
         for (self.jobs.items()) |*job| group.async(self.io, askOne, .{ self, job, &semaphore });
         if (self.reporter != null) group.async(self.io, watch, .{ self, self.jobs.len });

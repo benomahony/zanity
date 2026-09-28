@@ -210,3 +210,27 @@ test "--infer asks only about functions that report errors, and caches every ans
     try std.testing.expectEqual(@as(usize, 3), std.mem.count(u8, requests, "\n"));
     try std.testing.expect(std.mem.indexOf(u8, requests, "def fine") == null);
 }
+
+test "zanity.toml disables rules and excludes paths" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    const io = std.testing.io;
+    const zanity = try Io.Dir.cwd().realPathFileAlloc(io, paths.zanity, arena);
+    const run = try std.process.run(arena, io, .{ .argv = &.{ zanity, "check", "--plain", "." }, .cwd = .{ .path = "tests/config/project" } });
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, run.term);
+    try std.testing.expect(std.mem.indexOf(u8, run.stdout, "long-parameter-list") == null);
+    try std.testing.expect(std.mem.indexOf(u8, run.stdout, "vendor/") == null);
+    try std.testing.expectEqualStrings("zanity: checked 1 file, no issues found\n", run.stderr);
+}
+
+test "a mistake in zanity.toml stops the run and says where" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    const io = std.testing.io;
+    const zanity = try Io.Dir.cwd().realPathFileAlloc(io, paths.zanity, arena);
+    const run = try std.process.run(arena, io, .{ .argv = &.{ zanity, "check", "--plain", "." }, .cwd = .{ .path = "tests/config/broken" } });
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 2 }, run.term);
+    try std.testing.expect(std.mem.indexOf(u8, run.stderr, "zanity.toml:1: 'recursions' isn't a rule") != null);
+}

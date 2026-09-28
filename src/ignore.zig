@@ -65,6 +65,13 @@ pub const Ignore = struct {
         try self.parse(try self.text.copy(base), bytes);
     }
 
+    /// Adds one pattern in gitignore syntax, relative to the absolute directory `base`, as zanity.toml's `exclude` does.
+    pub fn exclude(self: *Ignore, base: []const u8, glob: []const u8) !void {
+        if (!std.fs.path.isAbsolute(base)) std.debug.panic("excluding '{s}' relative to '{s}', which is relative; pass the real path", .{ glob, base });
+        if (glob.len == 0) std.debug.panic("excluding an empty pattern relative to '{s}'", .{base});
+        try self.parse(try self.text.copy(base), glob);
+    }
+
     fn parse(self: *Ignore, base: []const u8, bytes: []const u8) !void {
         if (base.len == 0) std.debug.panic("parsing ignore patterns with no directory to anchor them; pass the directory the ignore file is in", .{});
         const before = self.patterns.len;

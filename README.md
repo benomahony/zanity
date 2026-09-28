@@ -41,6 +41,27 @@ zanity help check                             # every option
 
 `--infer` needs `TYPESAFE_API_KEY`. It only asks about functions that report errors, and only the questions no deterministic check answered. When it finishes it says how many functions came from the store and how long the rest took, so a slow run explains itself. Every answer is kept in a SQLite store in WAL mode, shared with nouls at `~/.cache/nouls/nouls.db` (or `$XDG_CACHE_HOME/nouls/nouls.db`), with the same schema and digests, so neither tool asks about unchanged code twice and answers nouls already paid for are reused. `ZANITY_STORE` points it at a different file.
 
+## Configuration
+
+zanity reads the nearest `zanity.toml` at or above the directory it runs in, stopping at the repository root. Everything is optional:
+
+```toml
+# Run only these rules (names or old codes). Leave it out to run the defaults.
+rules = ["recursion", "unbounded-loop", "long-function"]
+
+# Or keep the defaults but switch some off.
+disable = ["duplicate-name"]
+
+# Paths to skip, in .gitignore syntax, relative to this file.
+exclude = ["vendor/", "tests/golden/**"]
+
+[infer]
+# Requests sent to TypeSafe at once (1 to 64, default 8).
+concurrency = 16
+```
+
+`--rules` on the command line overrides `rules` and `disable`. A mistake in the file stops the run with exit code 2 and names the line, for example `zanity.toml:1: 'recursions' isn't a rule; ...`.
+
 ## Suppressing a finding
 
 A comment on the line of the finding silences it, in any language:

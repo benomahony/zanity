@@ -15,6 +15,7 @@ const Ignore = @import("ignore.zig").Ignore;
 const infer = @import("infer.zig");
 const store = @import("store.zig");
 const Live = @import("live.zig").Live;
+const config = @import("config.zig");
 const Facts = @import("facts.zig").Facts;
 const Finding = @import("facts.zig").Finding;
 
@@ -147,8 +148,14 @@ fn workspaceOf(ctx: *zcli.Context) *Workspace {
 fn runCheck(ctx: *zcli.Context, options: CheckOptions) ![]const Row {
     if (options.paths.len == 0) std.debug.panic("check ran with no paths; zcli supplies '.' when none are given", .{});
     const ws = workspaceOf(ctx);
-    var selected = if (options.rules) |list| try parseRules(ctx, ws, list) else rules.Set.defaults();
+    const settings = config.initConfig(std.heap.page_allocator, ws.io) catch |e| switch (e) {
+        error.InvalidConfig => return ctx.fail(.usage, config.problem[0..config.problem_len], "Fix that line of zanity.toml, or remove the setting to use zanity's default."),
+        else => return e,
+    };
+    for (settings.excludes()) |glob| try ws.ignore.exclude(settings.dir, glob);
+    var selected = if (options.rules) |list| try parseRules(ctx, ws, list) else settings.selection();
     if (options.infer) try connectInference(ctx, ws, &selected, options.rules == null);
+    if (ws.inference) |*inference| inference.concurrency = settings.concurrency orelse infer.default_concurrency;
     var live = Live.initLive(console(ctx, ctx.runtime.err), ws.io, !ctx.quiet);
     ws.live = &live;
     defer ws.live = null;
