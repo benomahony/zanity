@@ -36,7 +36,10 @@
             .url = "https://sqlite.org/2025/sqlite-amalgamation-3500400.zip",
             .hash = "N-V-__8AAHCbqABM_X5RTjbDBDBWErxZE8tJzmtEnLOLRHGx",
         },
-        .zcli = .{ .path = "../zcli" },
+        .zcli = .{
+            .url = "git+https://github.com/benomahony/zcli#6b423d63f549eba9bb02f46412f0740b69efcf98",
+            .hash = "zcli-0.1.0-ahKCbEgIAgDCZ5bpzhm7demHBqIfWwjhDAnfWHn-noWr",
+        },
         .tai = .{
             .url = "git+https://github.com/benomahony/zig-typesafe-ai#2367fbdea8db0cdde20406e889d324f70d06880f",
             .hash = "tai-0.1.0-ibOfVZ08AQDAiIBPqc-boY6buEPbza7rrCMKWxsdlCFb",
