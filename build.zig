@@ -53,6 +53,12 @@ fn module(b: *std.Build, root: []const u8, target: std.Build.ResolvedTarget, opt
         .file = b.path("vendor/tree-sitter/src/lib.c"),
         .flags = &.{ "-std=c11", "-O2", "-fno-sanitize=undefined", "-D_POSIX_C_SOURCE=200112L", "-D_DEFAULT_SOURCE", "-D_DARWIN_C_SOURCE", no_coverage },
     });
+    const sqlite = b.dependency("sqlite", .{});
+    mod.addCSourceFile(.{
+        .file = sqlite.path("sqlite3.c"),
+        .flags = &.{ "-O2", "-fno-sanitize=undefined", "-DSQLITE_THREADSAFE=1", "-DSQLITE_ENABLE_MEMSYS5", "-DSQLITE_DEFAULT_MEMSTATUS=0", "-DSQLITE_DQS=0", "-DSQLITE_OMIT_LOAD_EXTENSION", no_coverage },
+    });
+    mod.addIncludePath(sqlite.path("."));
     mod.addIncludePath(b.path("vendor/tree-sitter/include"));
     mod.addIncludePath(b.path("vendor/tree-sitter/src"));
     for (manifest.entries) |entry| {

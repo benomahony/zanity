@@ -189,6 +189,7 @@ test "--infer asks only about functions that report errors, and caches every ans
     var mock = try startMock(arena, io, try std.fs.path.join(arena, &.{ log, "requests.log" }), &env);
     defer mock.child.kill(io);
     try env.put("TYPESAFE_API_KEY", "test");
+    try env.put("ZANITY_STORE", try std.fs.path.join(arena, &.{ log, "store.db" }));
     try env.put("TYPESAFE_BASE_URL", try std.fmt.allocPrint(arena, "http://127.0.0.1:{s}", .{mock.port}));
     var outputs: [2][]const u8 = undefined;
     for (&outputs) |*out| {

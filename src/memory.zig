@@ -17,7 +17,7 @@ pub const Limits = struct {
     query_bytes: usize = 1 << 26,
     ignore_patterns: u32 = 1 << 14,
     ignore_bytes: u32 = 1 << 20,
-    judgements: u32 = 1 << 18,
+    store_bytes: usize = 1 << 25,
     judgement_bytes: u32 = 1 << 26,
 };
 

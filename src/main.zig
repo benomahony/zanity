@@ -13,6 +13,7 @@ const graph = @import("graph.zig");
 const memory = @import("memory.zig");
 const Ignore = @import("ignore.zig").Ignore;
 const infer = @import("infer.zig");
+const store = @import("store.zig");
 const Facts = @import("facts.zig").Facts;
 const Finding = @import("facts.zig").Finding;
 
@@ -202,6 +203,7 @@ fn checkPaths(ctx: *zcli.Context, ws: *Workspace, options: CheckOptions, selecte
     try checkFiles(ctx, ws, selected);
     if (ws.inference) |*inference| inference.judge(ws.facts.units.items(), &ws.findings, selected) catch |e| switch (e) {
         error.AskFailed => return ctx.fail(.io, infer.failure, "Check TYPESAFE_API_KEY and TYPESAFE_BASE_URL, then run again; answers already received are cached."),
+        error.StoreUnavailable => return ctx.fail(.io, try storeProblem(ws), "Check that the cache directory is writable and not full, then run again."),
         else => return e,
     };
     report.sortFindings(ws.findings.items());
@@ -242,6 +244,15 @@ fn checkFiles(ctx: *zcli.Context, ws: *Workspace, selected: rules.Set) !void {
     if (ws.checked > ws.files.len) std.debug.panic("checked {d} files out of {d} collected", .{ ws.checked, ws.files.len });
 }
 
+/// Says why the answer store could not be used, in SQLite's words when it gave some.
+fn storeProblem(ws: *Workspace) ![]const u8 {
+    if (store.failure_len > store.failure.len) std.debug.panic("the store kept {d} bytes of failure message in room for {d}", .{ store.failure_len, store.failure.len });
+    const reason = store.failure[0..store.failure_len];
+    const text = try ws.text.format("--infer could not use its answer store{s}{s}.", .{ if (reason.len > 0) ": " else "", reason });
+    if (text.len == 0) std.debug.panic("describing a store failure produced no text", .{});
+    return text;
+}
+
 /// Connects to TypeSafe for `--infer`, collecting the functions it will ask about and, unless
 /// `--rules` chose otherwise, turning on the rules only inference can decide.
 fn connectInference(ctx: *zcli.Context, ws: *Workspace, selected: *rules.Set, add_inferred: bool) !void {
@@ -249,6 +260,7 @@ fn connectInference(ctx: *zcli.Context, ws: *Workspace, selected: *rules.Set, ad
     const environ = ws.environ orelse std.debug.panic("--infer needs the process environment, but main did not store it in the workspace", .{});
     ws.inference = infer.Inference.initInference(std.heap.page_allocator, ws.io, environ, ws.limits) catch |e| switch (e) {
         error.MissingApiKey => return ctx.fail(.usage, "--infer asks TypeSafe to judge error messages, and needs an API key in TYPESAFE_API_KEY.", "Set TYPESAFE_API_KEY, or run without --infer to use only the deterministic checks."),
+        error.StoreUnavailable => return ctx.fail(.io, try storeProblem(ws), "Check that the cache directory is writable, or set ZANITY_STORE to a file zanity can create."),
         else => return e,
     };
     ws.facts.collect_units = true;

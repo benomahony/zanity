@@ -37,7 +37,7 @@ zanity help check                             # every option
 
 `check` walks directories recursively, respects `.gitignore` and `.git/info/exclude`, and skips dot directories and build output. It exits 0 when nothing fired, 1 when an error-level rule fired, and 2 on a usage error. Findings go to stdout and the one-line summary to stderr, so output can be piped cleanly. On a terminal the report is grouped by file, each finding shows how to fix it, and two tables close the run: files with the most errors, and rules that fired most. `--no-color` or `NO_COLOR` turns colour off.
 
-`--infer` needs `TYPESAFE_API_KEY`. It only asks about functions that report errors, only the questions no deterministic check answered, and caches every answer in `.zanity/judgements.tsv`, so unchanged code is never asked about twice.
+`--infer` needs `TYPESAFE_API_KEY`. It only asks about functions that report errors, and only the questions no deterministic check answered. Every answer is kept in a SQLite store in WAL mode, shared with nouls at `~/.cache/nouls/nouls.db` (or `$XDG_CACHE_HOME/nouls/nouls.db`), with the same schema and digests, so neither tool asks about unchanged code twice and answers nouls already paid for are reused. `ZANITY_STORE` points it at a different file.
 
 ## Suppressing a finding
 

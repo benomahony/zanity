@@ -32,6 +32,10 @@
     // Once all dependencies are fetched, `zig build` no longer requires
     // internet connectivity.
     .dependencies = .{
+        .sqlite = .{
+            .url = "https://sqlite.org/2025/sqlite-amalgamation-3500400.zip",
+            .hash = "N-V-__8AAHCbqABM_X5RTjbDBDBWErxZE8tJzmtEnLOLRHGx",
+        },
         .zcli = .{ .path = "../zcli" },
         .tai = .{
             .url = "git+https://github.com/benomahony/zig-typesafe-ai#2367fbdea8db0cdde20406e889d324f70d06880f",
