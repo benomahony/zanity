@@ -1,0 +1,10 @@
+rules: empty-block,constant-condition,float-equality,discarded-comparison,unreachable-code,generic-catch,debug-leftover,hardcoded-secret
+exit: 1
+catalogue_go.go:5:7: error [hardcoded-secret]
+catalogue_go.go:9:2: warning [empty-block]
+catalogue_go.go:11:2: warning [constant-condition]
+catalogue_go.go:14:5: warning [float-equality]
+catalogue_go.go:19:4: warning [empty-block]
+catalogue_go.go:21:2: error [hardcoded-secret]
+catalogue_go.go:23:2: error [debug-leftover]
+catalogue_go.go:25:2: warning [unreachable-code]

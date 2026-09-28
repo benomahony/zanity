@@ -1,0 +1,5 @@
+rules: vague-error,cryptic-error,unconstructive-error
+exit: 0
+messages_ts.ts:2:33: warning [vague-error]
+messages_ts.ts:3:34: warning [cryptic-error]
+messages_ts.ts:4:17: warning [vague-error]

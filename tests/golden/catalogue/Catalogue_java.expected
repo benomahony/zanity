@@ -1,0 +1,10 @@
+rules: empty-block,constant-condition,float-equality,discarded-comparison,unreachable-code,generic-catch,debug-leftover,hardcoded-secret
+exit: 1
+Catalogue_java.java:2:3: error [hardcoded-secret]
+Catalogue_java.java:6:5: warning [empty-block]
+Catalogue_java.java:7:5: warning [constant-condition]
+Catalogue_java.java:8:20: warning [float-equality]
+Catalogue_java.java:9:20: warning [generic-catch]
+Catalogue_java.java:10:20: warning [generic-catch]
+Catalogue_java.java:11:27: warning [empty-block]
+Catalogue_java.java:12:13: warning [constant-condition]

@@ -1,5 +1,4 @@
 const std = @import("std");
-const assert = std.debug.assert;
 
 pub const Language = opaque {};
 pub const Parser = opaque {};
@@ -17,27 +16,47 @@ pub const Node = extern struct {
     pub const Key = struct { id: usize, start: u32 };
 
     pub fn key(n: Node) Key {
-        assert(n.id != null);
-        assert(n.tree != null);
+        if (n.id == null) std.debug.panic("a null tree-sitter node has no key; check ts_node_is_null before indexing it", .{});
+        if (n.tree == null) std.debug.panic("node at byte {d} belongs to no tree; the tree was deleted while its nodes were still in use", .{ts_node_start_byte(n)});
         return .{ .id = @intFromPtr(n.id), .start = ts_node_start_byte(n) };
     }
     pub fn text(n: Node, source: []const u8) []const u8 {
         const start = ts_node_start_byte(n);
         const end = ts_node_end_byte(n);
-        assert(start <= end);
-        assert(end <= source.len);
+        if (start > end) std.debug.panic("node spans bytes {d}..{d}, which run backwards; the tree is corrupt", .{ start, end });
+        if (end > source.len) std.debug.panic("node ends at byte {d} but the source has {d}; it was parsed from different text than this", .{ end, source.len });
         return source[start..end];
     }
     pub fn parent(n: Node) ?Node {
-        assert(!ts_node_is_null(n));
+        if (n.id == null) std.debug.panic("asked for the parent of a null node; check ts_node_is_null first", .{});
         const found = ts_node_parent(n);
         if (ts_node_is_null(found)) return null;
-        assert(ts_node_start_byte(found) <= ts_node_start_byte(n));
+        if (ts_node_start_byte(found) > ts_node_start_byte(n)) std.debug.panic("parent {s} starts at byte {d}, after its child {s} at {d}; the tree is corrupt", .{ ts_node_type(found), ts_node_start_byte(found), ts_node_type(n), ts_node_start_byte(n) });
         return found;
     }
+    /// Formats as `kind at line:column` with `{f}`, so a failure names the syntax it is about.
+    pub fn where(n: Node) Where {
+        if (n.tree == null) std.debug.panic("describing a node whose tree was deleted; describe it while the tree is alive", .{});
+        const at = ts_node_start_point(n);
+        if (at.row == std.math.maxInt(u32)) std.debug.panic("a {s} node reports row {d}, which no file has", .{ ts_node_type(n), at.row });
+        return .{ .kind = std.mem.span(ts_node_type(n)), .line = at.row + 1, .column = at.column + 1 };
+    }
+
+    pub const Where = struct {
+        kind: []const u8,
+        line: u32,
+        column: u32,
+
+        pub fn format(w: Where, writer: *std.Io.Writer) std.Io.Writer.Error!void {
+            if (w.kind.len == 0) std.debug.panic("a node at {d}:{d} has an empty kind name", .{ w.line, w.column });
+            if (w.line == 0 or w.column == 0) std.debug.panic("{s} is at {d}:{d}; lines and columns count from 1", .{ w.kind, w.line, w.column });
+            try writer.print("{s} at {d}:{d}", .{ w.kind, w.line, w.column });
+        }
+    };
+
     pub fn eql(a: Node, b: Node) bool {
-        assert(a.tree != null);
-        assert(b.tree != null);
+        if (a.tree == null) std.debug.panic("compared a node from no tree (its tree was deleted) with {s} at byte {d}", .{ ts_node_type(b), ts_node_start_byte(b) });
+        if (b.tree == null) std.debug.panic("compared {s} at byte {d} with a node from no tree (its tree was deleted)", .{ ts_node_type(a), ts_node_start_byte(a) });
         return a.id == b.id and ts_node_start_byte(a) == ts_node_start_byte(b);
     }
 };
@@ -110,17 +129,17 @@ pub extern fn ts_query_cursor_next_match(cursor: *QueryCursor, match: *QueryMatc
 pub extern fn ts_query_cursor_set_match_limit(cursor: *QueryCursor, limit: u32) void;
 
 pub fn captureName(query: *const Query, id: u32) []const u8 {
-    assert(id < ts_query_capture_count(query));
+    if (id >= ts_query_capture_count(query)) std.debug.panic("capture id {d} is out of range; the query has {d} captures", .{ id, ts_query_capture_count(query) });
     var len: u32 = 0;
     const ptr = ts_query_capture_name_for_id(query, id, &len);
-    assert(len > 0);
+    if (len == 0) std.debug.panic("capture {d} has an empty name; every @capture in a query needs one", .{id});
     return ptr[0..len];
 }
 
 pub fn stringValue(query: *const Query, id: u32) []const u8 {
-    assert(id < ts_query_string_count(query));
+    if (id >= ts_query_string_count(query)) std.debug.panic("string id {d} is out of range; the query has {d} strings", .{ id, ts_query_string_count(query) });
     var len: u32 = 0;
     const ptr = ts_query_string_value_for_id(query, id, &len);
-    assert(len < std.math.maxInt(u16));
+    if (len >= std.math.maxInt(u16)) std.debug.panic("query string {d} is {d} bytes long; a predicate argument that long is a broken query", .{ id, len });
     return ptr[0..len];
 }

@@ -1,0 +1,11 @@
+rules: empty-block,constant-condition,float-equality,discarded-comparison,unreachable-code,generic-catch,debug-leftover,hardcoded-secret
+exit: 1
+catalogue_ts.ts:2:3: warning [empty-block]
+catalogue_ts.ts:3:3: warning [empty-block]
+catalogue_ts.ts:4:3: warning [constant-condition]
+catalogue_ts.ts:5:13: warning [constant-condition]
+catalogue_ts.ts:6:3: error [discarded-comparison]
+catalogue_ts.ts:7:3: error [hardcoded-secret]
+catalogue_ts.ts:8:3: error [debug-leftover]
+catalogue_ts.ts:12:7: warning [unreachable-code]
+catalogue_ts.ts:17:3: warning [unreachable-code]

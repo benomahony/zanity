@@ -1,0 +1,4 @@
+rules: vague-error,cryptic-error,unconstructive-error
+exit: 0
+messages_rs.rs:3:16: warning [vague-error]
+messages_rs.rs:5:25: warning [cryptic-error]

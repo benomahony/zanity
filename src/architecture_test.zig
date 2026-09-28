@@ -1,5 +1,4 @@
 const std = @import("std");
-const assert = std.debug.assert;
 const Io = std.Io;
 const adapters = @import("adapters");
 const ts = @import("ts.zig");
@@ -30,14 +29,14 @@ fn learn(arena: std.mem.Allocator) !Knowledge {
             try k.vocabulary.put(arena, try arena.dupe(u8, n.part), {});
         }
     }
-    assert(k.languages.count() == adapters.all.len);
-    assert(k.kinds.count() > 0);
+    if (k.languages.count() != adapters.all.len) std.debug.panic("learned {d} language names from {d} adapters; two adapters share a name in languages/manifest.zon", .{ k.languages.count(), adapters.all.len });
+    if (k.kinds.count() == 0) @panic("learned no grammar node kinds, so the architecture test would pass vacuously; check the grammars load");
     return k;
 }
 
 fn violations(arena: std.mem.Allocator, checker: Probe, path: []const u8, source: []const u8) !usize {
     const k = checker.knowledge;
-    assert(path.len > 0);
+    if (path.len == 0) std.debug.panic("asked to scan a file with an empty path ({d} bytes)", .{source.len});
     const parser = ts.ts_parser_new() orelse return error.OutOfMemory;
     defer ts.ts_parser_delete(parser);
     _ = ts.ts_parser_set_language(parser, @ptrCast(checker.adapter.grammar()));
@@ -59,7 +58,7 @@ fn violations(arena: std.mem.Allocator, checker: Probe, path: []const u8, source
         const at = ts.ts_node_start_point(entry.node);
         std.debug.print("\n{s}:{d}:{d}: '{s}' is {s}; move it into the language's queries or name tables", .{ path, at.row + 1, at.column + 1, word, if (names_language) "a language name" else "a grammar node kind" });
     }
-    assert(found <= index.triples.len);
+    if (found > index.triples.len) std.debug.panic("{s}: reported {d} violations from {d} captured nodes", .{ path, found, index.triples.len });
     return found;
 }
 

@@ -1,7 +1,7 @@
 .{
     .{
         .name = "python",
-        .not_applicable = .{"dynamic-allocation"},
+        .not_applicable = .{ "dynamic-allocation", "precedence-trap", "switch-fallthrough" },
         .extensions = .{ "py", "pyi" },
         .ecosystem = "python",
         .scanner = true,
@@ -13,11 +13,11 @@
         .ecosystem = "zig",
         .scanner = false,
         .queries = .{ "locals", "textobjects", "zanity" },
-        .not_applicable = .{ "NASA05-A", "NASA05-M1", "NASA05-M3", "NASA05-M4", "NASA05-M5" },
+        .not_applicable = .{ "NASA05-M1", "NASA05-M3", "NASA05-M4", "NASA05-M5", "discarded-comparison", "unreachable-code", "generic-catch", "return-in-finally", "identity-comparison", "precedence-trap", "generic-throw", "switch-fallthrough", "missing-default", "no-effect-statement", "tls-verification-disabled", "unsafe-deserialization", "shell-command", "sql-built-from-strings", "unawaited-call" },
     },
     .{
         .name = "go",
-        .not_applicable = .{ "dynamic-allocation", "restated-type", "constant-assertion", "redundant-null-check", "conversion-assertion", "guaranteed-length" },
+        .not_applicable = .{ "dynamic-allocation", "restated-type", "constant-assertion", "redundant-null-check", "conversion-assertion", "guaranteed-length", "discarded-comparison", "generic-catch", "return-in-finally", "identity-comparison", "precedence-trap", "generic-throw", "switch-fallthrough", "no-effect-statement", "unsafe-deserialization", "shell-command", "wall-clock-duration", "unawaited-call" },
         .extensions = .{"go"},
         .ecosystem = "go",
         .scanner = false,
@@ -25,7 +25,7 @@
     },
     .{
         .name = "typescript",
-        .not_applicable = .{ "dynamic-allocation", "restated-type", "redundant-null-check", "conversion-assertion", "guaranteed-length" },
+        .not_applicable = .{ "dynamic-allocation", "restated-type", "redundant-null-check", "conversion-assertion", "guaranteed-length", "float-equality", "generic-catch", "identity-comparison", "generic-throw", "weak-hash" },
         .extensions = .{ "ts", "mts", "cts" },
         .ecosystem = "node",
         .scanner = true,
@@ -33,7 +33,7 @@
     },
     .{
         .name = "rust",
-        .not_applicable = .{ "assertion-side-effect", "restated-type", "constant-assertion", "redundant-null-check", "conversion-assertion", "guaranteed-length" },
+        .not_applicable = .{ "assertion-side-effect", "restated-type", "constant-assertion", "redundant-null-check", "conversion-assertion", "guaranteed-length", "generic-catch", "return-in-finally", "identity-comparison", "precedence-trap", "generic-throw", "switch-fallthrough", "missing-default", "unsafe-deserialization", "shell-command", "sql-built-from-strings", "secret-in-log", "unawaited-call" },
         .extensions = .{"rs"},
         .ecosystem = "rust",
         .scanner = true,
@@ -41,7 +41,7 @@
     },
     .{
         .name = "java",
-        .not_applicable = .{ "dynamic-allocation", "restated-type", "redundant-null-check", "conversion-assertion", "guaranteed-length" },
+        .not_applicable = .{ "dynamic-allocation", "restated-type", "redundant-null-check", "conversion-assertion", "guaranteed-length", "discarded-comparison", "unreachable-code", "debug-leftover", "no-effect-statement", "tls-verification-disabled", "weak-hash", "unsafe-deserialization", "shell-command", "unawaited-call" },
         .extensions = .{"java"},
         .ecosystem = "jvm",
         .scanner = false,

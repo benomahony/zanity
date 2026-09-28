@@ -1,0 +1,6 @@
+def f(a, b):
+    # TODO: say why this must hold and what to look at when it fails.
+    assert len(a) > b.size, f"expected len(a) > b.size, got a={a!r}, b.size={b.size!r}"
+    assert a, "already explained"
+    # TODO: say why this must hold and what to look at when it fails.
+    assert True, "expected True"

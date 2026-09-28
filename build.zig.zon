@@ -33,6 +33,10 @@
     // internet connectivity.
     .dependencies = .{
         .zcli = .{ .path = "../zcli" },
+        .tai = .{
+            .url = "git+https://github.com/benomahony/zig-typesafe-ai#2367fbdea8db0cdde20406e889d324f70d06880f",
+            .hash = "tai-0.1.0-ibOfVZ08AQDAiIBPqc-boY6buEPbza7rrCMKWxsdlCFb",
+        },
         .zrich = .{
             .url = "https://github.com/benomahony/zrich/archive/3ff0f67047714f0445980c3fe03f8a8f35e27d9a.tar.gz",
             .hash = "zrich-0.1.0-DVxxqNsJAQAjlhRl3Ck_ET9oMq3Di_ZePMH4QrJrEtQo",

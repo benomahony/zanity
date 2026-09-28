@@ -1,0 +1,4 @@
+rules: assertion-message,assertion-density
+exit: 0
+assertion_message.zig:5:5: warning [assertion-message]
+assertion_message.zig:6:5: warning [assertion-message]

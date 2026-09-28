@@ -12,8 +12,8 @@ const limits: memory.Limits = .{ .captures = 1 << 14, .depth = 1 << 10, .per_fil
 fn everyRule() rules.Set {
     var set: rules.Set = .{};
     for (rules.all) |r| set.include(r.name);
-    assert(set.len == rules.all.len);
-    assert(set.enabled(rules.all[set.len - 1].name));
+    if (set.len != rules.all.len) std.debug.panic("the fuzz rule set enabled {d} of {d} rules; a rule is missing from include()", .{ set.len, rules.all.len });
+    if (!set.enabled(rules.all[set.len - 1].name)) std.debug.panic("the fuzz rule set does not enable '{s}', the last rule", .{rules.all[set.len - 1].name});
     return set;
 }
 
@@ -35,8 +35,8 @@ fn checkAnything(_: void, smith: *std.testing.Smith) anyerror!void {
         error.LimitExceeded => return,
         else => return e,
     };
-    assert(std.sort.isSorted(check.Diagnostic, result.diagnostics, {}, check.Diagnostic.reportOrder));
-    for (result.diagnostics) |d| assert(rules.find(d.rule) != null and d.message.len > 0);
+    if (!std.sort.isSorted(check.Diagnostic, result.diagnostics, {}, check.Diagnostic.reportOrder)) std.debug.panic("expected diagnostics in report order, got {d} diagnostics out of order", .{result.diagnostics.len});
+    for (result.diagnostics) |d| if (rules.find(d.rule) == null or d.message.len == 0) std.debug.panic("fuzzing reported rule '{s}' with message '{s}'; every finding needs a known rule and a message", .{ d.rule, d.message });
 }
 
 test "checking any bytes in any language never breaks an invariant" {

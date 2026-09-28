@@ -130,3 +130,127 @@
 
 (variadic_parameter_declaration
   name: (identifier) @parameter.name)
+
+; Engineering error catalogue rules: each `@finding.<rule>` capture is a finding of that rule.
+
+(interpreted_string_literal) @literal.string
+
+(raw_string_literal) @literal.string
+
+; CWE-1071: an empty body with not even a comment.
+([
+  (if_statement
+    consequence: (block) @_body)
+  (for_statement
+    body: (block) @_body)
+] @finding.empty-block
+  (#empty? @_body))
+
+; An empty `else` is reported at the `else`, not at the `if` whose body may be fine.
+((if_statement
+  "else" @finding.empty-block
+  alternative: (block) @_body)
+  (#empty? @_body))
+
+; CWE-570, CWE-571: a condition that is a literal.
+(if_statement
+  condition: [(true) (false)]) @finding.constant-condition
+
+; CWE-1077: exact equality with a floating-point literal other than zero.
+((binary_expression
+  operator: ["==" "!="]
+  right: (float_literal) @_float) @finding.float-equality
+  (#not-any-of? @_float "0.0" "0." ".0"))
+
+((binary_expression
+  left: (float_literal) @_float
+  operator: ["==" "!="]) @finding.float-equality
+  (#not-any-of? @_float "0.0" "0." ".0"))
+
+; CWE-561: the statement right after one that always leaves the block.
+; Labeled statements can be reached by goto, so they are not listed.
+(statement_list
+  [
+    (return_statement)
+    (break_statement)
+    (continue_statement)
+    (goto_statement)
+  ]
+  .
+  [
+    (expression_statement)
+    (assignment_statement)
+    (short_var_declaration)
+    (inc_statement)
+    (dec_statement)
+    (send_statement)
+    (var_declaration)
+    (const_declaration)
+    (if_statement)
+    (for_statement)
+    (expression_switch_statement)
+    (type_switch_statement)
+    (select_statement)
+    (go_statement)
+    (defer_statement)
+    (return_statement)
+    (break_statement)
+    (continue_statement)
+    (block)
+  ] @finding.unreachable-code)
+
+; CWE-478: a switch without a default case.
+[
+  (expression_switch_statement)
+  (type_switch_statement)
+] @finding.missing-default
+
+(default_case) @unless.missing-default
+
+; CWE-295: a TLS config with certificate checks turned off.
+((keyed_element
+  key: (literal_element
+    (identifier) @_key)
+  value: (literal_element
+    (true))) @finding.tls-verification-disabled
+  (#eq? @_key "InsecureSkipVerify"))
+
+; Shapes the engine measures or cross-checks: strings built at runtime (SQL), nesting and decisions.
+(binary_expression
+  operator: "-") @arith.difference
+
+(binary_expression
+  operator: "+") @string.built
+
+((call_expression
+  function: (selector_expression
+    field: (field_identifier) @_function)) @string.built
+  (#eq? @_function "Sprintf"))
+
+[
+  (if_statement)
+  (for_statement)
+  (expression_switch_statement)
+  (type_switch_statement)
+  (select_statement)
+] @control.outer
+
+(if_statement
+  alternative: (if_statement) @control.chain)
+
+[
+  (if_statement)
+  (for_statement)
+  (expression_case)
+  (type_case)
+  (communication_case)
+] @decision.point
+
+(binary_expression
+  operator: ["&&" "||"]) @decision.point
+
+; Names and field accesses, for rules that look at the values an expression reads.
+[
+  (identifier)
+  (selector_expression)
+] @expression.path

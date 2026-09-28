@@ -1,0 +1,10 @@
+rules: empty-block,constant-condition,float-equality,discarded-comparison,unreachable-code,generic-catch,debug-leftover,hardcoded-secret
+exit: 1
+catalogue_zig.zig:3:1: error [hardcoded-secret]
+catalogue_zig.zig:7:5: warning [empty-block]
+catalogue_zig.zig:8:5: warning [empty-block]
+catalogue_zig.zig:9:5: warning [constant-condition]
+catalogue_zig.zig:12:5: warning [constant-condition]
+catalogue_zig.zig:17:7: warning [empty-block]
+catalogue_zig.zig:18:9: warning [float-equality]
+catalogue_zig.zig:21:5: error [debug-leftover]

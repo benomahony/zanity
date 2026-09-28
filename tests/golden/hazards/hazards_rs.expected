@@ -1,0 +1,6 @@
+rules: return-in-finally,identity-comparison,precedence-trap,generic-throw,switch-fallthrough,missing-default,no-effect-statement,tls-verification-disabled,weak-hash,unsafe-deserialization,shell-command,sql-built-from-strings,secret-in-log,wall-clock-duration,unawaited-call,deep-nesting,complex-function
+exit: 1
+hazards_rs.rs:4:5: warning [no-effect-statement]
+hazards_rs.rs:5:14: error [tls-verification-disabled]
+hazards_rs.rs:6:14: warning [wall-clock-duration]
+hazards_rs.rs:7:5: warning [weak-hash]

@@ -1,0 +1,15 @@
+rules: empty-block,constant-condition,float-equality,discarded-comparison,unreachable-code,generic-catch,debug-leftover,hardcoded-secret
+exit: 1
+catalogue_py.py:5:5: warning [empty-block]
+catalogue_py.py:7:5: warning [empty-block]
+catalogue_py.py:9:5: warning [constant-condition]
+catalogue_py.py:11:5: warning [constant-condition]
+catalogue_py.py:13:5: error [discarded-comparison]
+catalogue_py.py:13:5: warning [float-equality]
+catalogue_py.py:16:5: warning [generic-catch]
+catalogue_py.py:20:5: warning [generic-catch]
+catalogue_py.py:22:5: error [hardcoded-secret]
+catalogue_py.py:23:5: error [debug-leftover]
+catalogue_py.py:24:5: error [debug-leftover]
+catalogue_py.py:26:5: warning [unreachable-code]
+catalogue_py.py:35:9: warning [float-equality]

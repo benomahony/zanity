@@ -1,0 +1,7 @@
+rules: return-in-finally,identity-comparison,precedence-trap,generic-throw,switch-fallthrough,missing-default,no-effect-statement,tls-verification-disabled,weak-hash,unsafe-deserialization,shell-command,sql-built-from-strings,secret-in-log,wall-clock-duration,unawaited-call,deep-nesting,complex-function
+exit: 1
+hazards_go.go:11:23: error [secret-in-log]
+hazards_go.go:12:2: warning [missing-default]
+hazards_go.go:16:18: error [tls-verification-disabled]
+hazards_go.go:17:2: warning [weak-hash]
+hazards_go.go:18:11: error [sql-built-from-strings]

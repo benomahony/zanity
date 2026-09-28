@@ -1,0 +1,4 @@
+rules: vague-error,cryptic-error,unconstructive-error
+exit: 0
+Messages_java.java:3:54: warning [vague-error]
+Messages_java.java:4:52: warning [cryptic-error]

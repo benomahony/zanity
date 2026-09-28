@@ -1,5 +1,4 @@
 const std = @import("std");
-const assert = std.debug.assert;
 const Allocator = std.mem.Allocator;
 const rules = @import("rules.zig");
 const memory = @import("memory.zig");
@@ -16,8 +15,8 @@ const Keyed = struct {
     index: u32,
 
     fn order(_: void, a: Keyed, b: Keyed) bool {
-        assert(a.key.len > 0);
-        assert(b.key.len > 0);
+        if (a.key.len == 0) std.debug.panic("definition {d} has an empty concept key; conceptKey always starts with the language name", .{a.index});
+        if (b.key.len == 0) std.debug.panic("definition {d} has an empty concept key; conceptKey always starts with the language name", .{b.index});
         const by_key = std.mem.order(u8, a.key, b.key);
         return if (by_key == .eq) a.index < b.index else by_key == .lt;
     }
@@ -32,8 +31,8 @@ pub const ConceptScratch = struct {
     words: memory.Text,
 
     pub fn initNamingScratch(gpa: Allocator, limits: memory.Limits) Allocator.Error!ConceptScratch {
-        assert(limits.definitions > 0);
-        assert(limits.text_bytes > 0);
+        if (limits.definitions == 0) std.debug.panic("memory.Limits.definitions is 0, so naming checks have no room for any name", .{});
+        if (limits.text_bytes == 0) std.debug.panic("memory.Limits.text_bytes is 0, so naming checks have no room to split names into words", .{});
         return .{
             .keyed = try .initBounded(gpa, limits.definitions, "definitions across all files"),
             .spellings = try .initBounded(gpa, limits.definitions, "spellings of one concept"),
@@ -46,25 +45,25 @@ pub const ConceptScratch = struct {
 };
 
 pub fn crossCheck(s: *ConceptScratch, facts: *Facts, enabled: rules.Set, findings: *memory.Bounded(Finding)) error{LimitExceeded}!void {
-    assert(enabled.len > 0);
+    if (enabled.len == 0) std.debug.panic("cross-file naming checks ran with no rules enabled; runCheck always enables at least one", .{});
     const definitions = facts.definitions.items();
     std.mem.sort(Definition, definitions, {}, Definition.sourceOrder);
     const before = findings.len;
     if (enabled.enabled("name-drift")) try drift(s, facts.text, definitions, findings);
     if (enabled.enabled("duplicate-name")) try duplicates(s, facts.text, definitions, findings);
-    assert(findings.len - before <= definitions.len * 2);
+    if (findings.len - before > definitions.len * 2) std.debug.panic("naming checks reported {d} findings for {d} definitions; each definition can be in at most one drift and one duplicate", .{ findings.len - before, definitions.len });
 }
 
 fn exempt(name: []const u8) bool {
-    assert(name.len > 0);
+    if (name.len == 0) std.debug.panic("asked whether an empty name is exempt from naming checks; the @name capture matched an empty node", .{});
     const dunder = name.len > 4 and std.mem.startsWith(u8, name, "__") and std.mem.endsWith(u8, name, "__");
-    assert(!dunder or name.len > 4);
+    if (dunder and name.len <= 4) std.debug.panic("'{s}' was taken for a dunder name, but those need at least 5 bytes, like __x__", .{name});
     return dunder;
 }
 
 /// Splits a name into lowercase words, which live in `s.words` until its next reset.
 pub fn tokenise(s: *ConceptScratch, name: []const u8) error{LimitExceeded}![]const []const u8 {
-    assert(name.len > 0);
+    if (name.len == 0) std.debug.panic("asked to split an empty name into words; the @name capture matched an empty node", .{});
     s.tokens.clear();
     var start: usize = 0;
     for (0..name.len + 1) |i| {
@@ -79,17 +78,17 @@ pub fn tokenise(s: *ConceptScratch, name: []const u8) error{LimitExceeded}![]con
         }
         start = if (separator) i + 1 else i;
     }
-    assert(s.tokens.len <= name.len);
+    if (s.tokens.len > name.len) std.debug.panic("'{s}' ({d} bytes) split into {d} words; a word needs at least one byte", .{ name, name.len, s.tokens.len });
     return s.tokens.items();
 }
 
 fn caseBoundary(name: []const u8, i: usize) bool {
-    assert(i > 0 and i < name.len);
+    if (i == 0 or i >= name.len) std.debug.panic("checked for a word boundary at byte {d} of '{s}' ({d} bytes); only bytes 1..{d} can start a word", .{ i, name, name.len, name.len -| 1 });
     const previous = name[i - 1];
     const current = name[i];
     if (std.ascii.isUpper(current) and (std.ascii.isLower(previous) or std.ascii.isDigit(previous))) return true;
     const acronym_end = std.ascii.isUpper(previous) and std.ascii.isUpper(current) and i + 1 < name.len and std.ascii.isLower(name[i + 1]);
-    assert(!acronym_end or i + 1 < name.len);
+    if (acronym_end and i + 1 >= name.len) std.debug.panic("'{s}': an acronym ending at byte {d} needs a lowercase byte after it", .{ name, i });
     return acronym_end;
 }
 
@@ -105,14 +104,14 @@ fn conceptKey(s: *ConceptScratch, language: []const u8, name: []const u8) error{
         _ = try s.words.copy(token);
     }
     const key = s.words.buffer[start..s.words.used];
-    assert(key.len > language.len);
-    assert(tokens.len > 0);
+    if (key.len <= language.len) std.debug.panic("the concept key for '{s}' is '{s}', with no words after the language {s}", .{ name, key, language });
+    if (tokens.len == 0) std.debug.panic("'{s}' split into no words; names need at least one letter or digit", .{name});
     return key;
 }
 
 fn stringLessThan(_: void, a: []const u8, b: []const u8) bool {
-    assert(a.len > 0);
-    assert(b.len > 0);
+    if (a.len == 0) std.debug.panic("sorting an empty word against '{s}'; tokenise never returns empty words", .{b});
+    if (b.len == 0) std.debug.panic("sorting '{s}' against an empty word; tokenise never returns empty words", .{a});
     return std.mem.order(u8, a, b) == .lt;
 }
 
@@ -149,39 +148,39 @@ fn drift(s: *ConceptScratch, text: *memory.Text, definitions: []const Definition
             .message = try text.format("One concept is spelled {d} ways: {s}.", .{ names.len, spellings }),
         });
     }
-    assert(start == keyed.len);
-    assert(findings.len >= before);
+    if (start != keyed.len) std.debug.panic("name-drift stopped at definition {d} of {d}; runEnd must reach the end", .{ start, keyed.len });
+    if (findings.len < before) std.debug.panic("name-drift removed findings: {d} before, {d} after", .{ before, findings.len });
 }
 
 fn runEnd(keyed: []const Keyed, start: usize) usize {
-    assert(start < keyed.len);
+    if (start >= keyed.len) std.debug.panic("asked for the run of names from {d}, past the {d} names", .{ start, keyed.len });
     var end = start + 1;
     while (end < keyed.len and std.mem.eql(u8, keyed[end].key, keyed[start].key)) end += 1;
-    assert(end > start);
+    if (end <= start) std.debug.panic("the run of names from {d} ended at {d}; a run holds at least its first name", .{ start, end });
     return end;
 }
 
 fn joined(text: *memory.Text, names: []const []const u8) error{LimitExceeded}![]const u8 {
-    assert(names.len > 0);
+    if (names.len == 0) std.debug.panic("asked to list no names; a finding about names needs at least one", .{});
     const start = text.used;
     for (names, 0..) |name, i| {
         if (i > 0) _ = try text.copy(", ");
         _ = try text.copy(name);
     }
-    assert(text.used > start);
+    if (text.used <= start) std.debug.panic("listing {d} names wrote nothing; names are never empty", .{names.len});
     return text.buffer[start..text.used];
 }
 
 fn addUnique(list: *memory.Bounded([]const u8), value: []const u8) error{LimitExceeded}!void {
-    assert(value.len > 0);
+    if (value.len == 0) std.debug.panic("asked to record an empty name among {d}; names are never empty", .{list.len});
     for (list.items()) |existing| if (std.mem.eql(u8, existing, value)) return;
     try list.add(value);
-    assert(list.len > 0);
+    if (list.len == 0) std.debug.panic("recorded '{s}' but the list is still empty", .{value});
 }
 
 fn caseOnlyAcrossKinds(names: []const []const u8, kinds: usize) bool {
-    assert(names.len >= 2);
-    assert(kinds >= 1);
+    if (names.len < 2) std.debug.panic("comparing the case of {d} names; drift needs at least 2 spellings", .{names.len});
+    if (kinds == 0) std.debug.panic("{d} names ('{s}' first) have no kinds recorded; every definition has a kind", .{ names.len, names[0] });
     if (kinds < 2) return false;
     for (names[1..]) |n| if (!std.ascii.eqlIgnoreCase(n, names[0])) return false;
     return true;
@@ -190,7 +189,7 @@ fn caseOnlyAcrossKinds(names: []const []const u8, kinds: usize) bool {
 /// True when the names differ only in which side of a direction word each
 /// part sits, like `copyFromTo` and `copyToFrom`, which are distinct concepts.
 fn directionalNames(s: *ConceptScratch, names: []const []const u8) error{LimitExceeded}!bool {
-    assert(names.len >= 2);
+    if (names.len < 2) std.debug.panic("comparing the direction words of {d} names; drift needs at least 2 spellings", .{names.len});
     s.shapes.clear();
     for (names) |name| {
         const start = s.words.used;
@@ -207,13 +206,13 @@ fn directionalNames(s: *ConceptScratch, names: []const []const u8) error{LimitEx
         if (sides < 2) return false;
         try addUnique(&s.shapes, s.words.buffer[start..s.words.used]);
     }
-    assert(s.shapes.len <= names.len);
+    if (s.shapes.len > names.len) std.debug.panic("{d} names produced {d} shapes; addUnique keeps at most one per name", .{ names.len, s.shapes.len });
     return s.shapes.len == names.len;
 }
 
 fn isDirectional(token: []const u8) bool {
-    assert(token.len > 0);
-    assert(directional.len > 0);
+    if (token.len == 0) std.debug.panic("asked whether an empty word is a direction word; tokenise never returns empty words", .{});
+    if (directional.len == 0) std.debug.panic("the list of direction words is empty, so '{s}' can't be checked", .{token});
     for (directional) |d| if (std.mem.eql(u8, d, token)) return true;
     return false;
 }
@@ -246,8 +245,8 @@ fn duplicates(s: *ConceptScratch, text: *memory.Text, definitions: []const Defin
             });
         }
     }
-    assert(start == keyed.len);
-    assert(findings.len - before <= definitions.len);
+    if (start != keyed.len) std.debug.panic("duplicate-name stopped at definition {d} of {d}; runEnd must reach the end", .{ start, keyed.len });
+    if (findings.len - before > definitions.len) std.debug.panic("duplicate-name reported {d} findings for {d} definitions; each definition can be reported once", .{ findings.len - before, definitions.len });
 }
 
 test "names split on separators, case changes and acronyms" {

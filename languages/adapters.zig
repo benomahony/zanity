@@ -1,5 +1,4 @@
 const std = @import("std");
-const assert = std.debug.assert;
 const manifest = @import("manifest.zig");
 
 pub const Tables = manifest.Tables;
@@ -24,30 +23,30 @@ pub const Adapter = struct {
 
 fn families(comptime entry: manifest.Entry) []const QueryFile {
     comptime {
-        assert(entry.queries.len > 0);
+        if (entry.queries.len == 0) @compileError("language " ++ entry.name ++ " lists no query files in languages/manifest.zon");
         var out: [entry.queries.len]QueryFile = undefined;
         for (entry.queries, 0..) |family, i| {
             out[i] = .{ .name = family, .source = @embedFile(entry.name ++ "/queries/" ++ family ++ ".scm") };
         }
         const final = out;
-        assert(final.len == entry.queries.len);
+        if (final.len != entry.queries.len) @compileError("language " ++ entry.name ++ " loaded a different number of query files than it lists");
         return &final;
     }
 }
 
 fn querySource(comptime entry: manifest.Entry) []const u8 {
     comptime {
-        assert(entry.queries.len > 0);
+        if (entry.queries.len == 0) @compileError("language " ++ entry.name ++ " lists no query files in languages/manifest.zon");
         var source: []const u8 = "";
         for (entry.queries) |family| source = source ++ @embedFile(entry.name ++ "/queries/" ++ family ++ ".scm") ++ "\n";
-        assert(source.len > 0);
+        if (source.len == 0) @compileError("language " ++ entry.name ++ "'s query files are all empty");
         return source;
     }
 }
 
 fn tablesFor(comptime ecosystem: []const u8) *const Tables {
-    assert(ecosystem.len > 0);
-    assert(manifest.tables.len > 0);
+    if (ecosystem.len == 0) @compileError("a language in languages/manifest.zon has an empty .ecosystem");
+    if (manifest.tables.len == 0) @compileError("languages/tables.zon has no name tables, so ecosystem " ++ ecosystem ++ " has none");
     for (manifest.tables) |*t| if (std.mem.eql(u8, t.ecosystem, ecosystem)) return t;
     @compileError("no name tables for ecosystem " ++ ecosystem);
 }

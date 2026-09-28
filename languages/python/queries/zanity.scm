@@ -171,3 +171,173 @@
 ] @loop.outer
 
 (function_definition) @function.outer
+
+; Engineering error catalogue rules: each `@finding.<rule>` capture is a finding of that rule.
+
+(string) @literal.string
+
+; CWE-1071: a body that is only `pass`. Function and class stubs are left alone, and so is a
+; body with a comment, which the grammar puts just before the block.
+[
+  (if_statement
+    condition: (_)
+    .
+    consequence: (block . (pass_statement) .))
+  (elif_clause
+    condition: (_)
+    .
+    consequence: (block . (pass_statement) .))
+  (else_clause
+    .
+    body: (block . (pass_statement) .))
+  (for_statement
+    right: (_)
+    .
+    body: (block . (pass_statement) .))
+  (while_statement
+    condition: (_)
+    .
+    body: (block . (pass_statement) .))
+  (with_statement
+    (with_clause)
+    .
+    body: (block . (pass_statement) .))
+] @finding.empty-block
+
+; CWE-570, CWE-571: a condition that is a literal. `while True` is unbounded-loop's.
+[
+  (if_statement
+    condition: [(true) (false) (none) (integer) (float) (string)])
+  (elif_clause
+    condition: [(true) (false) (none) (integer) (float) (string)])
+  (while_statement
+    condition: [(false) (none)])
+] @finding.constant-condition
+
+; CWE-1077: exact equality with a floating-point literal other than zero.
+((comparison_operator
+  ["==" "!="]
+  (float) @_float) @finding.float-equality
+  (#not-any-of? @_float "0.0" "0." ".0"))
+
+((comparison_operator
+  (float) @_float
+  ["==" "!="]) @finding.float-equality
+  (#not-any-of? @_float "0.0" "0." ".0"))
+
+; CWE-480: a comparison whose result is thrown away.
+(block
+  (comparison_operator) @finding.discarded-comparison)
+
+(module
+  (comparison_operator) @finding.discarded-comparison)
+
+; CWE-561: the statement right after one that always leaves the block.
+(block
+  [
+    (return_statement)
+    (raise_statement)
+    (break_statement)
+    (continue_statement)
+  ]
+  .
+  (_) @finding.unreachable-code)
+
+; CWE-396: a bare `except:` or one naming the root exception types.
+(except_clause
+  !value) @finding.generic-catch
+
+((except_clause
+  value: [
+    (identifier) @_type
+    (as_pattern
+      .
+      (identifier) @_type)
+  ]) @finding.generic-catch
+  (#any-of? @_type "Exception" "BaseException"))
+
+; The message of a raised exception, for the error-message rules.
+(raise_statement
+  (call
+    arguments: (argument_list
+      .
+      (string) @error.message)))
+
+; CWE-584: a return inside finally replaces the exception or return already under way.
+((return_statement) @finding.return-in-finally
+  (#has-ancestor? @finding.return-in-finally finally_clause))
+
+; CWE-595: `is` compares identity; with a literal, equal values can compare unequal.
+(comparison_operator
+  (_)
+  ["is" "is not"]
+  [(string) (integer) (float)]) @finding.identity-comparison
+
+; CWE-397: raising the root exception types.
+((raise_statement
+  [
+    (call
+      function: (identifier) @_type)
+    (identifier) @_type
+  ]) @finding.generic-throw
+  (#any-of? @_type "Exception" "BaseException"))
+
+; CWE-1164: a bare name, attribute or number as a statement. Strings are left alone: they document.
+(block
+  [(identifier) (attribute) (integer) (float)] @finding.no-effect-statement)
+
+; CWE-295: requests and httpx calls with certificate checks turned off.
+((keyword_argument
+  name: (identifier) @_name
+  value: (false)) @finding.tls-verification-disabled
+  (#eq? @_name "verify"))
+
+; CWE-478: a match statement without a `case _:` catch-all.
+(match_statement) @finding.missing-default
+
+((case_clause
+  (case_pattern) @unless.missing-default)
+  (#eq? @unless.missing-default "_"))
+
+; Shapes the engine measures or cross-checks: subtractions (wall-clock durations), strings built at
+; runtime (SQL), async functions and calls made as statements (unawaited calls), nesting and decisions.
+(binary_operator
+  operator: "-") @arith.difference
+
+(binary_operator
+  operator: ["+" "%"]) @string.built
+
+((call
+  function: (attribute
+    attribute: (identifier) @_method)) @string.built
+  (#eq? @_method "format"))
+
+(function_definition
+  "async"
+  name: (identifier) @async.name)
+
+(block
+  (call
+    function: (_) @statement.call))
+
+[
+  (if_statement)
+  (for_statement)
+  (while_statement)
+  (try_statement)
+  (with_statement)
+  (match_statement)
+] @control.outer
+
+[
+  (if_statement)
+  (elif_clause)
+  (for_statement)
+  (while_statement)
+  (except_clause)
+  (case_clause)
+  (conditional_expression)
+  (boolean_operator)
+  (for_in_clause)
+  (if_clause)
+] @decision.point

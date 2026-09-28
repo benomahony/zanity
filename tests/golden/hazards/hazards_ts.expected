@@ -1,0 +1,14 @@
+rules: return-in-finally,identity-comparison,precedence-trap,generic-throw,switch-fallthrough,missing-default,no-effect-statement,tls-verification-disabled,weak-hash,unsafe-deserialization,shell-command,sql-built-from-strings,secret-in-log,wall-clock-duration,unawaited-call,deep-nesting,complex-function
+exit: 1
+hazards_ts.ts:4:9: error [unawaited-call]
+hazards_ts.ts:4:30: error [return-in-finally]
+hazards_ts.ts:5:7: error [precedence-trap]
+hazards_ts.ts:6:7: error [precedence-trap]
+hazards_ts.ts:7:3: warning [missing-default]
+hazards_ts.ts:8:5: warning [switch-fallthrough]
+hazards_ts.ts:9:7: error [unawaited-call]
+hazards_ts.ts:13:3: warning [no-effect-statement]
+hazards_ts.ts:14:19: error [tls-verification-disabled]
+hazards_ts.ts:15:12: error [sql-built-from-strings]
+hazards_ts.ts:16:13: warning [wall-clock-duration]
+hazards_ts.ts:17:22: error [secret-in-log]

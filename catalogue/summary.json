@@ -1,0 +1,16 @@
+{
+  "catalogue_version": "0.2.0",
+  "cwe_version": "4.20",
+  "cwe_weaknesses": 969,
+  "extensions": 60,
+  "total_families": 1029,
+  "categories": 422,
+  "views": 59,
+  "deprecated_weaknesses": 25,
+  "assessment_kinds": {
+    "defect": 966,
+    "risk_indicator": 37,
+    "policy_violation": 26
+  },
+  "implemented_detectors": 41
+}

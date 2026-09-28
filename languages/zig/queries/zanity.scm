@@ -38,6 +38,79 @@
     (_) @assertion.condition)) @assertion.outer
   (#eq? @_assert "assert"))
 
+; The asserting form Zig recommends when a failure needs to explain itself:
+; `if (!ok) std.debug.panic("expected {d} got {d}", .{ want, got });` or `@panic("...")`,
+; as a statement, a loop body or a comptime check. Either polarity asserts: the branch only panics.
+((if_statement
+  condition: (_) @assertion.condition
+  body: [
+    (call_expression
+      function: (field_expression
+        member: (identifier) @_panic)
+      arguments: (arguments
+        .
+        (_) @assertion.message))
+    (builtin_function
+      (builtin_identifier) @_panic
+      (arguments
+        .
+        (_) @assertion.message))
+    (block_expression
+      (block
+        .
+        (expression_statement
+          [
+            (call_expression
+              function: (field_expression
+                member: (identifier) @_panic)
+              arguments: (arguments
+                .
+                (_) @assertion.message))
+            (builtin_function
+              (builtin_identifier) @_panic
+              (arguments
+                .
+                (_) @assertion.message))
+          ])
+        .))
+  ]) @assertion.outer
+  (#any-of? @_panic "panic" "@panic" "@compileError"))
+
+((if_expression
+  condition: (_) @assertion.condition
+  [
+    (call_expression
+      function: (field_expression
+        member: (identifier) @_panic)
+      arguments: (arguments
+        .
+        (_) @assertion.message))
+    (builtin_function
+      (builtin_identifier) @_panic
+      (arguments
+        .
+        (_) @assertion.message))
+    (block_expression
+      (block
+        .
+        (expression_statement
+          [
+            (call_expression
+              function: (field_expression
+                member: (identifier) @_panic)
+              arguments: (arguments
+                .
+                (_) @assertion.message))
+            (builtin_function
+              (builtin_identifier) @_panic
+              (arguments
+                .
+                (_) @assertion.message))
+          ])
+        .))
+  ]) @assertion.outer
+  (#any-of? @_panic "panic" "@panic" "@compileError"))
+
 (assignment_expression
   left: (_) @assignment.lhs
   operator: "="
@@ -141,3 +214,85 @@
 ] @loop.outer
 
 (function_declaration) @function.outer
+
+; Engineering error catalogue rules: each `@finding.<rule>` capture is a finding of that rule.
+
+(string) @literal.string
+
+; CWE-1071: an empty body with not even a comment.
+([
+  (if_statement
+    body: (block_expression
+      (block) @_body))
+  (while_statement
+    body: (block_expression
+      (block) @_body))
+  (for_statement
+    body: (block_expression
+      (block) @_body))
+  (else_clause
+    alternative: (labeled_statement
+      (block) @_body))
+] @finding.empty-block
+  (#empty? @_body))
+
+; CWE-570, CWE-571: a condition that is a literal. `while (true)` is unbounded-loop's.
+[
+  (if_statement
+    condition: (boolean))
+  (if_expression
+    condition: (boolean))
+] @finding.constant-condition
+
+((while_statement
+  condition: (boolean) @_value) @finding.constant-condition
+  (#eq? @_value "false"))
+
+; CWE-1077: exact equality with a floating-point literal other than zero.
+((binary_expression
+  operator: ["==" "!="]
+  right: (float) @_float) @finding.float-equality
+  (#not-any-of? @_float "0.0"))
+
+((binary_expression
+  left: (float) @_float
+  operator: ["==" "!="]) @finding.float-equality
+  (#not-any-of? @_float "0.0"))
+
+; CWE-489: `@breakpoint()` stops the program for a debugger.
+((builtin_function
+  (builtin_identifier) @_builtin) @finding.debug-leftover
+  (#eq? @_builtin "@breakpoint"))
+
+; The message of a panic outside an assertion, for the error-message rules.
+((builtin_function
+  (builtin_identifier) @_builtin
+  (arguments
+    .
+    (string) @error.message))
+  (#any-of? @_builtin "@panic" "@compileError"))
+
+; Shapes the engine measures: subtractions (wall-clock durations), nesting and decisions.
+(binary_expression
+  operator: "-") @arith.difference
+
+[
+  (if_statement)
+  (while_statement)
+  (for_statement)
+  (switch_expression)
+] @control.outer
+
+(else_clause
+  alternative: (if_statement) @control.chain)
+
+[
+  (if_statement)
+  (if_expression)
+  (while_statement)
+  (for_statement)
+  (switch_case)
+] @decision.point
+
+(binary_expression
+  operator: ["and" "or"]) @decision.point

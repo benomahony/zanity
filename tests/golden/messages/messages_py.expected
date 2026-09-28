@@ -1,0 +1,10 @@
+rules: vague-error,cryptic-error,unconstructive-error
+exit: 0
+messages_py.py:5:19: warning [unconstructive-error]
+messages_py.py:5:19: warning [vague-error]
+messages_py.py:6:19: warning [vague-error]
+messages_py.py:8:15: warning [vague-error]
+messages_py.py:10:26: warning [vague-error]
+messages_py.py:12:26: warning [cryptic-error]
+messages_py.py:14:26: warning [vague-error]
+messages_py.py:15:19: warning [vague-error]

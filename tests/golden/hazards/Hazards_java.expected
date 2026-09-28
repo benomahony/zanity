@@ -1,0 +1,10 @@
+rules: return-in-finally,identity-comparison,precedence-trap,generic-throw,switch-fallthrough,missing-default,no-effect-statement,tls-verification-disabled,weak-hash,unsafe-deserialization,shell-command,sql-built-from-strings,secret-in-log,wall-clock-duration,unawaited-call,deep-nesting,complex-function
+exit: 1
+Hazards_java.java:2:32: warning [generic-throw]
+Hazards_java.java:3:30: error [return-in-finally]
+Hazards_java.java:4:9: error [identity-comparison]
+Hazards_java.java:5:9: error [precedence-trap]
+Hazards_java.java:6:5: warning [missing-default]
+Hazards_java.java:6:18: warning [switch-fallthrough]
+Hazards_java.java:7:14: warning [wall-clock-duration]
+Hazards_java.java:8:5: warning [generic-throw]

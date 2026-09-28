@@ -1,5 +1,4 @@
 const std = @import("std");
-const assert = std.debug.assert;
 const Allocator = std.mem.Allocator;
 const memory = @import("memory.zig");
 const facts_module = @import("facts.zig");
@@ -27,8 +26,8 @@ pub const CycleScratch = struct {
     cycles: memory.Bounded(Cycle),
 
     pub fn initGraphScratch(gpa: Allocator, limits: memory.Limits) Allocator.Error!CycleScratch {
-        assert(limits.functions > 0);
-        assert(limits.edges > 0);
+        if (limits.functions == 0) std.debug.panic("memory.Limits.functions is 0, so the call graph has no room for any function", .{});
+        if (limits.edges == 0) std.debug.panic("memory.Limits.edges is 0, so the call graph has no room for any call", .{});
         return .{
             .by_name = try .initBounded(gpa, limits.functions, "functions across all files"),
             .offsets = try .initBounded(gpa, limits.functions + 1, "functions across all files"),
@@ -52,7 +51,7 @@ pub const Graph = struct {
 
     pub fn fromFacts(s: *CycleScratch, facts: *const Facts) error{LimitExceeded}!Graph {
         const functions = facts.functions.items();
-        assert(functions.len < unvisited);
+        if (functions.len >= unvisited) std.debug.panic("{d} functions reach the 'unvisited' marker {d}; lower memory.Limits.functions", .{ functions.len, unvisited });
         s.by_name.clear();
         for (0..functions.len) |i| try s.by_name.add(@intCast(i));
         std.mem.sort(u32, s.by_name.items(), functions, nameOrder);
@@ -78,21 +77,21 @@ pub const Graph = struct {
                 cursor[call.caller] += 1;
             }
         }
-        assert(offsets.len == functions.len + 1);
-        assert(s.targets.len == offsets[functions.len]);
+        if (offsets.len != functions.len + 1) std.debug.panic("the call graph has {d} row offsets for {d} functions; it needs one more than the functions", .{ offsets.len, functions.len });
+        if (s.targets.len != offsets[functions.len]) std.debug.panic("the call graph stores {d} call targets but its last offset says {d}", .{ s.targets.len, offsets[functions.len] });
         return .{ .offsets = offsets, .targets = s.targets.items() };
     }
 
     fn out(self: Graph, v: u32) []const u32 {
-        assert(v + 1 < self.offsets.len);
-        assert(self.offsets[v] <= self.offsets[v + 1]);
+        if (v + 1 >= self.offsets.len) std.debug.panic("asked for the calls of function {d}, but the graph has {d} functions", .{ v, self.offsets.len -| 1 });
+        if (self.offsets[v] > self.offsets[v + 1]) std.debug.panic("function {d}'s calls run backwards ({d}..{d}); the offsets were not built in order", .{ v, self.offsets[v], self.offsets[v + 1] });
         return self.targets[self.offsets[v]..self.offsets[v + 1]];
     }
 
     pub fn cycles(self: Graph, s: *CycleScratch) error{LimitExceeded}![]const Cycle {
         const n = self.offsets.len - 1;
-        assert(n < unvisited);
-        assert(n <= s.index.len);
+        if (n >= unvisited) std.debug.panic("{d} functions reach the 'unvisited' marker {d}; lower memory.Limits.functions", .{ n, unvisited });
+        if (n > s.index.len) std.debug.panic("the graph has {d} functions but the cycle search has room for {d}; memory.Limits.functions is too low", .{ n, s.index.len });
         const index = s.index[0..n];
         const low = s.low[0..n];
         @memset(index, unvisited);
@@ -130,9 +129,9 @@ pub const Graph = struct {
                 if (s.frames.last()) |parent| low[parent.node] = @min(low[parent.node], low[v]);
                 if (low[v] == index[v]) try self.component(s, v);
             }
-            assert(s.frames.len == 0);
+            if (s.frames.len != 0) std.debug.panic("the cycle search from function {d} ended with {d} frames still open", .{ root, s.frames.len });
         }
-        assert(s.stack.len == 0);
+        if (s.stack.len != 0) std.debug.panic("the cycle search ended with {d} functions still on its stack; a component was not popped", .{s.stack.len});
         return s.cycles.items();
     }
 
@@ -145,8 +144,8 @@ pub const Graph = struct {
             if (w == root) break;
         }
         const members = s.members.items()[start..];
-        assert(members.len > 0);
-        assert(members[members.len - 1] == root);
+        if (members.len == 0) std.debug.panic("function {d} closed a component with no members; it was not on the stack", .{root});
+        if (members[members.len - 1] != root) std.debug.panic("function {d}'s component ends with function {d}; the stack was not popped down to its root", .{ root, members[members.len - 1] });
         const cyclic = members.len > 1 or std.mem.indexOfScalar(u32, self.out(root), root) != null;
         if (cyclic) try s.cycles.add(.{ .members = members }) else s.members.len = start;
     }
@@ -161,8 +160,8 @@ const Lookup = struct {
         const lo = std.sort.lowerBound(u32, self.sorted, self, compareName);
         var hi = lo;
         while (hi < self.sorted.len and std.mem.eql(u8, self.functions[self.sorted[hi]].name, self.call.callee)) hi += 1;
-        assert(lo <= hi);
-        assert(hi <= self.sorted.len);
+        if (lo > hi) std.debug.panic("the functions named '{s}' run backwards ({d}..{d})", .{ self.call.callee, lo, hi });
+        if (hi > self.sorted.len) std.debug.panic("the functions named '{s}' end at {d}, past the {d} sorted names", .{ self.call.callee, hi, self.sorted.len });
         return self.sorted[lo..hi];
     }
 
@@ -170,27 +169,27 @@ const Lookup = struct {
     /// to functions or methods when the call syntax says which it must be.
     fn accepts(self: Lookup, c: u32) bool {
         const caller_path = self.functions[self.call.caller].path;
-        assert(c < self.functions.len);
+        if (c >= self.functions.len) std.debug.panic("call to '{s}' resolved to function {d}, but only {d} are recorded", .{ self.call.callee, c, self.functions.len });
         if (!reaches(self.call.reach, self.functions[c].method)) return false;
         if (std.mem.eql(u8, self.functions[c].path, caller_path)) return true;
         for (self.candidates()) |other| {
             const local = std.mem.eql(u8, self.functions[other].path, caller_path);
             if (local and reaches(self.call.reach, self.functions[other].method)) return false;
         }
-        assert(self.call.callee.len > 0);
+        if (self.call.callee.len == 0) std.debug.panic("function {d} calls something with an empty name; check the @call.name capture", .{self.call.caller});
         return true;
     }
 };
 
 fn compareName(lookup: Lookup, id: u32) std.math.Order {
-    assert(id < lookup.functions.len);
-    assert(lookup.call.callee.len > 0);
+    if (id >= lookup.functions.len) std.debug.panic("looking up '{s}' reached function {d}, but only {d} are recorded", .{ lookup.call.callee, id, lookup.functions.len });
+    if (lookup.call.callee.len == 0) std.debug.panic("function {d} calls something with an empty name; check the @call.name capture", .{lookup.call.caller});
     return std.mem.order(u8, lookup.call.callee, lookup.functions[id].name);
 }
 
 fn nameOrder(functions: []const Function, a: u32, b: u32) bool {
-    assert(a < functions.len);
-    assert(b < functions.len);
+    if (a >= functions.len) std.debug.panic("sorting function {d}, but only {d} are recorded", .{ a, functions.len });
+    if (b >= functions.len) std.debug.panic("sorting function {d}, but only {d} are recorded", .{ b, functions.len });
     const by_name = std.mem.order(u8, functions[a].name, functions[b].name);
     return if (by_name == .eq) a < b else by_name == .lt;
 }
@@ -201,8 +200,8 @@ fn reaches(reach: facts_module.Reach, method: bool) bool {
         .functions => !method,
         .methods => method,
     };
-    assert(result or reach != .any);
-    assert(!result or reach != .methods or method);
+    if (!result and reach == .any) std.debug.panic("a call that can reach anything ({t}) refused a {s}", .{ reach, if (method) "method" else "function" });
+    if (result and reach == .methods and !method) std.debug.panic("a call that can only reach methods accepted a plain function", .{});
     return result;
 }
 
@@ -219,8 +218,8 @@ pub fn recursion(s: *CycleScratch, facts: *const Facts, findings: *memory.Bounde
             try findings.add(.{ .path = f.path, .line = f.line, .column = f.column, .rule = "recursion", .message = message });
         }
     }
-    assert(findings.len - before <= facts.functions.len);
-    assert(graph.offsets.len == facts.functions.len + 1);
+    if (findings.len - before > facts.functions.len) std.debug.panic("recursion reported {d} findings for {d} functions; each function can be in at most one cycle", .{ findings.len - before, facts.functions.len });
+    if (graph.offsets.len != facts.functions.len + 1) std.debug.panic("the call graph has {d} row offsets for {d} functions", .{ graph.offsets.len, facts.functions.len });
 }
 
 test "cycles are found without recursion" {

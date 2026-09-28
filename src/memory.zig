@@ -1,5 +1,4 @@
 const std = @import("std");
-const assert = std.debug.assert;
 const Allocator = std.mem.Allocator;
 
 pub const Limits = struct {
@@ -16,13 +15,17 @@ pub const Limits = struct {
     edges: u32 = 1 << 21,
     tree_bytes: usize = 1 << 29,
     query_bytes: usize = 1 << 26,
+    ignore_patterns: u32 = 1 << 14,
+    ignore_bytes: u32 = 1 << 20,
+    judgements: u32 = 1 << 18,
+    judgement_bytes: u32 = 1 << 26,
 };
 
 pub var exceeded: []const u8 = "";
 
 pub fn Bounded(comptime T: type) type {
-    comptime assert(@sizeOf(T) > 0);
-    comptime assert(@alignOf(T) > 0);
+    comptime if (@sizeOf(T) == 0) @compileError("Bounded(" ++ @typeName(T) ++ ") holds a zero-sized type; it needs no storage, so count items instead");
+    comptime if (@alignOf(T) == 0) @compileError("Bounded(" ++ @typeName(T) ++ ") has zero alignment, which Zig types never have");
     return struct {
         const Self = @This();
 
@@ -31,47 +34,47 @@ pub fn Bounded(comptime T: type) type {
         what: []const u8,
 
         pub fn initBounded(gpa: Allocator, capacity: usize, what: []const u8) Allocator.Error!Self {
-            assert(capacity > 0);
-            assert(what.len > 0);
+            if (capacity == 0) std.debug.panic("Bounded buffer for {s} was given capacity 0; check the matching field in memory.Limits", .{what});
+            if (what.len == 0) std.debug.panic("Bounded buffer of capacity {d} has no description; pass what it holds so a full buffer can say which limit to raise", .{capacity});
             return .{ .buffer = try gpa.alloc(T, capacity), .what = what };
         }
 
         pub fn add(self: *Self, item: T) error{LimitExceeded}!void {
-            assert(self.len <= self.buffer.len);
+            if (self.len > self.buffer.len) std.debug.panic("{s}: {d} items recorded but only {d} slots exist; something set len without add()", .{ self.what, self.len, self.buffer.len });
             if (self.len == self.buffer.len) {
                 exceeded = self.what;
                 return error.LimitExceeded;
             }
             self.buffer[self.len] = item;
             self.len += 1;
-            assert(self.len <= self.buffer.len);
+            if (self.len > self.buffer.len) std.debug.panic("{s}: add() left {d} items in {d} slots", .{ self.what, self.len, self.buffer.len });
         }
 
         pub fn items(self: *const Self) []T {
-            assert(self.len <= self.buffer.len);
-            assert(self.buffer.len > 0);
+            if (self.len > self.buffer.len) std.debug.panic("{s}: {d} items recorded but only {d} slots exist; something set len without add()", .{ self.what, self.len, self.buffer.len });
+            if (self.buffer.len == 0) std.debug.panic("{s}: the buffer was never allocated; call initBounded before items()", .{self.what});
             return self.buffer[0..self.len];
         }
 
         pub fn last(self: *const Self) ?*T {
-            assert(self.len <= self.buffer.len);
+            if (self.len > self.buffer.len) std.debug.panic("{s}: {d} items recorded but only {d} slots exist; something set len without add()", .{ self.what, self.len, self.buffer.len });
             if (self.len == 0) return null;
-            assert(self.buffer.len > 0);
+            if (self.buffer.len == 0) std.debug.panic("{s}: holds {d} items in an unallocated buffer; call initBounded first", .{ self.what, self.len });
             return &self.buffer[self.len - 1];
         }
 
         pub fn drop(self: *Self) ?T {
-            assert(self.len <= self.buffer.len);
+            if (self.len > self.buffer.len) std.debug.panic("{s}: {d} items recorded but only {d} slots exist; something set len without add()", .{ self.what, self.len, self.buffer.len });
             if (self.len == 0) return null;
             self.len -= 1;
-            assert(self.len < self.buffer.len);
+            if (self.len >= self.buffer.len) std.debug.panic("{s}: drop() left {d} items in {d} slots", .{ self.what, self.len, self.buffer.len });
             return self.buffer[self.len];
         }
 
         pub fn clear(self: *Self) void {
-            assert(self.len <= self.buffer.len);
+            if (self.len > self.buffer.len) std.debug.panic("{s}: {d} items recorded but only {d} slots exist; something set len without add()", .{ self.what, self.len, self.buffer.len });
             self.len = 0;
-            assert(self.items().len == 0);
+            if (self.items().len != 0) std.debug.panic("{s}: clear() left {d} items", .{ self.what, self.items().len });
         }
     };
 }
@@ -81,25 +84,25 @@ pub const Text = struct {
     used: usize = 0,
 
     pub fn initText(gpa: Allocator, capacity: usize) Allocator.Error!Text {
-        assert(capacity > 0);
+        if (capacity == 0) std.debug.panic("Text buffer was given capacity 0; check memory.Limits.text_bytes", .{});
         const buffer = try gpa.alloc(u8, capacity);
-        assert(buffer.len == capacity);
+        if (buffer.len != capacity) std.debug.panic("Text buffer: asked for {d} bytes, the allocator returned {d}", .{ capacity, buffer.len });
         return .{ .buffer = buffer };
     }
 
     pub fn format(self: *Text, comptime fmt: []const u8, args: anytype) error{LimitExceeded}![]const u8 {
-        assert(self.used <= self.buffer.len);
+        if (self.used > self.buffer.len) std.debug.panic("Text buffer: {d} bytes marked used out of {d}; something moved used past the end", .{ self.used, self.buffer.len });
         const written = std.fmt.bufPrint(self.buffer[self.used..], fmt, args) catch {
             exceeded = "bytes of message text";
             return error.LimitExceeded;
         };
         self.used += written.len;
-        assert(self.used <= self.buffer.len);
+        if (self.used > self.buffer.len) std.debug.panic("Text buffer: format() left {d} bytes used out of {d}", .{ self.used, self.buffer.len });
         return written;
     }
 
     pub fn copy(self: *Text, bytes: []const u8) error{LimitExceeded}![]const u8 {
-        assert(self.used <= self.buffer.len);
+        if (self.used > self.buffer.len) std.debug.panic("Text buffer: {d} bytes marked used out of {d}; something moved used past the end", .{ self.used, self.buffer.len });
         if (self.buffer.len - self.used < bytes.len) {
             exceeded = "bytes of names and paths";
             return error.LimitExceeded;
@@ -107,7 +110,7 @@ pub const Text = struct {
         const out = self.buffer[self.used .. self.used + bytes.len];
         @memcpy(out, bytes);
         self.used += bytes.len;
-        assert(std.mem.eql(u8, out, bytes));
+        if (!std.mem.eql(u8, out, bytes)) std.debug.panic("Text buffer: copied '{s}' but the buffer holds '{s}'; the source overlaps the buffer", .{ bytes, out });
         return out;
     }
 };
@@ -121,13 +124,13 @@ pub const Pool = struct {
     what: []const u8,
 
     pub fn initPool(gpa: Allocator, capacity: usize, what: []const u8) Allocator.Error!Pool {
-        assert(capacity % header == 0);
-        assert(what.len > 0);
+        if (capacity % header != 0) std.debug.panic("Pool for {s}: capacity {d} is not a multiple of the {d}-byte header; round memory.Limits up", .{ what, capacity, header });
+        if (what.len == 0) std.debug.panic("Pool of {d} bytes has no description; pass what it holds so running out can say which limit to raise", .{capacity});
         return .{ .buffer = try gpa.alignedAlloc(u8, .fromByteUnits(header), capacity), .what = what };
     }
 
     fn take(self: *Pool, size: usize) ?[*]u8 {
-        assert(self.used % header == 0);
+        if (self.used % header != 0) std.debug.panic("Pool for {s}: {d} bytes used is not header-aligned ({d}); take() must round every allocation", .{ self.what, self.used, header });
         const rounded = std.mem.alignForward(usize, size, header) + header;
         if (self.buffer.len - self.used < rounded) {
             exceeded = self.what;
@@ -136,37 +139,37 @@ pub const Pool = struct {
         std.mem.writeInt(usize, self.buffer[self.used..][0..@sizeOf(usize)], size, .little);
         self.last = self.used;
         self.used += rounded;
-        assert(self.used <= self.buffer.len);
+        if (self.used > self.buffer.len) std.debug.panic("Pool for {s}: take() used {d} of {d} bytes", .{ self.what, self.used, self.buffer.len });
         return self.buffer.ptr + self.last + header;
     }
 
     fn sizeOf(self: *const Pool, ptr: [*]u8) usize {
         const offset = @intFromPtr(ptr) - @intFromPtr(self.buffer.ptr) - header;
-        assert(offset < self.used);
-        assert(offset % header == 0);
+        if (offset >= self.used) std.debug.panic("Pool for {s}: pointer at offset {d} is past the {d} bytes handed out; tree-sitter freed or resized memory the pool never gave it", .{ self.what, offset, self.used });
+        if (offset % header != 0) std.debug.panic("Pool for {s}: pointer at offset {d} is not at a {d}-byte allocation boundary; it was not returned by take()", .{ self.what, offset, header });
         return std.mem.readInt(usize, self.buffer[offset..][0..@sizeOf(usize)], .little);
     }
 
     fn release(self: *Pool, ptr: [*]u8) void {
         const offset = @intFromPtr(ptr) - @intFromPtr(self.buffer.ptr) - header;
-        assert(offset < self.used);
+        if (offset >= self.used) std.debug.panic("Pool for {s}: freeing offset {d}, past the {d} bytes handed out; a pointer was freed twice or came from another allocator", .{ self.what, offset, self.used });
         if (offset == self.last) self.used = self.last;
-        assert(self.used <= self.buffer.len);
+        if (self.used > self.buffer.len) std.debug.panic("Pool for {s}: release() left {d} of {d} bytes used", .{ self.what, self.used, self.buffer.len });
     }
 
     fn owns(self: *const Pool, ptr: [*]u8) bool {
         const address = @intFromPtr(ptr);
         const start = @intFromPtr(self.buffer.ptr);
-        assert(self.buffer.len > 0);
-        assert(start % header == 0);
+        if (self.buffer.len == 0) std.debug.panic("Pool for {s} was never allocated; call initPool first", .{self.what});
+        if (start % header != 0) std.debug.panic("Pool for {s}: buffer starts at 0x{x}, not {d}-byte aligned; allocate it with alignedAlloc", .{ self.what, start, header });
         return address >= start and address < start + self.buffer.len;
     }
 
     pub fn reset(self: *Pool) void {
-        assert(self.used <= self.buffer.len);
+        if (self.used > self.buffer.len) std.debug.panic("Pool for {s}: {d} bytes used of {d} before reset", .{ self.what, self.used, self.buffer.len });
         self.used = 0;
         self.last = 0;
-        assert(self.used == 0);
+        if (self.used != 0) std.debug.panic("Pool for {s}: reset() left {d} bytes used", .{ self.what, self.used });
     }
 };
 
@@ -174,22 +177,22 @@ pub var tree_pool: ?*Pool = null;
 
 fn active() *Pool {
     const pool = tree_pool orelse unreachable;
-    assert(pool.buffer.len > 0);
-    assert(pool.used <= pool.buffer.len);
+    if (pool.buffer.len == 0) std.debug.panic("the tree-sitter pool was installed without a buffer; call initPool before parsing", .{});
+    if (pool.used > pool.buffer.len) std.debug.panic("the tree-sitter pool reports {d} bytes used of {d}", .{ pool.used, pool.buffer.len });
     return pool;
 }
 
 export fn zanityMalloc(size: usize) ?*anyopaque {
-    assert(size < std.math.maxInt(u32));
+    if (size >= std.math.maxInt(u32)) std.debug.panic("tree-sitter asked for {d} bytes, more than a 4 GiB file could need; the parse state is corrupt", .{size});
     const ptr = active().take(size);
-    assert(ptr == null or @intFromPtr(ptr.?) % header == 0);
+    if (ptr != null and @intFromPtr(ptr.?) % header != 0) std.debug.panic("zanityMalloc returned 0x{x}, not {d}-byte aligned", .{ @intFromPtr(ptr.?), header });
     return ptr;
 }
 
 export fn zanityCalloc(count: usize, size: usize) ?*anyopaque {
     const total = count * size;
-    assert(count == 0 or total / count == size);
-    assert(total < std.math.maxInt(u32));
+    if (count != 0 and total / count != size) std.debug.panic("tree-sitter asked for {d} x {d} bytes, which overflows", .{ count, size });
+    if (total >= std.math.maxInt(u32)) std.debug.panic("tree-sitter asked for {d} x {d} = {d} bytes, more than a 4 GiB file could need", .{ count, size, total });
     const ptr = active().take(total) orelse return null;
     @memset(ptr[0..total], 0);
     return ptr;
@@ -198,20 +201,20 @@ export fn zanityCalloc(count: usize, size: usize) ?*anyopaque {
 export fn zanityRealloc(old: ?*anyopaque, size: usize) ?*anyopaque {
     const pool = active();
     const previous: [*]u8 = @ptrCast(old orelse return pool.take(size));
-    assert(pool.owns(previous));
+    if (!pool.owns(previous)) std.debug.panic("tree-sitter resized 0x{x}, which the pool did not allocate; it came from another allocator", .{@intFromPtr(previous)});
     const previous_size = pool.sizeOf(previous);
     const fresh = pool.take(size) orelse return null;
     @memcpy(fresh[0..@min(size, previous_size)], previous[0..@min(size, previous_size)]);
-    assert(fresh != previous);
+    if (fresh == previous) std.debug.panic("zanityRealloc returned the block it was resizing (0x{x}); take() must hand out new memory", .{@intFromPtr(fresh)});
     return fresh;
 }
 
 export fn zanityFree(ptr: ?*anyopaque) void {
     const pool = active();
     const bytes: [*]u8 = @ptrCast(ptr orelse return);
-    assert(pool.owns(bytes));
+    if (!pool.owns(bytes)) std.debug.panic("tree-sitter freed 0x{x}, which the pool did not allocate; it came from another allocator", .{@intFromPtr(bytes)});
     pool.release(bytes);
-    assert(pool.used <= pool.buffer.len);
+    if (pool.used > pool.buffer.len) std.debug.panic("the tree-sitter pool reports {d} bytes used of {d} after a free", .{ pool.used, pool.buffer.len });
 }
 
 test "bounded containers refuse to grow past their limit" {

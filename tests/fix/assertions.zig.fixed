@@ -1,0 +1,14 @@
+const std = @import("std");
+const assert = std.debug.assert;
+
+fn f(a: []const u8, b: usize) void {
+    // TODO: say why this must hold and what to look at when it fails.
+    if (!(a.len > b)) std.debug.panic("expected a.len > b, got a.len={any}, b={any}", .{ a.len, b });
+    // TODO: say why this must hold and what to look at when it fails.
+    if (b > 0) if (!(std.mem.eql(u8, a, "x{"))) std.debug.panic("expected std.mem.eql(u8, a, 'x{{'), got a={any}", .{ a });
+    // TODO: say why this must hold and what to look at when it fails.
+    defer if (!(b < 10)) std.debug.panic("expected b < 10, got b={any}", .{ b });
+    // TODO: say why this must hold and what to look at when it fails.
+    if (!(true)) @panic("expected true");
+    if (!(b != 3)) std.debug.panic("expected b != 3, got {d}", .{b});
+}
