@@ -4,3 +4,8 @@ def f(a, b):
     assert a, "already explained"
     # TODO: say why this must hold and what to look at when it fails.
     assert True, "expected True"
+
+
+def g(q):
+    # TODO: say why this must hold and what to look at when it fails.
+    assert len({e["id"] for e in q}) == len(q), f"expected len({{e['id'] for e in q}}) == len(q), got q={q!r}"

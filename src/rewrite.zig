@@ -26,12 +26,31 @@ pub fn conditionValues(self: *File, condition: ts.Node, out: *[4][]const u8) []c
         if (after.len > 0 and after[0] == '(') continue;
         const text = node.text(self.source);
         if (!(std.ascii.isAlphabetic(text[0]) or text[0] == '_')) continue;
+        if (boundInside(self, start, end, text)) continue;
         if (count == out.len or contains(out[0..count], text)) continue;
         out[count] = text;
         count += 1;
     }
     if (count > found) std.debug.panic("{s}: kept {d} values from only {d} candidates", .{ self.work.facts.path, count, found });
     return out[0..count];
+}
+
+/// Whether the name `path` starts with is defined between `start` and `end`, like the `e` in
+/// `{e.id for e in q}`: it exists only inside the condition, so a message can't show it.
+fn boundInside(self: *File, start: u32, end: u32, path: []const u8) bool {
+    if (start > end) std.debug.panic("{s}: looking for definitions in bytes {d}..{d}, which run backwards", .{ self.work.facts.path, start, end });
+    const root_end = for (path, 0..) |c, i| {
+        if (!(std.ascii.isAlphanumeric(c) or c == '_' or c == '$')) break i;
+    } else path.len;
+    if (root_end == 0) std.debug.panic("{s}: the value '{s}' does not start with a name", .{ self.work.facts.path, path });
+    const names = self.checker.compiled.names;
+    const first = std.sort.lowerBound(captures.Triple, self.index.triples, start, hazards.startsBefore);
+    for (self.index.triples[first..]) |t| {
+        if (t.key.start >= end) break;
+        if (!std.mem.eql(u8, names[t.id].family, "local.definition")) continue;
+        if (std.mem.eql(u8, t.node.text(self.source), path[0..root_end])) return true;
+    }
+    return false;
 }
 
 /// The outermost names and field accesses between `start` and `end`, in order: `a.len`, not `a`.
