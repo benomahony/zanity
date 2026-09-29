@@ -1,0 +1,3 @@
+# Fixtures are deliberately bad code, and their expected output depends on it: check them only
+# when a test names them, and never --fix them.
+exclude = ["tests/golden/", "tests/fix/", "tests/config/", "tests/infer/project/"]
