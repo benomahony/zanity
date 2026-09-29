@@ -299,3 +299,12 @@
   (lambda_expression)
   (class_body)
 ] @declaration.barrier
+
+; An initializer that does something besides compute a value, so --fix won't move it.
+[
+  (method_invocation)
+  (object_creation_expression)
+  (array_creation_expression)
+  (assignment_expression)
+  (update_expression)
+] @declaration.effect

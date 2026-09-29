@@ -272,3 +272,11 @@
         (#not-eq? @declaration.name "_"))) @declaration.outer))
 
 (block) @declaration.block
+
+; An initializer that does something besides compute a value, so --fix won't move it.
+[
+  (call_expression)
+  (unary_expression
+    operator: "<-")
+  (func_literal)
+] @declaration.effect

@@ -236,3 +236,13 @@
   (continue_expression)
   (try_expression)
 ] @declaration.exit
+
+; An initializer that does something besides compute a value, so --fix won't move it.
+[
+  (call_expression)
+  (macro_invocation)
+  (await_expression)
+  (assignment_expression)
+  (compound_assignment_expr)
+  (unsafe_block)
+] @declaration.effect

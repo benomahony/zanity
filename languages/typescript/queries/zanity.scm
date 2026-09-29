@@ -413,3 +413,14 @@
 
 ; A class body's methods run later, so a local moved into one would be made at a different time.
 (class_body) @declaration.barrier
+
+; An initializer that does something besides compute a value, so --fix won't move it.
+[
+  (call_expression)
+  (new_expression)
+  (await_expression)
+  (yield_expression)
+  (assignment_expression)
+  (augmented_assignment_expression)
+  (update_expression)
+] @declaration.effect

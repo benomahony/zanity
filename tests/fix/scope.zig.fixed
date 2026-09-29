@@ -1,0 +1,29 @@
+fn narrow(flag: bool) u32 {
+    if (flag) {
+        const only_inside = 3;
+        return only_inside + 1;
+    }
+    return 0;
+}
+
+fn called(flag: bool) u32 {
+    const computed = compute();
+    if (flag) {
+        return computed;
+    }
+    return 0;
+}
+
+fn compute() u32 {
+    return 3;
+}
+
+fn reassigned(flag: bool) u32 {
+    var base: u32 = 1;
+    const derived = base + 1;
+    base = 5;
+    if (flag) {
+        return derived + base;
+    }
+    return base;
+}

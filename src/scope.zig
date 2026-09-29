@@ -5,6 +5,7 @@ const captures = @import("captures.zig");
 const check = @import("check.zig");
 const hazards = @import("hazards.zig");
 const File = check.File;
+const Edit = @import("facts.zig").Edit;
 
 /// Names declared by one statement, such as `x, err := f()`, which can only move together.
 const max_group = 8;
@@ -16,6 +17,8 @@ const Ids = struct {
     scope: captures.Id,
     reference: captures.Id,
     exit: ?captures.Id,
+    /// Something in an initializer besides computing a value, such as a call, so --fix won't move it.
+    effect: ?captures.Id,
     string: ?captures.Id,
     /// Code that runs once per iteration, or later, so a local moved into it is made at a different time.
     barriers: [3]?captures.Id,
@@ -29,6 +32,7 @@ const Ids = struct {
             .scope = c.id("local.scope") orelse return null,
             .reference = c.id("local.reference") orelse return null,
             .exit = c.id("declaration.exit"),
+            .effect = c.id("declaration.effect"),
             .string = c.id("literal.string"),
             .barriers = .{ c.id("loop.outer"), c.id("function.outer"), c.id("declaration.barrier") },
         };
@@ -107,8 +111,68 @@ fn checkGroup(self: *File, ids: Ids, group: *const Group) !void {
     if (ts.ts_node_start_byte(target) < group.after()) std.debug.panic("{s}: the block {f} that '{s}' would move into starts before the declaration ends", .{ self.work.facts.path, target.where(), declared.text(self.source) });
     const line = ts.ts_node_start_point(target).row + 1;
     if (!try self.report(declared, "wide-scope", try wideScopeMessage(self, group, line))) return;
-    self.s.diagnostics.last().?.fix = try self.say("Move this declaration to the top of the block on line {d}, unless its initializer has to run before the code in between.", .{line});
-    if (self.s.diagnostics.last().?.fix.len == 0) std.debug.panic("{s}: the wide-scope fix for '{s}' came out empty", .{ self.work.facts.path, declared.text(self.source) });
+    const diagnostic = self.s.diagnostics.last().?;
+    diagnostic.edit = try moveEdit(self, ids, group, target);
+    diagnostic.fix = if (diagnostic.edit == null)
+        try self.say("Move this declaration to the top of the block on line {d}, unless its initializer has to run before the code in between.", .{line})
+    else
+        try self.say("Move this declaration to the top of the block on line {d}.", .{line});
+    if (diagnostic.fix.len == 0) std.debug.panic("{s}: the wide-scope fix for '{s}' came out empty", .{ self.work.facts.path, declared.text(self.source) });
+}
+
+/// The edit that moves the declaration to the top of `target`: it takes the declaration's line
+/// out and writes it after the line that opens `target`, at the indentation of the line after.
+/// Null when moving it could change what it computes, or the layout isn't one line per statement.
+fn moveEdit(self: *File, ids: Ids, group: *const Group, target: ts.Node) !?Edit {
+    const line = lineAlone(self, group.statement) orelse return null;
+    if (!pureInitializer(self, ids, group, target)) return null;
+    const open = ts.ts_node_start_byte(target);
+    if (self.source[open] != '{') return null;
+    const open_end = std.mem.indexOfScalarPos(u8, self.source, open, '\n') orelse return null;
+    if (std.mem.trim(u8, self.source[open + 1 .. open_end], " \t\r").len != 0) return null;
+    const insert: u32 = @intCast(open_end + 1);
+    const next_end = std.mem.indexOfScalarPos(u8, self.source, insert, '\n') orelse return null;
+    const next = self.source[insert..next_end];
+    const code = std.mem.trimStart(u8, next, " \t");
+    if (code.len == 0 or code[0] == '}') return null;
+    if (insert <= line.end) std.debug.panic("{s}: the block {f} opens before the declaration {f} ends", .{ self.work.facts.path, target.where(), group.statement.where() });
+    const replacement = try self.work.text.format("{s}{s}{s}\n", .{ self.source[line.end + 1 .. insert], next[0 .. next.len - code.len], group.statement.text(self.source) });
+    if (!std.mem.endsWith(u8, replacement, "\n")) std.debug.panic("{s}: the moved declaration '{s}' does not end its line", .{ self.work.facts.path, replacement });
+    return .{ .start = line.start, .end = insert, .replacement = replacement };
+}
+
+const Line = struct { start: u32, end: u32 };
+
+/// The line `node` is on, when it is on one line with nothing else on it but whitespace.
+fn lineAlone(self: *File, node: ts.Node) ?Line {
+    const start = ts.ts_node_start_byte(node);
+    const end = ts.ts_node_end_byte(node);
+    if (end <= start) std.debug.panic("{s}: the declaration {f} is empty", .{ self.work.facts.path, node.where() });
+    if (std.mem.indexOfScalar(u8, self.source[start..end], '\n') != null) return null;
+    const line_start = if (std.mem.lastIndexOfScalar(u8, self.source[0..start], '\n')) |newline| newline + 1 else 0;
+    const line_end = std.mem.indexOfScalarPos(u8, self.source, end, '\n') orelse return null;
+    if (std.mem.trim(u8, self.source[line_start..start], " \t").len != 0) return null;
+    if (std.mem.trim(u8, self.source[end..line_end], " \t\r").len != 0) return null;
+    if (line_end < end) std.debug.panic("{s}: the line of {f} ends at byte {d}, before the declaration does", .{ self.work.facts.path, node.where(), line_end });
+    return .{ .start = @intCast(line_start), .end = @intCast(line_end) };
+}
+
+/// Whether the initializer only computes a value from names that nothing between the declaration
+/// and `target` mentions, so computing it later gives the same value.
+fn pureInitializer(self: *File, ids: Ids, group: *const Group, target: ts.Node) bool {
+    const statement = group.statement;
+    const end = ts.ts_node_end_byte(statement);
+    const between = self.source[group.after()..ts.ts_node_start_byte(target)];
+    if (between.len > self.source.len) std.debug.panic("{s}: {d} bytes lie between {f} and {f}, more than the file holds", .{ self.work.facts.path, between.len, statement.where(), target.where() });
+    const first = std.sort.lowerBound(captures.Triple, self.index.triples, ts.ts_node_start_byte(statement), hazards.startsBefore);
+    for (self.index.triples[first..]) |t| {
+        if (t.key.start >= end) break;
+        if (t.id == ids.effect) return false;
+        if (t.id != ids.reference or isDefinition(self, t.node)) continue;
+        if (containsWord(between, t.node.text(self.source))) return false;
+    }
+    if (first > self.index.triples.len) std.debug.panic("{s}: the captures of {f} start at {d}, past the {d} recorded", .{ self.work.facts.path, statement.where(), first, self.index.triples.len });
+    return true;
 }
 
 fn wideScopeMessage(self: *File, group: *const Group, line: u32) ![]const u8 {
