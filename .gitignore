@@ -3,3 +3,4 @@ zig-out/
 zig-pkg/
 .zanity/
 *.zip
+__pycache__/
