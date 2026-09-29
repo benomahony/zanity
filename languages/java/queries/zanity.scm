@@ -308,3 +308,8 @@
   (assignment_expression)
   (update_expression)
 ] @declaration.effect
+
+; A check a test makes through JUnit or AssertJ, so a test's checks can be counted.
+((method_invocation
+  name: (identifier) @_check) @test.check
+  (#any-of? @_check "assertEquals" "assertNotEquals" "assertTrue" "assertFalse" "assertNull" "assertNotNull" "assertSame" "assertNotSame" "assertArrayEquals" "assertIterableEquals" "assertLinesMatch" "assertThrows" "assertDoesNotThrow" "assertTimeout" "assertAll" "assertThat" "fail"))

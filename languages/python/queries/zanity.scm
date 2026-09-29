@@ -388,3 +388,12 @@
   (for_in_clause)
   (if_clause)
 ] @decision.point
+
+; A check a test makes through unittest, so a test's checks can be counted. `assert` itself is
+; already an assertion.
+((call
+  function: (attribute
+    object: (identifier) @_self
+    attribute: (identifier) @_check)) @test.check
+  (#eq? @_self "self")
+  (#any-of? @_check "assertEqual" "assertNotEqual" "assertTrue" "assertFalse" "assertIs" "assertIsNot" "assertIsNone" "assertIsNotNone" "assertIn" "assertNotIn" "assertIsInstance" "assertNotIsInstance" "assertRaises" "assertRaisesRegex" "assertAlmostEqual" "assertNotAlmostEqual" "assertGreater" "assertGreaterEqual" "assertLess" "assertLessEqual" "assertRegex" "assertNotRegex" "assertCountEqual" "assertDictEqual" "assertListEqual" "assertSetEqual" "assertTupleEqual" "assertSequenceEqual" "assertMultiLineEqual" "fail"))

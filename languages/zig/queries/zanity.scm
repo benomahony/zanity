@@ -357,3 +357,9 @@
   (builtin_function)
   (assignment_expression)
 ] @declaration.effect
+
+; A check a test makes through std.testing, so a test's checks can be counted.
+((call_expression
+  function: (field_expression
+    member: (identifier) @_check)) @test.check
+  (#any-of? @_check "expect" "expectEqual" "expectEqualStrings" "expectEqualSlices" "expectEqualDeep" "expectError" "expectApproxEqAbs" "expectApproxEqRel" "expectFmt" "expectStringStartsWith" "expectStringEndsWith"))

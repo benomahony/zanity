@@ -424,3 +424,21 @@
   (augmented_assignment_expression)
   (update_expression)
 ] @declaration.effect
+
+; A check a test makes, `expect(x).toBe(y)` or `assert.equal(x, y)`, so a test's checks can be
+; counted.
+(call_expression
+  function: (member_expression
+    object: [
+      (call_expression
+        function: (identifier) @_expect)
+      (member_expression
+        object: (call_expression
+          function: (identifier) @_expect))
+    ])
+  (#eq? @_expect "expect")) @test.check
+
+((call_expression
+  function: (member_expression
+    object: (identifier) @_assert)) @test.check
+  (#eq? @_assert "assert"))

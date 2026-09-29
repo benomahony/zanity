@@ -1,0 +1,3 @@
+rules: eager-test
+exit: 0
+EagerTest_java.java:3:10: warning [eager-test]

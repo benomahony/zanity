@@ -80,6 +80,8 @@ pub const Context = struct {
     has_message: bool = false,
     /// A branch or loop that continues its parent at the same depth, like an `else if`.
     chained: bool = false,
+    /// Checks a test makes: its assertions and its test framework's checks.
+    checks: u32 = 0,
     /// Decision points in the function, for its cyclomatic complexity.
     decisions: u32 = 0,
     /// Whether the function's nesting was already reported, so it is reported once.
@@ -179,6 +181,7 @@ const Vocabulary = struct {
     control_chain: ?captures.Id,
     decision_point: ?captures.Id,
     test_outer: ?captures.Id,
+    test_check: ?captures.Id,
 
     fn lookup(c: captures.Compiled) Vocabulary {
         if (c.names.len == 0) std.debug.panic("the query has no captures, so no rule could run; check the language's query files", .{});
@@ -210,6 +213,7 @@ const Vocabulary = struct {
             .control_chain = c.id("control.chain"),
             .decision_point = c.id("decision.point"),
             .test_outer = c.id("test.outer"),
+            .test_check = c.id("test.check"),
         };
     }
 };
@@ -333,6 +337,8 @@ pub const File = struct {
             if (!self.hasOuter(found, .assertion)) if (self.enclosingUnit()) |unit| {
                 unit.decisions += 1;
             };
+        } else if (v.test_check == id) {
+            if (self.enclosingTest()) |unit| unit.checks += 1;
         } else if (v.async_name == id) {
             try self.s.async_names.add(node.text(self.source));
         } else if (v.statement_call == id) {
@@ -502,8 +508,9 @@ pub const File = struct {
             .trail_mark = self.s.trail.len,
         };
         switch (family) {
-            .assertion => if (self.enclosingFunction()) |function| {
-                function.asserts += 1;
+            .assertion => {
+                if (self.enclosingFunction()) |function| function.asserts += 1;
+                if (self.enclosingTest()) |unit| unit.checks += 1;
             },
             .statement => if (node.parent()) |parent| {
                 ctx.previous = self.trailFor(parent.key());
@@ -577,6 +584,33 @@ pub const File = struct {
         return null;
     }
 
+    /// The innermost test: a test construct, or a function named as a test (`test_x`, `TestX`).
+    /// Code in a callback or helper inside a test counts toward that test.
+    pub fn enclosingTest(self: *File) ?*Context {
+        const items = self.s.contexts.items();
+        if (items.len > self.s.contexts.buffer.len) std.debug.panic("{s}: {d} open constructs in room for {d}", .{ self.work.facts.path, items.len, self.s.contexts.buffer.len });
+        var i = items.len;
+        while (i > 0) {
+            i -= 1;
+            switch (items[i].family) {
+                .class => return null,
+                .@"test" => return &items[i],
+                .function => if (items[i].is_test) return &items[i],
+                else => {},
+            }
+        }
+        if (i != 0) std.debug.panic("{s}: the search for an enclosing test stopped at depth {d} without returning", .{ self.work.facts.path, i });
+        return null;
+    }
+
+    /// A test that makes more checks than a failure can point at.
+    pub fn checkEager(self: *File, ctx: Context, at: ts.Node, shown: []const u8) !void {
+        if (ctx.family != .@"test" and !ctx.is_test) std.debug.panic("{s}: counting the checks of {f}, which is not a test", .{ self.work.facts.path, ctx.node.where() });
+        if (shown.len == 0) std.debug.panic("{s}: the test {f} has no name to show", .{ self.work.facts.path, ctx.node.where() });
+        if (ctx.checks <= rules.max_test_checks) return;
+        _ = try self.report(at, "eager-test", try self.say("'{s}' makes {d} checks; past {d}, a failure no longer says which behaviour broke.", .{ shown, ctx.checks, rules.max_test_checks }));
+    }
+
     /// Lines of code from the first row of `span` to its last, not counting blank and comment lines.
     pub fn codeLinesIn(self: *File, span: ts.Node) u32 {
         const first = ts.ts_node_start_point(span).row;
@@ -598,6 +632,7 @@ pub const File = struct {
         if (lines >= rules.max_test_lines) {
             _ = try self.report(at, "long-test", try self.say("'{s}' has {d} lines of code; tests must have fewer than {d}.", .{ shown, lines, rules.max_test_lines }));
         }
+        try self.checkEager(ctx, at, shown);
         if (ctx.decisions + 1 > rules.max_complexity) {
             _ = try self.report(at, "complex-function", try self.say("'{s}' makes {d} decisions (cyclomatic complexity {d}), past the {d} a reader can follow and a test suite can cover.", .{ shown, ctx.decisions, ctx.decisions + 1, rules.max_complexity }));
         }
@@ -951,6 +986,7 @@ pub const File = struct {
         if (ctx.family != .function) std.debug.panic("{s}: measuring {f} as a function, but it is a {t}", .{ self.work.facts.path, ctx.node.where(), ctx.family });
         if (!std.mem.eql(u8, name, name_node.text(self.source))) std.debug.panic("{s}: measuring '{s}' under the name of {f}", .{ self.work.facts.path, name, name_node.where() });
         if (self.index.marks(ctx.node, self.v.test_outer)) return;
+        if (ctx.is_test) try self.checkEager(ctx, name_node, name);
         const lines = self.codeLinesIn(ctx.span);
         if (ctx.is_test and lines >= rules.max_test_lines) {
             _ = try self.report(name_node, "long-test", try self.say("'{s}' has {d} lines of code; tests must have fewer than {d}.", .{ name, lines, rules.max_test_lines }));

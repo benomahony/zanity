@@ -1,0 +1,3 @@
+rules: eager-test
+exit: 0
+test_eager_test.py:1:5: warning [eager-test]

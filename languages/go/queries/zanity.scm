@@ -280,3 +280,14 @@
     operator: "<-")
   (func_literal)
 ] @declaration.effect
+
+; A check a test makes, through testing.T or testify, so a test's checks can be counted.
+((call_expression
+  function: (selector_expression
+    field: (field_identifier) @_check)) @test.check
+  (#any-of? @_check "Error" "Errorf" "Fatal" "Fatalf" "Fail" "FailNow"))
+
+((call_expression
+  function: (selector_expression
+    operand: (identifier) @_package)) @test.check
+  (#any-of? @_package "assert" "require"))
