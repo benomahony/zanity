@@ -8,3 +8,8 @@ fn f(a: []const u8, b: usize) void {
     assert(true);
     if (!(b != 3)) std.debug.panic("expected b != 3, got {d}", .{b});
 }
+
+fn g(items: []const u32, i: usize) void {
+    assert(items[i] > 0);
+    assert(i < items.len and items[i] > 1);
+}

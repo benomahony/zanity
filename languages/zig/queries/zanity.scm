@@ -147,6 +147,33 @@
   (field_expression)
 ] @expression.path
 
+; An element read with a constant or a name, so a message can show `items[i]` rather than all
+; of `items`.
+(index_expression
+  object: [
+    (identifier)
+    (field_expression)
+  ]
+  index: [
+    (identifier)
+    (integer)
+    (field_expression)
+  ]) @expression.path
+
+; Code that may not run when the expression around it does, so reading it again in a message
+; could fail where the expression did not: `items[i]` in `i < items.len and items[i] > 0`.
+(binary_expression
+  operator: [
+    "and"
+    "or"
+  ]
+  right: (_) @expression.conditional)
+
+[
+  (if_expression)
+  (switch_expression)
+] @expression.conditional
+
 (binary_expression
   left: (_) @compare.subject
   operator: "!="

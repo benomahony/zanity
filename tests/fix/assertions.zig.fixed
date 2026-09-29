@@ -12,3 +12,10 @@ fn f(a: []const u8, b: usize) void {
     if (!(true)) @panic("expected true");
     if (!(b != 3)) std.debug.panic("expected b != 3, got {d}", .{b});
 }
+
+fn g(items: []const u32, i: usize) void {
+    // TODO: say why this must hold and what to look at when it fails.
+    if (!(items[i] > 0)) std.debug.panic("expected items[i] > 0, got items[i]={any}", .{ items[i] });
+    // TODO: say why this must hold and what to look at when it fails.
+    if (!(i < items.len and items[i] > 1)) std.debug.panic("expected i < items.len and items[i] > 1, got i={any}, items.len={any}, items={any}", .{ i, items.len, items });
+}

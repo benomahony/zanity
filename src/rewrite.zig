@@ -24,8 +24,8 @@ pub fn conditionValues(self: *File, condition: ts.Node, out: *[4][]const u8) []c
     for (widest[0..found]) |node| {
         const after = std.mem.trimStart(u8, self.source[ts.ts_node_end_byte(node)..end], " \t");
         if (after.len > 0 and after[0] == '(') continue;
-        const text = node.text(self.source);
-        if (!(std.ascii.isAlphabetic(text[0]) or text[0] == '_')) continue;
+        const text = shownValue(self, node, condition);
+        if (text.len == 0 or !(std.ascii.isAlphabetic(text[0]) or text[0] == '_')) continue;
         if (boundInside(self, start, end, text)) continue;
         if (count == out.len or contains(out[0..count], text)) continue;
         out[count] = text;
@@ -35,13 +35,40 @@ pub fn conditionValues(self: *File, condition: ts.Node, out: *[4][]const u8) []c
     return out[0..count];
 }
 
+/// What a message can safely read again of `node`: all of it when the condition certainly
+/// evaluated it, otherwise only the name it starts with. `d[k]` in `k in d and d[k] > 0` did not
+/// run when `k in d` failed, so reading it in the message would raise where the condition didn't.
+/// A path holding a double quote is cut to its name too, since the message may be a string that
+/// uses that quote.
+fn shownValue(self: *File, node: ts.Node, condition: ts.Node) []const u8 {
+    const text = node.text(self.source);
+    if (ts.ts_node_end_byte(node) > ts.ts_node_end_byte(condition)) std.debug.panic("{s}: the value {f} ends after its condition {f}", .{ self.work.facts.path, node.where(), condition.where() });
+    const root = text[0..rootLength(text)];
+    if (std.mem.indexOfScalar(u8, text, '"') != null) return root;
+    var current: ?ts.Node = node;
+    while (current) |ancestor| : (current = ancestor.parent()) {
+        if (self.index.marks(ancestor, self.v.expression_conditional)) return root;
+        if (ancestor.eql(condition)) break;
+    }
+    if (root.len > text.len) std.debug.panic("{s}: the name '{s}' is longer than the path '{s}' it starts", .{ self.work.facts.path, root, text });
+    return text;
+}
+
+/// The length of the name a path starts with: `d` in `d['id']` or `self` in `self.items`.
+fn rootLength(path: []const u8) usize {
+    if (path.len == 0) std.debug.panic("asked for the name at the start of an empty path; captures always span some text", .{});
+    const length = for (path, 0..) |c, i| {
+        if (!(std.ascii.isAlphanumeric(c) or c == '_' or c == '$')) break i;
+    } else path.len;
+    if (length > path.len) std.debug.panic("the name at the start of '{s}' is {d} bytes long, past its end", .{ path, length });
+    return length;
+}
+
 /// Whether the name `path` starts with is defined between `start` and `end`, like the `e` in
 /// `{e.id for e in q}`: it exists only inside the condition, so a message can't show it.
 fn boundInside(self: *File, start: u32, end: u32, path: []const u8) bool {
     if (start > end) std.debug.panic("{s}: looking for definitions in bytes {d}..{d}, which run backwards", .{ self.work.facts.path, start, end });
-    const root_end = for (path, 0..) |c, i| {
-        if (!(std.ascii.isAlphanumeric(c) or c == '_' or c == '$')) break i;
-    } else path.len;
+    const root_end = rootLength(path);
     if (root_end == 0) std.debug.panic("{s}: the value '{s}' does not start with a name", .{ self.work.facts.path, path });
     const names = self.checker.compiled.names;
     const first = std.sort.lowerBound(captures.Triple, self.index.triples, start, hazards.startsBefore);

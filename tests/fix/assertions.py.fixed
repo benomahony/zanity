@@ -9,3 +9,12 @@ def f(a, b):
 def g(q):
     # TODO: say why this must hold and what to look at when it fails.
     assert len({e["id"] for e in q}) == len(q), f"expected len({{e['id'] for e in q}}) == len(q), got q={q!r}"
+
+
+def h(d, k, x):
+    # TODO: say why this must hold and what to look at when it fails.
+    assert d['schema_version'] == '2.0', f"expected d['schema_version'] == '2.0', got d['schema_version']={d['schema_version']!r}"
+    # TODO: say why this must hold and what to look at when it fails.
+    assert k in d and d[k] > 0, f"expected k in d and d[k] > 0, got k={k!r}, d={d!r}"
+    # TODO: say why this must hold and what to look at when it fails.
+    assert x is None or x.ok, f"expected x is None or x.ok, got x={x!r}"
