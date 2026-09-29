@@ -116,8 +116,12 @@ pub const Inference = struct {
         if (self.concurrency == 0) std.debug.panic("--infer would ask TypeSafe with no requests allowed at once", .{});
         var semaphore: Io.Semaphore = .{ .permits = self.concurrency };
         var group: Io.Group = .init;
+        // The watcher needs its own thread from the start: `async` may defer a task until `await`,
+        // which would show no progress until the requests queued ahead of it were done. Without a
+        // spare thread it still runs, just late.
+        if (self.reporter != null) group.concurrent(self.io, watch, .{ self, self.jobs.len }) catch
+            group.async(self.io, watch, .{ self, self.jobs.len });
         for (self.jobs.items()) |*job| group.async(self.io, askOne, .{ self, job, &semaphore });
-        if (self.reporter != null) group.async(self.io, watch, .{ self, self.jobs.len });
         try group.await(self.io);
         for (self.jobs.items()) |*job| {
             defer job.diagnostics.deinit();
