@@ -12,4 +12,5 @@ test {
     _ = @import("ignore.zig");
     _ = @import("catalogue_test.zig");
     _ = @import("infer.zig");
+    _ = @import("scope.zig");
 }

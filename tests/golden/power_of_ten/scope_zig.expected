@@ -1,0 +1,4 @@
+rules: wide-scope
+exit: 0
+scope_zig.zig:2:11: warning [wide-scope]
+scope_zig.zig:42:15: warning [wide-scope]

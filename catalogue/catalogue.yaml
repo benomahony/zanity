@@ -38653,8 +38653,9 @@ entries:
     effectiveness: ''
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - wide-scope
   tags: []
 - id: CWE-1127
   title: Compilation with Insufficient Warnings or Errors

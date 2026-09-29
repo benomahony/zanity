@@ -215,3 +215,24 @@
 
 (binary_expression
   operator: ["&&" "||"]) @decision.point
+
+; A local declared as a statement of a block, and the blocks it could move into.
+(block
+  (let_declaration
+    pattern: (identifier) @declaration.name) @declaration.outer)
+
+(block) @declaration.block
+
+; Code that runs later, so a local moved into it would be made at a different time.
+[
+  (closure_expression)
+  (async_block)
+] @declaration.barrier
+
+; An initializer that can leave the block, so moving it would skip or change what comes after.
+[
+  (return_expression)
+  (break_expression)
+  (continue_expression)
+  (try_expression)
+] @declaration.exit

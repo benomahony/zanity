@@ -1,7 +1,7 @@
 .{
     .{
         .name = "python",
-        .not_applicable = .{ "dynamic-allocation", "precedence-trap", "switch-fallthrough" },
+        .not_applicable = .{ "dynamic-allocation", "precedence-trap", "switch-fallthrough", "wide-scope" },
         .extensions = .{ "py", "pyi" },
         .ecosystem = "python",
         .scanner = true,

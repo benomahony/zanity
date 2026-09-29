@@ -285,3 +285,17 @@
 
 (binary_expression
   operator: ["&&" "||"]) @decision.point
+
+; A local declared as a statement of a block, and the blocks it could move into.
+(block
+  (local_variable_declaration
+    declarator: (variable_declarator
+      name: (identifier) @declaration.name)) @declaration.outer)
+
+(block) @declaration.block
+
+; Code that runs later, so a local moved into it would be made at a different time.
+[
+  (lambda_expression)
+  (class_body)
+] @declaration.barrier

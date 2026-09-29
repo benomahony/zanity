@@ -12,6 +12,7 @@ const rewrite = @import("rewrite.zig");
 const hazards = @import("hazards.zig");
 const weak = @import("weak.zig");
 const suppress = @import("suppress.zig");
+const scope = @import("scope.zig");
 
 pub const Diagnostic = struct {
     line: u32,
@@ -260,6 +261,7 @@ pub const Checker = struct {
         try file.walk(root);
         try hazards.checkUnawaited(&file);
         try hazards.checkLength(&file, root);
+        try scope.checkWideScope(&file);
         if (file.s.contexts.len != 0) std.debug.panic("{s}: the walk ended with {d} constructs still open; every node entered must be left", .{ work.facts.path, file.s.contexts.len });
         if (file.s.opened.len != 0) std.debug.panic("{s}: the walk ended with {d} nodes still open; every node entered must be left", .{ work.facts.path, file.s.opened.len });
         return .{ .diagnostics = file.finish(), .parse_error = ts.ts_node_has_error(root) };

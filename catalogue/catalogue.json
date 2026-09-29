@@ -37563,8 +37563,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "wide-scope"
+      ],
       "tags": []
     },
     {

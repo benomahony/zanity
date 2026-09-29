@@ -296,3 +296,30 @@
 
 (binary_expression
   operator: ["and" "or"]) @decision.point
+
+; A local declared as a statement of a block, and the blocks it could move into. This grammar
+; parses an assignment such as `a += b` as a variable_declaration too, so the name must follow
+; `const` or `var`.
+(block
+  (variable_declaration
+    ["const" "var"]
+    .
+    (identifier) @declaration.name) @declaration.outer)
+
+(block) @declaration.block
+
+; Code that runs once per iteration, or later, so a local moved into it is made at a different time.
+[
+  (for_expression)
+  (while_expression)
+  (defer_statement)
+  (errdefer_statement)
+] @declaration.barrier
+
+; An initializer that can leave the block, so moving it would skip or change what comes after.
+[
+  (return_expression)
+  (break_expression)
+  (continue_expression)
+  (try_expression)
+] @declaration.exit

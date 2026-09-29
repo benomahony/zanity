@@ -401,3 +401,15 @@
 
 (binary_expression
   operator: ["&&" "||" "??"]) @decision.point
+
+; A local declared with let or const as a statement of a block, and the blocks it could move
+; into. var is scoped to the whole function, so it is left out.
+(statement_block
+  (lexical_declaration
+    (variable_declarator
+      name: (identifier) @declaration.name)) @declaration.outer)
+
+(statement_block) @declaration.block
+
+; A class body's methods run later, so a local moved into one would be made at a different time.
+(class_body) @declaration.barrier

@@ -1,0 +1,5 @@
+rules: wide-scope
+exit: 0
+scope_go.go:4:2: warning [wide-scope]
+scope_go.go:12:6: warning [wide-scope]
+scope_go.go:41:2: warning [wide-scope]

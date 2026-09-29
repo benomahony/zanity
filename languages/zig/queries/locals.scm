@@ -5,7 +5,11 @@
 (parameter
   name: (identifier) @local.definition.parameter)
 
+; This grammar parses an assignment such as `a += b` as a variable_declaration too, so only the
+; name right after `const` or `var` is defined.
 (variable_declaration
+  ["const" "var"]
+  .
   (identifier) @local.definition.var)
 
 (variable_declaration

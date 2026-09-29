@@ -254,3 +254,21 @@
   (identifier)
   (selector_expression)
 ] @expression.path
+
+; A local declared as a statement of a block, and the blocks it could move into. `_` discards
+; a value; it declares nothing.
+(block
+  (statement_list
+    (short_var_declaration
+      left: (expression_list
+        (identifier) @declaration.name
+        (#not-eq? @declaration.name "_"))) @declaration.outer))
+
+(block
+  (statement_list
+    (var_declaration
+      (var_spec
+        name: (identifier) @declaration.name
+        (#not-eq? @declaration.name "_"))) @declaration.outer))
+
+(block) @declaration.block

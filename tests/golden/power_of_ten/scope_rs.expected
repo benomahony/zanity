@@ -1,0 +1,4 @@
+rules: wide-scope
+exit: 0
+scope_rs.rs:2:9: warning [wide-scope]
+scope_rs.rs:32:13: warning [wide-scope]

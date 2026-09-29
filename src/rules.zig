@@ -82,6 +82,7 @@ pub const all = [_]Rule{
     .{ .name = "unawaited-call", .advice = "Await it, or keep the task and await it later, so it runs and its errors are seen.", .severity = .@"error", .default = true, .catalogue = &.{"EXT-ASYNC-003"}, .needs = &.{ "async.name", "statement.call" } },
     .{ .name = "deep-nesting", .advice = "Return early for the edge cases, or move the inner block into its own function.", .severity = .warning, .default = true, .catalogue = &.{"CWE-1124"}, .needs = &.{"control.outer"} },
     .{ .name = "complex-function", .advice = "Split the function so each part makes fewer decisions, or replace a chain of branches with a table.", .severity = .warning, .default = true, .catalogue = &.{"CWE-1121"}, .needs = &.{ "function.outer", "function.name", "decision.point" } },
+    .{ .name = "wide-scope", .alias = "NASA06", .advice = "Declare it inside that block, where it is used.", .severity = .warning, .default = true, .catalogue = &.{"CWE-1126"}, .needs = &.{ "declaration.outer", "declaration.name", "declaration.block", "local.scope", "local.reference", "function.outer", "loop.outer" } },
     .{ .name = "long-file", .advice = "Split the file by responsibility into modules of a few hundred lines.", .severity = .warning, .default = true, .catalogue = &.{"CWE-1080"} },
 };
 
