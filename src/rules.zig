@@ -34,6 +34,7 @@ pub const all = [_]Rule{
     .{ .name = "forbidden-call", .alias = "NASA01-A", .advice = "Call the code you need directly.", .severity = .warning, .default = true, .needs = &.{ "call.outer", "call.name" }, .catalogue = &.{"CWE-94"} },
     .{ .name = "recursion", .alias = "NASA01-B", .advice = "Rewrite it as a loop with a fixed bound.", .severity = .warning, .default = true, .needs = &.{ "call.outer", "call.name", "call.receiver", "function.outer", "function.name" }, .catalogue = &.{"CWE-674"} },
     .{ .name = "unbounded-loop", .alias = "NASA02", .advice = "Loop over a collection or cap the number of iterations.", .severity = .warning, .default = true, .needs = &.{ "loop.outer", "loop.condition", "loop.iterable", "literal.true" }, .catalogue = &.{"CWE-835"} },
+    .{ .name = "long-test", .alias = "CMP002", .advice = "Split it into tests that each check one behaviour, or move the setup into a helper.", .severity = .warning, .default = true, .needs = &.{ "function.outer", "function.name" } },
     .{ .name = "long-function", .alias = "NASA04", .advice = "Move a self-contained step into its own function.", .severity = .warning, .default = true, .needs = &.{ "function.outer", "function.name" } },
     .{ .name = "assertion-density", .alias = "NASA05", .advice = "Assert conditions a bug could actually break: what it needs from its inputs and what it guarantees about its result.", .severity = .@"error", .default = true, .needs = &.{ "function.outer", "function.name", "assertion.outer" } },
     .{ .name = "assertion-message", .alias = "NASA05-A", .advice = "Add a message stating what must be true.", .severity = .warning, .default = true, .needs = &.{ "assertion.outer", "assertion.message" } },
@@ -142,6 +143,8 @@ pub const Set = struct {
 };
 
 pub const max_function_lines = 60;
+/// A test is read to learn one behaviour, so it gets less room than a function (testdesiderata CMP002).
+pub const max_test_lines = 50;
 pub const min_asserts_per_function = 2;
 pub const max_parameters = 4;
 /// Deeper than this many nested branches and loops in one function is hard to follow.

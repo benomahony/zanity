@@ -1,0 +1,3 @@
+rules: long-test,long-function
+exit: 0
+test_long_test.py:1:5: warning [long-test]

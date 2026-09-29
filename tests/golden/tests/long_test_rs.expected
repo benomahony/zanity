@@ -1,0 +1,3 @@
+rules: long-test,long-function
+exit: 0
+long_test_rs.rs:2:4: warning [long-test]

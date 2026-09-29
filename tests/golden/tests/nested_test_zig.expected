@@ -1,0 +1,3 @@
+rules: deep-nesting
+exit: 0
+nested_test_zig.zig:7:21: warning [deep-nesting]

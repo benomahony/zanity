@@ -1,0 +1,3 @@
+rules: long-test,long-function
+exit: 0
+LongTest_java.java:3:10: warning [long-test]

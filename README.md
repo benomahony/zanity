@@ -97,6 +97,7 @@ Rules marked *off* only run when named with `--rules`.
 | `unbounded-loop` | warning | a loop with no bound, such as `while True` or `for {}` |
 | `dynamic-allocation` | error | allocation after initialization, in Zig and Rust |
 | `long-function` | warning | a function with 60 or more lines of code, not counting blank and comment lines |
+| `long-test` | warning | a test with 50 or more lines of code, not counting blank and comment lines |
 | `assertion-density` | error | a function with fewer than two assertions that can catch a bug |
 | `assertion-message` | warning | an assertion with no message |
 | `assertion-side-effect` | error | an assertion that assigns or calls something that changes state |

@@ -177,6 +177,7 @@ const Vocabulary = struct {
     statement_call: ?captures.Id,
     control_chain: ?captures.Id,
     decision_point: ?captures.Id,
+    test_outer: ?captures.Id,
 
     fn lookup(c: captures.Compiled) Vocabulary {
         if (c.names.len == 0) std.debug.panic("the query has no captures, so no rule could run; check the language's query files", .{});
@@ -206,6 +207,7 @@ const Vocabulary = struct {
             .statement_call = c.id("statement.call"),
             .control_chain = c.id("control.chain"),
             .decision_point = c.id("decision.point"),
+            .test_outer = c.id("test.outer"),
         };
     }
 };
@@ -326,8 +328,8 @@ pub const File = struct {
             return false;
         }
         if (v.decision_point == id) {
-            if (!self.hasOuter(found, .assertion)) if (self.enclosingFunction()) |function| {
-                function.decisions += 1;
+            if (!self.hasOuter(found, .assertion)) if (self.enclosingUnit()) |unit| {
+                unit.decisions += 1;
             };
         } else if (v.async_name == id) {
             try self.s.async_names.add(node.text(self.source));
@@ -554,6 +556,67 @@ pub const File = struct {
         return null;
     }
 
+    /// The innermost named function or test, whose decisions a decision point adds to. A test is
+    /// its own unit even where it is a call with an unnamed callback, like `it("works", () => {})`.
+    pub fn enclosingUnit(self: *File) ?*Context {
+        const items = self.s.contexts.items();
+        var i = items.len;
+        while (i > 0) {
+            i -= 1;
+            switch (items[i].family) {
+                .class => return null,
+                .@"test" => return &items[i],
+                .function => if (items[i].name != null) return &items[i],
+                else => {},
+            }
+        }
+        if (i != 0) std.debug.panic("{s}: the search for an enclosing unit stopped at depth {d} without returning", .{ self.work.facts.path, i });
+        if (items.len > self.s.contexts.buffer.len) std.debug.panic("{s}: {d} open constructs in room for {d}", .{ self.work.facts.path, items.len, self.s.contexts.buffer.len });
+        return null;
+    }
+
+    /// Lines of code from the first row of `span` to its last, not counting blank and comment lines.
+    pub fn codeLinesIn(self: *File, span: ts.Node) u32 {
+        const first = ts.ts_node_start_point(span).row;
+        const last = ts.ts_node_end_point(span).row;
+        if (last < first) std.debug.panic("{s}: {f} ends on row {d}, before it starts on row {d}", .{ self.work.facts.path, span.where(), last, first });
+        var lines: u32 = 0;
+        for (self.code_lines[first .. last + 1]) |is_code| lines += @intFromBool(is_code);
+        if (lines > last - first + 1) std.debug.panic("{s}: counted {d} code lines in {d} rows of {f}", .{ self.work.facts.path, lines, last - first + 1, span.where() });
+        return lines;
+    }
+
+    /// A test's length against the tighter limit for tests, and its decisions against the usual one.
+    pub fn closeTest(self: *File, ctx: Context) !void {
+        if (ctx.family != .@"test") std.debug.panic("{s}: closing {f} as a test, but it is a {t}", .{ self.work.facts.path, ctx.node.where(), ctx.family });
+        const name_node = self.functionNameOf(ctx.node);
+        const at = name_node orelse ctx.node;
+        const shown = if (name_node) |n| n.text(self.source) else header(ctx.node.text(self.source));
+        const lines = self.codeLinesIn(ctx.span);
+        if (lines >= rules.max_test_lines) {
+            _ = try self.report(at, "long-test", try self.say("'{s}' has {d} lines of code; tests must have fewer than {d}.", .{ shown, lines, rules.max_test_lines }));
+        }
+        if (ctx.decisions + 1 > rules.max_complexity) {
+            _ = try self.report(at, "complex-function", try self.say("'{s}' makes {d} decisions (cyclomatic complexity {d}), past the {d} a reader can follow and a test suite can cover.", .{ shown, ctx.decisions, ctx.decisions + 1, rules.max_complexity }));
+        }
+        if (shown.len == 0) std.debug.panic("{s}: the test {f} has no first line to name it by", .{ self.work.facts.path, ctx.node.where() });
+    }
+
+    /// The name of the open function on `node` itself, as for a test that is a function marked
+    /// `#[test]` or `@Test`; null for a test block or a test call.
+    pub fn functionNameOf(self: *File, node: ts.Node) ?ts.Node {
+        const items = self.s.contexts.items();
+        if (items.len > self.s.contexts.buffer.len) std.debug.panic("{s}: {d} open constructs in room for {d}", .{ self.work.facts.path, items.len, self.s.contexts.buffer.len });
+        var i = items.len;
+        while (i > 0) {
+            i -= 1;
+            if (items[i].family == .function and items[i].node.eql(node)) return items[i].name;
+            if (ts.ts_node_start_byte(items[i].node) < ts.ts_node_start_byte(node)) return null;
+        }
+        if (i != 0) std.debug.panic("{s}: the search for the function on {f} stopped at depth {d}", .{ self.work.facts.path, node.where(), i });
+        return null;
+    }
+
     pub fn enclosingFunction(self: *File) ?*Context {
         const items = self.s.contexts.items();
         var i = items.len;
@@ -591,7 +654,8 @@ pub const File = struct {
             .assignment => try self.closeAssignment(ctx),
             .function => try self.closeFunction(ctx),
             .statement => try self.remember(ctx),
-            .class, .@"test", .control => {},
+            .@"test" => try self.closeTest(ctx),
+            .class, .control => {},
             .definition => try self.closeDefinition(ctx),
         }
     }
@@ -853,13 +917,8 @@ pub const File = struct {
         const name_node = ctx.name orelse return;
         const name = name_node.text(self.source);
         if (name.len == 0) std.debug.panic("{s}: @function.name matched the empty {f}; capture the function's identifier", .{ self.work.facts.path, name_node.where() });
-        const first = ts.ts_node_start_point(ctx.span).row;
         const last = ts.ts_node_end_point(ctx.span).row;
-        var lines: u32 = 0;
-        for (self.code_lines[first .. last + 1]) |is_code| lines += @intFromBool(is_code);
-        if (lines >= rules.max_function_lines) {
-            _ = try self.report(name_node, "long-function", try self.say("'{s}' has {d} lines of code; functions must have fewer than {d}.", .{ name, lines, rules.max_function_lines }));
-        }
+        try self.checkFunctionLength(ctx, name_node, name);
         if (ctx.formal_parameters > rules.max_parameters) {
             _ = try self.report(name_node, "long-parameter-list", try self.say("'{s}' takes {d} parameters; functions should take at most {d}.", .{ name, ctx.formal_parameters, rules.max_parameters }));
         }
@@ -880,6 +939,21 @@ pub const File = struct {
         if (ctx.has_message and self.work.facts.collect_units) {
             const at = ts.ts_node_start_point(name_node);
             try self.work.facts.unit(name, .{ at.row, at.column, last }, ctx.span.text(self.source));
+        }
+    }
+
+    /// A function against the function limit, or a test named as one (`test_x`, `TestX`) against the
+    /// tighter test limit. A test marked by an attribute or annotation is also a test construct,
+    /// and closeTest measures it.
+    pub fn checkFunctionLength(self: *File, ctx: Context, name_node: ts.Node, name: []const u8) !void {
+        if (ctx.family != .function) std.debug.panic("{s}: measuring {f} as a function, but it is a {t}", .{ self.work.facts.path, ctx.node.where(), ctx.family });
+        if (!std.mem.eql(u8, name, name_node.text(self.source))) std.debug.panic("{s}: measuring '{s}' under the name of {f}", .{ self.work.facts.path, name, name_node.where() });
+        if (self.index.marks(ctx.node, self.v.test_outer)) return;
+        const lines = self.codeLinesIn(ctx.span);
+        if (ctx.is_test and lines >= rules.max_test_lines) {
+            _ = try self.report(name_node, "long-test", try self.say("'{s}' has {d} lines of code; tests must have fewer than {d}.", .{ name, lines, rules.max_test_lines }));
+        } else if (!ctx.is_test and lines >= rules.max_function_lines) {
+            _ = try self.report(name_node, "long-function", try self.say("'{s}' has {d} lines of code; functions must have fewer than {d}.", .{ name, lines, rules.max_function_lines }));
         }
     }
 

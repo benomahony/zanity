@@ -1,0 +1,3 @@
+rules: deep-nesting
+exit: 0
+nested_test_ts.ts:7:11: warning [deep-nesting]
