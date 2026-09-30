@@ -671,9 +671,7 @@ pub const File = struct {
         const name_node = ctx.name orelse return;
         const name = name_node.text(self.source);
         if (name.len == 0) std.debug.panic("{s}: @call.name matched the empty {f}; capture the callee's identifier", .{ self.work.facts.path, name_node.where() });
-        if (contains(self.tables.forbidden_calls, name)) {
-            _ = try self.report(ctx.callee orelse name_node, "forbidden-call", try self.say("Calling '{s}' runs code that can't be reviewed or checked before it runs.", .{name}));
-        }
+        try hazards.checkForbiddenCall(self, ctx, name);
         if (self.calleeIn(ctx, name, self.tables.debug_calls)) |matched| {
             _ = try self.report(ctx.callee orelse name_node, "debug-leftover", try self.say("'{s}' is debugging code: wherever it ships it stops the program or dumps its state.", .{matched}));
         }

@@ -78,6 +78,16 @@ pub fn checkRiskyCall(self: *File, ctx: Context, name: []const u8) !void {
     if (name.len == 0) std.debug.panic("{s}: the call {f} has an empty name; capture the callee as @call.name in the language's zanity.scm", .{ self.work.facts.path, ctx.node.where() });
 }
 
+/// A call that runs code no one can review: a bare builtin such as Python's `compile(source, ...)`,
+/// or a method that evaluates code on any receiver, such as `obj.eval()`. `re.compile` is neither.
+pub fn checkForbiddenCall(self: *File, ctx: Context, name: []const u8) !void {
+    if (ctx.family != .call) std.debug.panic("{s}: checking {f} for a forbidden call, but it is a {t}; call checkForbiddenCall() only from closeCall()", .{ self.work.facts.path, ctx.node.where(), ctx.family });
+    if (name.len == 0) std.debug.panic("{s}: the call {f} has an empty name; capture the callee as @call.name in the language's zanity.scm", .{ self.work.facts.path, ctx.node.where() });
+    const forbidden = if (ctx.receiver == null) self.tables.forbidden_calls else self.tables.forbidden_methods;
+    if (!contains(forbidden, name)) return;
+    _ = try self.report(ctx.callee orelse ctx.name.?, "forbidden-call", try self.say("Calling '{s}' runs code that can't be reviewed or checked before it runs.", .{name}));
+}
+
 /// A shell command line or SQL text built from values at runtime.
 fn checkRiskyArgument(self: *File, ctx: Context, name: []const u8, first: ts.Node) !void {
     if (ts.ts_node_start_byte(first) < ts.ts_node_start_byte(ctx.node)) std.debug.panic("{s}: the argument {f} starts before the call {f} it belongs to, so the query attached it to the wrong call; in that language's zanity.scm, capture @call.argument inside the call's @call.outer node", .{ self.work.facts.path, first.where(), ctx.node.where() });

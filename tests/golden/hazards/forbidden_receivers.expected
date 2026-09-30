@@ -1,0 +1,5 @@
+rules: forbidden-call
+exit: 0
+forbidden_receivers.py:4:8: warning [forbidden-call]
+forbidden_receivers.py:5:10: warning [forbidden-call]
+forbidden_receivers.py:6:1: warning [forbidden-call]
