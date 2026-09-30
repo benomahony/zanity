@@ -138,8 +138,8 @@ pub fn main(init: std.process.Init) !u8 {
     var runtime = zcli.native.runtime(init, &out_writer.interface, &err_writer.interface);
     runtime.user_data = ws;
     const code = app.run(init.gpa, args[1..], runtime);
-    if (@intFromEnum(code) > 130) std.debug.panic("zcli returned exit code {d}; codes above 130 collide with signals", .{@intFromEnum(code)});
-    return @intFromEnum(code);
+    if (@backingInt(code) > 130) std.debug.panic("zcli returned exit code {d}; codes above 130 collide with signals", .{@backingInt(code)});
+    return @backingInt(code);
 }
 
 fn workspaceOf(ctx: *zcli.Context) *Workspace {

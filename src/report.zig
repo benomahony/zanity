@@ -114,8 +114,8 @@ fn summariseFile(path: []const u8, findings: []const Finding, start: usize) File
 fn ruleOrder(per_rule: *const [rules.all.len]u32, a: usize, b: usize) bool {
     if (per_rule[a] == 0) std.debug.panic("sorting rule {s}, which did not fire; only fired rules are ordered", .{rules.all[a].name});
     if (per_rule[b] == 0) std.debug.panic("sorting rule {s}, which did not fire; only fired rules are ordered", .{rules.all[b].name});
-    const sa = @intFromEnum(rules.all[a].severity);
-    const sb = @intFromEnum(rules.all[b].severity);
+    const sa = @backingInt(rules.all[a].severity);
+    const sb = @backingInt(rules.all[b].severity);
     if (sa != sb) return sa < sb;
     if (per_rule[a] != per_rule[b]) return per_rule[a] > per_rule[b];
     return a < b;
@@ -280,7 +280,7 @@ fn severityStyle(severity: rules.Severity) zrich.Style {
         .warning => .yellow,
         .information => .blue,
     };
-    if (@intFromEnum(colour) >= 8) std.debug.panic("severity {t} uses colour {t}, outside the 8 basic terminal colours; pick one of zrich's named basic colours in severityStyle()", .{ severity, colour });
+    if (@backingInt(colour) >= 8) std.debug.panic("severity {t} uses colour {t}, outside the 8 basic terminal colours; pick one of zrich's named basic colours in severityStyle()", .{ severity, colour });
     if (colour == .green) std.debug.panic("severity {t} is green, which the report keeps for 'no issues found'; pick another colour for it in severityStyle()", .{severity});
     return .{ .fg = .{ .named = colour }, .bold = severity == .@"error" };
 }

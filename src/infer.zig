@@ -219,13 +219,12 @@ pub const Inference = struct {
     fn describe(self: *Inference, job: *const Job, err: anyerror) ![]const u8 {
         if (job.failed == null) std.debug.panic("{s}: describing a failure ({t}) for '{s}', whose request succeeded; call describe() only for a job whose failed is set", .{ job.unit.path, err, job.unit.name });
         const d = job.diagnostics;
-        const status: u32 = if (d.status) |s| @intFromEnum(s) else 0;
+        const status: u32 = if (d.status) |s| @backingInt(s) else 0;
         const detail = std.mem.trim(u8, d.body[0..@min(d.body.len, 300)], " \t\r\n");
         const text = try self.json.format("TypeSafe could not judge '{s}' in {s}: {t} (HTTP {d}, {d} attempts){s}{s}", .{ job.unit.name, job.unit.path, err, status, d.attempts, if (detail.len > 0) ": " else "", detail });
         if (text.len == 0) std.debug.panic("describing a failed TypeSafe call produced no text; describe() must write the error and the function, so check its format call", .{});
         return text;
     }
-
 };
 
 /// Whether a deterministic check already reported `rule` inside the unit, so asking is wasted.
