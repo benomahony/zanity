@@ -1,7 +1,5 @@
 const std = @import("std");
 const manifest = @import("languages/manifest.zig");
-/// The one place zanity's version is written: `zanity --version` and the release tag both come from it.
-const version = @import("build.zig.zon").version;
 
 pub fn build(b: *std.Build) void {
     if (manifest.entries.len == 0) std.debug.panic("languages/manifest.zon lists no languages; zanity needs at least one grammar", .{});
@@ -10,6 +8,8 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const strip = b.option(bool, "strip", "Leave debug info out of the binary, as release builds do") orelse false;
+    // The release workflow passes the version it is about to tag; any other build is a dev build.
+    const version = b.option([]const u8, "version", "The version zanity --version reports, as a release sets it") orelse "dev";
 
     const exe = b.addExecutable(.{ .name = "zanity", .root_module = module(b, "src/main.zig", target, optimize) });
     exe.root_module.strip = strip;

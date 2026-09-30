@@ -293,13 +293,13 @@ Golden cases in `tests/golden/` run through the real binary and compare where ea
 
 ### Releasing
 
-Set `.version` in `build.zig.zon`, commit, and push a matching tag:
+Every commit that passes CI on `main` is released automatically, one patch version up from the latest release: the workflow builds every platform with `zig build release -Dversion=<version>` and publishes the binaries as a GitHub release, tagging that commit. To raise the minor or major version instead, run the release workflow by hand:
 
 ```sh
-git tag v0.1.0 && git push origin v0.1.0
+gh workflow run release -f bump=minor   # or bump=major
 ```
 
-The release workflow runs the tests, builds every platform with `zig build release` (you can run that locally too; the binaries land in `zig-out/release/`) and publishes them as a GitHub release.
+`zig build release` works locally too; the binaries land in `zig-out/release/` and report themselves as `zanity dev` unless you pass `-Dversion`.
 
 ## Licence
 

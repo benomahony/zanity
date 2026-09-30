@@ -1,35 +1,86 @@
 name: Release
 
-# To release: set .version in build.zig.zon, commit, then push a tag v<that version>, e.g.
-#   git tag v0.1.0 && git push origin v0.1.0
+# Every commit that passes CI on main is released, one patch version up from the latest v* tag
+# (0.1.0 if there is none). To raise the minor or major version instead, run this by hand:
+#   gh workflow run release -f bump=minor
 on:
-  push:
-    tags: ["v*"]
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Which part of the version to raise
+        type: choice
+        options: [patch, minor, major]
+        default: minor
 
 permissions:
   contents: write
 
+# Releases queue rather than race, so two never take the same version.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
+  # A release by hand hasn't been through CI yet; one after CI on main has.
   test:
+    if: github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/ci.yml
 
   release:
     needs: test
+    if: >-
+      always() &&
+      (github.event_name == 'workflow_dispatch' && needs.test.result == 'success' ||
+       github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
+    env:
+      COMMIT: ${{ github.event.workflow_run.head_sha || github.sha }}
+      BUMP: ${{ inputs.bump || 'patch' }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.COMMIT }}
+          fetch-depth: 0
       - uses: mlugg/setup-zig@v2
-      - name: Check the tag is the version in build.zig.zon
+      - name: Choose the version
+        id: version
         run: |
-          zig build
-          built=$(./zig-out/bin/zanity --version)
-          if [ "$built" != "zanity ${GITHUB_REF_NAME#v}" ]; then
-            echo "::error::Tag $GITHUB_REF_NAME, but the build says '$built'. Set .version in build.zig.zon to ${GITHUB_REF_NAME#v}, commit, and tag that commit."
+          if [ "$GITHUB_EVENT_NAME" = workflow_run ] && git tag --points-at HEAD | grep -q '^v'; then
+            echo "::notice::$COMMIT is already released as $(git tag --points-at HEAD | head -n1)."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          latest=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1)
+          if [ -z "$latest" ]; then
+            next=0.1.0
+          else
+            v=${latest#v}; major=${v%%.*}; rest=${v#*.}; minor=${rest%%.*}; patch=${rest#*.}
+            case "$BUMP" in
+              major) next=$((major + 1)).0.0 ;;
+              minor) next=$major.$((minor + 1)).0 ;;
+              *) next=$major.$minor.$((patch + 1)) ;;
+            esac
+          fi
+          echo "Releasing v$next (after ${latest:-no release})."
+          echo "version=$next" >> "$GITHUB_OUTPUT"
+      - name: Build every platform
+        if: steps.version.outputs.skip != 'true'
+        run: |
+          zig build release -Dversion=${{ steps.version.outputs.version }}
+          built=$(./zig-out/release/zanity-linux-x86_64 --version)
+          if [ "$built" != "zanity ${{ steps.version.outputs.version }}" ]; then
+            echo "::error::The release binary reports '$built', not zanity ${{ steps.version.outputs.version }}; check that build.zig passes -Dversion into build_info."
             exit 1
           fi
-      - run: zig build release
-      # GitHub shows each asset's SHA-256 digest on the release page and in its API.
+      # Creates the tag on the tested commit. GitHub lists each binary's SHA-256 on the release.
       - name: Publish the release
+        if: steps.version.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" zig-out/release/* --title "zanity $GITHUB_REF_NAME" --generate-notes --verify-tag
+        run: >-
+          gh release create "v${{ steps.version.outputs.version }}" zig-out/release/*
+          --target "$COMMIT" --title "zanity v${{ steps.version.outputs.version }}" --generate-notes
