@@ -90,7 +90,7 @@ pub fn checkForbiddenCall(self: *File, ctx: Context, name: []const u8) !void {
 
 /// A shell command line or SQL text built from values at runtime.
 fn checkRiskyArgument(self: *File, ctx: Context, name: []const u8, first: ts.Node) !void {
-    if (ts.ts_node_start_byte(first) < ts.ts_node_start_byte(ctx.node)) std.debug.panic("{s}: the argument {f} starts before the call {f} it belongs to, so the query attached it to the wrong call; in that language's zanity.scm, capture @call.argument inside the call's @call.outer node", .{ self.work.facts.path, first.where(), ctx.node.where() });
+    if (ts.ts_node_start_byte(first) < ts.ts_node_start_byte(ctx.node)) std.debug.panic("{s}: the argument {f} starts before the call {f} it belongs to, so the language's query linked it to the wrong call; in that language's zanity.scm, move the argument's capture (@call.argument) inside the pattern for the call itself (@call.outer)", .{ self.work.facts.path, first.where(), ctx.node.where() });
     const built = self.index.marks(first, self.v.string_built) or self.index.marks(first, self.v.string_format);
     const literal = self.index.marks(first, self.v.literal_string) and !self.index.marks(first, self.v.string_format);
     if (self.calleeIn(ctx, name, self.tables.shell_calls)) |m| if (!literal) {
@@ -99,7 +99,7 @@ fn checkRiskyArgument(self: *File, ctx: Context, name: []const u8, first: ts.Nod
     if (ctx.receiver != null and contains(self.tables.sql_methods, name) and built) {
         _ = try self.report(first, "sql-built-from-strings", try self.say("This SQL is built from strings at runtime, so a value containing a quote can change the query: '{s}'.", .{header(first.text(self.source))}));
     }
-    if (built and literal and !self.index.marks(first, self.v.string_format)) std.debug.panic("{s}: {f} is marked both as a plain string and as a string built at runtime, which can't both be true; in that language's zanity.scm, give it only one of @literal.string and @string.built", .{ self.work.facts.path, first.where() });
+    if (built and literal and !self.index.marks(first, self.v.string_format)) std.debug.panic("{s}: {f} is treated both as fixed text and as text put together at runtime, which can't both be true, so the language's query marks it twice; in that language's zanity.scm, keep only one of its two captures (@literal.string for fixed text, @string.built for text built at runtime)", .{ self.work.facts.path, first.where() });
 }
 
 /// Reports a logged value whose name says it is a secret, such as `token` or `db_password`.
