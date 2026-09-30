@@ -133,7 +133,7 @@ zanity help check                             # every option
 
 ### Checks that need a language model
 
-A few questions about error messages, such as whether a message misleads, can't be decided by reading the code's structure. `--infer` asks them of an LLM service, TypeSafe, for the functions that report errors, after every deterministic check has run. It needs `TYPESAFE_API_KEY` in the environment. Answers are cached in a SQLite file (`~/.cache/nouls/nouls.db`, or set `ZANITY_STORE`), so unchanged code is never asked about twice. Without `--infer`, zanity never touches the network.
+A few questions about error messages, such as whether a message misleads, can't be decided by reading the code's structure. `--infer` asks them of an LLM service, TypeSafe, for the functions that report errors, after every deterministic check has run. It needs `TYPESAFE_API_KEY` in the environment. Answers are cached in a SQLite file (`~/.cache/zanity/zanity.db`, or set `ZANITY_STORE`), so unchanged code is never asked about twice. Without `--infer`, zanity never touches the network.
 
 ## Configuration
 
@@ -167,10 +167,10 @@ disable = ["process-in-test", "network-in-test"]
 A comment on the line of the finding silences it, in any language:
 
 ```python
-value = eval(text)  # nasa: ignore[forbidden-call]
+value = eval(text)  # zanity: ignore[forbidden-call]
 ```
 
-`nasa: ignore` with no list silences every rule on that line. A rule can be named by its name or by its code, such as `NASA01-A`.
+`zanity: ignore` with no list silences every rule on that line. A rule can be named by its name or by its code, such as `NASA01-A`.
 
 ## Languages
 

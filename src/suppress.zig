@@ -1,4 +1,4 @@
-//! Suppression comments such as `# nasa: ignore[NASA04]`, which silence a rule on one line.
+//! Suppression comments such as `# zanity: ignore[long-function]`, which silence a rule on one line.
 const std = @import("std");
 const ts = @import("ts.zig");
 const captures = @import("captures.zig");
@@ -52,13 +52,16 @@ pub fn parseIgnore(codes: *memory.Bounded([]const u8), comment: []const u8) !boo
     return false;
 }
 
-/// Where the text after `nasa: ignore` starting at `i` begins, or null if there is no marker there.
+/// The word that starts a suppression comment, before `ignore`.
+const marker = "zanity:";
+
+/// Where the text after `zanity: ignore` starting at `i` begins, or null if there is no marker there.
 fn ignoreMarkerEnd(comment: []const u8, i: usize) ?usize {
     if (i >= comment.len) std.debug.panic("looked for a suppression at byte {d} of the {d}-byte comment '{s}'; parseIgnore() must call ignoreMarkerEnd() with a byte inside the comment", .{ i, comment.len, comment });
-    if (!std.ascii.startsWithIgnoreCase(comment[i..], "nasa:")) return null;
+    if (!std.ascii.startsWithIgnoreCase(comment[i..], marker)) return null;
     const before = std.mem.trimEnd(u8, comment[0..i], " \t");
     if (before.len > 0 and std.ascii.isAlphanumeric(before[before.len - 1])) return null;
-    var j = i + 5;
+    var j = i + marker.len;
     while (j < comment.len and std.ascii.isWhitespace(comment[j])) j += 1;
     if (!std.ascii.startsWithIgnoreCase(comment[j..], "ignore")) return null;
     j += 6;

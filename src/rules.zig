@@ -34,8 +34,8 @@ pub const all = [_]Rule{
     .{ .name = "forbidden-call", .alias = "NASA01-A", .advice = "Call the code you need directly.", .severity = .warning, .default = true, .needs = &.{ "call.outer", "call.name" }, .catalogue = &.{"CWE-94"} },
     .{ .name = "recursion", .alias = "NASA01-B", .advice = "Rewrite it as a loop with a fixed bound.", .severity = .warning, .default = true, .needs = &.{ "call.outer", "call.name", "call.receiver", "function.outer", "function.name" }, .catalogue = &.{"CWE-674"} },
     .{ .name = "unbounded-loop", .alias = "NASA02", .advice = "Loop over a collection or cap the number of iterations.", .severity = .warning, .default = true, .needs = &.{ "loop.outer", "loop.condition", "loop.iterable", "literal.true" }, .catalogue = &.{"CWE-835"} },
-    .{ .name = "eager-test", .alias = "CMP001", .advice = "Split it into tests that each check one behaviour, named for that behaviour.", .severity = .warning, .default = true, .needs = &.{ "function.outer", "function.name" } },
-    .{ .name = "long-test", .alias = "CMP002", .advice = "Split it into tests that each check one behaviour, or move the setup into a helper.", .severity = .warning, .default = true, .needs = &.{ "function.outer", "function.name" } },
+    .{ .name = "eager-test", .advice = "Split it into tests that each check one behaviour, named for that behaviour.", .severity = .warning, .default = true, .needs = &.{ "function.outer", "function.name" } },
+    .{ .name = "long-test", .advice = "Split it into tests that each check one behaviour, or move the setup into a helper.", .severity = .warning, .default = true, .needs = &.{ "function.outer", "function.name" } },
     .{ .name = "long-function", .alias = "NASA04", .advice = "Move a self-contained step into its own function.", .severity = .warning, .default = true, .needs = &.{ "function.outer", "function.name" } },
     .{ .name = "assertion-density", .alias = "NASA05", .advice = "Assert conditions a bug could actually break: what it needs from its inputs and what it guarantees about its result.", .severity = .@"error", .default = true, .needs = &.{ "function.outer", "function.name", "assertion.outer" } },
     .{ .name = "assertion-message", .alias = "NASA05-A", .advice = "Add a message stating what must be true.", .severity = .warning, .default = true, .needs = &.{ "assertion.outer", "assertion.message" } },
@@ -44,18 +44,18 @@ pub const all = [_]Rule{
     .{ .name = "long-parameter-list", .advice = "Group related parameters into a struct or split the function.", .severity = .warning, .default = true, .needs = &.{ "function.outer", "function.name", "function.parameter" }, .catalogue = &.{"CWE-1064"} },
     .{ .name = "passthrough-wrapper", .advice = "Call the target directly, or give the wrapper work of its own.", .severity = .warning, .default = true, .needs = &.{ "function.outer", "function.name", "function.passthrough" }, .catalogue = &.{"CWE-1041"} },
     .{ .name = "swallowed-error", .advice = "Handle the error, log it with context, or let it propagate.", .severity = .warning, .default = true, .needs = &.{"catch.swallowed"}, .catalogue = &.{ "CWE-390", "CWE-1069" } },
-    .{ .name = "sleep-in-test", .alias = "FST001", .advice = "Wait for the event itself, or use a fake clock.", .severity = .warning, .default = true, .needs = &.{ "call.outer", "call.name", "function.name" } },
-    .{ .name = "polling-loop", .alias = "FST002", .advice = "Wait on an event or callback, or inject a clock.", .severity = .warning, .default = true, .needs = &.{ "call.outer", "call.name", "loop.outer", "function.name" } },
-    .{ .name = "shared-state-in-test", .alias = "ISO002", .advice = "Set it for this test only and restore it after, with the framework's fixture (monkeypatch, t.Setenv, a try/finally), or pass the value in.", .severity = .warning, .default = true, .needs = &.{ "call.outer", "call.name", "function.name" } },
-    .{ .name = "filesystem-in-test", .alias = "ISO003", .advice = "Work in the test framework's temporary directory, or pass the code a reader and writer instead of a path.", .severity = .warning, .default = true, .needs = &.{ "call.outer", "call.name", "function.name" } },
-    .{ .name = "network-in-test", .alias = "ISO004", .advice = "Stub the service at its boundary with a fake that answers like it, or move this to an integration suite.", .severity = .warning, .default = true, .needs = &.{ "call.outer", "call.name", "function.name" } },
-    .{ .name = "database-in-test", .alias = "ISO005", .advice = "Use an in-memory database or a fake repository, or move this to an integration suite.", .severity = .warning, .default = true, .needs = &.{ "call.outer", "call.name", "function.name" } },
-    .{ .name = "unmanaged-temp-in-test", .alias = "ISO006", .advice = "Use the framework's temporary directory (tmp_path, t.TempDir(), @TempDir, std.testing.tmpDir), which it cleans up.", .severity = .warning, .default = true, .needs = &.{ "call.outer", "call.name", "function.name" } },
-    .{ .name = "process-in-test", .alias = "ISO008", .advice = "Call the code the process would run directly, or move this to an end-to-end suite.", .severity = .warning, .default = true, .needs = &.{ "call.outer", "call.name", "function.name" } },
+    .{ .name = "sleep-in-test", .advice = "Wait for the event itself, or use a fake clock.", .severity = .warning, .default = true, .needs = &.{ "call.outer", "call.name", "function.name" } },
+    .{ .name = "polling-loop", .advice = "Wait on an event or callback, or inject a clock.", .severity = .warning, .default = true, .needs = &.{ "call.outer", "call.name", "loop.outer", "function.name" } },
+    .{ .name = "shared-state-in-test", .advice = "Set it for this test only and restore it after, with the framework's fixture (monkeypatch, t.Setenv, a try/finally), or pass the value in.", .severity = .warning, .default = true, .needs = &.{ "call.outer", "call.name", "function.name" } },
+    .{ .name = "filesystem-in-test", .advice = "Work in the test framework's temporary directory, or pass the code a reader and writer instead of a path.", .severity = .warning, .default = true, .needs = &.{ "call.outer", "call.name", "function.name" } },
+    .{ .name = "network-in-test", .advice = "Stub the service at its boundary with a fake that answers like it, or move this to an integration suite.", .severity = .warning, .default = true, .needs = &.{ "call.outer", "call.name", "function.name" } },
+    .{ .name = "database-in-test", .advice = "Use an in-memory database or a fake repository, or move this to an integration suite.", .severity = .warning, .default = true, .needs = &.{ "call.outer", "call.name", "function.name" } },
+    .{ .name = "unmanaged-temp-in-test", .advice = "Use the framework's temporary directory (tmp_path, t.TempDir(), @TempDir, std.testing.tmpDir), which it cleans up.", .severity = .warning, .default = true, .needs = &.{ "call.outer", "call.name", "function.name" } },
+    .{ .name = "process-in-test", .advice = "Call the code the process would run directly, or move this to an end-to-end suite.", .severity = .warning, .default = true, .needs = &.{ "call.outer", "call.name", "function.name" } },
     .{ .name = "nondeterministic-test", .advice = "Inject a seeded generator or a fixed value.", .severity = .warning, .default = true, .needs = &.{ "call.outer", "call.name", "function.name" } },
-    .{ .name = "test-double", .alias = "BHV001", .advice = "Use the real object, or a fake that behaves like it.", .severity = .warning, .default = true, .needs = &.{ "call.outer", "call.name", "function.name" }, .catalogue = &.{"EXT-VERIFY-003"} },
-    .{ .name = "name-drift", .alias = "drift", .advice = "Pick one spelling and use it everywhere.", .severity = .warning, .default = true, .needs = &.{"name"} },
-    .{ .name = "duplicate-name", .alias = "duplicate", .advice = "Give each a name that says how it differs.", .severity = .warning, .default = true, .needs = &.{"name"} },
+    .{ .name = "test-double", .advice = "Use the real object, or a fake that behaves like it.", .severity = .warning, .default = true, .needs = &.{ "call.outer", "call.name", "function.name" }, .catalogue = &.{"EXT-VERIFY-003"} },
+    .{ .name = "name-drift", .advice = "Pick one spelling and use it everywhere.", .severity = .warning, .default = true, .needs = &.{"name"} },
+    .{ .name = "duplicate-name", .advice = "Give each a name that says how it differs.", .severity = .warning, .default = true, .needs = &.{"name"} },
     .{ .name = "restated-type", .alias = "NASA05-M1", .advice = "Assert something about its value instead.", .severity = .warning, .default = false, .needs = &.{ "assertion.condition", "call.argument", "parameter.name", "parameter.type" }, .catalogue = &.{"EXT-VERIFY-002"} },
     .{ .name = "constant-assertion", .alias = "NASA05-M2", .advice = "Assert something that depends on the input.", .severity = .@"error", .default = false, .needs = &.{ "statement.outer", "assignment.lhs", "assignment.rhs", "literal.constant", "expression.path", "compare.not_null", "compare.equal" }, .catalogue = &.{"EXT-VERIFY-002"} },
     .{ .name = "redundant-null-check", .alias = "NASA05-M3", .advice = "Remove this check.", .severity = .warning, .default = false, .needs = &.{ "statement.outer", "compare.not_null", "compare.subject", "call.argument" }, .catalogue = &.{"EXT-VERIFY-002"} },
@@ -164,9 +164,9 @@ pub const Set = struct {
 };
 
 pub const max_function_lines = 60;
-/// A test is read to learn one behaviour, so it gets less room than a function (testdesiderata CMP002).
+/// A test is read to learn one behaviour, so it gets less room than a function.
 pub const max_test_lines = 50;
-/// Past this many checks, a failing test no longer says which behaviour broke (testdesiderata CMP001).
+/// Past this many checks, a failing test no longer says which behaviour broke.
 pub const max_test_checks = 10;
 pub const min_asserts_per_function = 2;
 pub const max_parameters = 4;

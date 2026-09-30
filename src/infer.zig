@@ -1,7 +1,7 @@
 //! The inference tier. For each function that reports an error, `check --infer` asks TypeSafe
 //! the questions of the rules that no deterministic check can settle, skipping any a
-//! deterministic check already answered there. Answers are kept in the store zanity shares with
-//! nouls, by model, function and question, so unchanged code is never asked about twice.
+//! deterministic check already answered there. Answers are kept in a store by model, function
+//! and question, so unchanged code is never asked about twice.
 const std = @import("std");
 const Io = std.Io;
 const Allocator = std.mem.Allocator;
@@ -13,9 +13,9 @@ const Unit = facts_module.Unit;
 const Finding = facts_module.Finding;
 const store = @import("store.zig");
 
-/// How sure the model must be before a judgement becomes a finding, as in nouls.
+/// How sure the model must be before a judgement becomes a finding.
 pub const threshold = 0.8;
-/// Requests to TypeSafe at once when zanity.toml doesn't say, as in nouls.
+/// Requests to TypeSafe at once when zanity.toml doesn't say.
 pub const default_concurrency = 8;
 const max_questions = 8;
 
@@ -194,7 +194,7 @@ pub const Inference = struct {
         if (job.count > max_questions) std.debug.panic("{s}: recorded {d} answers about '{s}', more than {d}; record() must keep at most one answer per queued question", .{ unit.path, job.count, unit.name, max_questions });
     }
 
-    /// The language and source identify a function, as in nouls; the model is kept alongside.
+    /// The language and source identify a function; the model is kept alongside.
     fn unitHash(self: *const Inference, unit: *const Unit) store.Digest {
         if (self.client.model.len == 0) std.debug.panic("the TypeSafe client has no model name; tai falls back to jev-latest, so this is a broken client", .{});
         if (unit.language.len == 0) std.debug.panic("{s}: unit '{s}' has no language", .{ unit.path, unit.name });

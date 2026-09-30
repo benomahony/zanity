@@ -1,12 +1,12 @@
 const std = @import("std");
 
-fn silenced() void {} // nasa: ignore[NASA05]
+fn silenced() void {} // zanity: ignore[NASA05]
 
-fn other_code() void {} // nasa: ignore[NASA04]
+fn other_code() void {} // zanity: ignore[NASA04]
 
-// nasa: ignore
+// zanity: ignore
 fn next_line() void {}
 
-fn blanket() void { // nasa: ignore
-    while (true) {} // nasa:ignore[NASA02]
+fn blanket() void { // zanity: ignore
+    while (true) {} // zanity:ignore[NASA02]
 }

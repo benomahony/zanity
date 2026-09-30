@@ -1,6 +1,5 @@
-//! The SQLite store zanity shares with nouls: answers keyed by model, question and function, in
-//! WAL mode so an editor and a terminal can use it at once. The schema and the digests match the
-//! Python nouls, so an answer either tool paid for is never asked for again.
+//! The SQLite store of --infer answers, keyed by model, question and function, in WAL mode so
+//! several runs can use it at once. An answer paid for once is never asked for again.
 const std = @import("std");
 const Io = std.Io;
 const Allocator = std.mem.Allocator;
@@ -81,7 +80,7 @@ const find_answer = "SELECT probability FROM answers WHERE model = ?1 AND questi
 const save_unit = "INSERT OR IGNORE INTO units (unit_hash, language, source) VALUES (?1, ?2, ?3)";
 const save_answer = "INSERT OR REPLACE INTO answers (model, question_hash, unit_hash, probability, asked_at) VALUES (?1, ?2, ?3, ?4, strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now'))";
 
-/// A nouls digest: the first 32 hex characters of the SHA-256 of the parts joined with NUL.
+/// A digest: the first 32 hex characters of the SHA-256 of the parts joined with NUL.
 pub const Digest = [32]u8;
 
 pub fn digest(parts: []const []const u8) Digest {
@@ -174,7 +173,9 @@ pub const Store = struct {
     }
 };
 
-/// Where the store lives: `ZANITY_STORE`, or nouls' store under the user's cache directory.
+const store_name = "zanity.db";
+
+/// Where the store lives: `ZANITY_STORE`, or zanity.db in zanity's folder of the user's cache directory.
 fn initPath(gpa: Allocator, io: Io, environ: *const std.process.Environ.Map) ![:0]const u8 {
     if (environ.get("ZANITY_STORE")) |path| {
         if (path.len == 0) std.debug.panic("ZANITY_STORE is set but empty; unset it or name a file", .{});
@@ -184,10 +185,10 @@ fn initPath(gpa: Allocator, io: Io, environ: *const std.process.Environ.Map) ![:
         const home = environ.get("HOME") orelse return error.StoreUnavailable;
         break :blk try std.fs.path.join(gpa, &.{ home, ".cache" });
     };
-    const dir = try std.fs.path.join(gpa, &.{ cache, "nouls" });
+    const dir = try std.fs.path.join(gpa, &.{ cache, "zanity" });
     Io.Dir.cwd().createDirPath(io, dir) catch return error.StoreUnavailable;
-    const path = try std.fs.path.joinZ(gpa, &.{ dir, "nouls.db" });
-    if (!std.mem.endsWith(u8, path, "nouls.db")) std.debug.panic("the store path {s} does not end in nouls.db; initPath() must join the cache directory with nouls.db", .{path});
+    const path = try std.fs.path.joinZ(gpa, &.{ dir, store_name });
+    if (!std.mem.endsWith(u8, path, store_name)) std.debug.panic("the store path {s} does not end in {s}; initPath() must join the cache directory with it", .{ path, store_name });
     return path;
 }
 
@@ -215,7 +216,7 @@ fn failed(db: *sqlite3) error{StoreUnavailable} {
     return error.StoreUnavailable;
 }
 
-test "digests match the Python nouls, so both tools share answers" {
+test "digests stay the same, so answers already in a store keep matching" {
     const unit = digest(&.{ "lang-a", "def f():\n    return 1\n" });
     try std.testing.expectEqualStrings("307f739720f5a61cf9920d8646b0f444", &unit);
     const question = digest(&.{"Does the function raise, assert, return or log an error message too vague to identify the problem, for example \"something went wrong\" or \"invalid input\" without saying which input, which value or what was expected?"});
