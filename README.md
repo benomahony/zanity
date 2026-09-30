@@ -4,7 +4,7 @@
 
 Fast, deterministic sanity checks for code written by people and agents.
 
-zanity checks Python, Zig, Go, TypeScript, Rust and Java for the mistakes that make code unsafe, untestable or hard to follow: unbounded loops, functions with no assertions, tests that sleep or touch the network, error messages that don't say what to do, and dozens more. It parses each file once with [tree-sitter](https://tree-sitter.github.io) and runs every rule in a single pass, so checking a whole repository takes moments. It is one static binary with no runtime to install.
+zanity checks Python, Zig, Go, TypeScript, Rust and Java for the mistakes that make code unsafe, untestable or hard to follow: unbounded loops, functions with no assertions, tests that sleep or touch the network, error messages that don't say what to do, and dozens more. It parses each file once with [tree-sitter](https://tree-sitter.github.io) and runs every rule in a single pass, so checking a whole repository takes moments. It is one static binary with no runtime to install, and it never touches the network, unless you add `--infer` to have a language model judge what code structure can't, such as whether an error message misleads.
 
 ```console
 $ zanity check src
@@ -77,6 +77,8 @@ disable = ["process-in-test", "filesystem-in-test", "network-in-test"]
 
 Once `zanity check .` is clean, keep it that way with `--strict`, which fails on warnings as well as errors. That is what a pre-commit hook or CI should run.
 
+When the deterministic checks pass, try `--infer` to have a language model judge your error messages too; see [Judging error messages with `--infer`](#judging-error-messages-with---infer).
+
 ### Pre-commit
 
 With [pre-commit](https://pre-commit.com), add this to `.pre-commit-config.yaml` (zanity must be installed and on your `PATH`):
@@ -113,7 +115,15 @@ jobs:
         #   args: check src --strict     # default: check . --strict
 ```
 
-The action downloads the release binary for the runner and fails the job on any finding.
+The action downloads the release binary for the runner and fails the job on any finding. To include `--infer`, store your TypeSafe key as a repository secret and pass it in:
+
+```yaml
+      - uses: benomahony/zanity@v0.1.0
+        with:
+          args: check . --strict --infer
+        env:
+          TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+```
 
 ## Usage
 
@@ -126,14 +136,33 @@ zanity check . --strict                       # exit 1 on warnings too
 zanity check . --fix                          # apply the fixes zanity can make, then report the rest
 zanity check . --json                         # a JSON array, one object per finding
 zanity check . --plain                        # stable key=value lines for scripts
+zanity check . --infer                        # also have a language model judge error messages
 zanity help check                             # every option
 ```
 
 `check` exits 0 when nothing fired, 1 when an error-level rule fired (or any rule, with `--strict`), and 2 on a usage error such as a mistake in `zanity.toml`. Findings go to stdout and the one-line summary to stderr, so output can be piped cleanly. On a terminal the report is grouped by file and ends with two tables: the files with the most errors, and the rules that fired most. A progress line shows how far a long run has got; `-q` hides it, and it never appears in piped output. `--no-color` or `NO_COLOR` turns colour off.
 
-### Checks that need a language model
+### Judging error messages with `--infer`
 
-A few questions about error messages, such as whether a message misleads, can't be decided by reading the code's structure. `--infer` asks them of an LLM service, TypeSafe, for the functions that report errors, after every deterministic check has run. It needs `TYPESAFE_API_KEY` in the environment. Answers are cached in a SQLite file (`~/.cache/zanity/zanity.db`, or set `ZANITY_STORE`), so unchanged code is never asked about twice. Without `--infer`, zanity never touches the network.
+Whether an error message is vague, cryptic or unhelpful can often be decided from the code: a message that shows none of the values its condition reads is vague. zanity checks that deterministically on every run. What code structure can't settle, such as whether a message describes a different failure from the one that happened, `--infer` asks of a language model through the [TypeSafe API](https://docs.typesafe.ai/api), after every deterministic check has run.
+
+```sh
+export TYPESAFE_API_KEY=...   # from your TypeSafe account
+zanity check . --infer
+```
+
+| Rule | Asks whether a function |
+|---|---|
+| `vague-error` | has an error message too vague to find the problem: it doesn't name the input or value that failed, or what was expected |
+| `cryptic-error` | has an error message that isn't in plain language: a code, an internal name or jargon |
+| `unconstructive-error` | has an error message that says what failed but not what to do about it |
+| `misleading-error` | has an error message that describes a different failure from the one that happened (*off* by default; `rules = ["all"]` includes it) |
+
+A finding is reported when the model is at least 80% sure, and says how sure it was.
+
+**What is sent:** the source of each function that raises, returns or logs an error, and only the questions no deterministic check already answered. Nothing else leaves your machine, and without `--infer` nothing does at all.
+
+**Cost and speed:** answers are cached in a SQLite file, `~/.cache/zanity/zanity.db` (or wherever `ZANITY_STORE` points), keyed by the function's source, so unchanged code is never asked about twice and a second run is instant. A progress line shows how many functions are answered and how long the rest will take. `[infer] concurrency` in `zanity.toml` sets how many requests run at once (default 8, up to 64); `TYPESAFE_BASE_URL` points at a different TypeSafe endpoint.
 
 ## Configuration
 
