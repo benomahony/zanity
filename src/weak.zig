@@ -59,13 +59,13 @@ pub fn annotationIs(self: *File, annotation: []const u8, type_text: []const u8) 
 pub fn callFor(self: *File, node: ts.Node) ?Call {
     const key = node.key();
     const calls = self.s.calls.items();
-    if (calls.len > self.s.calls.buffer.len) std.debug.panic("{s}: {d} calls recorded in room for {d}", .{ self.work.facts.path, calls.len, self.s.calls.buffer.len });
+    if (calls.len > self.s.calls.buffer.len) std.debug.panic("{s}: {d} calls recorded in room for {d}; raise memory.Limits.captures", .{ self.work.facts.path, calls.len, self.s.calls.buffer.len });
     var i = calls.len;
     while (i > 0) {
         i -= 1;
         if (calls[i].key.id == key.id and calls[i].key.start == key.start) return calls[i];
     }
-    if (i != 0) std.debug.panic("{s}: the search for the call at {f} stopped at {d} without returning", .{ self.work.facts.path, node.where(), i });
+    if (i != 0) std.debug.panic("{s}: the search for the call at {f} stopped at {d} without returning; the loop in callFor() must return from inside, so check its exits", .{ self.work.facts.path, node.where(), i });
     return null;
 }
 
@@ -84,8 +84,8 @@ pub fn plainCall(self: *File, node: ts.Node, table: []const []const u8) ?[]const
     const name = call.name orelse return null;
     if (call.receiver) return null;
     const text = name.text(self.source);
-    if (text.len == 0) std.debug.panic("{s}: the call {f} has an empty name; @call.name matched an empty node", .{ self.work.facts.path, node.where() });
-    if (ts.ts_node_start_byte(name) < ts.ts_node_start_byte(node)) std.debug.panic("{s}: @call.name {f} starts before its call {f}", .{ self.work.facts.path, name.where(), node.where() });
+    if (text.len == 0) std.debug.panic("{s}: the call {f} has an empty name; @call.name matched an empty node, so capture the callee's identifier as @call.name in the language's zanity.scm", .{ self.work.facts.path, node.where() });
+    if (ts.ts_node_start_byte(name) < ts.ts_node_start_byte(node)) std.debug.panic("{s}: @call.name {f} starts before its call {f}; capture @call.name inside @call.outer in the language's zanity.scm", .{ self.work.facts.path, name.where(), node.where() });
     return if (contains(table, text)) text else null;
 }
 
@@ -130,8 +130,8 @@ pub fn isPath(self: *File, node: ts.Node, target: []const u8) bool {
 }
 
 pub fn isLiteral(self: *File, node: ts.Node) bool {
-    if (ts.ts_node_end_byte(node) > self.source.len) std.debug.panic("{s}: {f} ends at byte {d}, past the {d}-byte file", .{ self.work.facts.path, node.where(), ts.ts_node_end_byte(node), self.source.len });
-    if (ts.ts_node_start_byte(node) > ts.ts_node_end_byte(node)) std.debug.panic("{s}: {f} runs backwards", .{ self.work.facts.path, node.where() });
+    if (ts.ts_node_end_byte(node) > self.source.len) std.debug.panic("{s}: {f} ends at byte {d}, past the {d}-byte file; pass a node from the tree parsed from this file", .{ self.work.facts.path, node.where(), ts.ts_node_end_byte(node), self.source.len });
+    if (ts.ts_node_start_byte(node) > ts.ts_node_end_byte(node)) std.debug.panic("{s}: {f} runs backwards; pass a node from a live tree parsed from this file", .{ self.work.facts.path, node.where() });
     if (self.index.marks(node, self.v.literal_collection)) return true;
     if (self.index.marks(node, self.v.literal_constant) and !self.index.marks(node, self.v.string_format)) return true;
     return plainCall(self, node, self.tables.constant_constructors) != null;
@@ -164,11 +164,11 @@ pub fn subjectIs(self: *File, condition: ts.Node, target: []const u8) bool {
 
 pub fn childWith(self: *File, node: ts.Node, capture: ?captures.Id) ?ts.Node {
     const count = ts.ts_node_named_child_count(node);
-    if (count > ts.ts_node_descendant_count(node)) std.debug.panic("{s}: {f} has {d} named children but {d} descendants", .{ self.work.facts.path, node.where(), count, ts.ts_node_descendant_count(node) });
+    if (count > ts.ts_node_descendant_count(node)) std.debug.panic("{s}: {f} has {d} named children but {d} descendants; pass a node from a live tree, since tree-sitter never counts fewer descendants than children", .{ self.work.facts.path, node.where(), count, ts.ts_node_descendant_count(node) });
     for (0..count) |i| {
         const child = ts.ts_node_named_child(node, @intCast(i));
         if (self.index.marks(child, capture)) {
-            if (ts.ts_node_end_byte(child) > ts.ts_node_end_byte(node)) std.debug.panic("{s}: the child {f} ends after its parent {f}", .{ self.work.facts.path, child.where(), node.where() });
+            if (ts.ts_node_end_byte(child) > ts.ts_node_end_byte(node)) std.debug.panic("{s}: the child {f} ends after its parent {f}; pass a node from a live tree parsed from this file", .{ self.work.facts.path, child.where(), node.where() });
             return child;
         }
     }

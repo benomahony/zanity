@@ -153,10 +153,10 @@ fn drift(s: *ConceptScratch, text: *memory.Text, definitions: []const Definition
 }
 
 fn runEnd(keyed: []const Keyed, start: usize) usize {
-    if (start >= keyed.len) std.debug.panic("asked for the run of names from {d}, past the {d} names", .{ start, keyed.len });
+    if (start >= keyed.len) std.debug.panic("asked for the run of names from {d}, past the {d} names; call runEnd() only with a start below the name count", .{ start, keyed.len });
     var end = start + 1;
     while (end < keyed.len and std.mem.eql(u8, keyed[end].key, keyed[start].key)) end += 1;
-    if (end <= start) std.debug.panic("the run of names from {d} ended at {d}; a run holds at least its first name", .{ start, end });
+    if (end <= start) std.debug.panic("the run of names from {d} ended at {d}; a run holds at least its first name, so runEnd() must start its scan after the first name", .{ start, end });
     return end;
 }
 

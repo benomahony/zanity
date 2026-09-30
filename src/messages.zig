@@ -74,7 +74,7 @@ pub const MessageWords = struct {
     has_values: bool = false,
 
     fn split(self: *MessageWords, text: []const u8) void {
-        if (self.len != 0) std.debug.panic("splitting '{s}' into a word list that already holds {d} words", .{ text, self.len });
+        if (self.len != 0) std.debug.panic("splitting '{s}' into a word list that already holds {d} words; clear the word list before split()", .{ text, self.len });
         var i: usize = 0;
         var start: ?usize = null;
         while (i < text.len) : (i += 1) {
@@ -92,28 +92,28 @@ pub const MessageWords = struct {
             }
         }
         if (start) |from| self.keep(text[from..]);
-        if (self.len > max) std.debug.panic("kept {d} words of '{s}' in room for {d}", .{ self.len, text, max });
+        if (self.len > max) std.debug.panic("kept {d} words of '{s}' in room for {d}; keep() must stop adding at the list's capacity", .{ self.len, text, max });
     }
 
     /// The last byte of a placeholder starting at `i`, such as `{d}`, `${name}` or `%s`, or null.
     fn placeholderEnd(text: []const u8, i: usize) ?usize {
-        if (i >= text.len) std.debug.panic("looked for a placeholder at byte {d} of the {d}-byte '{s}'", .{ i, text.len, text });
+        if (i >= text.len) std.debug.panic("looked for a placeholder at byte {d} of the {d}-byte '{s}'; call placeholderEnd() only with a byte inside the message", .{ i, text.len, text });
         const c = text[i];
         const next: u8 = if (i + 1 < text.len) text[i + 1] else 0;
         if (c == '{' or (c == '$' and next == '{')) return std.mem.indexOfScalarPos(u8, text, i, '}') orelse text.len;
         if (c != '%' or !(std.ascii.isAlphabetic(next) or next == '(')) return null;
         var end = i + 1;
         while (end + 1 < text.len and (std.ascii.isAlphanumeric(text[end + 1]) or text[end + 1] == ')')) end += 1;
-        if (end <= i) std.debug.panic("the placeholder at byte {d} of '{s}' ended before it began", .{ i, text });
+        if (end <= i) std.debug.panic("the placeholder at byte {d} of '{s}' ended before it began; placeholderEnd() must scan forward from the opening brace", .{ i, text });
         return end;
     }
 
     fn keep(self: *MessageWords, word: []const u8) void {
-        if (word.len == 0) std.debug.panic("splitting a message produced an empty word before {d} others", .{self.len});
+        if (word.len == 0) std.debug.panic("splitting a message produced an empty word before {d} others; split() must skip empty runs between separators", .{self.len});
         if (self.len == max) return;
         self.list[self.len] = word;
         self.len += 1;
-        if (self.len > max) std.debug.panic("stored {d} words in room for {d}", .{ self.len, max });
+        if (self.len > max) std.debug.panic("stored {d} words in room for {d}; keep() must stop adding at the list's capacity", .{ self.len, max });
     }
 
     fn allIn(self: *const MessageWords, vocabulary: []const []const u8) bool {
@@ -127,14 +127,14 @@ pub const MessageWords = struct {
 
     /// Whether every word that isn't framing, like "expected" or "got", also appears in `condition`.
     fn restates(self: *const MessageWords, condition: *const MessageWords) bool {
-        if (self.len == 0) std.debug.panic("asked whether an empty message restates its condition", .{});
+        if (self.len == 0) std.debug.panic("asked whether an empty message restates its condition; checkMessage() must skip empty messages before calling restates()", .{});
         var meaningful: usize = 0;
         for (self.list[0..self.len]) |w| {
             if (inVocabulary(&rules.filler_words, w)) continue;
             meaningful += 1;
             if (!inVocabulary(condition.list[0..condition.len], w)) return false;
         }
-        if (meaningful > self.len) std.debug.panic("counted {d} meaningful words out of {d}", .{ meaningful, self.len });
+        if (meaningful > self.len) std.debug.panic("counted {d} meaningful words out of {d}; restates() must count each word at most once", .{ meaningful, self.len });
         return meaningful > 0;
     }
 };

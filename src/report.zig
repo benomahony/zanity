@@ -73,8 +73,8 @@ pub const Sink = struct { console: zrich.Console, scratch: *TableScratch, text: 
 
 /// Each file's findings with their fixes, then a table of files, worst first, and a table of rules.
 pub fn render(sink: Sink, findings: []const Finding) !void {
-    if (!std.sort.isSorted(Finding, findings, {}, findingOrder)) std.debug.panic("expected findings sorted by path and position, got {d} findings out of order", .{findings.len});
-    if (findings.len >= std.math.maxInt(u32)) std.debug.panic("{d} findings is more than a report can number", .{findings.len});
+    if (!std.sort.isSorted(Finding, findings, {}, findingOrder)) std.debug.panic("expected findings sorted by path and position, got {d} findings out of order; call sortFindings() before render()", .{findings.len});
+    if (findings.len >= std.math.maxInt(u32)) std.debug.panic("{d} findings is more than a report can number; lower memory.Limits.findings below 4 billion", .{findings.len});
     try summariseFiles(sink, findings);
     for (sink.scratch.tallies.items()) |t| try renderFile(sink.console, t, findings[t.start..t.end]);
     try renderTable(sink);
@@ -98,7 +98,7 @@ fn summariseFiles(sink: Sink, findings: []const Finding) !void {
 
 /// Counts one file's errors and warnings.
 fn summariseFile(path: []const u8, findings: []const Finding, start: usize) FileTally {
-    if (findings.len == 0) std.debug.panic("tallying {s} with no findings; only files with findings get a row", .{path});
+    if (findings.len == 0) std.debug.panic("tallying {s} with no findings; only files with findings get a row, so summarise() must skip files with none", .{path});
     var tally: FileTally = .{ .path = path, .start = start, .end = start + findings.len };
     for (findings) |f| {
         switch (rules.all[ruleIndex(f.rule)].severity) {
@@ -106,8 +106,8 @@ fn summariseFile(path: []const u8, findings: []const Finding, start: usize) File
             .warning, .information => tally.warnings += 1,
         }
     }
-    if (tally.errors + tally.warnings != findings.len) std.debug.panic("{s}: counted {d} errors and {d} warnings among {d} findings", .{ path, tally.errors, tally.warnings, findings.len });
-    if (tally.end <= tally.start) std.debug.panic("{s}: tally covers findings {d}..{d}", .{ path, tally.start, tally.end });
+    if (tally.errors + tally.warnings != findings.len) std.debug.panic("{s}: counted {d} errors and {d} warnings among {d} findings; every finding is an error or a warning, so check the severity switch in summariseFile()", .{ path, tally.errors, tally.warnings, findings.len });
+    if (tally.end <= tally.start) std.debug.panic("{s}: tally covers findings {d}..{d}; the range must run forwards within the findings, so check how summarise() sets start and end", .{ path, tally.start, tally.end });
     return tally;
 }
 
@@ -148,8 +148,8 @@ fn renderFile(console: zrich.Console, tally: FileTally, findings: []const Findin
         try console.styled(f.advice(), fix_style);
         try out.writeByte('\n');
     }
-    if (findings.len != tally.end - tally.start) std.debug.panic("{s}: rendering {d} findings for a tally of {d} ({d}..{d})", .{ tally.path, findings.len, tally.end - tally.start, tally.start, tally.end });
-    if (width < 3) std.debug.panic("{s}: the widest location is {d} characters; a location is at least '1:1'", .{ tally.path, width });
+    if (findings.len != tally.end - tally.start) std.debug.panic("{s}: rendering {d} findings for a tally of {d} ({d}..{d}); render the tally's own range of findings", .{ tally.path, findings.len, tally.end - tally.start, tally.start, tally.end });
+    if (width < 3) std.debug.panic("{s}: the widest location is {d} characters; a location is at least '1:1', so locationWidth() must measure line and column counted from 1", .{ tally.path, width });
 }
 
 fn plural(n: u32, word: []const u8) []const u8 {
@@ -240,17 +240,17 @@ fn renderRules(sink: Sink, findings: []const Finding) !void {
 }
 
 fn worstFirst(_: void, a: FileTally, b: FileTally) bool {
-    if (a.path.len == 0) std.debug.panic("a file tally with {d} errors has no path", .{a.errors});
-    if (b.path.len == 0) std.debug.panic("a file tally with {d} errors has no path", .{b.errors});
+    if (a.path.len == 0) std.debug.panic("a file tally with {d} errors has no path; summarise() must set each tally's path from its findings", .{a.errors});
+    if (b.path.len == 0) std.debug.panic("a file tally with {d} errors has no path; summarise() must set each tally's path from its findings", .{b.errors});
     if (a.errors != b.errors) return a.errors > b.errors;
     if (a.warnings != b.warnings) return a.warnings > b.warnings;
     return std.mem.order(u8, a.path, b.path) == .lt;
 }
 
 fn ruleIndex(name: []const u8) usize {
-    if (name.len == 0) std.debug.panic("looked up the report column of a finding with no rule name", .{});
+    if (name.len == 0) std.debug.panic("looked up the report column of a finding with no rule name; report() must always pass a rule name", .{});
     for (rules.all, 0..) |r, i| if (std.mem.eql(u8, r.name, name)) {
-        if (rules.find(name).?.severity != r.severity) std.debug.panic("rule {s} has two severities: {t} by name, {t} in rules.all", .{ name, rules.find(name).?.severity, r.severity });
+        if (rules.find(name).?.severity != r.severity) std.debug.panic("rule {s} has two severities: {t} by name, {t} in rules.all; take the severity from rules.find(), not from the finding", .{ name, rules.find(name).?.severity, r.severity });
         return i;
     };
     unreachable;
@@ -258,8 +258,8 @@ fn ruleIndex(name: []const u8) usize {
 
 fn locationWidth(f: Finding) usize {
     const width = digits(f.line + 1) + 1 + digits(f.column + 1);
-    if (width < 3) std.debug.panic("'{d}:{d}' is {d} characters wide; a location is at least '1:1'", .{ f.line + 1, f.column + 1, width });
-    if (width > 21) std.debug.panic("'{d}:{d}' is {d} characters wide; the report pads locations to at most 21", .{ f.line + 1, f.column + 1, width });
+    if (width < 3) std.debug.panic("'{d}:{d}' is {d} characters wide; a location is at least '1:1', so pass line and column counted from 1", .{ f.line + 1, f.column + 1, width });
+    if (width > 21) std.debug.panic("'{d}:{d}' is {d} characters wide; the report pads locations to at most 21, so widen the padding in renderFile() for larger files", .{ f.line + 1, f.column + 1, width });
     return width;
 }
 
@@ -269,8 +269,8 @@ fn label(severity: rules.Severity) []const u8 {
         .warning => "warning",
         .information => "info",
     };
-    if (text.len == 0) std.debug.panic("severity {t} has an empty label", .{severity});
-    if (text.len > "warning".len) std.debug.panic("severity label '{s}' is longer than 'warning', which the report pads to", .{text});
+    if (text.len == 0) std.debug.panic("severity {t} has an empty label; give it a label in label()'s switch", .{severity});
+    if (text.len > "warning".len) std.debug.panic("severity label '{s}' is longer than 'warning', which the report pads to, so shorten it or widen the padding in renderFile()", .{text});
     return text;
 }
 
@@ -280,15 +280,15 @@ fn severityStyle(severity: rules.Severity) zrich.Style {
         .warning => .yellow,
         .information => .blue,
     };
-    if (@intFromEnum(colour) >= 8) std.debug.panic("severity {t} uses colour {t}, outside the 8 basic terminal colours", .{ severity, colour });
-    if (colour == .green) std.debug.panic("severity {t} is green, which the report keeps for 'no issues found'", .{severity});
+    if (@intFromEnum(colour) >= 8) std.debug.panic("severity {t} uses colour {t}, outside the 8 basic terminal colours; pick one of zrich's named basic colours in severityStyle()", .{ severity, colour });
+    if (colour == .green) std.debug.panic("severity {t} is green, which the report keeps for 'no issues found'; pick another colour for it in severityStyle()", .{severity});
     return .{ .fg = .{ .named = colour }, .bold = severity == .@"error" };
 }
 
 fn digits(value: usize) usize {
-    if (value == 0) std.debug.panic("counting the digits of 0; line and column numbers start at 1", .{});
+    if (value == 0) std.debug.panic("counting the digits of 0; line and column numbers start at 1, so pass them counted from 1", .{});
     const result = std.math.log10_int(value) + 1;
-    if (result > 20) std.debug.panic("{d} has {d} digits, more than a usize can", .{ value, result });
+    if (result > 20) std.debug.panic("{d} has {d} digits, more than a usize can; the loop in digits() must stop at 0, so check its division", .{ value, result });
     return result;
 }
 

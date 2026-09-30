@@ -167,7 +167,7 @@ pub fn matchPath(glob: []const u8, path: []const u8) bool {
 
 /// Matches one segment with `*`, `?` and `[...]` classes; nothing crosses a `/`.
 pub fn matchSegment(glob: []const u8, name: []const u8) bool {
-    if (glob.len == 0) std.debug.panic("matching '{s}' against an empty segment pattern; matchPath handles empty segments itself", .{name});
+    if (glob.len == 0) std.debug.panic("matching '{s}' against an empty segment pattern; matchPath handles empty segments itself, so call matchSegment() only with a non-empty pattern", .{name});
     var gi: usize = 0;
     var ni: usize = 0;
     var star: ?usize = null;
@@ -190,20 +190,20 @@ pub fn matchSegment(glob: []const u8, name: []const u8) bool {
         gi = s + 1;
         ni = star_name;
     }
-    if (gi != glob.len) std.debug.panic("matching '{s}' against '{s}' stopped at byte {d} of the pattern", .{ glob, name, gi });
+    if (gi != glob.len) std.debug.panic("matching '{s}' against '{s}' stopped at byte {d} of the pattern; matchSegment() must consume the whole pattern or return false, so check its exits", .{ glob, name, gi });
     return true;
 }
 
 /// How many pattern bytes at `glob[gi]` match the one name byte `c`, or null if they don't.
 fn step(glob: []const u8, gi: usize, c: u8) ?usize {
-    if (gi >= glob.len) std.debug.panic("stepping past the end of pattern '{s}' at byte {d}", .{ glob, gi });
+    if (gi >= glob.len) std.debug.panic("stepping past the end of pattern '{s}' at byte {d}; call step() only while bytes of the pattern remain", .{ glob, gi });
     const width: ?usize = switch (glob[gi]) {
         '?' => 1,
         '[' => matchClass(glob[gi..], c),
         '\\' => if (gi + 1 < glob.len and glob[gi + 1] == c) 2 else null,
         else => if (glob[gi] == c) 1 else null,
     };
-    if (width) |w| if (gi + w > glob.len) std.debug.panic("a {d}-byte step at byte {d} runs past the end of '{s}'", .{ w, gi, glob });
+    if (width) |w| if (gi + w > glob.len) std.debug.panic("a {d}-byte step at byte {d} runs past the end of '{s}'; step() must measure a [...] class up to its ']', so check how it finds the end", .{ w, gi, glob });
     return width;
 }
 

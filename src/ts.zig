@@ -23,8 +23,8 @@ pub const Node = extern struct {
     pub fn text(n: Node, source: []const u8) []const u8 {
         const start = ts_node_start_byte(n);
         const end = ts_node_end_byte(n);
-        if (start > end) std.debug.panic("node spans bytes {d}..{d}, which run backwards; the tree is corrupt", .{ start, end });
-        if (end > source.len) std.debug.panic("node ends at byte {d} but the source has {d}; it was parsed from different text than this", .{ end, source.len });
+        if (start > end) std.debug.panic("node spans bytes {d}..{d}, which run backwards; the tree is corrupt, so check the tree was parsed from this source and not freed", .{ start, end });
+        if (end > source.len) std.debug.panic("node ends at byte {d} but the source has {d}; it was parsed from different text than this, so pass the source the tree was parsed from", .{ end, source.len });
         return source[start..end];
     }
     pub fn parent(n: Node) ?Node {
@@ -55,8 +55,8 @@ pub const Node = extern struct {
     };
 
     pub fn eql(a: Node, b: Node) bool {
-        if (a.tree == null) std.debug.panic("compared a node from no tree (its tree was deleted) with {s} at byte {d}", .{ ts_node_type(b), ts_node_start_byte(b) });
-        if (b.tree == null) std.debug.panic("compared {s} at byte {d} with a node from no tree (its tree was deleted)", .{ ts_node_type(a), ts_node_start_byte(a) });
+        if (a.tree == null) std.debug.panic("compared a node from no tree (its tree was deleted) with {s} at byte {d}; compare nodes only while their tree is alive", .{ ts_node_type(b), ts_node_start_byte(b) });
+        if (b.tree == null) std.debug.panic("compared {s} at byte {d} with a node from no tree (its tree was deleted); compare nodes only while their tree is alive", .{ ts_node_type(a), ts_node_start_byte(a) });
         return a.id == b.id and ts_node_start_byte(a) == ts_node_start_byte(b);
     }
 };
@@ -137,9 +137,9 @@ pub fn captureName(query: *const Query, id: u32) []const u8 {
 }
 
 pub fn stringValue(query: *const Query, id: u32) []const u8 {
-    if (id >= ts_query_string_count(query)) std.debug.panic("string id {d} is out of range; the query has {d} strings", .{ id, ts_query_string_count(query) });
+    if (id >= ts_query_string_count(query)) std.debug.panic("string id {d} is out of range; the query has {d} strings; pass an id from this query's predicate steps", .{ id, ts_query_string_count(query) });
     var len: u32 = 0;
     const ptr = ts_query_string_value_for_id(query, id, &len);
-    if (len >= std.math.maxInt(u16)) std.debug.panic("query string {d} is {d} bytes long; a predicate argument that long is a broken query", .{ id, len });
+    if (len >= std.math.maxInt(u16)) std.debug.panic("query string {d} is {d} bytes long; a predicate argument that long is a broken query, so fix the predicate in the language's .scm files", .{ id, len });
     return ptr[0..len];
 }

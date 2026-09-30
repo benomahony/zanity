@@ -54,7 +54,7 @@ pub fn parseIgnore(codes: *memory.Bounded([]const u8), comment: []const u8) !boo
 
 /// Where the text after `nasa: ignore` starting at `i` begins, or null if there is no marker there.
 fn ignoreMarkerEnd(comment: []const u8, i: usize) ?usize {
-    if (i >= comment.len) std.debug.panic("looked for a suppression at byte {d} of the {d}-byte comment '{s}'", .{ i, comment.len, comment });
+    if (i >= comment.len) std.debug.panic("looked for a suppression at byte {d} of the {d}-byte comment '{s}'; parseIgnore() must call ignoreMarkerEnd() with a byte inside the comment", .{ i, comment.len, comment });
     if (!std.ascii.startsWithIgnoreCase(comment[i..], "nasa:")) return null;
     const before = std.mem.trimEnd(u8, comment[0..i], " \t");
     if (before.len > 0 and std.ascii.isAlphanumeric(before[before.len - 1])) return null;
@@ -64,6 +64,6 @@ fn ignoreMarkerEnd(comment: []const u8, i: usize) ?usize {
     j += 6;
     if (j < comment.len and (std.ascii.isAlphanumeric(comment[j]) or comment[j] == '_')) return null;
     while (j < comment.len and std.ascii.isWhitespace(comment[j])) j += 1;
-    if (j > comment.len) std.debug.panic("the suppression marker in '{s}' ends at byte {d}, past the comment", .{ comment, j });
+    if (j > comment.len) std.debug.panic("the suppression marker in '{s}' ends at byte {d}, past the comment; ignoreMarkerEnd() must stop at the end of the comment", .{ comment, j });
     return j;
 }

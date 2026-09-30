@@ -102,7 +102,7 @@ pub const Text = struct {
     }
 
     pub fn copy(self: *Text, bytes: []const u8) error{LimitExceeded}![]const u8 {
-        if (self.used > self.buffer.len) std.debug.panic("Text buffer: {d} bytes marked used out of {d}; something moved used past the end", .{ self.used, self.buffer.len });
+        if (self.used > self.buffer.len) std.debug.panic("Text buffer: {d} bytes marked used out of {d}; something moved used past the end, so only copy() and format() may move used forward", .{ self.used, self.buffer.len });
         if (self.buffer.len - self.used < bytes.len) {
             exceeded = "bytes of names and paths";
             return error.LimitExceeded;
@@ -110,7 +110,7 @@ pub const Text = struct {
         const out = self.buffer[self.used .. self.used + bytes.len];
         @memcpy(out, bytes);
         self.used += bytes.len;
-        if (!std.mem.eql(u8, out, bytes)) std.debug.panic("Text buffer: copied '{s}' but the buffer holds '{s}'; the source overlaps the buffer", .{ bytes, out });
+        if (!std.mem.eql(u8, out, bytes)) std.debug.panic("Text buffer: copied '{s}' but the buffer holds '{s}'; the source overlaps the buffer, so copy from outside the buffer, or use the slice already in it", .{ bytes, out });
         return out;
     }
 };
@@ -166,10 +166,10 @@ pub const Pool = struct {
     }
 
     pub fn reset(self: *Pool) void {
-        if (self.used > self.buffer.len) std.debug.panic("Pool for {s}: {d} bytes used of {d} before reset", .{ self.what, self.used, self.buffer.len });
+        if (self.used > self.buffer.len) std.debug.panic("Pool for {s}: {d} bytes used of {d} before reset; only alloc() may move used forward, and never past the buffer", .{ self.what, self.used, self.buffer.len });
         self.used = 0;
         self.last = 0;
-        if (self.used != 0) std.debug.panic("Pool for {s}: reset() left {d} bytes used", .{ self.what, self.used });
+        if (self.used != 0) std.debug.panic("Pool for {s}: reset() left {d} bytes used; reset() must set used to 0", .{ self.what, self.used });
     }
 };
 
@@ -191,8 +191,8 @@ export fn zanityMalloc(size: usize) ?*anyopaque {
 
 export fn zanityCalloc(count: usize, size: usize) ?*anyopaque {
     const total = count * size;
-    if (count != 0 and total / count != size) std.debug.panic("tree-sitter asked for {d} x {d} bytes, which overflows", .{ count, size });
-    if (total >= std.math.maxInt(u32)) std.debug.panic("tree-sitter asked for {d} x {d} = {d} bytes, more than a 4 GiB file could need", .{ count, size, total });
+    if (count != 0 and total / count != size) std.debug.panic("tree-sitter asked for {d} x {d} bytes, which overflows; the input is too large to parse, so lower memory.Limits.file_bytes", .{ count, size });
+    if (total >= std.math.maxInt(u32)) std.debug.panic("tree-sitter asked for {d} x {d} = {d} bytes, more than a 4 GiB file could need; lower memory.Limits.file_bytes, or check the tree-sitter version in vendor/tree-sitter/REVISION", .{ count, size, total });
     const ptr = active().take(total) orelse return null;
     @memset(ptr[0..total], 0);
     return ptr;
@@ -212,9 +212,9 @@ export fn zanityRealloc(old: ?*anyopaque, size: usize) ?*anyopaque {
 export fn zanityFree(ptr: ?*anyopaque) void {
     const pool = active();
     const bytes: [*]u8 = @ptrCast(ptr orelse return);
-    if (!pool.owns(bytes)) std.debug.panic("tree-sitter freed 0x{x}, which the pool did not allocate; it came from another allocator", .{@intFromPtr(bytes)});
+    if (!pool.owns(bytes)) std.debug.panic("tree-sitter freed 0x{x}, which the pool did not allocate; it came from another allocator, so install the pool with ts_set_allocator before any parse", .{@intFromPtr(bytes)});
     pool.release(bytes);
-    if (pool.used > pool.buffer.len) std.debug.panic("the tree-sitter pool reports {d} bytes used of {d} after a free", .{ pool.used, pool.buffer.len });
+    if (pool.used > pool.buffer.len) std.debug.panic("the tree-sitter pool reports {d} bytes used of {d} after a free; zanityFree() must not move used past the buffer", .{ pool.used, pool.buffer.len });
 }
 
 test "bounded containers refuse to grow past their limit" {

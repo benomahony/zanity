@@ -84,7 +84,7 @@ pub const Inference = struct {
 
     /// Queues the questions a unit still needs, answering what it can from the cache.
     fn plan(self: *Inference, unit: *const Unit, settled: []const Finding, enabled: rules.Set) !void {
-        if (unit.source.len == 0) std.debug.panic("{s}: function '{s}' has no source to ask about", .{ unit.path, unit.name });
+        if (unit.source.len == 0) std.debug.panic("{s}: function '{s}' has no source to ask about; facts.unit() must store the function's source when it records the unit", .{ unit.path, unit.name });
         var job: Job = .{ .unit = unit, .unit_hash = self.unitHash(unit) };
         for (&rules.all) |*rule| {
             if (rule.question.len == 0 or !enabled.enabled(rule.name) or decided(settled, unit, rule.name)) continue;
@@ -97,7 +97,7 @@ pub const Inference = struct {
         if (job.count == 0) return;
         job.state = try self.stateOf(unit);
         try self.jobs.add(job);
-        if (job.count > max_questions) std.debug.panic("{s}: queued {d} questions about '{s}', more than {d}", .{ unit.path, job.count, unit.name, max_questions });
+        if (job.count > max_questions) std.debug.panic("{s}: queued {d} questions about '{s}', more than {d}; raise max_questions to the number of judgement rules in rules.all", .{ unit.path, job.count, unit.name, max_questions });
     }
 
     fn askAll(self: *Inference) !void {
@@ -155,7 +155,7 @@ pub const Inference = struct {
     }
 
     fn ask(self: *Inference, job: *Job, semaphore: *Io.Semaphore) !void {
-        if (job.count > max_questions) std.debug.panic("{s}: '{s}' has {d} questions queued, more than {d}", .{ job.unit.path, job.unit.name, job.count, max_questions });
+        if (job.count > max_questions) std.debug.panic("{s}: '{s}' has {d} questions queued, more than {d}; raise max_questions to the number of judgement rules in rules.all", .{ job.unit.path, job.unit.name, job.count, max_questions });
         var questions: [max_questions]tai.NamedQuestion = undefined;
         var count: usize = 0;
         for (job.rules[0..job.count], job.answers[0..job.count]) |rule, answer| {
@@ -177,13 +177,13 @@ pub const Inference = struct {
                 if (std.mem.eql(u8, rule.name, named.name)) answer.* = p;
             }
         }
-        if (count > job.count) std.debug.panic("{s}: asked {d} questions about '{s}' but only {d} were queued", .{ job.unit.path, count, job.unit.name, job.count });
+        if (count > job.count) std.debug.panic("{s}: asked {d} questions about '{s}' but only {d} were queued; ask() must ask only the unanswered questions in job.rules", .{ job.unit.path, count, job.unit.name, job.count });
     }
 
     /// Adds findings for the confident answers and caches the fresh ones.
     fn record(self: *Inference, job: *const Job, findings: *memory.Bounded(Finding)) !void {
         const unit = job.unit;
-        if (job.failed) |err| std.debug.panic("{s}: recording answers about '{s}' after the request failed with {t}", .{ unit.path, unit.name, err });
+        if (job.failed) |err| std.debug.panic("{s}: recording answers about '{s}' after the request failed with {t}; askOne() must skip record() when the job failed", .{ unit.path, unit.name, err });
         for (job.rules[0..job.count], job.answers[0..job.count], job.known[0..job.count]) |rule, answer, known| {
             const p = answer orelse continue;
             if (!known) try self.store.keepAnswer(.{ .model = self.client.model, .question = store.digest(&.{rule.question}), .unit = job.unit_hash, .language = unit.language, .source = unit.source, .probability = p });
@@ -191,7 +191,7 @@ pub const Inference = struct {
             const message = try self.json.format("'{s}' {s} (TypeSafe is {d:.0}% sure).", .{ unit.name, rule.judgement, p * 100 });
             try findings.add(.{ .path = unit.path, .line = unit.line, .column = unit.column, .rule = rule.name, .message = message });
         }
-        if (job.count > max_questions) std.debug.panic("{s}: recorded {d} answers about '{s}', more than {d}", .{ unit.path, job.count, unit.name, max_questions });
+        if (job.count > max_questions) std.debug.panic("{s}: recorded {d} answers about '{s}', more than {d}; record() must keep at most one answer per queued question", .{ unit.path, job.count, unit.name, max_questions });
     }
 
     /// The language and source identify a function, as in nouls; the model is kept alongside.
@@ -217,12 +217,12 @@ pub const Inference = struct {
     }
 
     fn describe(self: *Inference, job: *const Job, err: anyerror) ![]const u8 {
-        if (job.failed == null) std.debug.panic("{s}: describing a failure ({t}) for '{s}', whose request succeeded", .{ job.unit.path, err, job.unit.name });
+        if (job.failed == null) std.debug.panic("{s}: describing a failure ({t}) for '{s}', whose request succeeded; call describe() only for a job whose failed is set", .{ job.unit.path, err, job.unit.name });
         const d = job.diagnostics;
         const status: u32 = if (d.status) |s| @intFromEnum(s) else 0;
         const detail = std.mem.trim(u8, d.body[0..@min(d.body.len, 300)], " \t\r\n");
         const text = try self.json.format("TypeSafe could not judge '{s}' in {s}: {t} (HTTP {d}, {d} attempts){s}{s}", .{ job.unit.name, job.unit.path, err, status, d.attempts, if (detail.len > 0) ": " else "", detail });
-        if (text.len == 0) std.debug.panic("describing a failed TypeSafe call produced no text", .{});
+        if (text.len == 0) std.debug.panic("describing a failed TypeSafe call produced no text; describe() must write the error and the function, so check its format call", .{});
         return text;
     }
 
@@ -230,10 +230,10 @@ pub const Inference = struct {
 
 /// Whether a deterministic check already reported `rule` inside the unit, so asking is wasted.
 fn decided(settled: []const Finding, unit: *const Unit, rule: []const u8) bool {
-    if (unit.end_line < unit.line) std.debug.panic("{s}: '{s}' ends on line {d}, before it starts on {d}", .{ unit.path, unit.name, unit.end_line + 1, unit.line + 1 });
+    if (unit.end_line < unit.line) std.debug.panic("{s}: '{s}' ends on line {d}, before it starts on {d}; facts.unit() must record the function's first line before its last", .{ unit.path, unit.name, unit.end_line + 1, unit.line + 1 });
     const found = for (settled) |f| {
         if (std.mem.eql(u8, f.rule, rule) and std.mem.eql(u8, f.path, unit.path) and f.line >= unit.line and f.line <= unit.end_line) break true;
     } else false;
-    if (found and settled.len == 0) std.debug.panic("found a {s} finding among no findings", .{rule});
+    if (found and settled.len == 0) std.debug.panic("found a {s} finding among no findings; decided() must search only the findings added for this unit", .{rule});
     return found;
 }

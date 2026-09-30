@@ -83,8 +83,8 @@ pub const Graph = struct {
     }
 
     fn out(self: Graph, v: u32) []const u32 {
-        if (v + 1 >= self.offsets.len) std.debug.panic("asked for the calls of function {d}, but the graph has {d} functions", .{ v, self.offsets.len -| 1 });
-        if (self.offsets[v] > self.offsets[v + 1]) std.debug.panic("function {d}'s calls run backwards ({d}..{d}); the offsets were not built in order", .{ v, self.offsets[v], self.offsets[v + 1] });
+        if (v + 1 >= self.offsets.len) std.debug.panic("asked for the calls of function {d}, but the graph has {d} functions; pass an index below the function count from the facts", .{ v, self.offsets.len -| 1 });
+        if (self.offsets[v] > self.offsets[v + 1]) std.debug.panic("function {d}'s calls run backwards ({d}..{d}); the offsets were not built in order, so build() must fill the offsets in function order", .{ v, self.offsets[v], self.offsets[v + 1] });
         return self.targets[self.offsets[v]..self.offsets[v + 1]];
     }
 
@@ -160,8 +160,8 @@ const Lookup = struct {
         const lo = std.sort.lowerBound(u32, self.sorted, self, compareName);
         var hi = lo;
         while (hi < self.sorted.len and std.mem.eql(u8, self.functions[self.sorted[hi]].name, self.call.callee)) hi += 1;
-        if (lo > hi) std.debug.panic("the functions named '{s}' run backwards ({d}..{d})", .{ self.call.callee, lo, hi });
-        if (hi > self.sorted.len) std.debug.panic("the functions named '{s}' end at {d}, past the {d} sorted names", .{ self.call.callee, hi, self.sorted.len });
+        if (lo > hi) std.debug.panic("the functions named '{s}' run backwards ({d}..{d}); build() must sort the names before candidates() searches them", .{ self.call.callee, lo, hi });
+        if (hi > self.sorted.len) std.debug.panic("the functions named '{s}' end at {d}, past the {d} sorted names; candidates() must bound its run by the sorted names, so check its search", .{ self.call.callee, hi, self.sorted.len });
         return self.sorted[lo..hi];
     }
 
@@ -200,8 +200,8 @@ fn reaches(reach: facts_module.Reach, method: bool) bool {
         .functions => !method,
         .methods => method,
     };
-    if (!result and reach == .any) std.debug.panic("a call that can reach anything ({t}) refused a {s}", .{ reach, if (method) "method" else "function" });
-    if (result and reach == .methods and !method) std.debug.panic("a call that can only reach methods accepted a plain function", .{});
+    if (!result and reach == .any) std.debug.panic("a call that can reach anything ({t}) refused a {s}; reaches() must return true for .any, so check its switch", .{ reach, if (method) "method" else "function" });
+    if (result and reach == .methods and !method) std.debug.panic("a call that can only reach methods accepted a plain function; reaches() must refuse plain functions for .methods, so check its switch", .{});
     return result;
 }
 
@@ -218,8 +218,8 @@ pub fn recursion(s: *CycleScratch, facts: *const Facts, findings: *memory.Bounde
             try findings.add(.{ .path = f.path, .line = f.line, .column = f.column, .rule = "recursion", .message = message });
         }
     }
-    if (findings.len - before > facts.functions.len) std.debug.panic("recursion reported {d} findings for {d} functions; each function can be in at most one cycle", .{ findings.len - before, facts.functions.len });
-    if (graph.offsets.len != facts.functions.len + 1) std.debug.panic("the call graph has {d} row offsets for {d} functions", .{ graph.offsets.len, facts.functions.len });
+    if (findings.len - before > facts.functions.len) std.debug.panic("recursion reported {d} findings for {d} functions; each function can be in at most one cycle, so recursion() must mark each function it reports and skip it after", .{ findings.len - before, facts.functions.len });
+    if (graph.offsets.len != facts.functions.len + 1) std.debug.panic("the call graph has {d} row offsets for {d} functions; build() must write one offset per function plus one", .{ graph.offsets.len, facts.functions.len });
 }
 
 test "cycles are found without recursion" {

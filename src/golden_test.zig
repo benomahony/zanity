@@ -13,10 +13,10 @@ fn behaviour(arena: std.mem.Allocator, output: []const u8) ![]const u8 {
         const rule = rules.find(line[open + 2 .. close]) orelse return error.UnknownRule;
         try findings.append(arena, try std.fmt.allocPrint(arena, "{s} [{s}]\n", .{ line[0..open], rule.name }));
     }
-    if (findings.items.len != std.mem.count(u8, std.mem.trim(u8, output, "\n"), "\n") + @intFromBool(output.len > 0)) std.debug.panic("read {d} findings from {d} lines of output:\n{s}", .{ findings.items.len, std.mem.count(u8, std.mem.trim(u8, output, "\n"), "\n") + @intFromBool(output.len > 0), output });
+    if (findings.items.len != std.mem.count(u8, std.mem.trim(u8, output, "\n"), "\n") + @intFromBool(output.len > 0)) std.debug.panic("read {d} findings from {d} lines of output; behaviour() must keep one finding per line, so check how it splits:\n{s}", .{ findings.items.len, std.mem.count(u8, std.mem.trim(u8, output, "\n"), "\n") + @intFromBool(output.len > 0), output });
     std.mem.sort([]const u8, findings.items, {}, lineOrder);
     const joined = try std.mem.concat(arena, u8, findings.items);
-    if (joined.len < findings.items.len) std.debug.panic("joined {d} findings into {d} bytes; each needs at least a newline", .{ findings.items.len, joined.len });
+    if (joined.len < findings.items.len) std.debug.panic("joined {d} findings into {d} bytes; each needs at least a newline, so check that behaviour() writes each finding's line", .{ findings.items.len, joined.len });
     return joined;
 }
 
@@ -28,16 +28,16 @@ fn behaviourOfJson(arena: std.mem.Allocator, output: []const u8) ![]const u8 {
     var text: std.ArrayList(u8) = .empty;
     for (records) |r| {
         const rule = rules.find(r.rule) orelse return error.UnknownRule;
-        if (r.line == 0 or r.column == 0) std.debug.panic("{s}: zanity reported line {d} column {d}; --json counts both from 1", .{ r.path, r.line, r.column });
+        if (r.line == 0 or r.column == 0) std.debug.panic("{s}: zanity reported line {d} column {d}; --json counts both from 1, so fix the JSON row built in runCheck(), which adds 1 to both", .{ r.path, r.line, r.column });
         try text.print(arena, "{s}:{d}:{d}: {s} [{s}]\n", .{ r.path, r.line, r.column, r.severity, rule.name });
     }
-    if (std.mem.count(u8, text.items, "\n") != records.len) std.debug.panic("wrote {d} lines for {d} JSON findings:\n{s}", .{ std.mem.count(u8, text.items, "\n"), records.len, text.items });
+    if (std.mem.count(u8, text.items, "\n") != records.len) std.debug.panic("wrote {d} lines for {d} JSON findings; behaviourOfJson() must write one line per finding, so check its loop:\n{s}", .{ std.mem.count(u8, text.items, "\n"), records.len, text.items });
     return behaviour(arena, text.items);
 }
 
 fn lineOrder(_: void, a: []const u8, b: []const u8) bool {
-    if (a.len == 0) std.debug.panic("sorting an empty finding line against '{s}'", .{b});
-    if (b.len == 0) std.debug.panic("sorting '{s}' against an empty finding line", .{a});
+    if (a.len == 0) std.debug.panic("sorting an empty finding line against '{s}'; behaviour() must drop empty lines before sorting", .{b});
+    if (b.len == 0) std.debug.panic("sorting '{s}' against an empty finding line; behaviour() must drop empty lines before sorting", .{a});
     return std.mem.order(u8, a, b) == .lt;
 }
 

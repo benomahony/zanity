@@ -85,14 +85,14 @@ const save_answer = "INSERT OR REPLACE INTO answers (model, question_hash, unit_
 pub const Digest = [32]u8;
 
 pub fn digest(parts: []const []const u8) Digest {
-    if (parts.len == 0) std.debug.panic("digesting nothing; a digest names at least one part", .{});
+    if (parts.len == 0) std.debug.panic("digesting nothing; a digest names at least one part, so pass the language and source to digest()", .{});
     var h = std.crypto.hash.sha2.Sha256.init(.{});
     for (parts, 0..) |part, i| {
         if (i > 0) h.update("\x00");
         h.update(part);
     }
     const hex = std.fmt.bytesToHex(h.finalResult(), .lower);
-    if (hex.len != 64) std.debug.panic("a SHA-256 printed as {d} hex characters, not 64", .{hex.len});
+    if (hex.len != 64) std.debug.panic("a SHA-256 printed as {d} hex characters, not 64; print each of the digest's 32 bytes as two hex digits", .{hex.len});
     return hex[0..32].*;
 }
 
@@ -158,8 +158,8 @@ pub const Store = struct {
 
     /// Keeps an answer and the function it was about.
     pub fn keepAnswer(self: *const Store, a: Answer) !void {
-        if (a.probability < 0 or a.probability > 1) std.debug.panic("keeping a probability of {d}; answers are between 0 and 1", .{a.probability});
-        if (a.language.len == 0 or a.source.len == 0) std.debug.panic("keeping an answer about a function with no language or source", .{});
+        if (a.probability < 0 or a.probability > 1) std.debug.panic("keeping a probability of {d}; answers are between 0 and 1, so check how infer.zig reads TypeSafe's answer", .{a.probability});
+        if (a.language.len == 0 or a.source.len == 0) std.debug.panic("keeping an answer about a function with no language or source; plan() must pass the unit's language and source", .{});
         defer _ = sqlite3_reset(self.unit);
         defer _ = sqlite3_reset(self.answer);
         try bind(self.unit, 1, &a.unit);
@@ -187,7 +187,7 @@ fn initPath(gpa: Allocator, io: Io, environ: *const std.process.Environ.Map) ![:
     const dir = try std.fs.path.join(gpa, &.{ cache, "nouls" });
     Io.Dir.cwd().createDirPath(io, dir) catch return error.StoreUnavailable;
     const path = try std.fs.path.joinZ(gpa, &.{ dir, "nouls.db" });
-    if (!std.mem.endsWith(u8, path, "nouls.db")) std.debug.panic("the store path {s} does not end in nouls.db", .{path});
+    if (!std.mem.endsWith(u8, path, "nouls.db")) std.debug.panic("the store path {s} does not end in nouls.db; initPath() must join the cache directory with nouls.db", .{path});
     return path;
 }
 

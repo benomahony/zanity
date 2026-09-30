@@ -17,7 +17,7 @@ const hazards = @import("hazards.zig");
 pub fn conditionValues(self: *File, condition: ts.Node, out: *[4][]const u8) []const []const u8 {
     const start = ts.ts_node_start_byte(condition);
     const end = ts.ts_node_end_byte(condition);
-    if (start > end or end > self.source.len) std.debug.panic("{s}: the condition spans bytes {d}..{d} of a {d}-byte file", .{ self.work.facts.path, start, end, self.source.len });
+    if (start > end or end > self.source.len) std.debug.panic("{s}: the condition spans bytes {d}..{d} of a {d}-byte file; pass the @assertion.condition node from the tree parsed from this file", .{ self.work.facts.path, start, end, self.source.len });
     var widest: [8]ts.Node = undefined;
     const found = widestPaths(self, start, end, &widest);
     var count: usize = 0;
@@ -31,7 +31,7 @@ pub fn conditionValues(self: *File, condition: ts.Node, out: *[4][]const u8) []c
         out[count] = text;
         count += 1;
     }
-    if (count > found) std.debug.panic("{s}: kept {d} values from only {d} candidates", .{ self.work.facts.path, count, found });
+    if (count > found) std.debug.panic("{s}: kept {d} values from only {d} candidates; conditionValues() must add at most one value per candidate", .{ self.work.facts.path, count, found });
     return out[0..count];
 }
 
@@ -42,7 +42,7 @@ pub fn conditionValues(self: *File, condition: ts.Node, out: *[4][]const u8) []c
 /// uses that quote.
 fn shownValue(self: *File, node: ts.Node, condition: ts.Node) []const u8 {
     const text = node.text(self.source);
-    if (ts.ts_node_end_byte(node) > ts.ts_node_end_byte(condition)) std.debug.panic("{s}: the value {f} ends after its condition {f}", .{ self.work.facts.path, node.where(), condition.where() });
+    if (ts.ts_node_end_byte(node) > ts.ts_node_end_byte(condition)) std.debug.panic("{s}: the value {f} ends after its condition {f}; pass values found inside the condition, as widestPaths() does", .{ self.work.facts.path, node.where(), condition.where() });
     const root = text[0..rootLength(text)];
     if (std.mem.indexOfScalar(u8, text, '"') != null) return root;
     var current: ?ts.Node = node;
@@ -50,17 +50,17 @@ fn shownValue(self: *File, node: ts.Node, condition: ts.Node) []const u8 {
         if (self.index.marks(ancestor, self.v.expression_conditional)) return root;
         if (ancestor.eql(condition)) break;
     }
-    if (root.len > text.len) std.debug.panic("{s}: the name '{s}' is longer than the path '{s}' it starts", .{ self.work.facts.path, root, text });
+    if (root.len > text.len) std.debug.panic("{s}: the name '{s}' is longer than the path '{s}' it starts; rootLength() must stop inside the path", .{ self.work.facts.path, root, text });
     return text;
 }
 
 /// The length of the name a path starts with: `d` in `d['id']` or `self` in `self.items`.
 fn rootLength(path: []const u8) usize {
-    if (path.len == 0) std.debug.panic("asked for the name at the start of an empty path; captures always span some text", .{});
+    if (path.len == 0) std.debug.panic("asked for the name at the start of an empty path; captures always span some text, so skip an empty value before calling rootLength()", .{});
     const length = for (path, 0..) |c, i| {
         if (!(std.ascii.isAlphanumeric(c) or c == '_' or c == '$')) break i;
     } else path.len;
-    if (length > path.len) std.debug.panic("the name at the start of '{s}' is {d} bytes long, past its end", .{ path, length });
+    if (length > path.len) std.debug.panic("the name at the start of '{s}' is {d} bytes long, past its end; rootLength() must stop at the end of the path", .{ path, length });
     return length;
 }
 
@@ -105,7 +105,7 @@ pub fn assertionRewrite(self: *File, condition: ts.Node) ![]const u8 {
     if (t.assertion_form.len == 0) return "";
     var buffer: [4][]const u8 = undefined;
     const values = conditionValues(self, condition, &buffer);
-    if (values.len > buffer.len) std.debug.panic("{s}: conditionValues returned {d} values into room for {d}", .{ self.work.facts.path, values.len, buffer.len });
+    if (values.len > buffer.len) std.debug.panic("{s}: conditionValues returned {d} values into room for {d}; conditionValues() must stop at out.len", .{ self.work.facts.path, values.len, buffer.len });
     const form = if (values.len > 0) t.assertion_form else t.assertion_form_bare;
     const text = self.work.text;
     const start = text.used;
@@ -121,7 +121,7 @@ pub fn assertionRewrite(self: *File, condition: ts.Node) ![]const u8 {
     }
     _ = try text.copy(rest);
     const code = text.buffer[start..text.used];
-    if (std.mem.indexOf(u8, code, condition.text(self.source)) == null) std.debug.panic("expected the rewrite to contain the condition '{s}', got: {s}", .{ condition.text(self.source), code });
+    if (std.mem.indexOf(u8, code, condition.text(self.source)) == null) std.debug.panic("expected the rewrite to contain the condition '{s}'; the assertion_form in languages/tables.zon must include $condition. Got: {s}", .{ condition.text(self.source), code });
     return code;
 }
 
@@ -177,7 +177,7 @@ pub fn writePlaceholder(self: *File, placeholder: []const u8, condition: []const
 /// and braces double when the string is a format string.
 pub fn quote(text: *memory.Text, code: []const u8, doubled: bool) !void {
     const before = text.used;
-    if (before > text.buffer.len) std.debug.panic("expected the text buffer to hold its {d} used bytes, got {d} bytes of room", .{ before, text.buffer.len });
+    if (before > text.buffer.len) std.debug.panic("expected the text buffer to hold its {d} used bytes, got {d} bytes of room; only copy() and format() may move used forward", .{ before, text.buffer.len });
     var spaced = false;
     for (code) |c| {
         const space = c == ' ' or c == '\n' or c == '\r' or c == '\t';
@@ -191,5 +191,5 @@ pub fn quote(text: *memory.Text, code: []const u8, doubled: bool) !void {
             else => &.{c},
         });
     }
-    if (text.used - before > 2 * code.len) std.debug.panic("expected at most {d} quoted bytes for {d} of code, got {d}", .{ 2 * code.len, code.len, text.used - before });
+    if (text.used - before > 2 * code.len) std.debug.panic("expected at most {d} quoted bytes for {d} of code, got {d}; quote() writes at most two bytes per byte of code, so check its switch", .{ 2 * code.len, code.len, text.used - before });
 }

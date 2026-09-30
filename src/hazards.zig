@@ -112,7 +112,7 @@ pub fn checkLoggedSecret(self: *File, ctx: Context, callee: ts.Node) !void {
 /// Reports a branch or loop nested deeper than `rules.max_nesting`, once per function.
 pub fn checkNesting(self: *File, node: ts.Node, chained: bool) !void {
     const items = self.s.contexts.items();
-    if (items.len > self.s.contexts.buffer.len) std.debug.panic("{s}: {d} open constructs in room for {d}", .{ self.work.facts.path, items.len, self.s.contexts.buffer.len });
+    if (items.len > self.s.contexts.buffer.len) std.debug.panic("{s}: {d} open constructs in room for {d}; raise memory.Limits.depth, or check that leave() pops what enter() opened", .{ self.work.facts.path, items.len, self.s.contexts.buffer.len });
     var depth: u32 = @intFromBool(!chained);
     var i = items.len;
     const function = while (i > 0) {
@@ -120,7 +120,7 @@ pub fn checkNesting(self: *File, node: ts.Node, chained: bool) !void {
         if (items[i].family == .function or items[i].family == .class or items[i].family == .@"test") break &items[i];
         if (items[i].family == .control and !items[i].chained) depth += 1;
     } else null;
-    if (depth > items.len + 1) std.debug.panic("{s}: {f} counted {d} levels among {d} open constructs", .{ self.work.facts.path, node.where(), depth, items.len });
+    if (depth > items.len + 1) std.debug.panic("{s}: {f} counted {d} levels among {d} open constructs; checkNesting() must count at most one level per open construct", .{ self.work.facts.path, node.where(), depth, items.len });
     const owner = function orelse return;
     if (depth <= rules.max_nesting or owner.nesting_reported) return;
     owner.nesting_reported = true;
@@ -131,14 +131,14 @@ pub fn checkNesting(self: *File, node: ts.Node, chained: bool) !void {
 /// language's own awaitables. Their result is dropped, so the work may never run.
 pub fn checkUnawaited(self: *File) !void {
     const names = self.s.async_names.items();
-    if (names.len > self.s.async_names.buffer.len) std.debug.panic("{s}: {d} async names in room for {d}", .{ self.work.facts.path, names.len, self.s.async_names.buffer.len });
+    if (names.len > self.s.async_names.buffer.len) std.debug.panic("{s}: {d} async names in room for {d}; raise memory.Limits.per_file, or split the file", .{ self.work.facts.path, names.len, self.s.async_names.buffer.len });
     for (self.s.statement_calls.items()) |callee| {
         const text = callee.text(self.source);
         const last = text[if (std.mem.lastIndexOfScalar(u8, text, '.')) |dot| dot + 1 else 0..];
         if (!contains(names, last) and !contains(self.tables.async_calls, text)) continue;
         _ = try self.report(callee, "unawaited-call", try self.say("'{s}' is asynchronous and its result is dropped here, so the work may never run and its errors go unseen.", .{text}));
     }
-    if (self.s.contexts.len != 0) std.debug.panic("{s}: checking unawaited calls with {d} constructs still open", .{ self.work.facts.path, self.s.contexts.len });
+    if (self.s.contexts.len != 0) std.debug.panic("{s}: checking unawaited calls with {d} constructs still open; call checkUnawaited() after walk() has closed every construct", .{ self.work.facts.path, self.s.contexts.len });
 }
 
 pub fn checkLength(self: *File, root: ts.Node) !void {
@@ -152,8 +152,8 @@ pub fn checkLength(self: *File, root: ts.Node) !void {
 
 /// Reports a finding a query captured as `@finding.<rule>`, with the rule's message about the code.
 pub fn patternFinding(self: *File, node: ts.Node, rule_name: []const u8) !void {
-    const rule = rules.find(rule_name) orelse std.debug.panic("expected @finding.{s} to name a rule, got no such rule", .{rule_name});
-    if (rule.pattern.len == 0) std.debug.panic("expected rule {s} to have a pattern message for @finding captures, got none", .{rule.name});
+    const rule = rules.find(rule_name) orelse std.debug.panic("expected @finding.{s} to name a rule, got no such rule; add the rule to rules.all, or fix the capture's name in the language's zanity.scm", .{rule_name});
+    if (rule.pattern.len == 0) std.debug.panic("expected rule {s} to have a pattern message for @finding captures, got none; give it a .pattern in rules.all, with $code where the code goes", .{rule.name});
     if (self.index.marks(node, self.v.comment)) return;
     if (try cancelled(self, node, rule.name)) return;
     const code = header(node.text(self.source));
@@ -166,7 +166,7 @@ pub fn patternFinding(self: *File, node: ts.Node, rule_name: []const u8) !void {
         _ = try text.copy(part);
     }
     const message = text.buffer[start..text.used];
-    if (message.len < rule.pattern.len - "$code".len) std.debug.panic("expected the message to hold the pattern, got '{s}' for '{s}'", .{ message, rule.pattern });
+    if (message.len < rule.pattern.len - "$code".len) std.debug.panic("expected the message to hold the pattern, got '{s}' for '{s}'; patternFinding() must copy every part of the pattern, so check its loop", .{ message, rule.pattern });
     _ = try self.report(node, rule.name, message);
 }
 
@@ -207,8 +207,8 @@ pub fn namesSecret(name: []const u8) bool {
 }
 
 pub fn startsBefore(start: u32, t: captures.Triple) std.math.Order {
-    if (t.key.id == 0) std.debug.panic("a recorded capture at byte {d} has no node id", .{t.key.start});
+    if (t.key.id == 0) std.debug.panic("a recorded capture at byte {d} has no node id; index() must skip null nodes when it records captures", .{t.key.start});
     const order = std.math.order(start, t.key.start);
-    if (order == .eq and start != t.key.start) std.debug.panic("byte {d} compared equal to byte {d}", .{ start, t.key.start });
+    if (order == .eq and start != t.key.start) std.debug.panic("byte {d} compared equal to byte {d}; startsBefore() must compare the two start bytes, so check the arguments to std.math.order", .{ start, t.key.start });
     return order;
 }
