@@ -61,19 +61,13 @@ zanity check . --fix
 
 `--fix` makes only changes that can't alter what the code does, such as moving a declaration into the block that uses it or adding a message to an assertion. Where only a person knows something, like why an assertion must hold, it leaves a `TODO` comment for you to fill in.
 
-Then add a `zanity.toml` at the root of the repository to say what zanity should check. A good start:
+Then write a `zanity.toml` to say what zanity should check:
 
-```toml
-# Every rule, including those off by default.
-rules = ["all"]
-
-# Code you don't own or that is wrong on purpose.
-exclude = ["vendor/", "third_party/", "tests/fixtures/"]
-
-# End-to-end tests are meant to start processes and read files.
-[paths."tests/e2e/"]
-disable = ["process-in-test", "filesystem-in-test", "network-in-test"]
+```sh
+zanity init
 ```
+
+It writes every setting with notes on what it does, lists every rule with its severity and how to fix what it finds, turns on `rules = ["all"]`, and excludes the vendored and fixture directories it finds, such as `vendor/` and `tests/fixtures/`. Delete or change what you don't need; `--force` replaces an existing file.
 
 Once `zanity check .` is clean, keep it that way with `--strict`, which fails on warnings as well as errors. That is what a pre-commit hook or CI should run.
 
@@ -128,6 +122,7 @@ The action downloads the release binary for the runner and fails the job on any 
 ## Usage
 
 ```sh
+zanity init                                   # write a zanity.toml with every setting explained
 zanity check                                  # check the current directory
 zanity check src tests                        # check some paths
 zanity check . --rules recursion,long-function   # run only these rules

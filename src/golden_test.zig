@@ -176,6 +176,32 @@ test "zanity.schema.json matches the rules and settings in the code" {
     };
 }
 
+test "zanity init writes a zanity.toml that check reads, and won't overwrite it unasked" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    const io = std.testing.io;
+    const zanity = try Io.Dir.cwd().realPathFileAlloc(io, paths.zanity, arena);
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.createDirPath(io, "vendor");
+    try tmp.dir.writeFile(io, .{ .sub_path = "app.py", .data = "LIMIT = 3\n" });
+    try tmp.dir.writeFile(io, .{ .sub_path = "vendor/dep.py", .data = "def f(x):\n    return x\n" });
+    const work = try std.fs.path.join(arena, &.{ ".zig-cache", "tmp", &tmp.sub_path });
+    const first = try std.process.run(arena, io, .{ .argv = &.{ zanity, "init" }, .cwd = .{ .path = work } });
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, first.term);
+    const written = try tmp.dir.readFileAlloc(io, "zanity.toml", arena, .unlimited);
+    try std.testing.expect(std.mem.startsWith(u8, written, "#:schema " ++ schema.url));
+    try std.testing.expect(std.mem.indexOf(u8, written, "exclude = [\"vendor/\"]") != null);
+    const checked = try std.process.run(arena, io, .{ .argv = &.{ zanity, "check", "." }, .cwd = .{ .path = work } });
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, checked.term);
+    try std.testing.expectEqualStrings("zanity: checked 1 file, no issues found\n", checked.stderr);
+    const again = try std.process.run(arena, io, .{ .argv = &.{ zanity, "init" }, .cwd = .{ .path = work } });
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 2 }, again.term);
+    const forced = try std.process.run(arena, io, .{ .argv = &.{ zanity, "init", "--force" }, .cwd = .{ .path = work } });
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, forced.term);
+}
+
 test "--strict fails a run with only warnings, which a plain run passes" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();

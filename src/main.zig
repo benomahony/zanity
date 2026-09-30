@@ -16,6 +16,7 @@ const infer = @import("infer.zig");
 const store = @import("store.zig");
 const Live = @import("live.zig").Live;
 const config = @import("config.zig");
+const starter = @import("init.zig");
 const Facts = @import("facts.zig").Facts;
 const Finding = @import("facts.zig").Finding;
 
@@ -27,6 +28,18 @@ const CheckOptions = struct {
     fix: bool = false,
     infer: bool = false,
     strict: bool = false,
+};
+
+const InitOptions = struct {
+    paths: []const []const u8,
+    force: bool = false,
+};
+
+/// What `zanity init` wrote, as `--json` and `--plain` publish it.
+const InitRow = struct {
+    path: []const u8,
+    rules: usize,
+    excluded: usize,
 };
 
 /// One finding as `--json` and `--plain` publish it. Lines and columns count from 1.
@@ -56,12 +69,23 @@ const app: zcli.App = .{
             .{ .name = "strict", .help = "Exit 1 on any finding, warnings included, as a pre-commit hook or CI should." },
             .{ .name = "infer", .help = "Also ask TypeSafe what no deterministic check can decide, such as whether an error message misleads. Needs TYPESAFE_API_KEY." },
         },
-    }, .{ .run = runCheck, .human = renderHuman })},
+    }, .{ .run = runCheck, .human = renderHuman }), zcli.command(InitOptions, InitRow, .{
+        .name = "init",
+        .description = "Write a zanity.toml with every setting and rule explained, ready to trim.",
+        .examples = &.{ "zanity init", "zanity init path/to/project", "zanity init --force" },
+        .result_title = "Written",
+        .positional = .{ .name = "paths", .metavar = "DIR", .help = "The project's root, where zanity.toml goes.", .default = &.{"."} },
+        .options = &.{
+            .{ .name = "force", .help = "Replace an existing zanity.toml." },
+        },
+    }, .{ .run = runInit, .human = renderInit }) },
 };
 
 /// Everything a run needs, allocated once at startup and reused for every file.
 const Workspace = struct {
     live: ?*Live = null,
+    /// What `zanity init` wrote; one run writes one file.
+    init_row: [1]InitRow = undefined,
     /// The zanity.toml in effect, for its [paths] sections.
     settings: ?*const config.Config = null,
     limits: memory.Limits,
@@ -186,6 +210,49 @@ fn renderHuman(ctx: *zcli.Context, rows: []const Row) !void {
     try report.render(.{ .console = console(ctx, ctx.runtime.out), .scratch = &ws.table, .text = &ws.text }, findings);
     try report.summarise(console(ctx, ctx.runtime.err), report.count(findings, ws.checked));
     if (ws.checked > ws.files.len) std.debug.panic("checked {d} files out of {d} collected; count a file as checked only once, in checkFiles()", .{ ws.checked, ws.files.len });
+}
+
+fn runInit(ctx: *zcli.Context, options: InitOptions) ![]const InitRow {
+    const ws = workspaceOf(ctx);
+    if (options.paths.len != 1) return ctx.fail(.usage, "zanity init takes one directory.", "Run it in the project's root, or pass that directory, such as zanity init path/to/project.");
+    const dir = options.paths[0];
+    const target = if (std.mem.eql(u8, dir, ".")) config.file_name else try ws.text.format("{s}/{s}", .{ std.mem.trimEnd(u8, dir, "/"), config.file_name });
+    const exists = if (Io.Dir.cwd().access(ws.io, target, .{})) true else |_| false;
+    if (exists and !options.force) return ctx.fail(.usage, try ws.text.format("{s} already exists.", .{target}), "Edit it, or pass --force to replace it with a fresh one.");
+    try collect(ctx, ws, dir);
+    var counts: [adapters.all.len]starter.Project.Count = undefined;
+    for (adapters.all, &counts) |*adapter, *count| count.* = .{ .name = adapter.name, .files = 0 };
+    for (ws.files.items()) |path| if (language.forPath(path)) |adapter| {
+        counts[adapterIndex(adapter)].files += 1;
+    };
+    var present: [starter.usual_excludes.len][]const u8 = undefined;
+    var found: usize = 0;
+    for (starter.usual_excludes) |candidate| {
+        const path = if (std.mem.eql(u8, dir, ".")) candidate else try ws.text.format("{s}/{s}", .{ std.mem.trimEnd(u8, dir, "/"), candidate });
+        Io.Dir.cwd().access(ws.io, path, .{}) catch continue;
+        present[found] = candidate;
+        found += 1;
+    }
+    var buffer: [64 * 1024]u8 = undefined;
+    var w: std.Io.Writer = .fixed(&buffer);
+    try starter.renderConfig(&w, .{ .languages = &counts, .present = present[0..found] });
+    Io.Dir.cwd().writeFile(ws.io, .{ .sub_path = target, .data = w.buffered() }) catch |e| {
+        return ctx.fail(.io, try ws.text.format("Could not write {s}: {t}.", .{ target, e }), "Check that the directory exists and is writable.");
+    };
+    if (w.buffered().len == 0) std.debug.panic("zanity init wrote an empty {s}; renderConfig() in src/init.zig must write the whole file", .{target});
+    if (found > starter.usual_excludes.len) std.debug.panic("found {d} of the {d} usual excludes; the loop in runInit() must add each at most once", .{ found, starter.usual_excludes.len });
+    ws.init_row[0] = .{ .path = target, .rules = rules.all.len, .excluded = found };
+    return &ws.init_row;
+}
+
+fn renderInit(ctx: *zcli.Context, rows: []const InitRow) !void {
+    if (rows.len != 1) std.debug.panic("zanity init reported {d} files written; runInit() writes exactly one", .{rows.len});
+    const row = rows[0];
+    const out = console(ctx, ctx.runtime.out);
+    try out.writer.print("Wrote {s}: every setting explained, and all {d} rules listed with how to fix what they find.\n", .{ row.path, row.rules });
+    if (row.excluded > 0) try out.writer.print("It excludes the {d} fixture or vendored {s} it found; check that list.\n", .{ row.excluded, if (row.excluded == 1) "directory" else "directories" });
+    try out.writer.writeAll("Next: run `zanity check .`, then delete or change what you don't need.\n");
+    if (row.path.len == 0) std.debug.panic("zanity init reported writing a file with no path; runInit() must pass the path it wrote", .{});
 }
 
 fn console(ctx: *zcli.Context, stream: zcli.Stream) zrich.Console {
