@@ -166,7 +166,13 @@ A finding is reported when the model is at least 80% sure, and says how sure it 
 
 ## Configuration
 
-zanity reads the nearest `zanity.toml` at or above the directory it runs in, stopping at the repository root. Everything is optional:
+zanity reads the nearest `zanity.toml` at or above the directory it runs in, stopping at the repository root. For completion, hover docs and errors as you type, make this its first line; editors with a TOML language server, such as VS Code's Even Better TOML, pick it up:
+
+```toml
+#:schema https://raw.githubusercontent.com/benomahony/zanity/main/zanity.schema.json
+```
+
+Everything is optional:
 
 ```toml
 # Run only these rules; "all" is every rule, including those off by default.
@@ -312,6 +318,10 @@ No Zig code changes. Add:
 4. golden cases under `tests/golden/`.
 
 `zig build test` then lists every capture the language still needs for each rule. Supply it, or declare the rule not applicable to the language.
+
+### The config schema
+
+`zanity.schema.json` is written from the rules and limits in the code by `zig build schema`; a test fails when it is out of date, so run that after adding a rule or a setting.
 
 ### Testing
 

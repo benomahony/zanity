@@ -1,6 +1,7 @@
 const std = @import("std");
 const paths = @import("paths");
 const rules = @import("rules.zig");
+const schema = @import("schema.zig");
 
 const Io = std.Io;
 
@@ -160,6 +161,19 @@ test "--fix rewrites each fixture into its .fixed file and leaves nothing more t
         };
     }
     try std.testing.expect(cases > 0);
+}
+
+test "zanity.schema.json matches the rules and settings in the code" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    var rendered: std.Io.Writer.Allocating = .init(arena);
+    try schema.renderSchema(&rendered.writer);
+    const committed = try Io.Dir.cwd().readFileAlloc(std.testing.io, "zanity.schema.json", arena, .unlimited);
+    std.testing.expectEqualStrings(rendered.written(), committed) catch |e| {
+        std.debug.print("\nzanity.schema.json is out of date with the rules or settings; run zig build schema and commit the result\n", .{});
+        return e;
+    };
 }
 
 test "--strict fails a run with only warnings, which a plain run passes" {

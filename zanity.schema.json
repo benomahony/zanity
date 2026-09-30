@@ -1,0 +1,154 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/benomahony/zanity/main/zanity.schema.json",
+  "title": "zanity.toml",
+  "description": "Settings for zanity check: which rules run, which files are skipped, and how --infer asks TypeSafe.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "rules": {
+      "description": "Run only these rules instead of the defaults. \"all\" is every rule, including those off by default. --rules on the command line overrides it.",
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "#/definitions/ruleOrAll" }
+    },
+    "disable": {
+      "description": "Rules to leave out of the selection, such as [\"duplicate-name\"].",
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/definitions/rule" }
+    },
+    "exclude": {
+      "description": "Paths to skip, in .gitignore syntax, relative to this file, such as [\"vendor/\", \"tests/fixtures/**\"].",
+      "type": "array",
+      "maxItems": 256,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "infer": {
+      "description": "How check --infer asks TypeSafe about error messages.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "concurrency": {
+          "description": "Requests sent to TypeSafe at once.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64,
+          "default": 8
+        },
+        "threshold": {
+          "description": "How sure TypeSafe must be for a judgement to become a finding: 0.9 reports only what it is at least 90% sure of, and a lower value reports more.",
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "default": 0.8
+        }
+      }
+    },
+    "paths": {
+      "description": "Rules that don't report in some files, one table per pattern, such as [paths.\"tests/e2e/\"]. Patterns are .gitignore syntax, relative to this file.",
+      "type": "object",
+      "maxProperties": 32,
+      "propertyNames": { "minLength": 1 },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "disable": {
+            "description": "Rules that don't report in the files this pattern matches.",
+            "type": "array",
+            "uniqueItems": true,
+            "items": { "$ref": "#/definitions/rule" }
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "ruleOrAll": {
+      "anyOf": [
+        { "const": "all", "description": "Every rule, including those off by default." },
+        { "$ref": "#/definitions/rule" }
+      ]
+    },
+    "rule": {
+      "oneOf": [
+        { "const": "parse-error", "description": "warning, on by default. Fix the syntax error, or report the construct if the code is valid." },
+        { "const": "forbidden-call", "description": "warning, on by default. Call the code you need directly." },
+        { "const": "NASA01-A", "description": "The NASA code for forbidden-call: warning, on by default. Call the code you need directly." },
+        { "const": "recursion", "description": "warning, on by default. Rewrite it as a loop with a fixed bound." },
+        { "const": "NASA01-B", "description": "The NASA code for recursion: warning, on by default. Rewrite it as a loop with a fixed bound." },
+        { "const": "unbounded-loop", "description": "warning, on by default. Loop over a collection or cap the number of iterations." },
+        { "const": "NASA02", "description": "The NASA code for unbounded-loop: warning, on by default. Loop over a collection or cap the number of iterations." },
+        { "const": "eager-test", "description": "warning, on by default. Split it into tests that each check one behaviour, named for that behaviour." },
+        { "const": "long-test", "description": "warning, on by default. Split it into tests that each check one behaviour, or move the setup into a helper." },
+        { "const": "long-function", "description": "warning, on by default. Move a self-contained step into its own function." },
+        { "const": "NASA04", "description": "The NASA code for long-function: warning, on by default. Move a self-contained step into its own function." },
+        { "const": "assertion-density", "description": "error, on by default. Assert conditions a bug could actually break: what it needs from its inputs and what it guarantees about its result." },
+        { "const": "NASA05", "description": "The NASA code for assertion-density: error, on by default. Assert conditions a bug could actually break: what it needs from its inputs and what it guarantees about its result." },
+        { "const": "assertion-message", "description": "warning, on by default. Add a message stating what must be true." },
+        { "const": "NASA05-A", "description": "The NASA code for assertion-message: warning, on by default. Add a message stating what must be true." },
+        { "const": "dynamic-allocation", "description": "error, on by default. Allocate what it needs up front in an init function and reuse it." },
+        { "const": "assertion-side-effect", "description": "error, on by default. Do the work before the assertion and assert on its result." },
+        { "const": "long-parameter-list", "description": "warning, on by default. Group related parameters into a struct or split the function." },
+        { "const": "passthrough-wrapper", "description": "warning, on by default. Call the target directly, or give the wrapper work of its own." },
+        { "const": "swallowed-error", "description": "warning, on by default. Handle the error, log it with context, or let it propagate." },
+        { "const": "sleep-in-test", "description": "warning, on by default. Wait for the event itself, or use a fake clock." },
+        { "const": "polling-loop", "description": "warning, on by default. Wait on an event or callback, or inject a clock." },
+        { "const": "shared-state-in-test", "description": "warning, on by default. Set it for this test only and restore it after, with the framework's fixture (monkeypatch, t.Setenv, a try/finally), or pass the value in." },
+        { "const": "filesystem-in-test", "description": "warning, on by default. Work in the test framework's temporary directory, or pass the code a reader and writer instead of a path." },
+        { "const": "network-in-test", "description": "warning, on by default. Stub the service at its boundary with a fake that answers like it, or move this to an integration suite." },
+        { "const": "database-in-test", "description": "warning, on by default. Use an in-memory database or a fake repository, or move this to an integration suite." },
+        { "const": "unmanaged-temp-in-test", "description": "warning, on by default. Use the framework's temporary directory (tmp_path, t.TempDir(), @TempDir, std.testing.tmpDir), which it cleans up." },
+        { "const": "process-in-test", "description": "warning, on by default. Call the code the process would run directly, or move this to an end-to-end suite." },
+        { "const": "nondeterministic-test", "description": "warning, on by default. Inject a seeded generator or a fixed value." },
+        { "const": "test-double", "description": "warning, on by default. Use the real object, or a fake that behaves like it." },
+        { "const": "name-drift", "description": "warning, on by default. Pick one spelling and use it everywhere." },
+        { "const": "duplicate-name", "description": "warning, on by default. Give each a name that says how it differs." },
+        { "const": "restated-type", "description": "warning, off by default. Assert something about its value instead." },
+        { "const": "NASA05-M1", "description": "The NASA code for restated-type: warning, off by default. Assert something about its value instead." },
+        { "const": "constant-assertion", "description": "error, off by default. Assert something that depends on the input." },
+        { "const": "NASA05-M2", "description": "The NASA code for constant-assertion: error, off by default. Assert something that depends on the input." },
+        { "const": "redundant-null-check", "description": "warning, off by default. Remove this check." },
+        { "const": "NASA05-M3", "description": "The NASA code for redundant-null-check: warning, off by default. Remove this check." },
+        { "const": "conversion-assertion", "description": "information, off by default. Assert the property you need it to have." },
+        { "const": "NASA05-M4", "description": "The NASA code for conversion-assertion: information, off by default. Assert the property you need it to have." },
+        { "const": "guaranteed-length", "description": "information, off by default. Assert the length you actually require." },
+        { "const": "NASA05-M5", "description": "The NASA code for guaranteed-length: information, off by default. Assert the length you actually require." },
+        { "const": "empty-block", "description": "warning, on by default. Fill in the body, delete the block, or leave a comment saying why nothing happens here." },
+        { "const": "constant-condition", "description": "warning, on by default. Delete the branch that can't run, or test the value that actually varies." },
+        { "const": "float-equality", "description": "warning, on by default. Compare within a tolerance, such as abs(a - b) <= epsilon." },
+        { "const": "discarded-comparison", "description": "error, on by default. Assign with '=', or use the comparison in a condition or an assertion." },
+        { "const": "unreachable-code", "description": "warning, on by default. Delete it, or move it before the return, break, continue or throw." },
+        { "const": "generic-catch", "description": "warning, on by default. Catch the specific exceptions you expect and let the rest propagate." },
+        { "const": "debug-leftover", "description": "error, on by default. Delete it; set breakpoints in the debugger instead of in the code." },
+        { "const": "hardcoded-secret", "description": "error, on by default. Read it from the environment or a secret store at runtime." },
+        { "const": "vague-error", "description": "warning, on by default. Name the input or value that failed, show it, and say what was expected." },
+        { "const": "cryptic-error", "description": "warning, on by default. Say in plain words what went wrong and what to do; keep any code alongside if tools need it." },
+        { "const": "unconstructive-error", "description": "warning, on by default. Add the next step for whoever reads it: the input, setting, file or code to change." },
+        { "const": "misleading-error", "description": "warning, off by default. Reword the message to name the failure that actually occurred." },
+        { "const": "return-in-finally", "description": "error, on by default. Move the return after the try statement, or let the finally block only clean up." },
+        { "const": "identity-comparison", "description": "error, on by default. Compare values with == in Python or .equals() in Java." },
+        { "const": "precedence-trap", "description": "error, on by default. Add parentheses to say which operation happens first." },
+        { "const": "generic-throw", "description": "warning, on by default. Raise a specific exception type, defined for this failure if none fits." },
+        { "const": "switch-fallthrough", "description": "warning, on by default. End the case with break, or mark the fall-through as intended with a comment." },
+        { "const": "missing-default", "description": "warning, on by default. Add a default case that handles or reports the unexpected value." },
+        { "const": "no-effect-statement", "description": "warning, on by default. Delete it, or finish the statement it was meant to be, such as a call or an assignment." },
+        { "const": "tls-verification-disabled", "description": "error, on by default. Remove the override; to trust a private certificate, add it to the trusted certificates instead." },
+        { "const": "weak-hash", "description": "warning, on by default. Use SHA-256 or better; for passwords, a password hash such as argon2, scrypt or bcrypt." },
+        { "const": "unsafe-deserialization", "description": "error, on by default. Parse a data-only format such as JSON, or use the library's safe loader." },
+        { "const": "shell-command", "description": "warning, on by default. Pass the program and its arguments as a list, without a shell, so no value is parsed as shell syntax." },
+        { "const": "sql-built-from-strings", "description": "error, on by default. Pass values as query parameters, such as ? or %s placeholders, instead of building the SQL text." },
+        { "const": "secret-in-log", "description": "error, on by default. Log that the secret was used, or a redacted form, never its value." },
+        { "const": "wall-clock-duration", "description": "warning, on by default. Measure durations with a monotonic clock, such as time.monotonic(), performance.now() or Instant::now()." },
+        { "const": "unawaited-call", "description": "error, on by default. Await it, or keep the task and await it later, so it runs and its errors are seen." },
+        { "const": "deep-nesting", "description": "warning, on by default. Return early for the edge cases, or move the inner block into its own function." },
+        { "const": "complex-function", "description": "warning, on by default. Split the function so each part makes fewer decisions, or replace a chain of branches with a table." },
+        { "const": "wide-scope", "description": "warning, on by default. Declare it inside that block, where it is used." },
+        { "const": "NASA06", "description": "The NASA code for wide-scope: warning, on by default. Declare it inside that block, where it is used." },
+        { "const": "long-file", "description": "warning, on by default. Split the file by responsibility into modules of a few hundred lines." }
+      ]
+    }
+  }
+}

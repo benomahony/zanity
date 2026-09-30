@@ -13,4 +13,5 @@ test {
     _ = @import("catalogue_test.zig");
     _ = @import("infer.zig");
     _ = @import("scope.zig");
+    _ = @import("schema.zig");
 }
