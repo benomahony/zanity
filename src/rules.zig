@@ -46,6 +46,12 @@ pub const all = [_]Rule{
     .{ .name = "swallowed-error", .advice = "Handle the error, log it with context, or let it propagate.", .severity = .warning, .default = true, .needs = &.{"catch.swallowed"}, .catalogue = &.{ "CWE-390", "CWE-1069" } },
     .{ .name = "sleep-in-test", .alias = "FST001", .advice = "Wait for the event itself, or use a fake clock.", .severity = .warning, .default = true, .needs = &.{ "call.outer", "call.name", "function.name" } },
     .{ .name = "polling-loop", .alias = "FST002", .advice = "Wait on an event or callback, or inject a clock.", .severity = .warning, .default = true, .needs = &.{ "call.outer", "call.name", "loop.outer", "function.name" } },
+    .{ .name = "shared-state-in-test", .alias = "ISO002", .advice = "Set it for this test only and restore it after, with the framework's fixture (monkeypatch, t.Setenv, a try/finally), or pass the value in.", .severity = .warning, .default = true, .needs = &.{ "call.outer", "call.name", "function.name" } },
+    .{ .name = "filesystem-in-test", .alias = "ISO003", .advice = "Work in the test framework's temporary directory, or pass the code a reader and writer instead of a path.", .severity = .warning, .default = true, .needs = &.{ "call.outer", "call.name", "function.name" } },
+    .{ .name = "network-in-test", .alias = "ISO004", .advice = "Stub the service at its boundary with a fake that answers like it, or move this to an integration suite.", .severity = .warning, .default = true, .needs = &.{ "call.outer", "call.name", "function.name" } },
+    .{ .name = "database-in-test", .alias = "ISO005", .advice = "Use an in-memory database or a fake repository, or move this to an integration suite.", .severity = .warning, .default = true, .needs = &.{ "call.outer", "call.name", "function.name" } },
+    .{ .name = "unmanaged-temp-in-test", .alias = "ISO006", .advice = "Use the framework's temporary directory (tmp_path, t.TempDir(), @TempDir, std.testing.tmpDir), which it cleans up.", .severity = .warning, .default = true, .needs = &.{ "call.outer", "call.name", "function.name" } },
+    .{ .name = "process-in-test", .alias = "ISO008", .advice = "Call the code the process would run directly, or move this to an end-to-end suite.", .severity = .warning, .default = true, .needs = &.{ "call.outer", "call.name", "function.name" } },
     .{ .name = "nondeterministic-test", .advice = "Inject a seeded generator or a fixed value.", .severity = .warning, .default = true, .needs = &.{ "call.outer", "call.name", "function.name" } },
     .{ .name = "test-double", .alias = "BHV001", .advice = "Use the real object, or a fake that behaves like it.", .severity = .warning, .default = true, .needs = &.{ "call.outer", "call.name", "function.name" }, .catalogue = &.{"EXT-VERIFY-003"} },
     .{ .name = "name-drift", .alias = "drift", .advice = "Pick one spelling and use it everywhere.", .severity = .warning, .default = true, .needs = &.{"name"} },
@@ -112,6 +118,20 @@ pub fn missing(rule: Rule, has: anytype, out: *[max_needs][]const u8) []const []
 pub const Set = struct {
     buffer: [all.len][]const u8 = undefined,
     len: usize = 0,
+
+    /// Adds the rule `name` or `alias` answers to, or every rule for `all`, including those off
+    /// by default. Returns false when no rule answers to it, so the caller can say which names do.
+    pub fn includeNamed(self: *Set, name: []const u8) bool {
+        if (name.len == 0) std.debug.panic("including a rule by an empty name; trim and skip empty items before calling includeNamed()", .{});
+        if (std.mem.eql(u8, name, "all")) {
+            for (all) |r| self.include(r.name);
+            if (self.len != all.len) std.debug.panic("'all' enabled {d} of the {d} rules; include() must add each rule once", .{ self.len, all.len });
+            return true;
+        }
+        const rule = find(name) orelse return false;
+        self.include(rule.name);
+        return true;
+    }
 
     pub fn defaults() Set {
         var set: Set = .{};

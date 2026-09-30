@@ -1,0 +1,8 @@
+rules: shared-state-in-test,filesystem-in-test,network-in-test,database-in-test,unmanaged-temp-in-test,process-in-test
+exit: 0
+IsolationTest_java.java:4:16: warning [shared-state-in-test]
+IsolationTest_java.java:5:15: warning [filesystem-in-test]
+IsolationTest_java.java:7:15: warning [unmanaged-temp-in-test]
+IsolationTest_java.java:8:20: warning [network-in-test]
+IsolationTest_java.java:9:23: warning [database-in-test]
+IsolationTest_java.java:11:30: warning [process-in-test]

@@ -1,0 +1,9 @@
+rules: shared-state-in-test,filesystem-in-test,network-in-test,database-in-test,unmanaged-temp-in-test,process-in-test
+exit: 0
+isolation_ts.ts:2:3: warning [shared-state-in-test]
+isolation_ts.ts:3:3: warning [shared-state-in-test]
+isolation_ts.ts:4:3: warning [filesystem-in-test]
+isolation_ts.ts:5:3: warning [unmanaged-temp-in-test]
+isolation_ts.ts:6:9: warning [network-in-test]
+isolation_ts.ts:7:3: warning [database-in-test]
+isolation_ts.ts:8:3: warning [process-in-test]

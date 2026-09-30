@@ -8,15 +8,26 @@
 //!
 //!     [infer]
 //!     concurrency = 16                         # requests to TypeSafe at once
+//!
+//!     [paths."src/*_test.zig"]                 # gitignore syntax, relative to this file
+//!     disable = ["process-in-test"]            # these rules don't report here
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const Io = std.Io;
 const rules = @import("rules.zig");
+const ignore = @import("ignore.zig");
 
 pub const file_name = "zanity.toml";
 pub const max_excludes = 256;
 pub const max_concurrency = 64;
+pub const max_path_sections = 32;
 const max_file_bytes = 1 << 20;
+
+/// A `[paths."<glob>"]` section: rules that don't report in the files the pattern matches.
+pub const PathRules = struct {
+    glob: []const u8,
+    disable: rules.Set = .{},
+};
 
 pub const Config = struct {
     /// The directory holding the file, which `exclude` patterns are relative to; empty when none was found.
@@ -26,10 +37,31 @@ pub const Config = struct {
     exclude: [max_excludes][]const u8 = undefined,
     exclude_len: usize = 0,
     concurrency: ?u32 = null,
+    paths: [max_path_sections]PathRules = undefined,
+    paths_len: usize = 0,
+
+    pub fn pathRules(self: *const Config) []const PathRules {
+        if (self.paths_len > max_path_sections) std.debug.panic("{d} [paths] sections in room for {d}", .{ self.paths_len, max_path_sections });
+        if (self.paths_len > 0 and self.dir.len == 0) std.debug.panic("{d} [paths] sections with no directory to anchor them", .{self.paths_len});
+        return self.paths[0..self.paths_len];
+    }
+
+    /// Whether a `[paths]` section turns `rule` off for the file at `relative`, a path from this
+    /// file's directory. As in gitignore, a pattern without a `/` matches the file's name at any
+    /// depth, and one ending in `/` matches everything under that directory.
+    pub fn disabledAt(self: *const Config, relative: []const u8, rule: []const u8) bool {
+        if (relative.len == 0) std.debug.panic("asked whether '{s}' is disabled for an empty path", .{rule});
+        if (rules.find(rule) == null) std.debug.panic("asked whether '{s}', which is not a rule, is disabled at '{s}'", .{ rule, relative });
+        for (self.pathRules()) |section| {
+            if (!section.disable.enabled(rule)) continue;
+            if (pathMatches(section.glob, relative)) return true;
+        }
+        return false;
+    }
 
     pub fn excludes(self: *const Config) []const []const u8 {
-        if (self.exclude_len > max_excludes) std.debug.panic("{d} exclude patterns in room for {d}", .{ self.exclude_len, max_excludes });
-        if (self.exclude_len > 0 and self.dir.len == 0) std.debug.panic("{d} exclude patterns with no directory to anchor them", .{self.exclude_len});
+        if (self.exclude_len > max_excludes) std.debug.panic("{d} exclude patterns in room for {d}; readStrings() must reject lists longer than max_excludes", .{ self.exclude_len, max_excludes });
+        if (self.exclude_len > 0 and self.dir.len == 0) std.debug.panic("{d} exclude patterns with no directory to anchor them; initConfig() must set dir to the folder holding zanity.toml", .{self.exclude_len});
         return self.exclude[0..self.exclude_len];
     }
 
@@ -38,11 +70,25 @@ pub const Config = struct {
         const chosen = self.rules orelse rules.Set.defaults();
         var kept: rules.Set = .{};
         for (chosen.names()) |name| if (!self.disable.enabled(name)) kept.include(name);
-        if (kept.len > chosen.len) std.debug.panic("disabling rules kept {d} of {d}, more than were chosen", .{ kept.len, chosen.len });
-        if (kept.len + self.disable.len < chosen.len) std.debug.panic("kept {d} of {d} rules after disabling {d}; disabling dropped extra rules", .{ kept.len, chosen.len, self.disable.len });
+        if (kept.len > chosen.len) std.debug.panic("disabling rules kept {d} of {d}, more than were chosen; selection() must copy only chosen rules, so check its loop", .{ kept.len, chosen.len });
+        if (kept.len + self.disable.len < chosen.len) std.debug.panic("kept {d} of {d} rules after disabling {d}; disabling dropped extra rules, so selection() must skip only the rules in disable", .{ kept.len, chosen.len, self.disable.len });
         return kept;
     }
 };
+
+fn pathMatches(glob: []const u8, relative: []const u8) bool {
+    if (glob.len == 0) std.debug.panic("matching '{s}' against an empty [paths] pattern; the reader rejects those", .{relative});
+    var buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const trimmed = std.mem.trimStart(u8, glob, "/");
+    const whole = if (std.mem.endsWith(u8, trimmed, "/"))
+        std.fmt.bufPrint(&buffer, "{s}**", .{trimmed}) catch return false
+    else if (std.mem.indexOfScalar(u8, trimmed, '/') == null)
+        std.fmt.bufPrint(&buffer, "**/{s}", .{trimmed}) catch return false
+    else
+        trimmed;
+    if (whole.len < trimmed.len) std.debug.panic("widening the [paths] pattern '{s}' shortened it to '{s}'", .{ glob, whole });
+    return ignore.matchPath(whole, relative);
+}
 
 /// What was wrong with the file, for the error message: the line and what to change.
 pub var problem: [512]u8 = undefined;
@@ -96,7 +142,7 @@ pub fn parseConfig(bytes: []u8) Error!Config {
     return config;
 }
 
-const Table = enum { root, infer };
+const Table = enum { root, infer, paths };
 
 const max_items = max_excludes;
 
@@ -105,6 +151,8 @@ const TomlReader = struct {
     at: usize = 0,
     table: Table = .root,
     items: [max_items][]const u8 = undefined,
+    /// The pattern of a `[paths."<glob>"]` header, until its section is added.
+    pending_glob: []const u8 = "",
 
     fn fail(self: *const TomlReader, comptime fmt: []const u8, args: anytype) Error {
         if (self.at > self.bytes.len) std.debug.panic("reporting a problem at byte {d} of a {d}-byte file", .{ self.at, self.bytes.len });
@@ -126,8 +174,8 @@ const TomlReader = struct {
                 else => break,
             }
         }
-        if (self.at < start) std.debug.panic("skipping blanks moved back from byte {d} to {d}", .{ start, self.at });
-        if (self.at > self.bytes.len) std.debug.panic("skipping blanks ran to byte {d} of {d}", .{ self.at, self.bytes.len });
+        if (self.at < start) std.debug.panic("skipping blanks moved back from byte {d} to {d}; skipBlank() must only move self.at forward", .{ start, self.at });
+        if (self.at > self.bytes.len) std.debug.panic("skipping blanks ran to byte {d} of {d}; skipBlank() must stop at the end of the file", .{ self.at, self.bytes.len });
     }
 
     /// Skips spaces and tabs, then requires the rest of the line to be empty or a comment.
@@ -146,12 +194,7 @@ const TomlReader = struct {
         if (self.at >= self.bytes.len) std.debug.panic("reading an entry at byte {d} of a {d}-byte file", .{ self.at, self.bytes.len });
         const start = self.at;
         if (self.bytes[self.at] == '[') {
-            self.at += 1;
-            const name = self.readKey() orelse return self.fail("expected a table name after '['.", .{});
-            if (self.at >= self.bytes.len or self.bytes[self.at] != ']') return self.fail("expected ']' after '[{s}'.", .{name});
-            self.at += 1;
-            self.table = std.meta.stringToEnum(Table, name) orelse .root;
-            if (self.table == .root) return self.fail("'[{s}]' isn't a table zanity knows; the only table is [infer].", .{name});
+            try self.readHeader(config);
         } else {
             const key = self.readKey() orelse return self.fail("expected a setting such as 'rules = [...]' or a table such as '[infer]'.", .{});
             while (self.at < self.bytes.len and (self.bytes[self.at] == ' ' or self.bytes[self.at] == '\t')) self.at += 1;
@@ -162,6 +205,26 @@ const TomlReader = struct {
         }
         try self.endLine();
         if (self.at <= start) std.debug.panic("reading an entry at byte {d} consumed nothing", .{start});
+    }
+
+    /// Reads a table header: `[infer]`, or `[paths."<glob>"]`, which starts a new section.
+    fn readHeader(self: *TomlReader, config: *Config) Error!void {
+        if (self.bytes[self.at] != '[') std.debug.panic("reading a table header at byte {d}, which is not '['", .{self.at});
+        const start = self.at;
+        self.at += 1;
+        const name = self.readKey() orelse return self.fail("expected a table name after '['.", .{});
+        if (std.mem.eql(u8, name, "paths")) {
+            if (self.at >= self.bytes.len or self.bytes[self.at] != '.') return self.fail("'[paths]' needs a pattern for the files it covers, such as [paths.\"tests/**\"].", .{});
+            self.at += 1;
+            if (self.at >= self.bytes.len) return self.fail("expected a quoted pattern after '[paths.'.", .{});
+            self.pending_glob = try self.readString("paths");
+        }
+        if (self.at >= self.bytes.len or self.bytes[self.at] != ']') return self.fail("expected ']' after '[{s}'.", .{name});
+        self.at += 1;
+        self.table = std.meta.stringToEnum(Table, name) orelse .root;
+        if (self.table == .root) return self.fail("'[{s}]' isn't a table zanity knows; the tables are [infer] and [paths.\"<pattern>\"].", .{name});
+        if (self.table == .paths) try self.readPathSection(config);
+        if (self.at <= start) std.debug.panic("reading a table header at byte {d} consumed nothing", .{start});
     }
 
     fn readKey(self: *TomlReader) ?[]const u8 {
@@ -175,8 +238,28 @@ const TomlReader = struct {
         return if (self.at == start) null else self.bytes[start..self.at];
     }
 
+    fn readPathSection(self: *TomlReader, config: *Config) Error!void {
+        if (self.table != .paths) std.debug.panic("starting a [paths] section while reading [{t}]", .{self.table});
+        const glob = self.pending_glob;
+        if (glob.len == 0) return self.fail("a [paths] pattern is empty; name the files it covers, such as \"tests/**\".", .{});
+        if (config.paths_len == max_path_sections) return self.fail("there are more than {d} [paths] sections; combine patterns that disable the same rules.", .{max_path_sections});
+        config.paths[config.paths_len] = .{ .glob = glob };
+        config.paths_len += 1;
+        self.pending_glob = "";
+        if (config.paths_len > max_path_sections) std.debug.panic("{d} [paths] sections in room for {d}", .{ config.paths_len, max_path_sections });
+    }
+
+    fn readPathSetting(self: *TomlReader, config: *Config, key: []const u8) Error!void {
+        if (self.table != .paths or config.paths_len == 0) std.debug.panic("reading '{s}' as a [paths] setting outside a [paths] section", .{key});
+        if (!std.mem.eql(u8, key, "disable")) return self.fail("'{s}' isn't a [paths] setting; the only one is disable.", .{key});
+        const section = &config.paths[config.paths_len - 1];
+        for (try self.readStrings(key)) |name| section.disable.include((rules.find(name) orelse return self.fail("'{s}' isn't a rule; the rules are listed in the README, and 'zanity check --rules' takes the same names.", .{name})).name);
+        if (section.disable.len > rules.all.len) std.debug.panic("[paths.\"{s}\"] disables {d} rules of {d}", .{ section.glob, section.disable.len, rules.all.len });
+    }
+
     fn readSetting(self: *TomlReader, config: *Config, key: []const u8) Error!void {
         if (key.len == 0) std.debug.panic("setting a key with no name at byte {d}", .{self.at});
+        if (self.table == .paths) return self.readPathSetting(config, key);
         if (self.table == .infer) {
             if (!std.mem.eql(u8, key, "concurrency")) return self.fail("'{s}' isn't an [infer] setting; the only one is concurrency.", .{key});
             const value = try self.readInteger(key);
@@ -195,7 +278,7 @@ const TomlReader = struct {
             },
             .rules, .disable => {
                 var set: rules.Set = .{};
-                for (items) |name| set.include((rules.find(name) orelse return self.fail("'{s}' isn't a rule; the rules are listed in the README, and 'zanity check --rules' takes the same names.", .{name})).name);
+                for (items) |name| if (!set.includeNamed(name)) return self.fail("'{s}' isn't a rule; the rules are listed in the README, 'all' names every rule, and 'zanity check --rules' takes the same names.", .{name});
                 if (which == .rules and set.len == 0) return self.fail("'rules' is empty, so nothing would run; list at least one rule, or remove it to run the defaults.", .{});
                 if (which == .rules) config.rules = set else config.disable = set;
             },

@@ -442,3 +442,18 @@
   function: (member_expression
     object: (identifier) @_assert)) @test.check
   (#eq? @_assert "assert"))
+
+; An assignment to the process environment, which changes it for every test after this one.
+((assignment_expression
+  left: [
+    (member_expression
+      object: (member_expression
+        object: (identifier) @_process
+        property: (property_identifier) @_env))
+    (subscript_expression
+      object: (member_expression
+        object: (identifier) @_process
+        property: (property_identifier) @_env))
+  ]) @test.shared_state
+  (#eq? @_process "process")
+  (#eq? @_env "env"))

@@ -19,6 +19,26 @@ pub const Tables = struct {
     sleeps: []const []const u8 = &.{},
     nondeterministic: []const []const u8 = &.{},
     test_doubles: []const []const u8 = &.{},
+    /// Calls that change state the whole process shares, such as an environment variable or the
+    /// working directory, so a test that makes them changes the tests after it.
+    process_state_calls: []const []const u8 = &.{},
+    /// Calls that read or change the real file system.
+    filesystem_calls: []const []const u8 = &.{},
+    /// Methods, on any receiver, that read or change the real file system, such as `read_text`.
+    filesystem_methods: []const []const u8 = &.{},
+    /// Names a test's own temporary directory goes by, such as pytest's `tmp_path`; file system
+    /// calls on a path that starts with one are isolated.
+    temp_roots: []const []const u8 = &.{},
+    /// Calls that make a temporary file or directory the test framework doesn't clean up.
+    unmanaged_temp_calls: []const []const u8 = &.{},
+    /// Calls that make a real network request or connection.
+    network_calls: []const []const u8 = &.{},
+    /// Calls that connect to a real database.
+    database_calls: []const []const u8 = &.{},
+    /// Database names that live only in memory, so a connection to one is isolated.
+    in_memory_databases: []const []const u8 = &.{},
+    /// Calls that start a real process.
+    process_calls: []const []const u8 = &.{},
     /// Names the language or its standard library requires, such as Zig's `format` for `{f}`
     /// or Go's `String`; many types define them, so they are not duplicate names.
     protocol_names: []const []const u8 = &.{},

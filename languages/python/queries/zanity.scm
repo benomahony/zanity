@@ -397,3 +397,22 @@
     attribute: (identifier) @_check)) @test.check
   (#eq? @_self "self")
   (#any-of? @_check "assertEqual" "assertNotEqual" "assertTrue" "assertFalse" "assertIs" "assertIsNot" "assertIsNone" "assertIsNotNone" "assertIn" "assertNotIn" "assertIsInstance" "assertNotIsInstance" "assertRaises" "assertRaisesRegex" "assertAlmostEqual" "assertNotAlmostEqual" "assertGreater" "assertGreaterEqual" "assertLess" "assertLessEqual" "assertRegex" "assertNotRegex" "assertCountEqual" "assertDictEqual" "assertListEqual" "assertSetEqual" "assertTupleEqual" "assertSequenceEqual" "assertMultiLineEqual" "fail"))
+
+; Statements that change state shared beyond a test: a global, or the process environment.
+(global_statement) @test.shared_state
+
+((assignment
+  left: (subscript
+    value: (attribute
+      object: (identifier) @_os
+      attribute: (identifier) @_environ))) @test.shared_state
+  (#eq? @_os "os")
+  (#eq? @_environ "environ"))
+
+((delete_statement
+  (subscript
+    value: (attribute
+      object: (identifier) @_os
+      attribute: (identifier) @_environ))) @test.shared_state
+  (#eq? @_os "os")
+  (#eq? @_environ "environ"))

@@ -60,6 +60,8 @@ const app: zcli.App = .{
 /// Everything a run needs, allocated once at startup and reused for every file.
 const Workspace = struct {
     live: ?*Live = null,
+    /// The zanity.toml in effect, for its [paths] sections.
+    settings: ?*const config.Config = null,
     limits: memory.Limits,
     text: memory.Text,
     facts: Facts,
@@ -153,6 +155,8 @@ fn runCheck(ctx: *zcli.Context, options: CheckOptions) ![]const Row {
         else => return e,
     };
     for (settings.excludes()) |glob| try ws.ignore.exclude(settings.dir, glob);
+    ws.settings = &settings;
+    defer ws.settings = null;
     var selected = if (options.rules) |list| try parseRules(ctx, ws, list) else settings.selection();
     if (options.infer) try connectInference(ctx, ws, &selected, options.rules == null);
     if (ws.inference) |*inference| inference.concurrency = settings.concurrency orelse infer.default_concurrency;
@@ -190,17 +194,17 @@ fn parseRules(ctx: *zcli.Context, ws: *Workspace, list: []const u8) !rules.Set {
     var it = std.mem.tokenizeScalar(u8, list, ',');
     while (it.next()) |raw| {
         const code = std.mem.trim(u8, raw, " ");
-        const rule = rules.find(code) orelse {
+        if (code.len == 0) continue;
+        if (!set.includeNamed(code)) {
             const start = ws.text.used;
-            _ = try ws.text.copy("The rules are:");
+            _ = try ws.text.copy("The rules are: all (every rule, including those off by default)");
             for (rules.all) |r| _ = try ws.text.format(" {s}", .{r.name});
             const hint = ws.text.buffer[start..ws.text.used];
             return ctx.fail(.usage, try ws.text.format("Unknown rule '{s}'.", .{code}), hint);
-        };
-        set.include(rule.name);
+        }
     }
-    if (set.len == 0) return ctx.fail(.usage, "--rules needs at least one rule.", "Pass a comma-separated list, such as --rules unbounded-loop,long-function.");
-    if (set.len > std.mem.count(u8, list, ",") + 1) std.debug.panic("--rules '{s}' enabled {d} rules from {d} names", .{ list, set.len, std.mem.count(u8, list, ",") + 1 });
+    if (set.len == 0) return ctx.fail(.usage, "--rules needs at least one rule.", "Pass a comma-separated list, such as --rules unbounded-loop,long-function, or --rules all.");
+    if (set.len > std.mem.count(u8, list, ",") + 1 and std.mem.indexOf(u8, list, "all") == null) std.debug.panic("--rules '{s}' enabled {d} rules from {d} names; each name other than 'all' enables one rule, so check includeNamed()", .{ list, set.len, std.mem.count(u8, list, ",") + 1 });
     if (rules.find(set.names()[0]) == null) std.debug.panic("--rules '{s}' enabled '{s}', which is not a rule", .{ list, set.names()[0] });
     return set;
 }
@@ -222,6 +226,7 @@ fn checkPaths(ctx: *zcli.Context, ws: *Workspace, options: CheckOptions, selecte
         else => return e,
     };
     if (ws.inference) |inference| try describeInference(ctx, ws, inference.stats);
+    try dropDisabled(ws);
     report.sortFindings(ws.findings.items());
     if (options.fix) try fixFiles(ctx, ws);
     const findings = ws.findings.items();
@@ -264,15 +269,15 @@ fn checkFiles(ctx: *zcli.Context, ws: *Workspace, selected: rules.Set) !void {
 
 fn reportInference(state: *anyopaque, done: usize, total: usize) void {
     const live: *Live = @ptrCast(@alignCast(state));
-    if (done > total) std.debug.panic("--infer reported {d} of {d} functions done", .{ done, total });
-    if (total == 0) std.debug.panic("--infer reported progress over no functions", .{});
+    if (done > total) std.debug.panic("--infer reported {d} of {d} functions done; Inference.watch() must report no more answered functions than it queued", .{ done, total });
+    if (total == 0) std.debug.panic("--infer reported progress over no functions; askAll() must start the watcher only when functions are queued", .{});
     live.update("Asking TypeSafe", done, total);
 }
 
 /// Says how much of --infer came from the store and how long TypeSafe took, so a slow run explains itself.
 fn describeInference(ctx: *zcli.Context, ws: *Workspace, stats: infer.Stats) !void {
-    if (stats.asked > stats.functions) std.debug.panic("--infer asked about {d} of {d} functions", .{ stats.asked, stats.functions });
-    if (stats.seconds < 0) std.debug.panic("--infer took {d} seconds", .{stats.seconds});
+    if (stats.asked > stats.functions) std.debug.panic("--infer asked about {d} of {d} functions; askAll() must count only queued functions as asked", .{ stats.asked, stats.functions });
+    if (stats.seconds < 0) std.debug.panic("--infer took {d} seconds; measure the time with the .awake clock, which never runs backwards", .{stats.seconds});
     if (ctx.quiet or stats.functions == 0) return;
     const line = try ws.text.format("zanity: --infer had questions about {d} {s}: {d} answered from the store, {d} asked of TypeSafe in {d}m{d:0>2}s.", .{
         stats.functions,
@@ -287,10 +292,10 @@ fn describeInference(ctx: *zcli.Context, ws: *Workspace, stats: infer.Stats) !vo
 
 /// Says why the answer store could not be used, in SQLite's words when it gave some.
 fn storeProblem(ws: *Workspace) ![]const u8 {
-    if (store.failure_len > store.failure.len) std.debug.panic("the store kept {d} bytes of failure message in room for {d}", .{ store.failure_len, store.failure.len });
+    if (store.failure_len > store.failure.len) std.debug.panic("the store kept {d} bytes of failure message in room for {d}; the store must cut its message to fit its buffer", .{ store.failure_len, store.failure.len });
     const reason = store.failure[0..store.failure_len];
     const text = try ws.text.format("--infer could not use its answer store{s}{s}.", .{ if (reason.len > 0) ": " else "", reason });
-    if (text.len == 0) std.debug.panic("describing a store failure produced no text", .{});
+    if (text.len == 0) std.debug.panic("describing a store failure produced no text; storeProblem() must write the store's message, so check its format call", .{});
     return text;
 }
 
@@ -323,7 +328,7 @@ fn fixFiles(ctx: *zcli.Context, ws: *Workspace) !void {
         files += @intFromBool(applied > 0);
         start = end;
     }
-    if (files > fixed) std.debug.panic("expected every fixed file to have a fixed finding, got {d} files and {d} findings", .{ files, fixed });
+    if (files > fixed) std.debug.panic("expected every fixed file to have a fixed finding, got {d} files and {d} findings; fixFile() must mark a finding fixed for each edit it applies", .{ files, fixed });
     var kept: usize = 0;
     for (findings) |f| {
         if (f.fixed) continue;
@@ -331,13 +336,42 @@ fn fixFiles(ctx: *zcli.Context, ws: *Workspace) !void {
         kept += 1;
     }
     ws.findings.len = kept;
-    if (kept + fixed != findings.len) std.debug.panic("--fix lost track of findings: {d} fixed and {d} kept out of {d}; a finding was marked fixed without its edit being applied", .{ fixed, kept, findings.len });
+    if (kept + fixed != findings.len) std.debug.panic("--fix lost track of findings: {d} fixed and {d} kept out of {d}; a finding was marked fixed without its edit being applied, so fixFile() must set fixed only after it writes the edit", .{ fixed, kept, findings.len });
     if (fixed > 0) {
         const line = try ws.text.format("zanity: fixed {d} {s} in {d} {s}", .{ fixed, if (fixed == 1) "finding" else "findings", files, if (files == 1) "file" else "files" });
         const err = console(ctx, ctx.runtime.err);
         try err.styled(line, .{ .fg = .{ .named = .green } });
         try err.writer.writeByte('\n');
     }
+}
+
+/// Drops the findings of rules that a [paths] section of zanity.toml turns off for their file,
+/// before they are reported or fixed.
+fn dropDisabled(ws: *Workspace) !void {
+    const settings = ws.settings orelse return;
+    if (settings.pathRules().len == 0) return;
+    const cwd = try Io.Dir.cwd().realPathFileAlloc(ws.io, ".", std.heap.page_allocator);
+    defer std.heap.page_allocator.free(cwd);
+    if (!std.mem.startsWith(u8, cwd, settings.dir)) std.debug.panic("zanity.toml was found in {s}, which is not at or above the working directory {s}", .{ settings.dir, cwd });
+    const below = std.mem.trimStart(u8, cwd[settings.dir.len..], "/");
+    const findings = ws.findings.items();
+    var kept: usize = 0;
+    var buffer: [std.fs.max_path_bytes]u8 = undefined;
+    for (findings) |f| {
+        var path = f.path;
+        while (std.mem.startsWith(u8, path, "./")) path = path[2..];
+        const relative = if (std.fs.path.isAbsolute(path))
+            (if (std.mem.startsWith(u8, path, settings.dir) and path.len > settings.dir.len and path[settings.dir.len] == '/') path[settings.dir.len + 1 ..] else "")
+        else if (below.len == 0)
+            path
+        else
+            std.fmt.bufPrint(&buffer, "{s}/{s}", .{ below, path }) catch "";
+        if (relative.len > 0 and settings.disabledAt(relative, f.rule)) continue;
+        findings[kept] = f;
+        kept += 1;
+    }
+    if (kept > findings.len) std.debug.panic("kept {d} of {d} findings; dropping findings in place can only shrink the list, so the loop wrote past what it read", .{ kept, findings.len });
+    ws.findings.len = kept;
 }
 
 /// Applies the non-overlapping edits of one file's findings, which are in source order.
@@ -396,7 +430,7 @@ fn replaceFile(ctx: *zcli.Context, ws: *Workspace, path: []const u8, bytes: []co
 
 /// Moves the findings that stay in a fixed file past the lines its edits added or removed.
 fn shiftLines(source: []const u8, findings: []Finding) void {
-    if (!(findings.len > 0)) std.debug.panic("expected findings to shift, got none for {d} bytes", .{source.len});
+    if (!(findings.len > 0)) std.debug.panic("expected findings to shift, got none for {d} bytes; call shiftLines() only for a file with findings", .{source.len});
     var delta: i64 = 0;
     for (findings) |*f| {
         if (f.fixed) {
@@ -407,7 +441,7 @@ fn shiftLines(source: []const u8, findings: []Finding) void {
         }
         f.line = @intCast(@as(i64, f.line) + delta);
     }
-    if (delta < -@as(i64, @intCast(source.len))) std.debug.panic("expected edits to remove at most the file's {d} bytes of lines, got {d} lines", .{ source.len, delta });
+    if (delta < -@as(i64, @intCast(source.len))) std.debug.panic("expected edits to remove at most the file's {d} bytes of lines, got {d} lines; shiftLines() must count newlines only inside each edit's span", .{ source.len, delta });
 }
 
 /// Adds the checkable files under `path`, skipping what git ignores. A file named directly is always checked.
@@ -455,8 +489,8 @@ fn collect(ctx: *zcli.Context, ws: *Workspace, path: []const u8) !void {
 }
 
 fn pathOrder(_: void, a: []const u8, b: []const u8) bool {
-    if (a.len == 0) std.debug.panic("sorting an empty path against '{s}'", .{b});
-    if (b.len == 0) std.debug.panic("sorting '{s}' against an empty path", .{a});
+    if (a.len == 0) std.debug.panic("sorting an empty path against '{s}'; collect() must never add an empty path", .{b});
+    if (b.len == 0) std.debug.panic("sorting '{s}' against an empty path; collect() must never add an empty path", .{a});
     return std.mem.order(u8, a, b) == .lt;
 }
 

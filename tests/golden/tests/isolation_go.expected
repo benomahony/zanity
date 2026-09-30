@@ -1,0 +1,8 @@
+rules: shared-state-in-test,filesystem-in-test,network-in-test,database-in-test,unmanaged-temp-in-test,process-in-test
+exit: 0
+isolation_go.go:13:2: warning [shared-state-in-test]
+isolation_go.go:15:2: warning [filesystem-in-test]
+isolation_go.go:18:2: warning [unmanaged-temp-in-test]
+isolation_go.go:19:2: warning [network-in-test]
+isolation_go.go:20:2: warning [database-in-test]
+isolation_go.go:21:2: warning [process-in-test]

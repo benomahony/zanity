@@ -1,3 +1,17 @@
+# Every rule, including those off by default: zanity's own code is held to all of them.
+rules = ["all"]
+
 # Fixtures are deliberately bad code, and their expected output depends on it: check them only
 # when a test names them, and never --fix them.
 exclude = ["tests/golden/", "tests/fix/", "tests/config/", "tests/infer/project/"]
+
+# End-to-end tests: they run the built zanity and read the fixtures and catalogue in the repo,
+# which is what they test.
+[paths."src/golden_test.zig"]
+disable = ["filesystem-in-test", "process-in-test"]
+
+[paths."src/architecture_test.zig"]
+disable = ["filesystem-in-test"]
+
+[paths."src/catalogue_test.zig"]
+disable = ["filesystem-in-test"]

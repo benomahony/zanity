@@ -1,0 +1,5 @@
+rules: shared-state-in-test,filesystem-in-test,network-in-test,database-in-test,unmanaged-temp-in-test,process-in-test
+exit: 0
+isolation_zig.zig:7:9: warning [filesystem-in-test]
+isolation_zig.zig:8:9: warning [process-in-test]
+isolation_zig.zig:9:13: warning [network-in-test]

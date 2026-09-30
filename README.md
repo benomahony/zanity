@@ -30,6 +30,7 @@ zig build -Doptimize=ReleaseFast
 zanity check                                  # check the current directory
 zanity check src tests                        # check some paths
 zanity check . --rules recursion,long-function   # run only these rules
+zanity check . --rules all                    # every rule, including those off by default
 zanity check . --json                         # a JSON array, one object per finding
 zanity check . --plain                        # stable key=value lines for scripts
 zanity check . --fix                          # apply the fixes zanity can make, then report the rest
@@ -46,7 +47,8 @@ zanity help check                             # every option
 zanity reads the nearest `zanity.toml` at or above the directory it runs in, stopping at the repository root. Everything is optional:
 
 ```toml
-# Run only these rules (names or old codes). Leave it out to run the defaults.
+# Run only these rules (names or old codes); "all" is every rule, including those off by
+# default. Leave it out to run the defaults.
 rules = ["recursion", "unbounded-loop", "long-function"]
 
 # Or keep the defaults but switch some off.
@@ -58,6 +60,11 @@ exclude = ["vendor/", "tests/golden/**"]
 [infer]
 # Requests sent to TypeSafe at once (1 to 64, default 8).
 concurrency = 16
+
+# Rules that don't report in some files, such as end-to-end tests that are meant to start
+# processes. The pattern is .gitignore syntax, relative to this file; add a section per pattern.
+[paths."tests/e2e/"]
+disable = ["process-in-test", "network-in-test"]
 ```
 
 `--rules` on the command line overrides `rules` and `disable`. A mistake in the file stops the run with exit code 2 and names the line, for example `zanity.toml:1: 'recursions' isn't a rule; ...`.
@@ -87,7 +94,7 @@ Every rule runs on every language where it means something. A rule that does not
 
 ## Rules
 
-Rules marked *off* only run when named with `--rules`.
+Rules marked *off* only run when named with `--rules`, or with `--rules all` or `rules = ["all"]`.
 
 **NASA's Power of Ten**
 
@@ -97,6 +104,12 @@ Rules marked *off* only run when named with `--rules`.
 | `unbounded-loop` | warning | a loop with no bound, such as `while True` or `for {}` |
 | `dynamic-allocation` | error | allocation after initialization, in Zig and Rust |
 | `long-function` | warning | a function with 60 or more lines of code, not counting blank and comment lines |
+| `shared-state-in-test` | warning | a test that changes process-wide state: an environment variable, the working directory, the import path, a global default or a `global` |
+| `filesystem-in-test` | warning | a test that reads or changes real files outside its own temporary directory |
+| `network-in-test` | warning | a test that makes a real network request or connection |
+| `database-in-test` | warning | a test that connects to a real database; in-memory databases are fine |
+| `unmanaged-temp-in-test` | warning | a test that makes temporary files its framework doesn't clean up |
+| `process-in-test` | warning | a test that starts a real process |
 | `eager-test` | warning | a test that makes more than 10 checks, counting assertions and test-framework checks such as `expect` and `assertEquals` |
 | `long-test` | warning | a test with 50 or more lines of code, not counting blank and comment lines |
 | `assertion-density` | error | a function with fewer than two assertions that can catch a bug |

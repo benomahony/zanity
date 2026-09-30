@@ -1,0 +1,12 @@
+rules: shared-state-in-test,filesystem-in-test,network-in-test,database-in-test,unmanaged-temp-in-test,process-in-test
+exit: 0
+test_isolation.py:14:5: warning [shared-state-in-test]
+test_isolation.py:15:5: warning [shared-state-in-test]
+test_isolation.py:16:5: warning [shared-state-in-test]
+test_isolation.py:17:5: warning [filesystem-in-test]
+test_isolation.py:18:5: warning [filesystem-in-test]
+test_isolation.py:21:5: warning [unmanaged-temp-in-test]
+test_isolation.py:22:5: warning [network-in-test]
+test_isolation.py:23:5: warning [database-in-test]
+test_isolation.py:25:5: warning [process-in-test]
+test_isolation.py:29:5: warning [shared-state-in-test]
