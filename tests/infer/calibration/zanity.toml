@@ -1,0 +1,7 @@
+# Calibration for the --infer questions: report every answer, however unsure, so the spread of
+# scores on known-good and known-bad messages can be compared. Expected answers are kept in
+# expected.json, never in the code the model sees.
+rules = ["vague-error", "cryptic-error", "unconstructive-error", "misleading-error"]
+
+[infer]
+threshold = 0.01

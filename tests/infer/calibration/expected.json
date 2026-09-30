@@ -1,0 +1,13 @@
+{
+  "parse_port":             {"vague-error": true,  "cryptic-error": false, "unconstructive-error": true,  "misleading-error": false},
+  "parse_port_clearly":     {"vague-error": false, "cryptic-error": false, "unconstructive-error": false, "misleading-error": false},
+  "load_config":            {"vague-error": true,  "cryptic-error": true,  "unconstructive-error": true,  "misleading-error": false},
+  "load_config_plainly":    {"vague-error": false, "cryptic-error": false, "unconstructive-error": false, "misleading-error": false},
+  "read_manifest":          {"vague-error": false, "cryptic-error": false, "unconstructive-error": true,  "misleading-error": false},
+  "read_manifest_helpfully":{"vague-error": false, "cryptic-error": false, "unconstructive-error": false, "misleading-error": false},
+  "set_name":               {"vague-error": false, "cryptic-error": false, "unconstructive-error": true,  "misleading-error": true},
+  "set_name_accurately":    {"vague-error": false, "cryptic-error": false, "unconstructive-error": false, "misleading-error": false},
+  "lookup":                 {"vague-error": true,  "cryptic-error": false, "unconstructive-error": true,  "misleading-error": false},
+  "lookup_explained":       {"vague-error": false, "cryptic-error": false, "unconstructive-error": false, "misleading-error": false},
+  "advance":                {"vague-error": false, "cryptic-error": false, "unconstructive-error": false, "misleading-error": false}
+}

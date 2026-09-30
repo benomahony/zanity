@@ -5,7 +5,7 @@ rules = ["all"]
 # Fixtures are deliberately bad code, and their expected output depends on it: check them only
 # when a test names them, and never --fix them. The catalogue's own scripts are vendored from its
 # release unchanged, so they are fixed there, not here.
-exclude = ["tests/golden/", "tests/fix/", "tests/config/", "tests/infer/project/", "catalogue/catalogue.py", "catalogue/standards.py", "catalogue/import_cwe.py"]
+exclude = ["tests/golden/", "tests/fix/", "tests/config/", "tests/infer/project/", "tests/infer/calibration/", "catalogue/catalogue.py", "catalogue/standards.py", "catalogue/import_cwe.py"]
 
 # End-to-end tests: they run the built zanity and read the fixtures and catalogue in the repo,
 # which is what they test.
