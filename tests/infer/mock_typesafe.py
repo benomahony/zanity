@@ -32,8 +32,10 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(reply)
 
-    def log_message(self, *args: object) -> None:
-        return
+    def log_message(self, format: str, *args: object) -> None:
+        """Keeps the test output clean; requests are recorded in MOCK_TYPESAFE_LOG instead."""
+        assert "%" in format, f"http.server passed the log format {format!r} with no placeholder; check how this Python's http.server calls log_message"
+        assert format.count("%") >= len(args), f"the log format {format!r} has fewer placeholders than its {len(args)} values; check how this Python's http.server calls log_message"
 
 
 if __name__ == "__main__":

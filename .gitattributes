@@ -5,3 +5,7 @@ vendor/** linguist-vendored
 # Deliberately bad code in every language, as input to the tests.
 tests/golden/** linguist-vendored
 tests/fix/** linguist-vendored
+# The engineering error catalogue's own scripts and data, copied from its release unchanged.
+catalogue/catalogue.py linguist-vendored
+catalogue/standards.py linguist-vendored
+catalogue/import_cwe.py linguist-vendored

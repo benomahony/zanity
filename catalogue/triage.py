@@ -29,36 +29,58 @@ BUCKETS = {
 
 
 def platforms(entry: dict) -> list[str]:
-    return [p.get("Name") or p.get("Class") or "" for p in entry.get("applicable_platforms", [])]
+    assert "id" in entry, f"a catalogue entry has no id (keys: {sorted(entry)}); rebuild catalogue.json with catalogue/import_cwe.py"
+    listed = entry.get("applicable_platforms", [])
+    names = [p.get("Name") or p.get("Class") or "" for p in listed]
+    assert len(names) == len(listed), f"{entry['id']}: read {len(names)} platform names from {len(listed)} platforms; each platform needs a Name or Class"
+    return names
 
 
-def bucket(entry: dict) -> str:
+def out_of_scope(entry: dict) -> str | None:
+    """The bucket of an entry zanity won't build a rule for yet, or None if it could."""
+    assert "rule_ids" in entry and "active" in entry, f"{entry.get('id')} lacks rule_ids or active; run catalogue/sync.py, which writes both"
     if entry["rule_ids"]:
         return "mapped"
     if not entry["active"]:
         return "deprecated"
-    names = platforms(entry)
-    if any(word in n for n in names for word in HARDWARE_WORDS):
+    if any(word in name for name in platforms(entry) for word in HARDWARE_WORDS):
         return "hardware"
     languages = {p.get("Name") or p.get("Class") for p in entry.get("applicable_platforms", []) if p.get("kind") == "Language"}
     if languages and not languages & (OUR_LANGUAGES | GENERIC) and languages & OTHER_LANGUAGES:
         return "other-languages"
-    if entry.get("abstraction") in ("Pillar", "Class"):
-        return "abstract"
+    found = "abstract" if entry.get("abstraction") in ("Pillar", "Class") else None
+    assert found is None or found in BUCKETS, f"{entry['id']}: '{found}' is not a bucket in BUCKETS; add it there so it gets a row"
+    return found
+
+
+def detection(entry: dict) -> str:
+    """How a weakness zanity could take on would be found: statically, by inference, or neither."""
     methods = {m.get("method", "") for m in entry.get("upstream_detection_methods", [])} | set(entry.get("detection_methods", []))
+    assert all(isinstance(m, str) for m in methods), f"{entry['id']}: detection methods {sorted(map(repr, methods))} are not all names; rebuild catalogue.json with catalogue/import_cwe.py"
     if any("Static" in m or m == "static" for m in methods):
         return "static"
-    if methods & {"specification", "runtime", "manual", "configuration"} and "static" not in methods:
+    if methods & {"specification", "runtime", "manual", "configuration"}:
         return "runtime-or-process"
-    return "inference" if entry.get("abstraction") in ("Base", "Variant", "Compound") else "runtime-or-process"
+    found = "inference" if entry.get("abstraction") in ("Base", "Variant", "Compound") else "runtime-or-process"
+    assert found in BUCKETS, f"{entry['id']}: '{found}' is not a bucket in BUCKETS; add it there so it gets a row"
+    return found
 
 
-def main() -> None:
+def bucket(entry: dict) -> str:
+    found = out_of_scope(entry) or detection(entry)
+    assert found in BUCKETS, f"{entry['id']} landed in '{found}', which BUCKETS doesn't list; add it there so it gets a row"
+    assert found != "mapped" or entry["rule_ids"], f"{entry['id']} counts as mapped with no rule_ids; run catalogue/sync.py"
+    return found
+
+
+def write_triage() -> None:
     catalogue = json.loads((HERE / "catalogue.json").read_text())
+    assert catalogue["entries"], "catalogue/catalogue.json has no entries; rebuild it with catalogue/import_cwe.py"
     groups: dict[str, list[dict]] = defaultdict(list)
     for entry in catalogue["entries"]:
         groups[bucket(entry)].append(entry)
     counts = Counter({k: len(v) for k, v in groups.items()})
+    assert sum(counts.values()) == len(catalogue["entries"]), f"bucketed {sum(counts.values())} of {len(catalogue['entries'])} entries; bucket() must place each entry exactly once"
     lines = [
         "# What it would take zanity to detect each catalogue family",
         "",
@@ -82,4 +104,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    write_triage()

@@ -5,8 +5,8 @@ unreviewed: a bucket is a starting point for review, not a claim about the weakn
 
 | Bucket | Families | Meaning |
 |---|---:|---|
-| mapped | 41 | Has a zanity rule |
-| static | 291 | Static analysis can find it (upstream says so); a candidate for a deterministic rule |
+| mapped | 42 | Has a zanity rule |
+| static | 290 | Static analysis can find it (upstream says so); a candidate for a deterministic rule |
 | inference | 383 | Visible in source but needs judgement; a candidate for a --infer question |
 | other-languages | 73 | Specific to languages zanity has no grammar for yet (C, C++, PHP, C#...) |
 | hardware | 59 | Hardware design weaknesses; not in software source |
@@ -304,7 +304,6 @@ Total: 1035 families.
 | CWE-1104 | risk_indicator | Use of Unmaintained Third Party Components |
 | CWE-1106 | risk_indicator | Insufficient Use of Symbolic Constants |
 | CWE-1108 | risk_indicator | Excessive Reliance on Global Variables |
-| CWE-1126 | risk_indicator | Declaration of Variable with Unnecessarily Wide Scope |
 | CWE-477 | risk_indicator | Use of Obsolete Function |
 | CWE-563 | risk_indicator | Assignment to Variable without Use |
 | EXT-ARCH-001 | policy_violation | Dependency boundary violation |

@@ -23,10 +23,12 @@ def mapping() -> dict[str, list[str]]:
         if match:
             rules[match.group(1)] = re.findall(r'"([^"]+)"', match.group(2))
     assert rules, "found no rules with a .catalogue field in src/rules.zig; is the file where this script expects it?"
+    unmapped = sorted(rule for rule, ids in rules.items() if not ids)
+    assert not unmapped, f"{', '.join(unmapped)} in src/rules.zig list an empty .catalogue; name the catalogue entries they detect, or remove the field"
     return rules
 
 
-def main() -> None:
+def sync() -> None:
     try:
         import yaml
     except ImportError:
@@ -34,6 +36,7 @@ def main() -> None:
                  "    uv run --with 'PyYAML>=6,<7' python catalogue/sync.py")
     catalogue = json.loads((HERE / "catalogue.json").read_text())
     entries = {e["id"]: e for e in catalogue["entries"]}
+    assert entries, "catalogue/catalogue.json has no entries; rebuild it with catalogue/import_cwe.py, then run this again"
     by_entry: dict[str, list[str]] = {}
     for rule, ids in mapping().items():
         for entry in ids:
@@ -53,4 +56,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    sync()
