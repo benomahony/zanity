@@ -158,7 +158,7 @@ zanity check . --infer
 | `unconstructive-error` | has an error message that says what failed but not what to do about it |
 | `misleading-error` | has an error message that describes a different failure from the one that happened (*off* by default; `rules = ["all"]` includes it) |
 
-A finding is reported when the model is at least 80% sure, and says how sure it was.
+A finding is reported when the model is at least 80% sure, and says how sure it was. `threshold` under `[infer]` in `zanity.toml` changes that: `threshold = 0.9` reports only what it is at least 90% sure of, and a lower value reports more.
 
 **What is sent:** the source of each function that raises, returns or logs an error, and only the questions no deterministic check already answered. Nothing else leaves your machine, and without `--infer` nothing does at all.
 
@@ -182,6 +182,8 @@ exclude = ["vendor/", "tests/fixtures/**"]
 [infer]
 # Requests sent to TypeSafe at once (1 to 64, default 8).
 concurrency = 16
+# How sure TypeSafe must be for a judgement to become a finding (above 0 up to 1, default 0.8).
+threshold = 0.9
 
 # Rules that don't report in some files. The pattern is .gitignore syntax, relative to this
 # file; add a section per pattern.

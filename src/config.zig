@@ -8,6 +8,7 @@
 //!
 //!     [infer]
 //!     concurrency = 16                         # requests to TypeSafe at once
+//!     threshold = 0.9                          # how sure it must be to report
 //!
 //!     [paths."src/*_test.zig"]                 # gitignore syntax, relative to this file
 //!     disable = ["process-in-test"]            # these rules don't report here
@@ -37,6 +38,8 @@ pub const Config = struct {
     exclude: [max_excludes][]const u8 = undefined,
     exclude_len: usize = 0,
     concurrency: ?u32 = null,
+    /// How sure TypeSafe must be for a judgement to become a finding, above 0 and at most 1.
+    threshold: ?f64 = null,
     paths: [max_path_sections]PathRules = undefined,
     paths_len: usize = 0,
 
@@ -257,18 +260,30 @@ const TomlReader = struct {
         if (section.disable.len > rules.all.len) std.debug.panic("[paths.\"{s}\"] disables {d} rules of {d}; Set.include() must add each rule once", .{ section.glob, section.disable.len, rules.all.len });
     }
 
+    fn readInferSetting(self: *TomlReader, config: *Config, key: []const u8) Error!void {
+        if (self.table != .infer) std.debug.panic("reading '{s}' as an [infer] setting outside [infer]; readSetting() must hand over only [infer] settings", .{key});
+        const InferSetting = enum { concurrency, threshold };
+        switch (std.meta.stringToEnum(InferSetting, key) orelse return self.fail("'{s}' isn't an [infer] setting; the settings are concurrency and threshold.", .{key})) {
+            .concurrency => {
+                const value = try self.readInteger(key);
+                if (value < 1 or value > max_concurrency) return self.fail("concurrency is {d}; it must be between 1 and {d}.", .{ value, max_concurrency });
+                config.concurrency = @intCast(value);
+            },
+            .threshold => {
+                const value = try self.readDecimal(key);
+                if (!(value > 0 and value <= 1)) return self.fail("threshold is {d}; it must be above 0 and at most 1, such as 0.9 to report only what TypeSafe is at least 90% sure of.", .{value});
+                config.threshold = value;
+            },
+        }
+        if (config.concurrency == null and config.threshold == null) std.debug.panic("read the [infer] setting '{s}' but stored nothing; each branch of readInferSetting() must store its value", .{key});
+    }
+
     fn readSetting(self: *TomlReader, config: *Config, key: []const u8) Error!void {
         if (key.len == 0) std.debug.panic("setting a key with no name at byte {d}; readEntry() must read a key before calling readSetting()", .{self.at});
         if (self.table == .paths) return self.readPathSetting(config, key);
-        if (self.table == .infer) {
-            if (!std.mem.eql(u8, key, "concurrency")) return self.fail("'{s}' isn't an [infer] setting; the only one is concurrency.", .{key});
-            const value = try self.readInteger(key);
-            if (value < 1 or value > max_concurrency) return self.fail("concurrency is {d}; it must be between 1 and {d}.", .{ value, max_concurrency });
-            config.concurrency = @intCast(value);
-            return;
-        }
+        if (self.table == .infer) return self.readInferSetting(config, key);
         const Setting = enum { rules, disable, exclude };
-        const which = std.meta.stringToEnum(Setting, key) orelse return self.fail("'{s}' isn't a setting; the settings are rules, disable, exclude and, under [infer], concurrency.", .{key});
+        const which = std.meta.stringToEnum(Setting, key) orelse return self.fail("'{s}' isn't a setting; the settings are rules, disable, exclude and, under [infer], concurrency and threshold.", .{key});
         const items = try self.readStrings(key);
         switch (which) {
             .exclude => {
@@ -298,6 +313,22 @@ const TomlReader = struct {
         const value = std.fmt.parseInt(i64, digits[0..n], 10) catch return self.fail("'{s}' needs a whole number, such as {s} = 8.", .{ key, key });
         if (self.at <= start) std.debug.panic("parsed {d} for '{s}' without reading a digit at byte {d}; readInteger() must fail before parsing when it read no digit", .{ value, key, start });
         if (n > digits.len) std.debug.panic("kept {d} digits in room for {d}; readInteger() must keep at most the digit buffer's length", .{ n, digits.len });
+        return value;
+    }
+
+    fn readDecimal(self: *TomlReader, key: []const u8) Error!f64 {
+        const start = self.at;
+        while (self.at < self.bytes.len and (std.ascii.isDigit(self.bytes[self.at]) or self.bytes[self.at] == '.' or self.bytes[self.at] == '_')) self.at += 1;
+        var digits: [32]u8 = undefined;
+        var n: usize = 0;
+        for (self.bytes[start..self.at]) |c| if (c != '_' and n < digits.len) {
+            digits[n] = c;
+            n += 1;
+        };
+        if (n == 0) return self.fail("'{s}' needs a number, such as {s} = 0.9.", .{ key, key });
+        const value = std.fmt.parseFloat(f64, digits[0..n]) catch return self.fail("'{s}' needs a number, such as {s} = 0.9.", .{ key, key });
+        if (n > digits.len) std.debug.panic("kept {d} digits in room for {d}; readDecimal() must keep at most the digit buffer's length", .{ n, digits.len });
+        if (n > self.at - start) std.debug.panic("kept {d} digits from {d} bytes read for '{s}'; readDecimal() must copy only bytes it read", .{ n, self.at - start, key });
         return value;
     }
 

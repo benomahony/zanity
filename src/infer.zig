@@ -14,7 +14,7 @@ const Finding = facts_module.Finding;
 const store = @import("store.zig");
 
 /// How sure the model must be before a judgement becomes a finding.
-pub const threshold = 0.8;
+pub const default_threshold = 0.8;
 /// Requests to TypeSafe at once when zanity.toml doesn't say.
 pub const default_concurrency = 8;
 const max_questions = 8;
@@ -51,6 +51,8 @@ pub const Inference = struct {
     json: memory.Text,
     reporter: ?Reporter = null,
     concurrency: usize = default_concurrency,
+    /// How sure TypeSafe must be for a judgement to become a finding; [infer] threshold sets it.
+    threshold: f64 = default_threshold,
     answered: std.atomic.Value(usize) = .init(0),
     stats: Stats = .{},
 
@@ -187,7 +189,7 @@ pub const Inference = struct {
         for (job.rules[0..job.count], job.answers[0..job.count], job.known[0..job.count]) |rule, answer, known| {
             const p = answer orelse continue;
             if (!known) try self.store.keepAnswer(.{ .model = self.client.model, .question = store.digest(&.{rule.question}), .unit = job.unit_hash, .language = unit.language, .source = unit.source, .probability = p });
-            if (p < threshold) continue;
+            if (p < self.threshold) continue;
             const message = try self.json.format("'{s}' {s} (TypeSafe is {d:.0}% sure).", .{ unit.name, rule.judgement, p * 100 });
             try findings.add(.{ .path = unit.path, .line = unit.line, .column = unit.column, .rule = rule.name, .message = message });
         }

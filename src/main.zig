@@ -161,7 +161,10 @@ fn runCheck(ctx: *zcli.Context, options: CheckOptions) ![]const Row {
     defer ws.settings = null;
     var selected = if (options.rules) |list| try parseRules(ctx, ws, list) else settings.selection();
     if (options.infer) try connectInference(ctx, ws, &selected, options.rules == null);
-    if (ws.inference) |*inference| inference.concurrency = settings.concurrency orelse infer.default_concurrency;
+    if (ws.inference) |*inference| {
+        inference.concurrency = settings.concurrency orelse infer.default_concurrency;
+        inference.threshold = settings.threshold orelse infer.default_threshold;
+    }
     var live = Live.initLive(console(ctx, ctx.runtime.err), ws.io, !ctx.quiet);
     ws.live = &live;
     defer ws.live = null;
