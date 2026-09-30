@@ -1,5 +1,7 @@
 const std = @import("std");
 const manifest = @import("languages/manifest.zig");
+/// The one place zanity's version is written: `zanity --version` and the release tag both come from it.
+const version = @import("build.zig.zon").version;
 
 pub fn build(b: *std.Build) void {
     if (manifest.entries.len == 0) std.debug.panic("languages/manifest.zon lists no languages; zanity needs at least one grammar", .{});
@@ -7,8 +9,16 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    const strip = b.option(bool, "strip", "Leave debug info out of the binary, as release builds do") orelse false;
+
     const exe = b.addExecutable(.{ .name = "zanity", .root_module = module(b, "src/main.zig", target, optimize) });
+    exe.root_module.strip = strip;
+    const build_info = b.addOptions();
+    build_info.addOption([]const u8, "version", version);
+    exe.root_module.addOptions("build_info", build_info);
     b.installArtifact(exe);
+
+    addRelease(b, build_info);
 
     const run = b.addRunArtifact(exe);
     run.step.dependOn(b.getInstallStep());
@@ -19,10 +29,44 @@ pub fn build(b: *std.Build) void {
     const options = b.addOptions();
     options.addOptionPath("zanity", exe.getEmittedBin());
     test_module.addOptions("paths", options);
+    test_module.addOptions("build_info", build_info);
     const tests = b.addRunArtifact(b.addTest(.{ .root_module = test_module }));
     tests.setCwd(b.path("."));
     tests.has_side_effects = true;
     b.step("test", "Run tests").dependOn(&tests.step);
+}
+
+/// The platforms a release ships for. Linux builds link musl statically, so one binary runs on
+/// any distribution.
+const release_targets = [_]struct { name: []const u8, query: std.Target.Query }{
+    .{ .name = "linux-x86_64", .query = .{ .cpu_arch = .x86_64, .os_tag = .linux, .abi = .musl } },
+    .{ .name = "linux-aarch64", .query = .{ .cpu_arch = .aarch64, .os_tag = .linux, .abi = .musl } },
+    .{ .name = "macos-x86_64", .query = .{ .cpu_arch = .x86_64, .os_tag = .macos } },
+    .{ .name = "macos-aarch64", .query = .{ .cpu_arch = .aarch64, .os_tag = .macos } },
+    .{ .name = "windows-x86_64", .query = .{ .cpu_arch = .x86_64, .os_tag = .windows } },
+};
+
+/// `zig build release`: a stripped ReleaseSafe binary for every platform in release_targets, in
+/// zig-out/release as zanity-<os>-<arch>. The names carry no version, so the latest release always
+/// has the same download URLs. ReleaseSafe keeps bounds and overflow checks, so a bug stops with a
+/// message instead of silently checking the wrong thing.
+fn addRelease(b: *std.Build, build_info: *std.Build.Step.Options) void {
+    const release = b.step("release", "Build every released platform into zig-out/release");
+    for (release_targets) |platform| {
+        const target = b.resolveTargetQuery(platform.query);
+        const os = @tagName(target.result.os.tag);
+        if (!std.mem.startsWith(u8, platform.name, os)) std.debug.panic("the release platform '{s}' builds for {s}, so its download would be misnamed; start its name in release_targets with '{s}-'", .{ platform.name, os, os });
+        const exe = b.addExecutable(.{ .name = "zanity", .root_module = module(b, "src/main.zig", target, .ReleaseSafe) });
+        exe.root_module.strip = true;
+        exe.root_module.addOptions("build_info", build_info);
+        const install = b.addInstallArtifact(exe, .{
+            .dest_dir = .{ .override = .{ .custom = "release" } },
+            .dest_sub_path = b.fmt("zanity-{s}{s}", .{ platform.name, target.result.exeFileExt() }),
+            .pdb_dir = .disabled,
+        });
+        release.dependOn(&install.step);
+    }
+    if (release.dependencies.items.len != release_targets.len) std.debug.panic("the release step builds {d} binaries for {d} platforms; add each platform's install step once", .{ release.dependencies.items.len, release_targets.len });
 }
 
 /// Vendored C (tree-sitter and the grammars) is built optimised and without UBSan in every mode:

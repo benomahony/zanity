@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # The release workflow runs this first, so nothing is released that fails it.
+  workflow_call:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      # Installs the Zig in build.zig.zon's minimum_zig_version.
+      - uses: mlugg/setup-zig@v2
+      # The tests include zanity checking its own source with every rule.
+      - run: zig build test --summary all
+      # Every released platform still cross-compiles.
+      - if: runner.os == 'Linux'
+        run: zig build release

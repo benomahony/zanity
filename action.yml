@@ -1,0 +1,44 @@
+name: zanity
+description: Check code with zanity, using its prebuilt release binary for the runner.
+branding:
+  icon: check-circle
+  color: green
+
+inputs:
+  version:
+    description: The zanity release to use, such as 0.1.0. Defaults to the latest release.
+    default: latest
+  args:
+    description: The zanity command line to run.
+    default: check . --strict
+
+runs:
+  using: composite
+  steps:
+    - name: Download zanity
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+      run: |
+        case "$RUNNER_OS-$RUNNER_ARCH" in
+          Linux-X64) name=zanity-linux-x86_64 ;;
+          Linux-ARM64) name=zanity-linux-aarch64 ;;
+          macOS-X64) name=zanity-macos-x86_64 ;;
+          macOS-ARM64) name=zanity-macos-aarch64 ;;
+          Windows-X64) name=zanity-windows-x86_64.exe ;;
+          *) echo "::error::zanity has no release binary for $RUNNER_OS on $RUNNER_ARCH; run it on Linux, macOS or Windows x64, or build it with zig build."; exit 1 ;;
+        esac
+        if [ "$VERSION" = latest ]; then
+          url="https://github.com/benomahony/zanity/releases/latest/download/$name"
+        else
+          url="https://github.com/benomahony/zanity/releases/download/v${VERSION#v}/$name"
+        fi
+        mkdir -p "$RUNNER_TEMP/zanity"
+        dest="$RUNNER_TEMP/zanity/zanity"
+        [ "$RUNNER_OS" = Windows ] && dest="$dest.exe"
+        curl -fsSL -o "$dest" "$url" || { echo "::error::Could not download $url; check that version $VERSION is listed at https://github.com/benomahony/zanity/releases."; exit 1; }
+        chmod +x "$dest"
+        echo "$RUNNER_TEMP/zanity" >> "$GITHUB_PATH"
+    - name: Run zanity
+      shell: bash
+      run: zanity ${{ inputs.args }}

@@ -162,6 +162,20 @@ test "--fix rewrites each fixture into its .fixed file and leaves nothing more t
     try std.testing.expect(cases > 0);
 }
 
+test "--strict fails a run with only warnings, which a plain run passes" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    const io = std.testing.io;
+    const zanity = try Io.Dir.cwd().realPathFileAlloc(io, paths.zanity, arena);
+    const fixture = "tests/golden/nasa/nasa02_detects_while_true.py";
+    const plain = try std.process.run(arena, io, .{ .argv = &.{ zanity, "check", "-q", "--rules", "unbounded-loop", fixture } });
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, plain.term);
+    try std.testing.expectEqualStrings("zanity: 0 errors and 1 warning in 1 of 1 file\n", plain.stderr);
+    const strict = try std.process.run(arena, io, .{ .argv = &.{ zanity, "check", "-q", "--strict", "--rules", "unbounded-loop", fixture } });
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 1 }, strict.term);
+}
+
 /// Starts tests/infer/mock_typesafe.py and returns it with the port it listens on.
 fn startMock(arena: std.mem.Allocator, io: Io, log: []const u8, env: *std.process.Environ.Map) !struct { child: std.process.Child, port: []const u8 } {
     if (log.len == 0) std.debug.panic("the mock TypeSafe server needs a log path to record requests in", .{});

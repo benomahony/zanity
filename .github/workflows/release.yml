@@ -1,0 +1,35 @@
+name: Release
+
+# To release: set .version in build.zig.zon, commit, then push a tag v<that version>, e.g.
+#   git tag v0.1.0 && git push origin v0.1.0
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    uses: ./.github/workflows/ci.yml
+
+  release:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: mlugg/setup-zig@v2
+      - name: Check the tag is the version in build.zig.zon
+        run: |
+          zig build
+          built=$(./zig-out/bin/zanity --version)
+          if [ "$built" != "zanity ${GITHUB_REF_NAME#v}" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME, but the build says '$built'. Set .version in build.zig.zon to ${GITHUB_REF_NAME#v}, commit, and tag that commit."
+            exit 1
+          fi
+      - run: zig build release
+      # GitHub shows each asset's SHA-256 digest on the release page and in its API.
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" zig-out/release/* --title "zanity $GITHUB_REF_NAME" --generate-notes --verify-tag

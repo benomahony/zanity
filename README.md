@@ -4,7 +4,7 @@
 
 Fast, deterministic sanity checks for code written by people and agents.
 
-zanity parses each file once with [tree-sitter](https://tree-sitter.github.io), walks the tree once, and runs every rule on that single walk. It replaces a family of Python linters (nasa-lsp, mockbuster, testdesiderata, bonsai, dddlint, and the errlint and sagalint specs) that each parsed every file separately. It is one static binary, it allocates all of its memory at startup, and it passes its own checks.
+zanity checks Python, Zig, Go, TypeScript, Rust and Java for the mistakes that make code unsafe, untestable or hard to follow: unbounded loops, functions with no assertions, tests that sleep or touch the network, error messages that don't say what to do, and dozens more. It parses each file once with [tree-sitter](https://tree-sitter.github.io) and runs every rule in a single pass, so checking a whole repository takes moments. It is one static binary with no runtime to install.
 
 ```console
 $ zanity check src
@@ -15,14 +15,105 @@ src/billing.py  2 errors, 1 warning
 zanity: 2 errors and 1 warning in 1 of 14 files
 ```
 
-## Build
+## Install
 
-zanity needs Zig `0.17.0-dev.947` or later. Everything else, including every grammar, is vendored.
+On macOS or Linux:
 
 ```sh
-zig build -Doptimize=ReleaseFast
-./zig-out/bin/zanity check .
+curl -fsSL https://raw.githubusercontent.com/benomahony/zanity/main/install.sh | sh
 ```
+
+It downloads the binary for your machine from the [latest release](https://github.com/benomahony/zanity/releases/latest), checks it against the SHA-256 GitHub lists for the release, and puts it in `~/.local/bin`, telling you if that isn't on your `PATH` yet. `ZANITY_VERSION=0.1.0` installs a particular release; `ZANITY_INSTALL_DIR` puts it somewhere else.
+
+On Windows, in PowerShell:
+
+```powershell
+New-Item -ItemType Directory -Force "$HOME\bin" | Out-Null
+Invoke-WebRequest -OutFile "$HOME\bin\zanity.exe" "https://github.com/benomahony/zanity/releases/latest/download/zanity-windows-x86_64.exe"
+```
+
+If you use [mise](https://mise.jdx.dev), `mise use -g github:benomahony/zanity` installs and updates it, as does [eget](https://github.com/zyedidia/eget) with `eget benomahony/zanity`. Or download `zanity-<os>-<arch>` from the release page yourself: it is a single file with nothing else to install, and the Linux builds are static, so they run on any distribution.
+
+### From source
+
+Building needs [Zig](https://ziglang.org/download/) at the version in `build.zig.zon`'s `minimum_zig_version`, currently a 0.17.0 nightly. Every grammar and library is vendored or fetched by the build.
+
+```sh
+git clone https://github.com/benomahony/zanity
+cd zanity
+zig build -Doptimize=ReleaseSafe
+./zig-out/bin/zanity --version
+```
+
+## Getting started in a project
+
+Run it from the root of your repository:
+
+```sh
+zanity check .
+```
+
+It checks every file in a language it knows, skipping whatever `.gitignore` ignores, dot directories and build output. Each finding says what is wrong and how to fix it. Many can be fixed for you:
+
+```sh
+zanity check . --fix
+```
+
+`--fix` makes only changes that can't alter what the code does, such as moving a declaration into the block that uses it or adding a message to an assertion. Where only a person knows something, like why an assertion must hold, it leaves a `TODO` comment for you to fill in.
+
+Then add a `zanity.toml` at the root of the repository to say what zanity should check. A good start:
+
+```toml
+# Every rule, including those off by default.
+rules = ["all"]
+
+# Code you don't own or that is wrong on purpose.
+exclude = ["vendor/", "third_party/", "tests/fixtures/"]
+
+# End-to-end tests are meant to start processes and read files.
+[paths."tests/e2e/"]
+disable = ["process-in-test", "filesystem-in-test", "network-in-test"]
+```
+
+Once `zanity check .` is clean, keep it that way with `--strict`, which fails on warnings as well as errors. That is what a pre-commit hook or CI should run.
+
+### Pre-commit
+
+With [pre-commit](https://pre-commit.com), add this to `.pre-commit-config.yaml` (zanity must be installed and on your `PATH`):
+
+```yaml
+repos:
+  - repo: https://github.com/benomahony/zanity
+    rev: v0.1.0  # the release you installed
+    hooks:
+      - id: zanity         # zanity check . --strict
+      # - id: zanity-fix   # applies fixes first, then fails on anything left
+```
+
+The hook checks the whole repository rather than only the staged files, because some rules compare files with each other (a name spelled two ways in two files, a function calling itself through another file).
+
+Without pre-commit, a plain git hook does the same:
+
+```sh
+printf '#!/bin/sh\nexec zanity check . --strict\n' > .git/hooks/pre-commit
+chmod +x .git/hooks/pre-commit
+```
+
+### GitHub Actions
+
+```yaml
+jobs:
+  zanity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: benomahony/zanity@v0.1.0
+        # with:
+        #   version: 0.1.0               # default: the latest release
+        #   args: check src --strict     # default: check . --strict
+```
+
+The action downloads the release binary for the runner and fails the job on any finding.
 
 ## Usage
 
@@ -31,43 +122,45 @@ zanity check                                  # check the current directory
 zanity check src tests                        # check some paths
 zanity check . --rules recursion,long-function   # run only these rules
 zanity check . --rules all                    # every rule, including those off by default
+zanity check . --strict                       # exit 1 on warnings too
+zanity check . --fix                          # apply the fixes zanity can make, then report the rest
 zanity check . --json                         # a JSON array, one object per finding
 zanity check . --plain                        # stable key=value lines for scripts
-zanity check . --fix                          # apply the fixes zanity can make, then report the rest
-zanity check . --infer                        # also ask TypeSafe what no deterministic check can decide
 zanity help check                             # every option
 ```
 
-`check` walks directories recursively, respects `.gitignore` and `.git/info/exclude`, and skips dot directories and build output. It exits 0 when nothing fired, 1 when an error-level rule fired, and 2 on a usage error. Findings go to stdout and the one-line summary to stderr, so output can be piped cleanly. On a terminal the report is grouped by file, each finding shows how to fix it, and two tables close the run: files with the most errors, and rules that fired most. While it runs, a progress line on the terminal shows how many files are checked and, with `--infer`, how many functions TypeSafe has answered, with elapsed time and an estimate of what is left; `-q` hides it, and it never appears in piped output. `--no-color` or `NO_COLOR` turns colour off.
+`check` exits 0 when nothing fired, 1 when an error-level rule fired (or any rule, with `--strict`), and 2 on a usage error such as a mistake in `zanity.toml`. Findings go to stdout and the one-line summary to stderr, so output can be piped cleanly. On a terminal the report is grouped by file and ends with two tables: the files with the most errors, and the rules that fired most. A progress line shows how far a long run has got; `-q` hides it, and it never appears in piped output. `--no-color` or `NO_COLOR` turns colour off.
 
-`--infer` needs `TYPESAFE_API_KEY`. It only asks about functions that report errors, and only the questions no deterministic check answered. When it finishes it says how many functions came from the store and how long the rest took, so a slow run explains itself. Every answer is kept in a SQLite store in WAL mode, shared with nouls at `~/.cache/nouls/nouls.db` (or `$XDG_CACHE_HOME/nouls/nouls.db`), with the same schema and digests, so neither tool asks about unchanged code twice and answers nouls already paid for are reused. `ZANITY_STORE` points it at a different file.
+### Checks that need a language model
+
+A few questions about error messages, such as whether a message misleads, can't be decided by reading the code's structure. `--infer` asks them of an LLM service, TypeSafe, for the functions that report errors, after every deterministic check has run. It needs `TYPESAFE_API_KEY` in the environment. Answers are cached in a SQLite file (`~/.cache/nouls/nouls.db`, or set `ZANITY_STORE`), so unchanged code is never asked about twice. Without `--infer`, zanity never touches the network.
 
 ## Configuration
 
 zanity reads the nearest `zanity.toml` at or above the directory it runs in, stopping at the repository root. Everything is optional:
 
 ```toml
-# Run only these rules (names or old codes); "all" is every rule, including those off by
-# default. Leave it out to run the defaults.
+# Run only these rules; "all" is every rule, including those off by default.
+# Leave it out to run the defaults.
 rules = ["recursion", "unbounded-loop", "long-function"]
 
 # Or keep the defaults but switch some off.
 disable = ["duplicate-name"]
 
 # Paths to skip, in .gitignore syntax, relative to this file.
-exclude = ["vendor/", "tests/golden/**"]
+exclude = ["vendor/", "tests/fixtures/**"]
 
 [infer]
 # Requests sent to TypeSafe at once (1 to 64, default 8).
 concurrency = 16
 
-# Rules that don't report in some files, such as end-to-end tests that are meant to start
-# processes. The pattern is .gitignore syntax, relative to this file; add a section per pattern.
+# Rules that don't report in some files. The pattern is .gitignore syntax, relative to this
+# file; add a section per pattern.
 [paths."tests/e2e/"]
 disable = ["process-in-test", "network-in-test"]
 ```
 
-`--rules` on the command line overrides `rules` and `disable`. A mistake in the file stops the run with exit code 2 and names the line, for example `zanity.toml:1: 'recursions' isn't a rule; ...`.
+`--rules` on the command line overrides `rules` and `disable`. A mistake in the file stops the run with exit code 2 and names the line and what to write instead, for example `zanity.toml:1: 'recursions' isn't a rule; ...`.
 
 ## Suppressing a finding
 
@@ -77,7 +170,7 @@ A comment on the line of the finding silences it, in any language:
 value = eval(text)  # nasa: ignore[forbidden-call]
 ```
 
-`nasa: ignore` with no list silences every rule on that line. Rules can be named by their zanity name or by the code of the tool they came from (`NASA01-A`, `FST001`, `drift`, ...), so existing suppressions keep working.
+`nasa: ignore` with no list silences every rule on that line. A rule can be named by its name or by its code, such as `NASA01-A`.
 
 ## Languages
 
@@ -90,11 +183,11 @@ value = eval(text)  # nasa: ignore[forbidden-call]
 | Rust | `.rs` |
 | Java | `.java` |
 
-Every rule runs on every language where it means something. A rule that does not apply to a language, such as `dynamic-allocation` in a garbage-collected language, is declared not applicable in `languages/manifest.zon`; anything else a rule needs must be supplied by the language's queries, or the build fails.
+Every rule runs on every language where it means something; `dynamic-allocation`, for example, only applies where memory is managed by hand.
 
 ## Rules
 
-Rules marked *off* only run when named with `--rules`, or with `--rules all` or `rules = ["all"]`.
+Rules marked *off* run only with `--rules all`, `rules = ["all"]`, or when named.
 
 **NASA's Power of Ten**
 
@@ -104,21 +197,14 @@ Rules marked *off* only run when named with `--rules`, or with `--rules all` or 
 | `unbounded-loop` | warning | a loop with no bound, such as `while True` or `for {}` |
 | `dynamic-allocation` | error | allocation after initialization, in Zig and Rust |
 | `long-function` | warning | a function with 60 or more lines of code, not counting blank and comment lines |
-| `shared-state-in-test` | warning | a test that changes process-wide state: an environment variable, the working directory, the import path, a global default or a `global` |
-| `filesystem-in-test` | warning | a test that reads or changes real files outside its own temporary directory |
-| `network-in-test` | warning | a test that makes a real network request or connection |
-| `database-in-test` | warning | a test that connects to a real database; in-memory databases are fine |
-| `unmanaged-temp-in-test` | warning | a test that makes temporary files its framework doesn't clean up |
-| `process-in-test` | warning | a test that starts a real process |
-| `eager-test` | warning | a test that makes more than 10 checks, counting assertions and test-framework checks such as `expect` and `assertEquals` |
-| `long-test` | warning | a test with 50 or more lines of code, not counting blank and comment lines |
+| `wide-scope` | warning | a local declared in a wider block than the only one that uses it |
 | `assertion-density` | error | a function with fewer than two assertions that can catch a bug |
 | `assertion-message` | warning | an assertion with no message |
 | `assertion-side-effect` | error | an assertion that assigns or calls something that changes state |
 | `forbidden-call` | warning | `eval`, `exec` and other calls that run code no one can review |
 | `restated-type`, `constant-assertion`, `redundant-null-check`, `conversion-assertion`, `guaranteed-length` | *off* | assertions that cannot fail, which do not count towards density |
 
-**Structure** (the first three from bonsai; the rest from the engineering error catalogue)
+**Structure**
 
 | Rule | Severity | Flags |
 |---|---|---|
@@ -127,26 +213,34 @@ Rules marked *off* only run when named with `--rules`, or with `--rules all` or 
 | `swallowed-error` | warning | an error handler that does nothing |
 | `empty-block` | warning | an empty block where code was expected |
 | `deep-nesting` | warning | code nested too deep to follow |
-| `complex-function` | warning | a function with too many paths through it |
+| `complex-function` | warning | a function or test with too many paths through it |
 | `long-file` | warning | a file too long to hold in mind |
 
-**Tests** (from testdesiderata and mockbuster)
+**Tests**
 
 | Rule | Severity | Flags |
 |---|---|---|
+| `long-test` | warning | a test with 50 or more lines of code, not counting blank and comment lines |
+| `eager-test` | warning | a test that makes more than 10 checks, counting assertions and test-framework checks such as `expect` and `assertEquals` |
 | `sleep-in-test` | warning | a test that waits on the clock |
 | `polling-loop` | warning | a loop in a test that polls with a sleep |
 | `nondeterministic-test` | warning | randomness or the current time in a test |
 | `test-double` | warning | a mock or stub that replaces real behaviour |
+| `shared-state-in-test` | warning | a test that changes process-wide state: an environment variable, the working directory, the import path, a global default or a `global` |
+| `filesystem-in-test` | warning | a test that reads or changes real files outside its own temporary directory |
+| `network-in-test` | warning | a test that makes a real network request or connection |
+| `database-in-test` | warning | a test that connects to a real database; in-memory databases are fine |
+| `unmanaged-temp-in-test` | warning | a test that makes temporary files its framework doesn't clean up |
+| `process-in-test` | warning | a test that starts a real process |
 
-**Names** (from dddlint)
+**Names**
 
 | Rule | Severity | Flags |
 |---|---|---|
 | `name-drift` | warning | one concept spelled several ways, such as `order_total` and `total_order` |
 | `duplicate-name` | warning | the same name defined more than once in one language |
 
-**Error messages** (from errlint)
+**Error messages**
 
 | Rule | Severity | Flags |
 |---|---|---|
@@ -155,13 +249,15 @@ Rules marked *off* only run when named with `--rules`, or with `--rules all` or 
 | `unconstructive-error` | warning | a message that does not say how to fix the problem |
 | `misleading-error` | *off* | a message that describes a different failure; needs `--infer` |
 
-**Hazards** (from the engineering error catalogue in `catalogue/`)
+**Hazards** (each traces to an entry in the engineering error catalogue in `catalogue/`)
 
-`constant-condition`, `float-equality`, `discarded-comparison`, `unreachable-code`, `generic-catch`, `generic-throw`, `debug-leftover`, `hardcoded-secret`, `return-in-finally`, `identity-comparison`, `precedence-trap`, `switch-fallthrough`, `missing-default`, `no-effect-statement`, `tls-verification-disabled`, `weak-hash`, `unsafe-deserialization`, `shell-command`, `sql-built-from-strings`, `secret-in-log`, `wall-clock-duration` and `unawaited-call`. Each rule links to the catalogue entries it detects, and a test keeps the two in step.
+`constant-condition`, `float-equality`, `discarded-comparison`, `unreachable-code`, `generic-catch`, `generic-throw`, `debug-leftover`, `hardcoded-secret`, `return-in-finally`, `identity-comparison`, `precedence-trap`, `switch-fallthrough`, `missing-default`, `no-effect-statement`, `tls-verification-disabled`, `weak-hash`, `unsafe-deserialization`, `shell-command`, `sql-built-from-strings`, `secret-in-log`, `wall-clock-duration` and `unawaited-call`.
 
-`parse-error` reports a file tree-sitter could not fully parse; the other rules still run on the recovered tree.
+`parse-error` reports a file tree-sitter could not fully parse; the other rules still run on what it recovered.
 
-## How it works
+## Contributing
+
+### How it works
 
 ```
 file ──► tree-sitter parse ──► one query per language ──► capture index ──► single walk ──► findings
@@ -175,7 +271,7 @@ file ──► tree-sitter parse ──► one query per language ──► capt
 - **Cross-file checks run once after all files**, over facts the walk collects: definitions for the naming rules, and functions and calls for the call graph.
 - **Memory is fixed.** Every buffer is allocated at startup from the limits in `src/memory.zig`; tree-sitter itself allocates from bump pools, one reset after each file. Exceeding a limit is a clear error naming the limit, not a crash.
 
-## Adding a language
+### Adding a language
 
 No Zig code changes. Add:
 
@@ -186,15 +282,25 @@ No Zig code changes. Add:
 
 `zig build test` then lists every capture the language still needs for each rule. Supply it, or declare the rule not applicable to the language.
 
-## Testing
+### Testing
 
 ```sh
 zig build test              # unit, golden, architecture, catalogue and self-check tests
 zig build test --fuzz=100K  # fuzz the checker with arbitrary bytes in every language
 ```
 
-Golden cases in `tests/golden/` run through the real binary and compare where each finding lands, its rule, its severity and the exit code, not the wording. The `nasa` and `dddlint` suites are generated from those tools by `tests/parity/`, so they prove zanity finds the same problems. The self-check runs zanity over its own source and fails on any finding.
+Golden cases in `tests/golden/` run through the real binary and compare where each finding lands, its rule, its severity and the exit code, not the wording. The self-check runs zanity over its own source with every rule and fails on any finding.
+
+### Releasing
+
+Set `.version` in `build.zig.zon`, commit, and push a matching tag:
+
+```sh
+git tag v0.1.0 && git push origin v0.1.0
+```
+
+The release workflow runs the tests, builds every platform with `zig build release` (you can run that locally too; the binaries land in `zig-out/release/`) and publishes them as a GitHub release.
 
 ## Licence
 
-Grammars and nvim-treesitter queries keep their own licences, alongside them in `languages/`. The CWE data in `catalogue/` is © The MITRE Corporation.
+zanity is MIT licensed; see `LICENSE`. Grammars and nvim-treesitter queries keep their own licences, alongside them in `languages/`. The CWE data in `catalogue/` is © The MITRE Corporation.

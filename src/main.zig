@@ -26,6 +26,7 @@ const CheckOptions = struct {
     rules: ?[]const u8 = null,
     fix: bool = false,
     infer: bool = false,
+    strict: bool = false,
 };
 
 /// One finding as `--json` and `--plain` publish it. Lines and columns count from 1.
@@ -41,17 +42,18 @@ const Row = struct {
 
 const app: zcli.App = .{
     .name = "zanity",
-    .version = "0.0.0",
+    .version = @import("build_info").version,
     .description = "Fast, deterministic sanity checks for code written by people and agents.",
     .commands = &.{zcli.command(CheckOptions, Row, .{
         .name = "check",
-        .description = "Check files and directories. Exits 1 when an error-level rule fires.",
-        .examples = &.{ "zanity check .", "zanity check src tests --rules unbounded-loop,long-function", "zanity check . --json", "zanity check . --fix" },
+        .description = "Check files and directories. Exits 1 when an error-level rule fires, or with --strict when any rule does.",
+        .examples = &.{ "zanity check .", "zanity check src tests --rules unbounded-loop,long-function", "zanity check . --json", "zanity check . --fix", "zanity check . --strict" },
         .result_title = "Findings",
         .positional = .{ .name = "paths", .metavar = "PATH", .help = "Files or directories to check.", .default = &.{"."} },
         .options = &.{
             .{ .name = "rules", .metavar = "RULES", .help = "Comma-separated rules to run instead of the defaults.", .example = "unbounded-loop,long-function" },
             .{ .name = "fix", .help = "Apply the fixes zanity can make, then report what is left." },
+            .{ .name = "strict", .help = "Exit 1 on any finding, warnings included, as a pre-commit hook or CI should." },
             .{ .name = "infer", .help = "Also ask TypeSafe what no deterministic check can decide, such as whether an error message misleads. Needs TYPESAFE_API_KEY." },
         },
     }, .{ .run = runCheck, .human = renderHuman })},
@@ -167,7 +169,7 @@ fn runCheck(ctx: *zcli.Context, options: CheckOptions) ![]const Row {
         error.LimitExceeded => return ctx.fail(.usage, try ws.text.format("This run has more {s} than zanity is built to hold.", .{memory.exceeded}), "Check fewer files at once, or report it if the input is ordinary."),
         else => return e,
     };
-    if (counts.errors > 0) ctx.status = .failure;
+    if (counts.errors > 0 or (options.strict and counts.warnings > 0)) ctx.status = .failure;
     if (ctx.format != .human) try report.summarise(console(ctx, ctx.runtime.err), counts);
     if (ws.rows.len != counts.errors + counts.warnings) std.debug.panic("{d} output rows for {d} errors and {d} warnings", .{ ws.rows.len, counts.errors, counts.warnings });
     return ws.rows.items();
