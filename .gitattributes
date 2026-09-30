@@ -1,0 +1,7 @@
+# Generated tree-sitter parsers and the vendored tree-sitter runtime: megabytes of C that
+# GitHub would otherwise count as the repository's language, and that no one reviews by hand.
+languages/*/grammar/** linguist-generated
+vendor/** linguist-vendored
+# Deliberately bad code in every language, as input to the tests.
+tests/golden/** linguist-vendored
+tests/fix/** linguist-vendored

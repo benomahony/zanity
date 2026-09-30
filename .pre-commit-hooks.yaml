@@ -1,0 +1,21 @@
+# Hooks for repositories that use pre-commit (https://pre-commit.com). They run the zanity on
+# your PATH; see "Install" in the README.
+#
+# They check the whole repository, not only the staged files: duplicate-name, name-drift and
+# recursion compare files with each other, and a whole check is quick.
+
+- id: zanity
+  name: zanity
+  description: Check the repository with the rules zanity.toml chooses; any finding, warnings included, fails the commit.
+  entry: zanity check . --strict
+  language: system
+  pass_filenames: false
+  files: (\.(py|pyi|zig|go|ts|mts|cts|rs|java)|(^|/)zanity\.toml)$
+
+- id: zanity-fix
+  name: zanity (fix)
+  description: Apply the fixes zanity can make, then fail on anything left, so you can review both before committing.
+  entry: zanity check . --strict --fix
+  language: system
+  pass_filenames: false
+  files: (\.(py|pyi|zig|go|ts|mts|cts|rs|java)|(^|/)zanity\.toml)$
