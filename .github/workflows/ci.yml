@@ -7,6 +7,14 @@ on:
   # The release workflow runs this first, so nothing is released that fails it.
   workflow_call:
 
+permissions:
+  contents: read
+
+# A newer push to the same branch or pull request makes an older run pointless.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     strategy:
@@ -18,8 +26,25 @@ jobs:
       - uses: actions/checkout@v5
       # Installs the Zig in build.zig.zon's minimum_zig_version.
       - uses: mlugg/setup-zig@v2
-      # The tests include zanity checking its own source with every rule.
+      - name: Formatting
+        run: zig fmt --check build.zig build.zig.zon src languages/*.zig languages/*.zon
+      # Unit, golden, architecture and catalogue tests, and zanity checking its own Zig source.
       - run: zig build test --summary all
-      # Every released platform still cross-compiles.
-      - if: runner.os == 'Linux'
+      # Every file in the repository, every rule, warnings included, as a user's CI would run it.
+      - name: zanity check . --strict
+        run: zig build && ./zig-out/bin/zanity check . --strict
+      - name: Every released platform still builds
+        if: runner.os == 'Linux'
         run: zig build release
+
+  catalogue:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+      # The catalogue's rule mapping and triage are generated; a stale copy fails here.
+      - name: Generated catalogue files are current
+        run: |
+          uv run --with 'PyYAML>=6,<7' python catalogue/sync.py
+          python3 catalogue/triage.py
+          git diff --exit-code -- catalogue || { echo "::error::The files above are out of date. Run: uv run --with 'PyYAML>=6,<7' python catalogue/sync.py && python3 catalogue/triage.py, then commit the result."; exit 1; }
