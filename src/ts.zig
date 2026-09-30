@@ -38,7 +38,7 @@ pub const Node = extern struct {
     pub fn where(n: Node) Where {
         if (n.tree == null) std.debug.panic("describing a node whose tree was deleted; describe it while the tree is alive", .{});
         const at = ts_node_start_point(n);
-        if (at.row == std.math.maxInt(u32)) std.debug.panic("a {s} node reports row {d}, which no file has", .{ ts_node_type(n), at.row });
+        if (at.row == std.math.maxInt(u32)) std.debug.panic("a {s} node reports row {d}, which no file has; pass a node from a live tree", .{ ts_node_type(n), at.row });
         return .{ .kind = std.mem.span(ts_node_type(n)), .line = at.row + 1, .column = at.column + 1 };
     }
 
@@ -48,7 +48,7 @@ pub const Node = extern struct {
         column: u32,
 
         pub fn format(w: Where, writer: *std.Io.Writer) std.Io.Writer.Error!void {
-            if (w.kind.len == 0) std.debug.panic("a node at {d}:{d} has an empty kind name", .{ w.line, w.column });
+            if (w.kind.len == 0) std.debug.panic("a node at {d}:{d} has an empty kind name; pass a node from a live tree", .{ w.line, w.column });
             if (w.line == 0 or w.column == 0) std.debug.panic("{s} is at {d}:{d}; lines and columns count from 1", .{ w.kind, w.line, w.column });
             try writer.print("{s} at {d}:{d}", .{ w.kind, w.line, w.column });
         }

@@ -17,7 +17,7 @@ const hazards = @import("hazards.zig");
 /// stock words, and for an assertion, whether it only restates its condition or hides its values.
 /// Whether a message misleads or fails to guide is left to `check --infer`.
 pub fn checkMessage(self: *File, node: ts.Node, condition: ?ts.Node) !void {
-    if (ts.ts_node_end_byte(node) > self.source.len) std.debug.panic("{s}: the message {f} ends past the {d}-byte file", .{ self.work.facts.path, node.where(), self.source.len });
+    if (ts.ts_node_end_byte(node) > self.source.len) std.debug.panic("{s}: the message {f} ends past the {d}-byte file; pass a node from the tree parsed from this file", .{ self.work.facts.path, node.where(), self.source.len });
     if (self.enclosingFunction()) |function| function.has_message = true;
     if (!self.index.marks(node, self.v.literal_string)) return;
     const content = stringContent(node.text(self.source));
@@ -40,7 +40,7 @@ pub fn checkMessage(self: *File, node: ts.Node, condition: ?ts.Node) !void {
     const tested = condition orelse return;
     words.has_values = has_values;
     try checkAgainstCondition(self, node, tested, &words);
-    if (words.len > MessageWords.max) std.debug.panic("{s}: kept {d} words of the message {f} in room for {d}", .{ self.work.facts.path, words.len, node.where(), MessageWords.max });
+    if (words.len > MessageWords.max) std.debug.panic("{s}: kept {d} words of the message {f} in room for {d}; split() must stop adding at the list's capacity", .{ self.work.facts.path, words.len, node.where(), MessageWords.max });
 }
 
 pub fn checkAgainstCondition(self: *File, node: ts.Node, condition: ts.Node, words: *const MessageWords) !void {
@@ -61,7 +61,7 @@ pub fn checkAgainstCondition(self: *File, node: ts.Node, condition: ts.Node, wor
     for (values, 0..) |v, i| _ = try self.work.text.format("{s}'{s}'", .{ if (i == 0) "" else ", ", v });
     const listed = self.work.text.buffer[start..self.work.text.used];
     _ = try self.report(node, "vague-error", try self.say("This message shows none of the values its condition reads ({s}), so a failure can't be diagnosed from the message alone.", .{listed}));
-    if (listed.len < values.len) std.debug.panic("{s}: listing {d} values wrote only {d} bytes", .{ self.work.facts.path, values.len, listed.len });
+    if (listed.len < values.len) std.debug.panic("{s}: listing {d} values wrote only {d} bytes; checkAgainstCondition() must write each value's name", .{ self.work.facts.path, values.len, listed.len });
 }
 
 /// The words of a message or condition, lowercased on comparison, with placeholders such as
@@ -104,7 +104,7 @@ pub const MessageWords = struct {
         if (c != '%' or !(std.ascii.isAlphabetic(next) or next == '(')) return null;
         var end = i + 1;
         while (end + 1 < text.len and (std.ascii.isAlphanumeric(text[end + 1]) or text[end + 1] == ')')) end += 1;
-        if (end <= i) std.debug.panic("the placeholder at byte {d} of '{s}' ended before it began; placeholderEnd() must scan forward from the opening brace", .{ i, text });
+        if (end <= i) std.debug.panic("the %-placeholder at byte {d} of '{s}' ended before it began; placeholderEnd() must scan forward from the '%'", .{ i, text });
         return end;
     }
 
@@ -121,7 +121,7 @@ pub const MessageWords = struct {
         const all = for (self.list[0..self.len]) |w| {
             if (!inVocabulary(vocabulary, w)) break false;
         } else true;
-        if (vocabulary.len == 0) std.debug.panic("compared {d} words with an empty vocabulary", .{self.len});
+        if (vocabulary.len == 0) std.debug.panic("compared {d} words with an empty vocabulary; pass one of the vocabularies in languages/tables.zon", .{self.len});
         return all;
     }
 
@@ -140,12 +140,12 @@ pub const MessageWords = struct {
 };
 
 pub fn inVocabulary(vocabulary: []const []const u8, word: []const u8) bool {
-    if (word.len == 0) std.debug.panic("looked up an empty word among {d}", .{vocabulary.len});
+    if (word.len == 0) std.debug.panic("looked up an empty word among {d}; skip empty words before calling inVocabulary()", .{vocabulary.len});
     const singular = if (word.len > 3 and (word[word.len - 1] == 's' or word[word.len - 1] == 'S')) word[0 .. word.len - 1] else word;
     const found = for (vocabulary) |v| {
         if (std.ascii.eqlIgnoreCase(v, word) or std.ascii.eqlIgnoreCase(v, singular)) break true;
     } else false;
-    if (found and vocabulary.len == 0) std.debug.panic("found '{s}' in an empty vocabulary", .{word});
+    if (found and vocabulary.len == 0) std.debug.panic("found '{s}' in an empty vocabulary; inVocabulary() must search only the words it was given", .{word});
     return found;
 }
 
@@ -154,7 +154,7 @@ pub fn stringContent(literal: []const u8) []const u8 {
     if (literal.len == 0) std.debug.panic("asked for the content of an empty string literal; the capture matched no text", .{});
     const unprefixed = std.mem.trimStart(u8, literal, "rbufRBUF@#");
     const content = std.mem.trim(u8, std.mem.trim(u8, unprefixed, "#"), "\"'`");
-    if (content.len > literal.len) std.debug.panic("the content of '{s}' came out longer than the literal", .{literal});
+    if (content.len > literal.len) std.debug.panic("the content of '{s}' came out longer than the literal; stringContent() must only trim the literal's quotes and prefix", .{literal});
     return std.mem.trim(u8, content, " \t\n.");
 }
 
@@ -170,16 +170,16 @@ pub fn looksLikeCode(content: []const u8) bool {
         if (std.ascii.isUpper(c)) upper += 1;
         if (c == '_' or c == '.' or c == ':' or std.ascii.isDigit(c) or (i > 0 and std.ascii.isUpper(c))) marks += 1;
     }
-    if (upper > letters) std.debug.panic("counted {d} capitals among {d} letters of '{s}'", .{ upper, letters, content });
+    if (upper > letters) std.debug.panic("counted {d} capitals among {d} letters of '{s}'; looksLikeCode() must count capitals only among the letters", .{ upper, letters, content });
     return marks > 0 or (letters > 1 and upper == letters);
 }
 
 /// Whether a failing condition already fixes every value it reads: only equalities, booleans
 /// and their combinations, with no ordering comparison, no `!=` and no call.
 pub fn settlesItsValues(condition: []const u8) bool {
-    if (condition.len == 0) std.debug.panic("asked whether an empty condition settles its values; the capture matched no text", .{});
+    if (condition.len == 0) std.debug.panic("asked whether an empty condition settles its values, so the query matched no text; in that language's zanity.scm, put @assertion.condition on the whole condition", .{});
     const open = std.mem.indexOfAny(u8, condition, "<>(") != null or std.mem.indexOf(u8, condition, "!=") != null;
-    if (open and condition.len == 1) std.debug.panic("'{s}' is a lone operator, not a condition", .{condition});
+    if (open and condition.len == 1) std.debug.panic("'{s}' is a lone operator rather than a whole condition, so the query captured only part of the assertion; in that language's zanity.scm, put @assertion.condition on the whole comparison", .{condition});
     return !open;
 }
 

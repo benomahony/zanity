@@ -5,17 +5,17 @@ const rules = @import("rules.zig");
 fn parsed(arena: std.mem.Allocator, text: []const u8) !config.Config {
     if (text.len == 0) std.debug.panic("parsing an empty test config; pass the TOML under test", .{});
     const result = try config.parseConfig(try arena.dupe(u8, text));
-    if (result.exclude_len > config.max_excludes) std.debug.panic("parsed {d} exclude patterns in room for {d}", .{ result.exclude_len, config.max_excludes });
+    if (result.exclude_len > config.max_excludes) std.debug.panic("parsed {d} exclude patterns in room for {d}; parseConfig() must refuse lists longer than max_excludes", .{ result.exclude_len, config.max_excludes });
     return result;
 }
 
 fn expectProblem(text: []const u8, expected: []const u8) !void {
-    if (!std.mem.startsWith(u8, expected, config.file_name)) std.debug.panic("expected problem '{s}' should start with the file name", .{expected});
+    if (!std.mem.startsWith(u8, expected, config.file_name)) std.debug.panic("expected problem '{s}' should start with the file name; start the expected problem with zanity.toml:<line>:", .{expected});
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
     try std.testing.expectError(error.InvalidConfig, parsed(arena_state.allocator(), text));
     try std.testing.expectEqualStrings(expected, config.problem[0..config.problem_len]);
-    if (config.problem_len == 0) std.debug.panic("the problem for '{s}' is empty", .{text});
+    if (config.problem_len == 0) std.debug.panic("the problem for '{s}' is empty; fail() must record a description of the problem", .{text});
 }
 
 test "a zanity.toml chooses rules, excludes paths and sets concurrency" {
@@ -71,7 +71,7 @@ test "mistakes in zanity.toml name the line and what to write" {
     try expectProblem("[paths.\"tests/\"]\nrules = [\"recursion\"]\n", "zanity.toml:2: 'rules' isn't a [paths] setting; the only one is disable.");
     try expectProblem("[infer]\nconcurrency = 500\n", "zanity.toml:2: concurrency is 500; it must be between 1 and 64.");
     try expectProblem("rules = []\n", "zanity.toml:1: 'rules' is empty, so nothing would run; list at least one rule, or remove it to run the defaults.");
-    try expectProblem("exclude = [\"a\" \"b\"]\n", "zanity.toml:1: items in 'exclude' must be separated by commas.");
+    try expectProblem("exclude = [\"a\" \"b\"]\n", "zanity.toml:1: items in 'exclude' must be separated by commas, such as [\"a\", \"b\"].");
     try expectProblem("rules = [\"recursion\"] extra\n", "zanity.toml:1: unexpected 'e' after a value; put each setting on its own line.");
 }
 

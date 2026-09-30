@@ -31,15 +31,15 @@ pub fn enclosingTest(self: *File) ?*Context {
 
 /// A test that makes more checks than a failure can point at.
 pub fn checkEager(self: *File, ctx: Context, at: ts.Node, shown: []const u8) !void {
-    if (ctx.family != .@"test" and !ctx.is_test) std.debug.panic("{s}: counting the checks of {f}, which is not a test", .{ self.work.facts.path, ctx.node.where() });
-    if (shown.len == 0) std.debug.panic("{s}: the test {f} has no name to show", .{ self.work.facts.path, ctx.node.where() });
+    if (ctx.family != .@"test" and !ctx.is_test) std.debug.panic("{s}: counting the checks of {f}, which is not a test; call checkEager() only for a test construct or a test-named function", .{ self.work.facts.path, ctx.node.where() });
+    if (shown.len == 0) std.debug.panic("{s}: the test {f} has no name to show; pass the test's name or first line", .{ self.work.facts.path, ctx.node.where() });
     if (ctx.checks <= rules.max_test_checks) return;
     _ = try self.report(at, "eager-test", try self.say("'{s}' makes {d} checks; past {d}, a failure no longer says which behaviour broke.", .{ shown, ctx.checks, rules.max_test_checks }));
 }
 
 /// A test's length against the tighter limit for tests, and its decisions against the usual one.
 pub fn closeTest(self: *File, ctx: Context) !void {
-    if (ctx.family != .@"test") std.debug.panic("{s}: closing {f} as a test, but it is a {t}", .{ self.work.facts.path, ctx.node.where(), ctx.family });
+    if (ctx.family != .@"test") std.debug.panic("{s}: closing {f} as a test, but it is a {t}; close() must dispatch each construct by its family, so check its switch", .{ self.work.facts.path, ctx.node.where(), ctx.family });
     const name_node = self.functionNameOf(ctx.node);
     const at = name_node orelse ctx.node;
     const shown = if (name_node) |n| n.text(self.source) else header(ctx.node.text(self.source));
@@ -51,12 +51,12 @@ pub fn closeTest(self: *File, ctx: Context) !void {
     if (ctx.decisions + 1 > rules.max_complexity) {
         _ = try self.report(at, "complex-function", try self.say("'{s}' makes {d} decisions (cyclomatic complexity {d}), past the {d} a reader can follow and a test suite can cover.", .{ shown, ctx.decisions, ctx.decisions + 1, rules.max_complexity }));
     }
-    if (shown.len == 0) std.debug.panic("{s}: the test {f} has no first line to name it by", .{ self.work.facts.path, ctx.node.where() });
+    if (shown.len == 0) std.debug.panic("{s}: the test {f} has no first line to name it by; capture a test node with text as @test.outer in the language's zanity.scm", .{ self.work.facts.path, ctx.node.where() });
 }
 
 pub fn checkTestCall(self: *File, ctx: Context, name: []const u8) !void {
-    if (ctx.family != .call) std.debug.panic("{s}: checking {f} as a test call, but it is a {t}", .{ self.work.facts.path, ctx.node.where(), ctx.family });
-    if (name.len == 0) std.debug.panic("{s}: the test call {f} has an empty name", .{ self.work.facts.path, ctx.node.where() });
+    if (ctx.family != .call) std.debug.panic("{s}: checking {f} as a test call, but it is a {t}; call checkTestCall() only from closeCall()", .{ self.work.facts.path, ctx.node.where(), ctx.family });
+    if (name.len == 0) std.debug.panic("{s}: the test call {f} has an empty name; capture the callee as @call.name in the language's zanity.scm", .{ self.work.facts.path, ctx.node.where() });
     if (self.calleeIn(ctx, name, self.tables.sleeps)) |callee| {
         _ = try self.report(ctx.node, "sleep-in-test", try self.say("'{s}' makes this test wait on the clock, which slows the suite and hides timing bugs.", .{callee}));
         for (self.s.contexts.items()) |*open_ctx| if (open_ctx.family == .loop) {

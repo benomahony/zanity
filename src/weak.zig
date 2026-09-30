@@ -17,8 +17,8 @@ const Note = check.Note;
 const suppress = @import("suppress.zig");
 
 pub fn restatedType(self: *File, function: *Context, node: ts.Node, condition: ts.Node) !void {
-    if (function.family != .function) std.debug.panic("{s}: checking restated types against the {t} {f}, which is not a function", .{ self.work.facts.path, function.family, function.node.where() });
-    if (ts.ts_node_start_byte(condition) < ts.ts_node_start_byte(node)) std.debug.panic("{s}: the condition {f} starts before its assertion {f}", .{ self.work.facts.path, condition.where(), node.where() });
+    if (function.family != .function) std.debug.panic("{s}: checking restated types against the {t} {f}, which is not a function; call restatedType() only with the enclosing function's context", .{ self.work.facts.path, function.family, function.node.where() });
+    if (ts.ts_node_start_byte(condition) < ts.ts_node_start_byte(node)) std.debug.panic("{s}: the condition {f} starts before its assertion {f}; capture @assertion.condition inside @assertion.outer in the language's zanity.scm", .{ self.work.facts.path, condition.where(), node.where() });
     const call = typeCheck(self, condition) orelse return;
     const subject = call.arguments[0].?.text(self.source);
     const type_text = call.arguments[1].?.text(self.source);
@@ -93,7 +93,7 @@ pub fn afterAssignment(self: *File, here: Assertion, lhs: ts.Node, rhs: ts.Node)
     const function = here.function;
     const node = here.node;
     const condition = here.condition;
-    if (ts.ts_node_end_byte(rhs) > ts.ts_node_start_byte(node)) std.debug.panic("{s}: the assignment value {f} ends after the assertion {f} that follows it", .{ self.work.facts.path, rhs.where(), node.where() });
+    if (ts.ts_node_end_byte(rhs) > ts.ts_node_start_byte(node)) std.debug.panic("{s}: the assignment value {f} ends after the assertion {f} that follows it; pass nodes from the tree parsed from this file, since tree-sitter nests a node inside its parent", .{ self.work.facts.path, rhs.where(), node.where() });
     if (ts.ts_node_end_byte(lhs) > ts.ts_node_start_byte(rhs)) std.debug.panic("{s}: @assignment.lhs {f} overlaps @assignment.rhs {f}; the query captured the wrong nodes", .{ self.work.facts.path, lhs.where(), rhs.where() });
     const target = lhs.text(self.source);
     if (isLiteral(self, rhs) and alwaysHolds(self, condition, target, rhs)) {
@@ -113,8 +113,8 @@ pub fn afterAssignment(self: *File, here: Assertion, lhs: ts.Node, rhs: ts.Node)
 pub fn afterAssertion(self: *File, here: Assertion, previous: ts.Node, previous_condition: ts.Node) !void {
     const function = here.function;
     const condition = here.condition;
-    if (ts.ts_node_end_byte(previous) > ts.ts_node_start_byte(condition)) std.debug.panic("{s}: the previous assertion {f} ends after this condition {f} starts", .{ self.work.facts.path, previous.where(), condition.where() });
-    if (ts.ts_node_start_byte(previous_condition) < ts.ts_node_start_byte(previous)) std.debug.panic("{s}: the condition {f} starts before its assertion {f}", .{ self.work.facts.path, previous_condition.where(), previous.where() });
+    if (ts.ts_node_end_byte(previous) > ts.ts_node_start_byte(condition)) std.debug.panic("{s}: the previous assertion {f} ends after this condition {f} starts; pass nodes from the tree parsed from this file, since tree-sitter nests a node inside its parent", .{ self.work.facts.path, previous.where(), condition.where() });
+    if (ts.ts_node_start_byte(previous_condition) < ts.ts_node_start_byte(previous)) std.debug.panic("{s}: the condition {f} starts before its assertion {f}; capture @assertion.condition inside @assertion.outer in the language's zanity.scm", .{ self.work.facts.path, previous_condition.where(), previous.where() });
     if (!self.index.marks(previous_condition, self.v.compare_not_null)) return;
     const subject = childWith(self, previous_condition, self.v.compare_subject) orelse return;
     const call = typeCheck(self, condition) orelse return;
@@ -125,7 +125,7 @@ pub fn afterAssertion(self: *File, here: Assertion, previous: ts.Node, previous_
 
 pub fn isPath(self: *File, node: ts.Node, target: []const u8) bool {
     if (target.len == 0) std.debug.panic("{s}: asked whether {f} is the empty name; the assigned name is never empty", .{ self.work.facts.path, node.where() });
-    if (ts.ts_node_end_byte(node) > self.source.len) std.debug.panic("{s}: {f} ends at byte {d}, past the {d}-byte file", .{ self.work.facts.path, node.where(), ts.ts_node_end_byte(node), self.source.len });
+    if (ts.ts_node_end_byte(node) > self.source.len) std.debug.panic("{s}: {f} ends at byte {d}, past the {d}-byte file; pass a node from the tree parsed from this file", .{ self.work.facts.path, node.where(), ts.ts_node_end_byte(node), self.source.len });
     return self.index.marks(node, self.v.expression_path) and sameText(node.text(self.source), target);
 }
 
@@ -138,8 +138,8 @@ pub fn isLiteral(self: *File, node: ts.Node) bool {
 }
 
 pub fn alwaysHolds(self: *File, condition: ts.Node, target: []const u8, value: ts.Node) bool {
-    if (target.len == 0) std.debug.panic("{s}: asked whether {f} always holds for an empty name", .{ self.work.facts.path, condition.where() });
-    if (ts.ts_node_end_byte(value) > ts.ts_node_start_byte(condition)) std.debug.panic("{s}: the assigned value {f} ends after the condition {f} starts", .{ self.work.facts.path, value.where(), condition.where() });
+    if (target.len == 0) std.debug.panic("{s}: asked whether {f} always holds for an empty name; skip empty names before calling alwaysHolds()", .{ self.work.facts.path, condition.where() });
+    if (ts.ts_node_end_byte(value) > ts.ts_node_start_byte(condition)) std.debug.panic("{s}: the assigned value {f} ends after the condition {f} starts; pass nodes from the tree parsed from this file, since tree-sitter nests a node inside its parent", .{ self.work.facts.path, value.where(), condition.where() });
     if (isPath(self, condition, target)) {
         return self.index.marks(value, self.v.literal_constant) and
             !self.index.marks(value, self.v.literal_falsy) and
@@ -156,9 +156,9 @@ pub fn alwaysHolds(self: *File, condition: ts.Node, target: []const u8, value: t
 }
 
 pub fn subjectIs(self: *File, condition: ts.Node, target: []const u8) bool {
-    if (target.len == 0) std.debug.panic("{s}: asked whether {f} compares an empty name", .{ self.work.facts.path, condition.where() });
+    if (target.len == 0) std.debug.panic("{s}: asked whether {f} compares an empty name; skip empty names before calling subjectIs()", .{ self.work.facts.path, condition.where() });
     const subject = childWith(self, condition, self.v.compare_subject) orelse return false;
-    if (ts.ts_node_start_byte(subject) < ts.ts_node_start_byte(condition)) std.debug.panic("{s}: @compare.subject {f} starts before its comparison {f}", .{ self.work.facts.path, subject.where(), condition.where() });
+    if (ts.ts_node_start_byte(subject) < ts.ts_node_start_byte(condition)) std.debug.panic("{s}: @compare.subject {f} starts before its comparison {f}; capture @compare.subject inside the comparison in the language's zanity.scm", .{ self.work.facts.path, subject.where(), condition.where() });
     return sameText(subject.text(self.source), target);
 }
 
@@ -176,8 +176,8 @@ pub fn childWith(self: *File, node: ts.Node, capture: ?captures.Id) ?ts.Node {
 }
 
 pub fn weak(self: *File, function: *Context, finding: Note) !void {
-    if (function.family != .function) std.debug.panic("{s}: recording a weak assertion against the {t} {f}, which is not a function", .{ self.work.facts.path, function.family, function.node.where() });
-    if (ts.ts_node_start_byte(finding.node) < ts.ts_node_start_byte(function.node)) std.debug.panic("{s}: the weak assertion {f} ({s}) starts before its function {f}", .{ self.work.facts.path, finding.node.where(), finding.rule, function.node.where() });
+    if (function.family != .function) std.debug.panic("{s}: recording a weak assertion against the {t} {f}, which is not a function; call weak() only with the enclosing function's context", .{ self.work.facts.path, function.family, function.node.where() });
+    if (ts.ts_node_start_byte(finding.node) < ts.ts_node_start_byte(function.node)) std.debug.panic("{s}: the weak assertion {f} ({s}) starts before its function {f}; record only assertions inside the function", .{ self.work.facts.path, finding.node.where(), finding.rule, function.node.where() });
     if (!try self.report(finding.node, finding.rule, finding.message)) return;
     const line = ts.ts_node_start_point(finding.node).row;
     for (self.s.weak.items()) |w| if (w.owner == function.serial and w.line == line) return;

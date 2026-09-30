@@ -68,7 +68,7 @@ pub const Ignore = struct {
     /// Adds one pattern in gitignore syntax, relative to the absolute directory `base`, as zanity.toml's `exclude` does.
     pub fn exclude(self: *Ignore, base: []const u8, glob: []const u8) !void {
         if (!std.fs.path.isAbsolute(base)) std.debug.panic("excluding '{s}' relative to '{s}', which is relative; pass the real path", .{ glob, base });
-        if (glob.len == 0) std.debug.panic("excluding an empty pattern relative to '{s}'", .{base});
+        if (glob.len == 0) std.debug.panic("excluding an empty pattern relative to '{s}'; readStrings() must refuse empty exclude patterns", .{base});
         try self.parse(try self.text.copy(base), glob);
     }
 
@@ -89,13 +89,13 @@ pub const Ignore = struct {
             if (line.len == 0) continue;
             try self.patterns.add(.{ .base = base, .glob = try self.text.copy(line), .negated = negated, .directories_only = directories_only, .anchored = anchored });
         }
-        if (self.patterns.len < before) std.debug.panic("parsing the ignore file in {s} removed patterns: {d} before, {d} after", .{ base, before, self.patterns.len });
+        if (self.patterns.len < before) std.debug.panic("parsing the ignore file in {s} removed patterns: {d} before, {d} after; parse() must only add patterns", .{ base, before, self.patterns.len });
     }
 
     /// Whether the entry at absolute `path` is ignored. The last matching pattern decides.
     pub fn ignored(self: *const Ignore, path: []const u8, kind: Kind) bool {
         if (!std.fs.path.isAbsolute(path)) std.debug.panic("asked whether '{s}' is ignored, but ignore patterns match absolute paths; join it to the walk's real root first", .{path});
-        if (self.patterns.len > self.patterns.buffer.len) std.debug.panic("{d} ignore patterns recorded in room for {d}", .{ self.patterns.len, self.patterns.buffer.len });
+        if (self.patterns.len > self.patterns.buffer.len) std.debug.panic("{d} ignore patterns recorded in room for {d}; raise memory.Limits for ignore patterns, or trim the ignore files", .{ self.patterns.len, self.patterns.buffer.len });
         var result = false;
         for (self.patterns.items()) |p| {
             if (p.directories_only and kind != .directory) continue;
@@ -161,7 +161,7 @@ pub fn matchPath(glob: []const u8, path: []const u8) bool {
         gi = s + 1;
         pi = star_path;
     }
-    if (gi != gs.len or pi != ps.len) std.debug.panic("matching '{s}' against '{s}' stopped at segment {d} of {d} and {d} of {d}", .{ glob, path, gi, gs.len, pi, ps.len });
+    if (gi != gs.len or pi != ps.len) std.debug.panic("matching '{s}' against '{s}' stopped at segment {d} of {d} and {d} of {d}; matchPath() must consume both lists or return false, so check its exits", .{ glob, path, gi, gs.len, pi, ps.len });
     return true;
 }
 
@@ -209,17 +209,17 @@ fn step(glob: []const u8, gi: usize, c: u8) ?usize {
 
 /// The width of the class at the start of `glob` if it admits `c`, else null.
 fn matchClass(glob: []const u8, c: u8) ?usize {
-    if (glob.len == 0 or glob[0] != '[') std.debug.panic("matching a class, but '{s}' does not start with '['", .{glob});
+    if (glob.len == 0 or glob[0] != '[') std.debug.panic("matching a class, but '{s}' does not start with '['; call matchClass() only at a '['", .{glob});
     const negated = glob.len > 1 and (glob[1] == '!' or glob[1] == '^');
     const scan = scanClass(glob, if (negated) 2 else 1, c);
     if (scan.end >= glob.len) return null;
-    if (glob[scan.end] != ']') std.debug.panic("the class in '{s}' should close at byte {d}, but has '{c}' there", .{ glob, scan.end, glob[scan.end] });
+    if (glob[scan.end] != ']') std.debug.panic("the class in '{s}' should close at byte {d}, but has '{c}' there; scanClass() must return the index of the class's ']'", .{ glob, scan.end, glob[scan.end] });
     return if (scan.hit != negated) scan.end + 1 else null;
 }
 
 /// Walks a class's members from `start` to its `]`, noting whether any single byte or range admits `c`.
 fn scanClass(glob: []const u8, start: usize, c: u8) struct { end: usize, hit: bool } {
-    if (start == 0 or start > 2) std.debug.panic("a class's members start at byte 1 or 2 of '{s}', not {d}", .{ glob, start });
+    if (start == 0 or start > 2) std.debug.panic("a class's members start at byte 1 or 2 of '{s}', not {d}; scanClass() must start after '[' and an optional '!' or '^'", .{ glob, start });
     var i = start;
     var hit = false;
     while (i < glob.len and (i == start or glob[i] != ']')) {
@@ -227,7 +227,7 @@ fn scanClass(glob: []const u8, start: usize, c: u8) struct { end: usize, hit: bo
         hit = hit or (if (range) c >= glob[i] and c <= glob[i + 2] else c == glob[i]);
         i += if (range) 3 else 1;
     }
-    if (i < start) std.debug.panic("scanning the class in '{s}' went backwards from {d} to {d}", .{ glob, start, i });
+    if (i < start) std.debug.panic("scanning the class in '{s}' went backwards from {d} to {d}; scanClass() must only scan forward", .{ glob, start, i });
     return .{ .end = i, .hit = hit };
 }
 

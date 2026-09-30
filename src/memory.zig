@@ -47,7 +47,7 @@ pub fn Bounded(comptime T: type) type {
             }
             self.buffer[self.len] = item;
             self.len += 1;
-            if (self.len > self.buffer.len) std.debug.panic("{s}: add() left {d} items in {d} slots", .{ self.what, self.len, self.buffer.len });
+            if (self.len > self.buffer.len) std.debug.panic("{s}: add() left {d} items in {d} slots; add() must refuse to add past the buffer", .{ self.what, self.len, self.buffer.len });
         }
 
         pub fn items(self: *const Self) []T {
@@ -67,14 +67,14 @@ pub fn Bounded(comptime T: type) type {
             if (self.len > self.buffer.len) std.debug.panic("{s}: {d} items recorded but only {d} slots exist; something set len without add()", .{ self.what, self.len, self.buffer.len });
             if (self.len == 0) return null;
             self.len -= 1;
-            if (self.len >= self.buffer.len) std.debug.panic("{s}: drop() left {d} items in {d} slots", .{ self.what, self.len, self.buffer.len });
+            if (self.len >= self.buffer.len) std.debug.panic("{s}: drop() left {d} items in {d} slots; drop() must take one item off", .{ self.what, self.len, self.buffer.len });
             return self.buffer[self.len];
         }
 
         pub fn clear(self: *Self) void {
             if (self.len > self.buffer.len) std.debug.panic("{s}: {d} items recorded but only {d} slots exist; something set len without add()", .{ self.what, self.len, self.buffer.len });
             self.len = 0;
-            if (self.items().len != 0) std.debug.panic("{s}: clear() left {d} items", .{ self.what, self.items().len });
+            if (self.items().len != 0) std.debug.panic("{s}: clear() left {d} items; clear() must set len to 0", .{ self.what, self.items().len });
         }
     };
 }
@@ -86,7 +86,7 @@ pub const Text = struct {
     pub fn initText(gpa: Allocator, capacity: usize) Allocator.Error!Text {
         if (capacity == 0) std.debug.panic("Text buffer was given capacity 0; check memory.Limits.text_bytes", .{});
         const buffer = try gpa.alloc(u8, capacity);
-        if (buffer.len != capacity) std.debug.panic("Text buffer: asked for {d} bytes, the allocator returned {d}", .{ capacity, buffer.len });
+        if (buffer.len != capacity) std.debug.panic("Text buffer: asked for {d} bytes, the allocator returned {d}; check the allocator passed to initText()", .{ capacity, buffer.len });
         return .{ .buffer = buffer };
     }
 
@@ -97,7 +97,7 @@ pub const Text = struct {
             return error.LimitExceeded;
         };
         self.used += written.len;
-        if (self.used > self.buffer.len) std.debug.panic("Text buffer: format() left {d} bytes used out of {d}", .{ self.used, self.buffer.len });
+        if (self.used > self.buffer.len) std.debug.panic("Text buffer: format() left {d} bytes used out of {d}; format() must refuse to write past the buffer", .{ self.used, self.buffer.len });
         return written;
     }
 
@@ -139,7 +139,7 @@ pub const Pool = struct {
         std.mem.writeInt(usize, self.buffer[self.used..][0..@sizeOf(usize)], size, .little);
         self.last = self.used;
         self.used += rounded;
-        if (self.used > self.buffer.len) std.debug.panic("Pool for {s}: take() used {d} of {d} bytes", .{ self.what, self.used, self.buffer.len });
+        if (self.used > self.buffer.len) std.debug.panic("Pool for {s}: take() used {d} of {d} bytes; take() must refuse to hand out past the buffer", .{ self.what, self.used, self.buffer.len });
         return self.buffer.ptr + self.last + header;
     }
 
@@ -154,7 +154,7 @@ pub const Pool = struct {
         const offset = @intFromPtr(ptr) - @intFromPtr(self.buffer.ptr) - header;
         if (offset >= self.used) std.debug.panic("Pool for {s}: freeing offset {d}, past the {d} bytes handed out; a pointer was freed twice or came from another allocator", .{ self.what, offset, self.used });
         if (offset == self.last) self.used = self.last;
-        if (self.used > self.buffer.len) std.debug.panic("Pool for {s}: release() left {d} of {d} bytes used", .{ self.what, self.used, self.buffer.len });
+        if (self.used > self.buffer.len) std.debug.panic("Pool for {s}: release() left {d} of {d} bytes used; release() must free the most recent block only", .{ self.what, self.used, self.buffer.len });
     }
 
     fn owns(self: *const Pool, ptr: [*]u8) bool {
@@ -178,14 +178,14 @@ pub var tree_pool: ?*Pool = null;
 fn active() *Pool {
     const pool = tree_pool orelse unreachable;
     if (pool.buffer.len == 0) std.debug.panic("the tree-sitter pool was installed without a buffer; call initPool before parsing", .{});
-    if (pool.used > pool.buffer.len) std.debug.panic("the tree-sitter pool reports {d} bytes used of {d}", .{ pool.used, pool.buffer.len });
+    if (pool.used > pool.buffer.len) std.debug.panic("the tree-sitter pool reports {d} bytes used of {d}; only the pool's own functions may move used forward", .{ pool.used, pool.buffer.len });
     return pool;
 }
 
 export fn zanityMalloc(size: usize) ?*anyopaque {
     if (size >= std.math.maxInt(u32)) std.debug.panic("tree-sitter asked for {d} bytes, more than a 4 GiB file could need; the parse state is corrupt", .{size});
     const ptr = active().take(size);
-    if (ptr != null and @intFromPtr(ptr.?) % header != 0) std.debug.panic("zanityMalloc returned 0x{x}, not {d}-byte aligned", .{ @intFromPtr(ptr.?), header });
+    if (ptr != null and @intFromPtr(ptr.?) % header != 0) std.debug.panic("zanityMalloc returned 0x{x}, not {d}-byte aligned; zanityMalloc() must round each block up to the alignment", .{ @intFromPtr(ptr.?), header });
     return ptr;
 }
 
@@ -201,7 +201,7 @@ export fn zanityCalloc(count: usize, size: usize) ?*anyopaque {
 export fn zanityRealloc(old: ?*anyopaque, size: usize) ?*anyopaque {
     const pool = active();
     const previous: [*]u8 = @ptrCast(old orelse return pool.take(size));
-    if (!pool.owns(previous)) std.debug.panic("tree-sitter resized 0x{x}, which the pool did not allocate; it came from another allocator", .{@intFromPtr(previous)});
+    if (!pool.owns(previous)) std.debug.panic("tree-sitter resized 0x{x}, which the pool did not allocate; it came from another allocator, so install the pool with ts_set_allocator before any parse", .{@intFromPtr(previous)});
     const previous_size = pool.sizeOf(previous);
     const fresh = pool.take(size) orelse return null;
     @memcpy(fresh[0..@min(size, previous_size)], previous[0..@min(size, previous_size)]);

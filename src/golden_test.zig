@@ -52,7 +52,7 @@ fn caseFailure(runner: Runner, suite: Suite, case: Case) !?[]const u8 {
     const zanity = runner.zanity;
     if (!std.fs.path.isAbsolute(zanity)) std.debug.panic("the zanity binary path '{s}' is relative; golden cases run in other directories and need an absolute path", .{zanity});
     const stem = if (case.project) name else name[0 .. name.len - std.fs.path.extension(name).len];
-    if (stem.len == 0) std.debug.panic("golden case '{s}' has no name before its extension", .{name});
+    if (stem.len == 0) std.debug.panic("golden case '{s}' has no name before its extension; name the case file, such as case.py, not .py", .{name});
     const expected_file = try suite.dir.readFileAlloc(io, try std.fmt.allocPrint(arena, "{s}.expected", .{stem}), arena, .unlimited);
     var lines = std.mem.splitScalar(u8, expected_file, '\n');
     const rules_line = lines.next() orelse "";
@@ -178,13 +178,13 @@ test "--strict fails a run with only warnings, which a plain run passes" {
 
 /// Starts tests/infer/mock_typesafe.py and returns it with the port it listens on.
 fn startMock(arena: std.mem.Allocator, io: Io, log: []const u8, env: *std.process.Environ.Map) !struct { child: std.process.Child, port: []const u8 } {
-    if (log.len == 0) std.debug.panic("the mock TypeSafe server needs a log path to record requests in", .{});
+    if (log.len == 0) std.debug.panic("the mock TypeSafe server needs a log path to record requests in; pass a scratch path for the mock's log", .{});
     try env.put("MOCK_TYPESAFE_LOG", log);
     var child = try std.process.spawn(io, .{ .argv = &.{ "python3", "tests/infer/mock_typesafe.py" }, .stdout = .pipe, .environ_map = env });
     var buffer: [64]u8 = undefined;
     var reader = child.stdout.?.reader(io, &buffer);
     const port = try reader.interface.takeDelimiterExclusive('\n');
-    if (port.len == 0 or port.len > 5) std.debug.panic("the mock TypeSafe server printed '{s}' instead of a port", .{port});
+    if (port.len == 0 or port.len > 5) std.debug.panic("the mock TypeSafe server printed '{s}' instead of a port; the mock must print its port first, so check tests/infer/mock_typesafe.py", .{port});
     return .{ .child = child, .port = try arena.dupe(u8, port) };
 }
 

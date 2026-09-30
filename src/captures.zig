@@ -41,13 +41,13 @@ pub const Compiled = struct {
         const patterns = ts.ts_query_pattern_count(query);
         const predicates = try arena.alloc([]const Predicate, patterns);
         for (predicates, 0..) |*p, i| p.* = try initPredicates(arena, query, @intCast(i));
-        if (predicates.len != patterns) std.debug.panic("compiled predicates for {d} of {d} query patterns", .{ predicates.len, patterns });
+        if (predicates.len != patterns) std.debug.panic("compiled predicates for {d} of {d} query patterns; initCompiled() must compile one predicate list per pattern", .{ predicates.len, patterns });
         return .{ .query = query, .names = names, .predicates = predicates };
     }
 
     pub fn has(self: Compiled, full: []const u8) bool {
         if (full.len == 0) std.debug.panic("asked whether the query has a capture with an empty name; pass a name such as 'call.name'", .{});
-        if (self.names.len > std.math.maxInt(Id)) std.debug.panic("the query has {d} capture names, more than a capture Id can number", .{self.names.len});
+        if (self.names.len > std.math.maxInt(Id)) std.debug.panic("the query has {d} capture names, more than a capture Id can number; widen captures.Id, or split the language's queries", .{self.names.len});
         return self.id(full) != null;
     }
 
@@ -148,7 +148,7 @@ pub fn index(scratch: *CaptureScratch, compiled: Compiled, root: ts.Node, source
         kept += 1;
     }
     scratch.triples.len = kept;
-    if (kept > all.len) std.debug.panic("removing duplicate captures kept {d} of {d}", .{ kept, all.len });
+    if (kept > all.len) std.debug.panic("removing duplicate captures kept {d} of {d}; the de-duplication must keep at least one of each node, so check its comparison", .{ kept, all.len });
     return .{ .triples = scratch.triples.items() };
 }
 
@@ -202,7 +202,7 @@ fn initPredicate(arena: Allocator, query: *const ts.Query, args: []const ts.Pred
 
 fn oneOf(name: []const u8, candidates: []const []const u8) bool {
     if (name.len == 0) std.debug.panic("a query predicate has an empty name; predicates look like #eq?", .{});
-    if (candidates.len == 0) std.debug.panic("checked predicate #{s} against no known predicate names", .{name});
+    if (candidates.len == 0) std.debug.panic("checked predicate #{s} against no known predicate names; add the predicate to the switch in initPredicate(), or remove it from the language's .scm files", .{name});
     for (candidates) |c| if (std.mem.eql(u8, name, c)) return true;
     return false;
 }
@@ -216,7 +216,7 @@ fn hasAncestor(node: ts.Node, kinds: []const []const u8) bool {
         for (kinds) |k| if (std.mem.eql(u8, k, kind)) return true;
         current = ancestor.parent();
     }
-    if (current == null) std.debug.panic("the ancestor walk from {s} at byte {d} ran out of steps on a null node instead of returning", .{ ts.ts_node_type(node), ts.ts_node_start_byte(node) });
+    if (current == null) std.debug.panic("the ancestor walk from {s} at byte {d} ran out of steps on a null node instead of returning; the walk must stop at the root, so check its loop condition", .{ ts.ts_node_type(node), ts.ts_node_start_byte(node) });
     return false;
 }
 
@@ -229,7 +229,7 @@ fn capturesOf(match: ts.QueryMatch, id: u32, buf: []ts.Node) []ts.Node {
             n += 1;
         }
     }
-    if (n > match.capture_count) std.debug.panic("found {d} nodes for capture {d} in a match of {d} captures", .{ n, id, match.capture_count });
+    if (n > match.capture_count) std.debug.panic("found {d} nodes for capture {d} in a match of {d} captures; capturesOf() must stop at the match's capture count", .{ n, id, match.capture_count });
     return buf[0..n];
 }
 
@@ -240,7 +240,7 @@ fn satisfies(scratch: *CaptureScratch, predicates: []const Predicate, match: ts.
         return error.LimitExceeded;
     }
     const buffers: Buffers = .{ .a = scratch.first.buffer[0..match.capture_count], .b = scratch.second.buffer[0..match.capture_count] };
-    if (buffers.a.len != match.capture_count or buffers.b.len != match.capture_count) std.debug.panic("predicate buffers hold {d} and {d} nodes for a match of {d}", .{ buffers.a.len, buffers.b.len, match.capture_count });
+    if (buffers.a.len != match.capture_count or buffers.b.len != match.capture_count) std.debug.panic("predicate buffers hold {d} and {d} nodes for a match of {d}; raise the predicate buffers in satisfies() to the largest match", .{ buffers.a.len, buffers.b.len, match.capture_count });
     if (match.capture_count > 0 and ts.ts_node_end_byte(match.captures[0].node) > text.len) std.debug.panic("a match ends at byte {d} but the source has {d}; the tree was parsed from different text", .{ ts.ts_node_end_byte(match.captures[0].node), text.len });
     for (predicates) |p| if (!holds(p, match, buffers, text)) return false;
     return true;
@@ -270,7 +270,7 @@ fn holds(predicate: Predicate, match: ts.QueryMatch, buffers: Buffers, text: []c
 const Sense = struct { positive: bool, any: bool };
 
 fn oneOfText(text: []const u8, values: []const []const u8) bool {
-    if (values.len == 0) std.debug.panic("#any-of? lists no values to compare '{s}' with", .{text});
+    if (values.len == 0) std.debug.panic("#any-of? lists no values to compare '{s}' with; give #any-of? at least one value in the language's .scm files", .{text});
     for (values) |v| {
         if (v.len == 0) std.debug.panic("#any-of? lists an empty value alongside '{s}'; remove it from the query", .{values[0]});
         if (std.mem.eql(u8, text, v)) return true;

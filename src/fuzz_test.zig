@@ -13,7 +13,7 @@ fn everyRule() rules.Set {
     var set: rules.Set = .{};
     for (rules.all) |r| set.include(r.name);
     if (set.len != rules.all.len) std.debug.panic("the fuzz rule set enabled {d} of {d} rules; a rule is missing from include()", .{ set.len, rules.all.len });
-    if (!set.enabled(rules.all[set.len - 1].name)) std.debug.panic("the fuzz rule set does not enable '{s}', the last rule", .{rules.all[set.len - 1].name});
+    if (!set.enabled(rules.all[set.len - 1].name)) std.debug.panic("the fuzz rule set does not enable '{s}', the last rule; build the fuzz rule set from every rule in rules.all", .{rules.all[set.len - 1].name});
     return set;
 }
 

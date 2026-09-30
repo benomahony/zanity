@@ -18,8 +18,8 @@ pub const Live = struct {
 
     pub fn initLive(console: zrich.Console, io: Io, enabled: bool) Live {
         const live: Live = .{ .console = console, .io = io, .enabled = enabled and console.options.interactive, .started = Io.Timestamp.now(io, .awake) };
-        if (live.enabled and !console.options.interactive) std.debug.panic("live progress enabled on a stream that is not a terminal", .{});
-        if (live.shown != null) std.debug.panic("a new progress line claims it was already drawn", .{});
+        if (live.enabled and !console.options.interactive) std.debug.panic("live progress enabled on a stream that is not a terminal; enable progress only when the console says it is interactive", .{});
+        if (live.shown != null) std.debug.panic("a new progress line claims it was already drawn; initLive() must start with nothing drawn", .{});
         return live;
     }
 

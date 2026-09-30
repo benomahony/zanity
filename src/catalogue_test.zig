@@ -14,20 +14,20 @@ const CatalogueEntry = struct {
 const Catalogue = struct { entries: []const CatalogueEntry };
 
 fn listsName(names: []const []const u8, wanted: []const u8) bool {
-    if (wanted.len == 0) std.debug.panic("expected a name to look for, got an empty one among {d}", .{names.len});
+    if (wanted.len == 0) std.debug.panic("expected a name to look for, got an empty one among {d}; pass the rule or entry name to look for", .{names.len});
     const found = for (names) |n| {
         if (std.mem.eql(u8, n, wanted)) break true;
     } else false;
-    if (found and names.len == 0) std.debug.panic("expected to find '{s}' only in a non-empty list, got an empty one", .{wanted});
+    if (found and names.len == 0) std.debug.panic("expected to find '{s}' only in a non-empty list, got an empty one; call listsName() only with a list read from catalogue.json", .{wanted});
     return found;
 }
 
 fn entryById(entries: []const CatalogueEntry, id: []const u8) ?CatalogueEntry {
-    if (id.len == 0) std.debug.panic("expected an entry id, got an empty one among {d} entries", .{entries.len});
+    if (id.len == 0) std.debug.panic("expected an entry id, got an empty one among {d} entries; every entry in catalogue/catalogue.json needs an id, so re-import it with catalogue/import_cwe.py", .{entries.len});
     const index = for (entries, 0..) |e, i| {
         if (std.mem.eql(u8, e.id, id)) break i;
     } else return null;
-    if (index >= entries.len) std.debug.panic("expected an index below {d}, got {d}", .{ entries.len, index });
+    if (index >= entries.len) std.debug.panic("expected an index below {d}, got {d}; entryById() must search only within the entries", .{ entries.len, index });
     return entries[index];
 }
 

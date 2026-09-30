@@ -188,7 +188,7 @@ const Vocabulary = struct {
 
     fn lookup(c: captures.Compiled) Vocabulary {
         if (c.names.len == 0) std.debug.panic("the query has no captures, so no rule could run; check the language's query files", .{});
-        if (c.predicates.len == 0) std.debug.panic("the query has {d} captures but no patterns", .{c.names.len});
+        if (c.predicates.len == 0) std.debug.panic("the query has {d} captures but no patterns; check the language's query files listed in languages/manifest.zon", .{c.names.len});
         return .{
             .comment = c.id("comment.outer"),
             .literal_true = c.id("literal.true"),
@@ -331,7 +331,7 @@ pub const File = struct {
     /// Captures that mark something about the node on their own, such as a decision point or an
     /// error message. Returns whether `id` was one of them.
     pub fn enterSignal(self: *File, node: ts.Node, id: captures.Id, found: []const captures.Triple) !bool {
-        if (found.len == 0) std.debug.panic("{s}: {f} carries capture {d} but no captures were found on it", .{ self.work.facts.path, node.where(), id });
+        if (found.len == 0) std.debug.panic("{s}: {f} carries capture {d} but no captures were found on it; call enterSignal() only with captures found on this node", .{ self.work.facts.path, node.where(), id });
         const v = self.v;
         if (v.catch_swallowed == id) {
             _ = try self.report(node, "swallowed-error", try self.say("This error handler does nothing, so the failure disappears silently.", .{}));
@@ -352,7 +352,7 @@ pub const File = struct {
         } else if (v.error_message == id) {
             if (self.innermost(.assertion) == null) try messages.checkMessage(self, node, null);
         } else return false;
-        if (self.s.statement_calls.len > self.s.statement_calls.buffer.len) std.debug.panic("{s}: {d} statement calls in room for {d}", .{ self.work.facts.path, self.s.statement_calls.len, self.s.statement_calls.buffer.len });
+        if (self.s.statement_calls.len > self.s.statement_calls.buffer.len) std.debug.panic("{s}: {d} statement calls in room for {d}; raise memory.Limits.per_file, or split the file", .{ self.work.facts.path, self.s.statement_calls.len, self.s.statement_calls.buffer.len });
         return true;
     }
 
@@ -404,7 +404,7 @@ pub const File = struct {
 
     pub fn definitionKind(self: *File, found: []const captures.Triple) ?[]const u8 {
         const names = self.checker.compiled.names;
-        if (found.len > self.index.triples.len) std.debug.panic("{s}: {d} captures on one node, more than the {d} in the file", .{ self.work.facts.path, found.len, self.index.triples.len });
+        if (found.len > self.index.triples.len) std.debug.panic("{s}: {d} captures on one node, more than the {d} in the file; of() must slice within the recorded captures", .{ self.work.facts.path, found.len, self.index.triples.len });
         for (found) |t| {
             if (!std.mem.eql(u8, names[t.id].family, "definition")) continue;
             if (names[t.id].part.len == 0) std.debug.panic("capture @{s} has no kind after 'definition.'; write it as @definition.function, @definition.class and so on", .{names[t.id].full});
@@ -415,7 +415,7 @@ pub const File = struct {
 
     pub fn hasOuter(self: *File, found: []const captures.Triple, family: Family) bool {
         const names = self.checker.compiled.names;
-        if (found.len > self.index.triples.len) std.debug.panic("{s}: {d} captures on one node, more than the {d} in the file", .{ self.work.facts.path, found.len, self.index.triples.len });
+        if (found.len > self.index.triples.len) std.debug.panic("{s}: {d} captures on one node, more than the {d} in the file; of() must slice within the recorded captures", .{ self.work.facts.path, found.len, self.index.triples.len });
         for (found) |t| {
             if (t.id >= names.len) std.debug.panic("{s}: capture id {d} is out of range; the query has {d} captures", .{ self.work.facts.path, t.id, names.len });
             if (std.mem.eql(u8, names[t.id].part, "outer") and std.mem.eql(u8, names[t.id].family, @tagName(family))) return true;
@@ -500,7 +500,7 @@ pub const File = struct {
     pub fn open(self: *File, family: Family, node: ts.Node) !void {
         if (self.s.contexts.last()) |top| {
             if (ts.ts_node_start_byte(node) < ts.ts_node_start_byte(top.node)) std.debug.panic("{s}: opening a {t} at {f}, which starts before the enclosing {t} {f}; the walk visits nodes in order", .{ self.work.facts.path, family, node.where(), top.family, top.node.where() });
-            if (ts.ts_node_end_byte(node) > ts.ts_node_end_byte(top.node)) std.debug.panic("{s}: opening a {t} at {f}, which ends after the enclosing {t} {f}", .{ self.work.facts.path, family, node.where(), top.family, top.node.where() });
+            if (ts.ts_node_end_byte(node) > ts.ts_node_end_byte(top.node)) std.debug.panic("{s}: opening a {t} at {f}, which ends after the enclosing {t} {f}; capture the inner construct inside the outer one's node in the language's zanity.scm", .{ self.work.facts.path, family, node.where(), top.family, top.node.where() });
         }
         self.serials += 1;
         var ctx: Context = .{
@@ -545,7 +545,7 @@ pub const File = struct {
     pub fn remember(self: *File, ctx: Context) !void {
         const parent = ctx.node.parent() orelse return;
         if (ctx.family != .statement) std.debug.panic("{s}: remembering a {t} ({f}) as the previous statement; only statements are remembered", .{ self.work.facts.path, ctx.family, ctx.node.where() });
-        if (ctx.trail_mark > self.s.trail.len) std.debug.panic("{s}: the statement {f} marked {d} summaries, but only {d} remain", .{ self.work.facts.path, ctx.node.where(), ctx.trail_mark, self.s.trail.len });
+        if (ctx.trail_mark > self.s.trail.len) std.debug.panic("{s}: the statement {f} marked {d} summaries, but only {d} remain; remember() must trim the trail back to the statement's mark, never below it", .{ self.work.facts.path, ctx.node.where(), ctx.trail_mark, self.s.trail.len });
         self.s.trail.len = ctx.trail_mark;
         const key = parent.key();
         for (self.s.trail.items()) |*entry| {
@@ -660,7 +660,7 @@ pub const File = struct {
     }
 
     pub fn closeCall(self: *File, ctx: Context) !void {
-        if (ctx.family != .call) std.debug.panic("{s}: closing {f} as a call, but it is a {t}", .{ self.work.facts.path, ctx.node.where(), ctx.family });
+        if (ctx.family != .call) std.debug.panic("{s}: closing {f} as a call, but it is a {t}; close() must dispatch each construct by its family, so check its switch", .{ self.work.facts.path, ctx.node.where(), ctx.family });
         try self.s.calls.add(.{
             .key = ctx.node.key(),
             .name = ctx.name,
@@ -699,7 +699,7 @@ pub const File = struct {
     }
 
     pub fn closeDefinition(self: *File, ctx: Context) !void {
-        if (ctx.family != .definition) std.debug.panic("{s}: closing {f} as a definition, but it is a {t}", .{ self.work.facts.path, ctx.node.where(), ctx.family });
+        if (ctx.family != .definition) std.debug.panic("{s}: closing {f} as a definition, but it is a {t}; close() must dispatch each construct by its family, so check its switch", .{ self.work.facts.path, ctx.node.where(), ctx.family });
         if (ctx.kind.len == 0) std.debug.panic("{s}: the definition {f} has no kind; capture it as @definition.function, @definition.class and so on", .{ self.work.facts.path, ctx.node.where() });
         const name_node = ctx.name orelse return;
         const name = name_node.text(self.source);
@@ -726,7 +726,7 @@ pub const File = struct {
 
     pub fn inTest(self: *File) bool {
         const items = self.s.contexts.items();
-        if (items.len > self.s.contexts.buffer.len) std.debug.panic("{s}: {d} open constructs in room for {d}", .{ self.work.facts.path, items.len, self.s.contexts.buffer.len });
+        if (items.len > self.s.contexts.buffer.len) std.debug.panic("{s}: {d} open constructs in room for {d}; raise memory.Limits.depth, or check that leave() pops what enter() opened", .{ self.work.facts.path, items.len, self.s.contexts.buffer.len });
         for (items) |ctx| if (ctx.is_test) {
             if (ctx.family != .function and ctx.family != .@"test") std.debug.panic("{s}: the {t} {f} is marked as a test; only functions and test blocks can be", .{ self.work.facts.path, ctx.family, ctx.node.where() });
             return true;
@@ -735,8 +735,8 @@ pub const File = struct {
     }
 
     pub fn checkAllocation(self: *File, ctx: Context, callee: []const u8) !void {
-        if (ctx.family != .call) std.debug.panic("{s}: checking the allocation in {f}, which is a {t}, not a call", .{ self.work.facts.path, ctx.node.where(), ctx.family });
-        if (callee.len == 0) std.debug.panic("{s}: the allocating call {f} has an empty callee", .{ self.work.facts.path, ctx.node.where() });
+        if (ctx.family != .call) std.debug.panic("{s}: checking the allocation in {f}, which is a {t}, not a call; call checkAllocation() only from closeCall()", .{ self.work.facts.path, ctx.node.where(), ctx.family });
+        if (callee.len == 0) std.debug.panic("{s}: the allocating call {f} has an empty callee; capture the callee as @call.name in the language's zanity.scm", .{ self.work.facts.path, ctx.node.where() });
         if (self.inTest() or self.inTestFile()) return;
         const function = self.enclosingFunction() orelse return;
         const owner = function.name.?.text(self.source);
@@ -755,8 +755,8 @@ pub const File = struct {
     }
 
     pub fn calleeIn(self: *File, ctx: Context, name: []const u8, table: []const []const u8) ?[]const u8 {
-        if (name.len == 0) std.debug.panic("{s}: looking up the call {f} in a name table with an empty name", .{ self.work.facts.path, ctx.node.where() });
-        if (ctx.family != .call) std.debug.panic("{s}: looking up {f} in a call table, but it is a {t}", .{ self.work.facts.path, ctx.node.where(), ctx.family });
+        if (name.len == 0) std.debug.panic("{s}: looking up the call {f} in a name table with an empty name; capture the callee as @call.name in the language's zanity.scm", .{ self.work.facts.path, ctx.node.where() });
+        if (ctx.family != .call) std.debug.panic("{s}: looking up {f} in a call table, but it is a {t}; call calleeIn() only with a call context", .{ self.work.facts.path, ctx.node.where(), ctx.family });
         for (table) |entry| {
             if (entry.len == 0) std.debug.panic("an entry in one of {s}'s name tables is empty; remove it from languages/tables.zon", .{self.tables.ecosystem});
             if (ctx.callee) |callee| {
@@ -773,7 +773,7 @@ pub const File = struct {
     }
 
     pub fn closeLoop(self: *File, ctx: Context) !void {
-        if (ctx.family != .loop) std.debug.panic("{s}: closing {f} as a loop, but it is a {t}", .{ self.work.facts.path, ctx.node.where(), ctx.family });
+        if (ctx.family != .loop) std.debug.panic("{s}: closing {f} as a loop, but it is a {t}; close() must dispatch each construct by its family, so check its switch", .{ self.work.facts.path, ctx.node.where(), ctx.family });
         if (ctx.has_sleep) {
             _ = try self.report(ctx.node, "polling-loop", try self.say("This loop polls with a sleep, so the test's speed and outcome depend on timing.", .{}));
         }
@@ -784,7 +784,7 @@ pub const File = struct {
     }
 
     pub fn closeAssignment(self: *File, ctx: Context) !void {
-        if (ctx.family != .assignment) std.debug.panic("{s}: closing {f} as an assignment, but it is a {t}", .{ self.work.facts.path, ctx.node.where(), ctx.family });
+        if (ctx.family != .assignment) std.debug.panic("{s}: closing {f} as an assignment, but it is a {t}; close() must dispatch each construct by its family, so check its switch", .{ self.work.facts.path, ctx.node.where(), ctx.family });
         if (self.inAssertionCondition(ctx.node)) {
             _ = try self.report(ctx.node, "assertion-side-effect", try self.say("This assertion assigns a variable, so the program behaves differently when assertions are disabled.", .{}));
         }
@@ -798,7 +798,7 @@ pub const File = struct {
     }
 
     pub fn closeAssertion(self: *File, ctx: Context) !void {
-        if (ctx.family != .assertion) std.debug.panic("{s}: closing {f} as an assertion, but it is a {t}", .{ self.work.facts.path, ctx.node.where(), ctx.family });
+        if (ctx.family != .assertion) std.debug.panic("{s}: closing {f} as an assertion, but it is a {t}; close() must dispatch each construct by its family, so check its switch", .{ self.work.facts.path, ctx.node.where(), ctx.family });
         if (ctx.message == null) {
             if (try self.report(ctx.node, "assertion-message", try self.say("This assertion has no message, so when it fails nobody will know which invariant broke or with what values.", .{}))) {
                 if (ctx.condition) |condition| try rewrite.explainAssertion(self, ctx.node, condition);
@@ -822,7 +822,7 @@ pub const File = struct {
     /// Points at what is worth asserting in this function, its inputs and its
     /// result, rather than asking for any assertion that makes up the count.
     pub fn assertionFix(self: *File, ctx: Context, name: []const u8) ![]const u8 {
-        if (ctx.family != .function) std.debug.panic("{s}: advising assertions for {f}, which is a {t}, not a function", .{ self.work.facts.path, ctx.node.where(), ctx.family });
+        if (ctx.family != .function) std.debug.panic("{s}: advising assertions for {f}, which is a {t}, not a function; call assertionFix() only from closeFunction()", .{ self.work.facts.path, ctx.node.where(), ctx.family });
         const params = self.s.signature.items()[ctx.parameter_start..][0..ctx.parameter_count];
         const start = self.work.text.used;
         if (params.len == 0) {
@@ -843,8 +843,8 @@ pub const File = struct {
         }
         _ = try self.work.text.copy(". An assertion that can't fail catches nothing.");
         const fix = self.work.text.buffer[start..self.work.text.used];
-        if (fix.len <= name.len) std.debug.panic("{s}: the assertion advice for '{s}' came out as '{s}', shorter than the name", .{ self.work.facts.path, name, fix });
-        if (!std.mem.endsWith(u8, fix, ".")) std.debug.panic("{s}: the assertion advice for '{s}' does not end with a full stop: '{s}'", .{ self.work.facts.path, name, fix });
+        if (fix.len <= name.len) std.debug.panic("{s}: the assertion advice for '{s}' came out as '{s}', shorter than the name; assertionFix() must write the advice around the name, so check its format calls", .{ self.work.facts.path, name, fix });
+        if (!std.mem.endsWith(u8, fix, ".")) std.debug.panic("{s}: the assertion advice for '{s}' does not end with a full stop: '{s}'; end the advice in assertionFix() with a full stop", .{ self.work.facts.path, name, fix });
         return fix;
     }
 
@@ -871,7 +871,7 @@ pub const File = struct {
                 else => {},
             }
         }
-        if (i != 0) std.debug.panic("{s}: the search for an enclosing class stopped at depth {d} without returning", .{ self.work.facts.path, i });
+        if (i != 0) std.debug.panic("{s}: the search for an enclosing class stopped at depth {d} without returning; the loop in definedInClass() must return from inside, so check its exits", .{ self.work.facts.path, i });
         if (!seen_function) std.debug.panic("{s}: asked whether a function is defined in a class while no function is open; call it from a @function.name capture", .{self.work.facts.path});
         return false;
     }
@@ -893,7 +893,7 @@ pub const File = struct {
     }
 
     pub fn closeFunction(self: *File, ctx: Context) !void {
-        if (ctx.family != .function) std.debug.panic("{s}: closing {f} as a function, but it is a {t}", .{ self.work.facts.path, ctx.node.where(), ctx.family });
+        if (ctx.family != .function) std.debug.panic("{s}: closing {f} as a function, but it is a {t}; close() must dispatch each construct by its family, so check its switch", .{ self.work.facts.path, ctx.node.where(), ctx.family });
         try self.resolveBareCalls(ctx);
         const name_node = ctx.name orelse return;
         const name = name_node.text(self.source);
@@ -927,8 +927,8 @@ pub const File = struct {
     /// tighter test limit. A test marked by an attribute or annotation is also a test construct,
     /// and closeTest measures it.
     pub fn checkFunctionLength(self: *File, ctx: Context, name_node: ts.Node, name: []const u8) !void {
-        if (ctx.family != .function) std.debug.panic("{s}: measuring {f} as a function, but it is a {t}", .{ self.work.facts.path, ctx.node.where(), ctx.family });
-        if (!std.mem.eql(u8, name, name_node.text(self.source))) std.debug.panic("{s}: measuring '{s}' under the name of {f}", .{ self.work.facts.path, name, name_node.where() });
+        if (ctx.family != .function) std.debug.panic("{s}: measuring {f} as a function, but it is a {t}; call checkFunctionLength() only from closeFunction()", .{ self.work.facts.path, ctx.node.where(), ctx.family });
+        if (!std.mem.eql(u8, name, name_node.text(self.source))) std.debug.panic("{s}: measuring '{s}' under the name of {f}; pass the function's own name node and its text", .{ self.work.facts.path, name, name_node.where() });
         if (self.index.marks(ctx.node, self.v.test_outer)) return;
         if (ctx.is_test) try test_quality.checkEager(self, ctx, name_node, name);
         const lines = self.codeLinesIn(ctx.span);
@@ -941,14 +941,14 @@ pub const File = struct {
 
     pub fn say(self: *File, comptime fmt: []const u8, args: anytype) ![]const u8 {
         const message = try self.work.text.format(fmt, args);
-        if (message.len == 0) std.debug.panic("{s}: a finding message came out empty from format '{s}'", .{ self.work.facts.path, fmt });
+        if (message.len == 0) std.debug.panic("{s}: a finding message came out empty from format '{s}'; give the report() call a message with text", .{ self.work.facts.path, fmt });
         if (!(std.ascii.isUpper(message[0]) or message[0] == '\'' or std.mem.startsWith(u8, message, "zanity"))) std.debug.panic("finding messages start with a capital, a quoted name or 'zanity'; this one does not: '{s}'", .{message});
         return message;
     }
 
     pub fn report(self: *File, node: ts.Node, rule: []const u8, message: []const u8) !bool {
         if (rules.find(rule) == null) std.debug.panic("{s}: reporting rule '{s}', which is not in rules.all; add it there or fix the name", .{ self.work.facts.path, rule });
-        if (ts.ts_node_end_byte(node) > self.source.len) std.debug.panic("{s}: reporting {s} on {f}, which ends past the {d}-byte file", .{ self.work.facts.path, rule, node.where(), self.source.len });
+        if (ts.ts_node_end_byte(node) > self.source.len) std.debug.panic("{s}: reporting {s} on {f}, which ends past the {d}-byte file; pass a node from the tree parsed from this file", .{ self.work.facts.path, rule, node.where(), self.source.len });
         if (!self.checker.enabled.enabled(rule)) return false;
         const start = ts.ts_node_start_point(node);
         if (suppress.suppressed(self, start.row, rule)) return false;
@@ -990,13 +990,13 @@ pub const File = struct {
         if (self.s.contexts.len != 0) std.debug.panic("{s}: finishing with {d} constructs still open; every node entered must be left", .{ self.work.facts.path, self.s.contexts.len });
         const diagnostics = self.s.diagnostics.items();
         std.mem.sort(Diagnostic, diagnostics, {}, Diagnostic.reportOrder);
-        if (!std.sort.isSorted(Diagnostic, diagnostics, {}, Diagnostic.reportOrder)) std.debug.panic("expected diagnostics in report order, got {d} diagnostics out of order", .{diagnostics.len});
+        if (!std.sort.isSorted(Diagnostic, diagnostics, {}, Diagnostic.reportOrder)) std.debug.panic("expected diagnostics in report order, got {d} diagnostics out of order; sort the diagnostics with Diagnostic.reportOrder before checking them", .{diagnostics.len});
         return diagnostics;
     }
 };
 
 pub fn contains(haystack: []const []const u8, needle: []const u8) bool {
-    if (needle.len == 0) std.debug.panic("looked up an empty name in a table of {d} names", .{haystack.len});
+    if (needle.len == 0) std.debug.panic("looked up an empty name in a table of {d} names; skip empty names before calling contains()", .{haystack.len});
     for (haystack) |h| {
         if (h.len == 0) std.debug.panic("a name table holds an empty entry while looking up '{s}'; remove it from languages/tables.zon", .{needle});
         if (std.mem.eql(u8, h, needle)) return true;
@@ -1014,8 +1014,8 @@ pub fn sameText(a: []const u8, b: []const u8) bool {
         if (a[i] != b[j]) return false;
         i += 1;
         j += 1;
-        if (i > a.len) std.debug.panic("comparing '{s}' with '{s}' ran past the first at byte {d}", .{ a, b, i });
-        if (j > b.len) std.debug.panic("comparing '{s}' with '{s}' ran past the second at byte {d}", .{ a, b, j });
+        if (i > a.len) std.debug.panic("comparing '{s}' with '{s}' ran past the first at byte {d}; the loop in sameText() must stop at the end of both strings", .{ a, b, i });
+        if (j > b.len) std.debug.panic("comparing '{s}' with '{s}' ran past the second at byte {d}; the loop in sameText() must stop at the end of both strings", .{ a, b, j });
     }
     unreachable;
 }
@@ -1029,6 +1029,6 @@ pub fn header(text: []const u8) []const u8 {
         if (before.len > 0 and (before[before.len - 1] == ')' or std.ascii.isAlphanumeric(before[before.len - 1]))) line = before;
     }
     const result = std.mem.trimEnd(u8, line, " \t:{}");
-    if (result.len > line_end) std.debug.panic("the first line of '{s}' came out longer than the line itself ({d} > {d})", .{ text[0..line_end], result.len, line_end });
+    if (result.len > line_end) std.debug.panic("the first line of '{s}' came out longer than the line itself ({d} > {d}); header() must only trim the line, so check its slicing", .{ text[0..line_end], result.len, line_end });
     return result;
 }

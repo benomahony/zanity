@@ -69,7 +69,7 @@ const Uses = struct { first: ?ts.Node = null, end: u32 = 0 };
 pub fn checkWideScope(self: *File) !void {
     if (!self.checker.enabled.enabled("wide-scope")) return;
     const ids = Ids.fromQuery(self.checker.compiled) orelse std.debug.panic("{s}: wide-scope is enabled but the query lacks its captures; the language test should have caught this", .{self.work.facts.path});
-    if (ids.outer >= self.checker.compiled.names.len) std.debug.panic("{s}: @declaration.outer has id {d}, but the query has {d} captures", .{ self.work.facts.path, ids.outer, self.checker.compiled.names.len });
+    if (ids.outer >= self.checker.compiled.names.len) std.debug.panic("{s}: @declaration.outer has id {d}, but the query has {d} captures; pass the checker's own compiled query", .{ self.work.facts.path, ids.outer, self.checker.compiled.names.len });
     var checked: usize = 0;
     for (self.index.triples) |t| {
         if (t.id != ids.outer) continue;
@@ -77,7 +77,7 @@ pub fn checkWideScope(self: *File) !void {
         const group = gather(self, ids, t.node) orelse continue;
         try checkGroup(self, ids, &group);
     }
-    if (checked > self.index.triples.len) std.debug.panic("{s}: checked {d} declarations among {d} captures", .{ self.work.facts.path, checked, self.index.triples.len });
+    if (checked > self.index.triples.len) std.debug.panic("{s}: checked {d} declarations among {d} captures; count one declaration per captured statement", .{ self.work.facts.path, checked, self.index.triples.len });
 }
 
 /// The names `statement` declares itself, not those declared inside its initializer; null when
@@ -97,7 +97,7 @@ fn gather(self: *File, ids: Ids, statement: ts.Node) ?Group {
         group.names[group.len] = t.node;
         group.len += 1;
     }
-    if (group.len > max_group) std.debug.panic("{s}: gathered {d} names in room for {d}", .{ self.work.facts.path, group.len, max_group });
+    if (group.len > max_group) std.debug.panic("{s}: gathered {d} names in room for {d}; gather() must stop adding at max_group", .{ self.work.facts.path, group.len, max_group });
     if (group.len == 0) return null;
     return group;
 }
@@ -108,7 +108,7 @@ fn checkGroup(self: *File, ids: Ids, group: *const Group) !void {
     const uses = findUses(self, ids, group, home);
     const target = innermostBlock(self, ids, uses, home) orelse return;
     if (crossesBarrier(self, ids, target, home)) return;
-    if (ts.ts_node_start_byte(target) < group.after()) std.debug.panic("{s}: the block {f} that '{s}' would move into starts before the declaration ends", .{ self.work.facts.path, target.where(), declared.text(self.source) });
+    if (ts.ts_node_start_byte(target) < group.after()) std.debug.panic("{s}: the block {f} that '{s}' would move into starts before the declaration ends; findUses() must start after the declaration ends", .{ self.work.facts.path, target.where(), declared.text(self.source) });
     const line = ts.ts_node_start_point(target).row + 1;
     if (!try self.report(declared, "wide-scope", try wideScopeMessage(self, group, line))) return;
     const diagnostic = self.s.diagnostics.last().?;
@@ -117,7 +117,7 @@ fn checkGroup(self: *File, ids: Ids, group: *const Group) !void {
         try self.say("Move this declaration to the top of the block on line {d}, unless its initializer has to run before the code in between.", .{line})
     else
         try self.say("Move this declaration to the top of the block on line {d}.", .{line});
-    if (diagnostic.fix.len == 0) std.debug.panic("{s}: the wide-scope fix for '{s}' came out empty", .{ self.work.facts.path, declared.text(self.source) });
+    if (diagnostic.fix.len == 0) std.debug.panic("{s}: the wide-scope fix for '{s}' came out empty; checkGroup() must write the fix with say()", .{ self.work.facts.path, declared.text(self.source) });
 }
 
 /// The edit that moves the declaration to the top of `target`: it takes the declaration's line
@@ -135,9 +135,9 @@ fn moveEdit(self: *File, ids: Ids, group: *const Group, target: ts.Node) !?Edit 
     const next = self.source[insert..next_end];
     const code = std.mem.trimStart(u8, next, " \t");
     if (code.len == 0 or code[0] == '}') return null;
-    if (insert <= line.end) std.debug.panic("{s}: the block {f} opens before the declaration {f} ends", .{ self.work.facts.path, target.where(), group.statement.where() });
+    if (insert <= line.end) std.debug.panic("{s}: the block {f} opens before the declaration {f} ends; innermostBlock() must return a block that starts after the declaration", .{ self.work.facts.path, target.where(), group.statement.where() });
     const replacement = try self.work.text.format("{s}{s}{s}\n", .{ self.source[line.end + 1 .. insert], next[0 .. next.len - code.len], group.statement.text(self.source) });
-    if (!std.mem.endsWith(u8, replacement, "\n")) std.debug.panic("{s}: the moved declaration '{s}' does not end its line", .{ self.work.facts.path, replacement });
+    if (!std.mem.endsWith(u8, replacement, "\n")) std.debug.panic("{s}: the moved declaration '{s}' does not end its line; moveEdit() must end the replacement with a newline", .{ self.work.facts.path, replacement });
     return .{ .start = line.start, .end = insert, .replacement = replacement };
 }
 
@@ -186,7 +186,7 @@ fn wideScopeMessage(self: *File, group: *const Group, line: u32) ![]const u8 {
     const verb = if (group.len == 1) "is" else "are";
     _ = try text.format(" {s} only used inside the block on line {d}, yet in scope before it, where a reader has to track it and code can misuse it.", .{ verb, line });
     const message = text.buffer[start..text.used];
-    if (message[0] != '\'') std.debug.panic("{s}: the wide-scope message does not start with a quoted name: '{s}'", .{ self.work.facts.path, message });
+    if (message[0] != '\'') std.debug.panic("{s}: the wide-scope message does not start with a quoted name: '{s}'; wideScopeMessage() must start with the first name in quotes", .{ self.work.facts.path, message });
     return message;
 }
 
@@ -217,23 +217,23 @@ fn findUses(self: *File, ids: Ids, group: *const Group, home: ts.Node) Uses {
 /// (a parameter or an inner declaration of the same name), and no inner definition shadows it.
 fn referencesGroup(self: *File, ids: Ids, group: *const Group, reference: ts.Node) bool {
     const text = reference.text(self.source);
-    if (text.len == 0) std.debug.panic("{s}: @local.reference matched the empty {f}", .{ self.work.facts.path, reference.where() });
+    if (text.len == 0) std.debug.panic("{s}: @local.reference matched the empty {f}; capture a named node as @local.reference in the language's locals.scm", .{ self.work.facts.path, reference.where() });
     if (isDefinition(self, reference)) return false;
     for (group.declared()) |name| {
         if (!std.mem.eql(u8, name.text(self.source), text)) continue;
         return !shadowed(self, ids, group.after(), reference);
     }
-    if (ts.ts_node_start_byte(reference) < group.after()) std.debug.panic("{s}: the reference {f} precedes the declaration it was checked against", .{ self.work.facts.path, reference.where() });
+    if (ts.ts_node_start_byte(reference) < group.after()) std.debug.panic("{s}: the reference {f} precedes the declaration it was checked against; findUses() must start after the declaration", .{ self.work.facts.path, reference.where() });
     return false;
 }
 
 fn mentionsGroup(self: *File, group: *const Group, string: ts.Node) bool {
     const text = string.text(self.source);
-    if (ts.ts_node_start_byte(string) < group.after()) std.debug.panic("{s}: the string {f} precedes the declaration it was checked against", .{ self.work.facts.path, string.where() });
+    if (ts.ts_node_start_byte(string) < group.after()) std.debug.panic("{s}: the string {f} precedes the declaration it was checked against; findUses() must start after the declaration", .{ self.work.facts.path, string.where() });
     for (group.declared()) |name| {
         if (containsWord(text, name.text(self.source))) return true;
     }
-    if (text.len == 0) std.debug.panic("{s}: @literal.string matched the empty {f}", .{ self.work.facts.path, string.where() });
+    if (text.len == 0) std.debug.panic("{s}: @literal.string matched the empty {f}; capture a named node as @literal.string in the language's zanity.scm", .{ self.work.facts.path, string.where() });
     return false;
 }
 
@@ -284,14 +284,14 @@ fn innermostBlock(self: *File, ids: Ids, uses: Uses, home: ts.Node) ?ts.Node {
 /// Whether a loop, function or closure sits between `target` and `home`, so a declaration moved
 /// into `target` would run on every iteration, or at a later time.
 fn crossesBarrier(self: *File, ids: Ids, target: ts.Node, home: ts.Node) bool {
-    if (target.eql(home)) std.debug.panic("{s}: the block {f} to move into is the one the declaration is already in", .{ self.work.facts.path, home.where() });
-    if (ts.ts_node_end_byte(target) > ts.ts_node_end_byte(home)) std.debug.panic("{s}: the block {f} ends after {f}, which should hold it", .{ self.work.facts.path, target.where(), home.where() });
+    if (target.eql(home)) std.debug.panic("{s}: the block {f} to move into is the one the declaration is already in; innermostBlock() must return a block inside the declaration's own", .{ self.work.facts.path, home.where() });
+    if (ts.ts_node_end_byte(target) > ts.ts_node_end_byte(home)) std.debug.panic("{s}: the block {f} ends after {f}, which should hold it; innermostBlock() must return a block inside the declaration's own", .{ self.work.facts.path, target.where(), home.where() });
     var current: ?ts.Node = target;
     while (current) |node| : (current = node.parent()) {
         if (node.eql(home)) return false;
         for (ids.barriers) |id| if (self.index.marks(node, id)) return true;
     }
-    std.debug.panic("{s}: walked up from the block {f} without reaching {f}", .{ self.work.facts.path, target.where(), home.where() });
+    std.debug.panic("{s}: walked up from the block {f} without reaching {f}; innermostBlock() must return a block inside the declaration's own", .{ self.work.facts.path, target.where(), home.where() });
 }
 
 /// The nearest ancestor of `node` that carries capture `id`.

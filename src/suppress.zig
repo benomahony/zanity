@@ -25,8 +25,8 @@ pub fn collectSuppressions(self: *File) !void {
 
 pub fn suppressed(self: *File, line: u32, rule: []const u8) bool {
     const found = rules.find(rule) orelse unreachable;
-    if (!found.answers(rule)) std.debug.panic("rules.find('{s}') returned rule {s}, which does not answer to that name", .{ rule, found.name });
-    if (line > std.mem.count(u8, self.source, "\n")) std.debug.panic("{s}: checking suppressions on line {d} of a {d}-line file", .{ self.work.facts.path, line + 1, std.mem.count(u8, self.source, "\n") + 1 });
+    if (!found.answers(rule)) std.debug.panic("rules.find('{s}') returned rule {s}, which does not answer to that name; rules.find() must return only a rule whose name or alias matches", .{ rule, found.name });
+    if (line > std.mem.count(u8, self.source, "\n")) std.debug.panic("{s}: checking suppressions on line {d} of a {d}-line file; pass a line number from the tree parsed from this file", .{ self.work.facts.path, line + 1, std.mem.count(u8, self.source, "\n") + 1 });
     for (self.s.suppressions.items()) |s| {
         if (s.line != line) continue;
         if (s.len == 0) return true;
@@ -41,7 +41,7 @@ pub fn parseIgnore(codes: *memory.Bounded([]const u8), comment: []const u8) !boo
         const j = ignoreMarkerEnd(comment, i) orelse continue;
         if (j >= comment.len or comment[j] != '[') return true;
         const close = std.mem.indexOfScalarPos(u8, comment, j, ']') orelse return true;
-        if (close <= j) std.debug.panic("the suppression list in '{s}' closes at byte {d}, before it opens at {d}", .{ comment, close, j });
+        if (close <= j) std.debug.panic("the suppression list in '{s}' closes at byte {d}, before it opens at {d}; parseIgnore() must search for ']' after the '['", .{ comment, close, j });
         var it = std.mem.splitScalar(u8, comment[j + 1 .. close], ',');
         while (it.next()) |raw| {
             const code = std.mem.trim(u8, raw, " \t");

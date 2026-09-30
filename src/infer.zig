@@ -79,7 +79,7 @@ pub const Inference = struct {
         try self.askAll();
         self.stats.seconds = started.durationTo(Io.Timestamp.now(self.io, .awake)).toSeconds();
         for (self.jobs.items()) |*job| try self.record(job, findings);
-        if (findings.len < before) std.debug.panic("--infer removed findings: {d} before, {d} after", .{ before, findings.len });
+        if (findings.len < before) std.debug.panic("--infer removed findings: {d} before, {d} after; judge() must only add findings", .{ before, findings.len });
     }
 
     /// Queues the questions a unit still needs, answering what it can from the cache.
@@ -101,7 +101,7 @@ pub const Inference = struct {
     }
 
     fn askAll(self: *Inference) !void {
-        if (self.jobs.len > self.jobs.buffer.len) std.debug.panic("{d} functions queued in room for {d}", .{ self.jobs.len, self.jobs.buffer.len });
+        if (self.jobs.len > self.jobs.buffer.len) std.debug.panic("{d} functions queued in room for {d}; raise memory.Limits for --infer functions, or check fewer files at once", .{ self.jobs.len, self.jobs.buffer.len });
         var pending: usize = 0;
         var waiting: usize = 0;
         for (self.jobs.items()) |job| {
@@ -113,7 +113,7 @@ pub const Inference = struct {
         self.stats = .{ .functions = self.jobs.len, .asked = waiting };
         if (pending == 0) return;
         self.answered.store(0, .monotonic);
-        if (self.concurrency == 0) std.debug.panic("--infer would ask TypeSafe with no requests allowed at once", .{});
+        if (self.concurrency == 0) std.debug.panic("--infer would ask TypeSafe with no requests allowed at once; set [infer] concurrency in zanity.toml to at least 1", .{});
         var semaphore: Io.Semaphore = .{ .permits = self.concurrency };
         var group: Io.Group = .init;
         // The watcher needs its own thread from the start: `async` may defer a task until `await`,
@@ -129,14 +129,14 @@ pub const Inference = struct {
             failure = try self.describe(job, err);
             return error.AskFailed;
         }
-        if (pending > self.jobs.len * max_questions) std.debug.panic("{d} unanswered questions across {d} functions", .{ pending, self.jobs.len });
+        if (pending > self.jobs.len * max_questions) std.debug.panic("{d} unanswered questions across {d} functions; plan() must queue at most max_questions per function", .{ pending, self.jobs.len });
     }
 
     /// Reports progress every 100 ms until every function is answered; the reporter decides what to redraw.
     fn watch(self: *Inference, total: usize) void {
         const reporter = self.reporter orelse std.debug.panic("watching --infer progress with no reporter; askAll only watches when one is set", .{});
-        if (total == 0) std.debug.panic("watching progress over no functions", .{});
-        if (total > self.jobs.len) std.debug.panic("watching {d} functions, but only {d} are queued", .{ total, self.jobs.len });
+        if (total == 0) std.debug.panic("watching progress over no functions; askAll() must start the watcher only when functions are queued", .{});
+        if (total > self.jobs.len) std.debug.panic("watching {d} functions, but only {d} are queued; askAll() must pass the number of functions it queued", .{ total, self.jobs.len });
         for (0..24 * 60 * 60 * 10) |_| {
             const done = self.answered.load(.monotonic);
             reporter.report(reporter.state, done, total);
@@ -147,7 +147,7 @@ pub const Inference = struct {
 
     fn askOne(self: *Inference, job: *Job, semaphore: *Io.Semaphore) void {
         if (job.count == 0) std.debug.panic("{s}: queued '{s}' with no questions; plan() only queues functions with some", .{ job.unit.path, job.unit.name });
-        if (job.failed != null) std.debug.panic("{s}: asking about '{s}' again after it failed", .{ job.unit.path, job.unit.name });
+        if (job.failed != null) std.debug.panic("{s}: asking about '{s}' again after it failed; askAll() must ask about each function once", .{ job.unit.path, job.unit.name });
         defer _ = self.answered.fetchAdd(1, .monotonic);
         self.ask(job, semaphore) catch |err| {
             job.failed = err;
@@ -197,13 +197,13 @@ pub const Inference = struct {
     /// The language and source identify a function; the model is kept alongside.
     fn unitHash(self: *const Inference, unit: *const Unit) store.Digest {
         if (self.client.model.len == 0) std.debug.panic("the TypeSafe client has no model name; tai falls back to jev-latest, so this is a broken client", .{});
-        if (unit.language.len == 0) std.debug.panic("{s}: unit '{s}' has no language", .{ unit.path, unit.name });
+        if (unit.language.len == 0) std.debug.panic("{s}: unit '{s}' has no language; facts.unit() must record the file's language with each function", .{ unit.path, unit.name });
         return store.digest(&.{ unit.language, unit.source });
     }
 
     /// The request state: the language and the function's source, as JSON.
     fn stateOf(self: *Inference, unit: *const Unit) ![]const u8 {
-        if (unit.language.len == 0) std.debug.panic("{s}: '{s}' has no language to tell TypeSafe", .{ unit.path, unit.name });
+        if (unit.language.len == 0) std.debug.panic("{s}: '{s}' has no language to tell TypeSafe; facts.unit() must record the file's language with each function", .{ unit.path, unit.name });
         const start = self.json.used;
         var writer: Io.Writer = .fixed(self.json.buffer[start..]);
         var json: std.json.Stringify = .{ .writer = &writer };
@@ -212,7 +212,7 @@ pub const Inference = struct {
             return error.LimitExceeded;
         };
         self.json.used += writer.end;
-        if (writer.end <= unit.source.len) std.debug.panic("{s}: the request for '{s}' is {d} bytes, no longer than its {d}-byte source", .{ unit.path, unit.name, writer.end, unit.source.len });
+        if (writer.end <= unit.source.len) std.debug.panic("{s}: the request for '{s}' is {d} bytes, no longer than its {d}-byte source; stateOf() must include the whole source in the request", .{ unit.path, unit.name, writer.end, unit.source.len });
         return self.json.buffer[start..self.json.used];
     }
 

@@ -37,10 +37,10 @@ pub fn applies(adapter: *const Adapter, name: []const u8) bool {
 }
 
 pub fn forPath(path: []const u8) ?*const Adapter {
-    if (path.len == 0) std.debug.panic("asked which language an empty path is written in", .{});
+    if (path.len == 0) std.debug.panic("asked which language an empty path is written in; skip empty paths before calling forPath()", .{});
     const ext = std.fs.path.extension(path);
     if (ext.len < 2) return null;
-    if (ext[0] != '.') std.debug.panic("the extension of '{s}' is '{s}', which does not start with '.'", .{ path, ext });
+    if (ext[0] != '.') std.debug.panic("the extension of '{s}' is '{s}', which does not start with '.'; std.fs.path.extension() must return the dot with the extension", .{ path, ext });
     for (adapters.all) |*adapter| {
         for (adapter.extensions) |e| if (std.mem.eql(u8, e, ext[1..])) return adapter;
     }

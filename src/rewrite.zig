@@ -67,9 +67,9 @@ fn rootLength(path: []const u8) usize {
 /// Whether the name `path` starts with is defined between `start` and `end`, like the `e` in
 /// `{e.id for e in q}`: it exists only inside the condition, so a message can't show it.
 fn boundInside(self: *File, start: u32, end: u32, path: []const u8) bool {
-    if (start > end) std.debug.panic("{s}: looking for definitions in bytes {d}..{d}, which run backwards", .{ self.work.facts.path, start, end });
+    if (start > end) std.debug.panic("{s}: looking for definitions in bytes {d}..{d}, which run backwards; pass the condition's start before its end", .{ self.work.facts.path, start, end });
     const root_end = rootLength(path);
-    if (root_end == 0) std.debug.panic("{s}: the value '{s}' does not start with a name", .{ self.work.facts.path, path });
+    if (root_end == 0) std.debug.panic("{s}: the value '{s}' does not start with a name; skip values that don't start with a name before calling boundInside()", .{ self.work.facts.path, path });
     const names = self.checker.compiled.names;
     const first = std.sort.lowerBound(captures.Triple, self.index.triples, start, hazards.startsBefore);
     for (self.index.triples[first..]) |t| {
@@ -82,7 +82,7 @@ fn boundInside(self: *File, start: u32, end: u32, path: []const u8) bool {
 
 /// The outermost names and field accesses between `start` and `end`, in order: `a.len`, not `a`.
 fn widestPaths(self: *File, start: u32, end: u32, widest: *[8]ts.Node) usize {
-    if (start > end) std.debug.panic("{s}: looking for values in bytes {d}..{d}, which run backwards", .{ self.work.facts.path, start, end });
+    if (start > end) std.debug.panic("{s}: looking for values in bytes {d}..{d}, which run backwards; pass the condition's start before its end", .{ self.work.facts.path, start, end });
     var found: usize = 0;
     for (self.index.triples) |t| {
         if (t.id != self.v.expression_path or t.key.start < start or ts.ts_node_end_byte(t.node) > end) continue;
@@ -95,7 +95,7 @@ fn widestPaths(self: *File, start: u32, end: u32, widest: *[8]ts.Node) usize {
         widest[found] = t.node;
         found += 1;
     }
-    if (found > widest.len) std.debug.panic("{s}: kept {d} values in room for {d}", .{ self.work.facts.path, found, widest.len });
+    if (found > widest.len) std.debug.panic("{s}: kept {d} values in room for {d}; widestPaths() must stop at the buffer's length", .{ self.work.facts.path, found, widest.len });
     return found;
 }
 
@@ -129,7 +129,7 @@ pub fn assertionRewrite(self: *File, condition: ts.Node) ![]const u8 {
 /// line comments, the edit that writes it with a TODO for the reason only a person knows.
 pub fn explainAssertion(self: *File, node: ts.Node, condition: ts.Node) !void {
     const diagnostic = self.s.diagnostics.last() orelse unreachable;
-    if (!std.mem.eql(u8, diagnostic.rule, "assertion-message")) std.debug.panic("expected the assertion-message finding, got {s}", .{diagnostic.rule});
+    if (!std.mem.eql(u8, diagnostic.rule, "assertion-message")) std.debug.panic("expected the assertion-message finding, got {s}; call explainAssertion() only right after reporting assertion-message", .{diagnostic.rule});
     const code = try assertionRewrite(self, condition);
     if (code.len == 0) return;
     diagnostic.fix = try self.say("Write it as `{s}`, so a failure says what broke and with which values.", .{code});
@@ -143,13 +143,13 @@ pub fn explainAssertion(self: *File, node: ts.Node, condition: ts.Node) !void {
     const indent = before[0 .. before.len - std.mem.trimStart(u8, before, " \t").len];
     const replacement = try self.work.text.format("{s}{s} TODO: say why this must hold and what to look at when it fails.\n{s}{s}", .{ indent, comment, before, code });
     diagnostic.edit = .{ .start = @intCast(line_start), .end = end, .replacement = replacement };
-    if (!(line_start <= start and start < end)) std.debug.panic("expected the edit to cover the assertion, got {d}..{d} around {d}", .{ line_start, end, start });
+    if (!(line_start <= start and start < end)) std.debug.panic("expected the edit to cover the assertion, got {d}..{d} around {d}; the edit must start at the assertion's line and end after it", .{ line_start, end, start });
 }
 
 pub fn writePlaceholder(self: *File, placeholder: []const u8, condition: []const u8, values: []const []const u8) !void {
     const t = self.tables;
     const text = self.work.text;
-    if (placeholder.len == 0 or placeholder[0] != '$') std.debug.panic("expected a placeholder starting with '$', got '{s}'", .{placeholder});
+    if (placeholder.len == 0 or placeholder[0] != '$') std.debug.panic("expected a placeholder starting with '$', got '{s}'; pass a placeholder from the language's assertion_form in languages/tables.zon", .{placeholder});
     if (std.mem.eql(u8, placeholder, "$condition")) {
         _ = try text.copy(condition);
     } else if (std.mem.eql(u8, placeholder, "$message")) {
@@ -170,7 +170,7 @@ pub fn writePlaceholder(self: *File, placeholder: []const u8, condition: []const
     } else {
         _ = try text.copy(placeholder);
     }
-    if (text.used > text.buffer.len) std.debug.panic("expected the text buffer to hold {d} bytes, got {d}", .{ text.buffer.len, text.used });
+    if (text.used > text.buffer.len) std.debug.panic("expected the text buffer to hold {d} bytes, got {d}; only copy() and format() may move used forward", .{ text.buffer.len, text.used });
 }
 
 /// Copies `code` into a string literal: quotes become apostrophes, whitespace runs one space,

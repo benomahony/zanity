@@ -136,13 +136,13 @@ pub const Store = struct {
         _ = sqlite3_busy_timeout(db, 5000);
         if (sqlite3_exec(db, schema, null, null, null) != ok) return failed(db);
         const opened: Store = .{ .db = db, .find = try prepare(db, find_answer), .unit = try prepare(db, save_unit), .answer = try prepare(db, save_answer) };
-        if (!configured) std.debug.panic("opened {s} before SQLite was given its heap", .{path});
+        if (!configured) std.debug.panic("opened {s} before SQLite was given its heap; install the heap with sqlite3_config before opening the store", .{path});
         return opened;
     }
 
     /// The model's cached answer to `question` about `unit`, if either tool has asked it.
     pub fn cached(self: *const Store, model: []const u8, question: Digest, unit: Digest) !?f64 {
-        if (model.len == 0) std.debug.panic("looking up an answer with no model name", .{});
+        if (model.len == 0) std.debug.panic("looking up an answer with no model name; pass the model --infer asks, from the tai client", .{});
         if (std.mem.eql(u8, &question, &unit)) std.debug.panic("looking up an answer whose question and function have the same digest {s}; one was passed as the other", .{&question});
         defer _ = sqlite3_reset(self.find);
         try bind(self.find, 1, model);
@@ -193,26 +193,26 @@ fn initPath(gpa: Allocator, io: Io, environ: *const std.process.Environ.Map) ![:
 }
 
 fn prepare(db: *sqlite3, sql: []const u8) !*sqlite3_stmt {
-    if (sql.len == 0) std.debug.panic("preparing an empty statement", .{});
+    if (sql.len == 0) std.debug.panic("preparing an empty statement; pass the SQL to prepare()", .{});
     if (std.mem.indexOfScalar(u8, sql, ';') != null) std.debug.panic("'{s}' holds more than one statement; prepare them one at a time", .{sql});
     var stmt: ?*sqlite3_stmt = null;
     if (sqlite3_prepare_v2(db, sql.ptr, @intCast(sql.len), &stmt, null) != ok) return failed(db);
-    return stmt orelse std.debug.panic("SQLite prepared '{s}' but returned no statement", .{sql});
+    return stmt orelse std.debug.panic("SQLite prepared '{s}' but returned no statement; check the SQL passed to prepare() is a single statement", .{sql});
 }
 
 fn bind(stmt: *sqlite3_stmt, index: c_int, text: []const u8) !void {
     if (index < 1) std.debug.panic("binding parameter {d}; SQLite numbers parameters from 1", .{index});
-    if (text.len > std.math.maxInt(c_int)) std.debug.panic("binding {d} bytes of text, more than SQLite takes in one parameter", .{text.len});
+    if (text.len > std.math.maxInt(c_int)) std.debug.panic("binding {d} bytes of text, more than SQLite takes in one parameter; shorten the function's source, or split the function", .{text.len});
     if (sqlite3_bind_text(stmt, index, text.ptr, @intCast(text.len), transient) != ok) return error.StoreUnavailable;
 }
 
 /// Records SQLite's reason for the last failure, for the error message, and reports it.
 fn failed(db: *sqlite3) error{StoreUnavailable} {
     const message = std.mem.span(sqlite3_errmsg(db));
-    if (message.len == 0) std.debug.panic("SQLite reported a failure with no message", .{});
+    if (message.len == 0) std.debug.panic("SQLite reported a failure with no message; check the store file with the sqlite3 command-line tool", .{});
     failure_len = @min(message.len, failure.len);
     @memcpy(failure[0..failure_len], message[0..failure_len]);
-    if (failure_len == 0) std.debug.panic("kept none of SQLite's {d}-byte failure message", .{message.len});
+    if (failure_len == 0) std.debug.panic("kept none of SQLite's {d}-byte failure message; failed() must copy at least part of SQLite's message", .{message.len});
     return error.StoreUnavailable;
 }
 

@@ -78,7 +78,7 @@ pub const Graph = struct {
             }
         }
         if (offsets.len != functions.len + 1) std.debug.panic("the call graph has {d} row offsets for {d} functions; it needs one more than the functions", .{ offsets.len, functions.len });
-        if (s.targets.len != offsets[functions.len]) std.debug.panic("the call graph stores {d} call targets but its last offset says {d}", .{ s.targets.len, offsets[functions.len] });
+        if (s.targets.len != offsets[functions.len]) std.debug.panic("the call graph stores {d} call targets but its last offset says {d}; fromFacts() must write every target it counts", .{ s.targets.len, offsets[functions.len] });
         return .{ .offsets = offsets, .targets = s.targets.items() };
     }
 
@@ -129,7 +129,7 @@ pub const Graph = struct {
                 if (s.frames.last()) |parent| low[parent.node] = @min(low[parent.node], low[v]);
                 if (low[v] == index[v]) try self.component(s, v);
             }
-            if (s.frames.len != 0) std.debug.panic("the cycle search from function {d} ended with {d} frames still open", .{ root, s.frames.len });
+            if (s.frames.len != 0) std.debug.panic("the cycle search from function {d} ended with {d} frames still open; the cycle search must pop every frame it pushes, so check its exits", .{ root, s.frames.len });
         }
         if (s.stack.len != 0) std.debug.panic("the cycle search ended with {d} functions still on its stack; a component was not popped", .{s.stack.len});
         return s.cycles.items();
@@ -144,8 +144,8 @@ pub const Graph = struct {
             if (w == root) break;
         }
         const members = s.members.items()[start..];
-        if (members.len == 0) std.debug.panic("function {d} closed a component with no members; it was not on the stack", .{root});
-        if (members[members.len - 1] != root) std.debug.panic("function {d}'s component ends with function {d}; the stack was not popped down to its root", .{ root, members[members.len - 1] });
+        if (members.len == 0) std.debug.panic("function {d} closed a component with no members; it was not on the stack, so check that cycles() pushes a function before component() closes it", .{root});
+        if (members[members.len - 1] != root) std.debug.panic("function {d}'s component ends with function {d}; the stack was not popped down to its root, so check the popping loop in component()", .{ root, members[members.len - 1] });
         const cyclic = members.len > 1 or std.mem.indexOfScalar(u32, self.out(root), root) != null;
         if (cyclic) try s.cycles.add(.{ .members = members }) else s.members.len = start;
     }
@@ -169,7 +169,7 @@ const Lookup = struct {
     /// to functions or methods when the call syntax says which it must be.
     fn accepts(self: Lookup, c: u32) bool {
         const caller_path = self.functions[self.call.caller].path;
-        if (c >= self.functions.len) std.debug.panic("call to '{s}' resolved to function {d}, but only {d} are recorded", .{ self.call.callee, c, self.functions.len });
+        if (c >= self.functions.len) std.debug.panic("call to '{s}' resolved to function {d}, but only {d} are recorded; resolve calls only against the recorded functions", .{ self.call.callee, c, self.functions.len });
         if (!reaches(self.call.reach, self.functions[c].method)) return false;
         if (std.mem.eql(u8, self.functions[c].path, caller_path)) return true;
         for (self.candidates()) |other| {
@@ -182,14 +182,14 @@ const Lookup = struct {
 };
 
 fn compareName(lookup: Lookup, id: u32) std.math.Order {
-    if (id >= lookup.functions.len) std.debug.panic("looking up '{s}' reached function {d}, but only {d} are recorded", .{ lookup.call.callee, id, lookup.functions.len });
+    if (id >= lookup.functions.len) std.debug.panic("looking up '{s}' reached function {d}, but only {d} are recorded; compareName() must index only the recorded functions", .{ lookup.call.callee, id, lookup.functions.len });
     if (lookup.call.callee.len == 0) std.debug.panic("function {d} calls something with an empty name; check the @call.name capture", .{lookup.call.caller});
     return std.mem.order(u8, lookup.call.callee, lookup.functions[id].name);
 }
 
 fn nameOrder(functions: []const Function, a: u32, b: u32) bool {
-    if (a >= functions.len) std.debug.panic("sorting function {d}, but only {d} are recorded", .{ a, functions.len });
-    if (b >= functions.len) std.debug.panic("sorting function {d}, but only {d} are recorded", .{ b, functions.len });
+    if (a >= functions.len) std.debug.panic("sorting function {d}, but only {d} are recorded; sort only indices of recorded functions", .{ a, functions.len });
+    if (b >= functions.len) std.debug.panic("sorting function {d}, but only {d} are recorded; sort only indices of recorded functions", .{ b, functions.len });
     const by_name = std.mem.order(u8, functions[a].name, functions[b].name);
     return if (by_name == .eq) a < b else by_name == .lt;
 }

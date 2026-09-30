@@ -41,8 +41,8 @@ pub const Config = struct {
     paths_len: usize = 0,
 
     pub fn pathRules(self: *const Config) []const PathRules {
-        if (self.paths_len > max_path_sections) std.debug.panic("{d} [paths] sections in room for {d}", .{ self.paths_len, max_path_sections });
-        if (self.paths_len > 0 and self.dir.len == 0) std.debug.panic("{d} [paths] sections with no directory to anchor them", .{self.paths_len});
+        if (self.paths_len > max_path_sections) std.debug.panic("{d} [paths] sections in room for {d}; readPathSection() must refuse sections past max_path_sections", .{ self.paths_len, max_path_sections });
+        if (self.paths_len > 0 and self.dir.len == 0) std.debug.panic("{d} [paths] sections with no directory to anchor them; initConfig() must set dir to the folder holding zanity.toml", .{self.paths_len});
         return self.paths[0..self.paths_len];
     }
 
@@ -50,8 +50,8 @@ pub const Config = struct {
     /// file's directory. As in gitignore, a pattern without a `/` matches the file's name at any
     /// depth, and one ending in `/` matches everything under that directory.
     pub fn disabledAt(self: *const Config, relative: []const u8, rule: []const u8) bool {
-        if (relative.len == 0) std.debug.panic("asked whether '{s}' is disabled for an empty path", .{rule});
-        if (rules.find(rule) == null) std.debug.panic("asked whether '{s}', which is not a rule, is disabled at '{s}'", .{ rule, relative });
+        if (relative.len == 0) std.debug.panic("asked whether '{s}' is disabled for an empty path; dropDisabled() must skip findings whose path is outside the config's folder", .{rule});
+        if (rules.find(rule) == null) std.debug.panic("asked whether '{s}', which is not a rule, is disabled at '{s}'; pass a rule name from rules.all", .{ rule, relative });
         for (self.pathRules()) |section| {
             if (!section.disable.enabled(rule)) continue;
             if (pathMatches(section.glob, relative)) return true;
@@ -86,7 +86,7 @@ fn pathMatches(glob: []const u8, relative: []const u8) bool {
         std.fmt.bufPrint(&buffer, "**/{s}", .{trimmed}) catch return false
     else
         trimmed;
-    if (whole.len < trimmed.len) std.debug.panic("widening the [paths] pattern '{s}' shortened it to '{s}'", .{ glob, whole });
+    if (whole.len < trimmed.len) std.debug.panic("widening the [paths] pattern '{s}' shortened it to '{s}'; pathMatches() must only add to a pattern, so check its format calls", .{ glob, whole });
     return ignore.matchPath(whole, relative);
 }
 
@@ -114,16 +114,16 @@ pub fn initConfig(gpa: Allocator, io: Io) !Config {
         if (isRepositoryRoot(io, d)) break;
         dir = std.fs.path.dirname(d);
     }
-    if (start.len == 0) std.debug.panic("searched for {s} from an empty directory", .{file_name});
+    if (start.len == 0) std.debug.panic("searched for {s} from an empty directory; initConfig() must start from the real path of the working directory", .{file_name});
     return .{};
 }
 
 fn isRepositoryRoot(io: Io, dir: []const u8) bool {
-    if (dir.len == 0) std.debug.panic("checking whether an empty path is a repository root", .{});
+    if (dir.len == 0) std.debug.panic("checking whether an empty path is a repository root; initConfig() must stop at the filesystem root before calling it", .{});
     var buffer: [std.fs.max_path_bytes]u8 = undefined;
     const git = std.fmt.bufPrint(&buffer, "{s}/.git", .{dir}) catch return false;
     Io.Dir.cwd().access(io, git, .{}) catch return false;
-    if (git.len <= dir.len) std.debug.panic("'{s}' is no longer than its directory '{s}'", .{ git, dir });
+    if (git.len <= dir.len) std.debug.panic("'{s}' is no longer than its directory '{s}'; isRepositoryRoot() must join .git onto the directory", .{ git, dir });
     return true;
 }
 
@@ -138,7 +138,7 @@ pub fn parseConfig(bytes: []u8) Error!Config {
         if (reader.at == bytes.len) break;
         try reader.readEntry(&config);
     }
-    if (reader.at != bytes.len) std.debug.panic("stopped parsing {s} at byte {d} of {d}", .{ file_name, reader.at, bytes.len });
+    if (reader.at != bytes.len) std.debug.panic("stopped parsing {s} at byte {d} of {d}; the loop in parseConfig() must read to the end of the file", .{ file_name, reader.at, bytes.len });
     return config;
 }
 
@@ -155,11 +155,11 @@ const TomlReader = struct {
     pending_glob: []const u8 = "",
 
     fn fail(self: *const TomlReader, comptime fmt: []const u8, args: anytype) Error {
-        if (self.at > self.bytes.len) std.debug.panic("reporting a problem at byte {d} of a {d}-byte file", .{ self.at, self.bytes.len });
+        if (self.at > self.bytes.len) std.debug.panic("reporting a problem at byte {d} of a {d}-byte file; fail() must be called with the reader inside the file", .{ self.at, self.bytes.len });
         const line = std.mem.count(u8, self.bytes[0..self.at], "\n") + 1;
         const written = std.fmt.bufPrint(&problem, "{s}:{d}: " ++ fmt, .{ file_name, line } ++ args) catch problem[0..];
         problem_len = written.len;
-        if (problem_len <= file_name.len) std.debug.panic("described a config problem as '{s}', with no detail", .{problem[0..problem_len]});
+        if (problem_len <= file_name.len) std.debug.panic("described a config problem as '{s}', with no detail; give the fail() call a description of what is wrong", .{problem[0..problem_len]});
         return error.InvalidConfig;
     }
 
@@ -186,45 +186,45 @@ const TomlReader = struct {
         if (self.at < self.bytes.len and self.bytes[self.at] != '\n' and self.bytes[self.at] != '\r') {
             return self.fail("unexpected '{c}' after a value; put each setting on its own line.", .{self.bytes[self.at]});
         }
-        if (self.at < start) std.debug.panic("ending a line moved back from byte {d} to {d}", .{ start, self.at });
-        if (self.at > self.bytes.len) std.debug.panic("ending a line ran to byte {d} of {d}", .{ self.at, self.bytes.len });
+        if (self.at < start) std.debug.panic("ending a line moved back from byte {d} to {d}; endLine() must only move self.at forward", .{ start, self.at });
+        if (self.at > self.bytes.len) std.debug.panic("ending a line ran to byte {d} of {d}; endLine() must stop at the end of the file", .{ self.at, self.bytes.len });
     }
 
     fn readEntry(self: *TomlReader, config: *Config) Error!void {
-        if (self.at >= self.bytes.len) std.debug.panic("reading an entry at byte {d} of a {d}-byte file", .{ self.at, self.bytes.len });
+        if (self.at >= self.bytes.len) std.debug.panic("reading an entry at byte {d} of a {d}-byte file; parseConfig() must stop before the end of the file", .{ self.at, self.bytes.len });
         const start = self.at;
         if (self.bytes[self.at] == '[') {
             try self.readHeader(config);
         } else {
             const key = self.readKey() orelse return self.fail("expected a setting such as 'rules = [...]' or a table such as '[infer]'.", .{});
             while (self.at < self.bytes.len and (self.bytes[self.at] == ' ' or self.bytes[self.at] == '\t')) self.at += 1;
-            if (self.at >= self.bytes.len or self.bytes[self.at] != '=') return self.fail("expected '=' after '{s}'.", .{key});
+            if (self.at >= self.bytes.len or self.bytes[self.at] != '=') return self.fail("expected '=' after '{s}'; write each setting as name = value.", .{key});
             self.at += 1;
             while (self.at < self.bytes.len and (self.bytes[self.at] == ' ' or self.bytes[self.at] == '\t')) self.at += 1;
             try self.readSetting(config, key);
         }
         try self.endLine();
-        if (self.at <= start) std.debug.panic("reading an entry at byte {d} consumed nothing", .{start});
+        if (self.at <= start) std.debug.panic("reading an entry at byte {d} consumed nothing; readEntry() must consume at least the key or header it read", .{start});
     }
 
     /// Reads a table header: `[infer]`, or `[paths."<glob>"]`, which starts a new section.
     fn readHeader(self: *TomlReader, config: *Config) Error!void {
-        if (self.bytes[self.at] != '[') std.debug.panic("reading a table header at byte {d}, which is not '['", .{self.at});
+        if (self.bytes[self.at] != '[') std.debug.panic("reading a table header at byte {d}, which is not '['; call readHeader() only at a '['", .{self.at});
         const start = self.at;
         self.at += 1;
-        const name = self.readKey() orelse return self.fail("expected a table name after '['.", .{});
+        const name = self.readKey() orelse return self.fail("expected a table name after '['; write [infer] or [paths.\"<pattern>\"].", .{});
         if (std.mem.eql(u8, name, "paths")) {
             if (self.at >= self.bytes.len or self.bytes[self.at] != '.') return self.fail("'[paths]' needs a pattern for the files it covers, such as [paths.\"tests/**\"].", .{});
             self.at += 1;
-            if (self.at >= self.bytes.len) return self.fail("expected a quoted pattern after '[paths.'.", .{});
+            if (self.at >= self.bytes.len) return self.fail("expected a quoted pattern after '[paths.'; write it as [paths.\"tests/**\"].", .{});
             self.pending_glob = try self.readString("paths");
         }
-        if (self.at >= self.bytes.len or self.bytes[self.at] != ']') return self.fail("expected ']' after '[{s}'.", .{name});
+        if (self.at >= self.bytes.len or self.bytes[self.at] != ']') return self.fail("expected ']' after '[{s}'; close the table name with ']'.", .{name});
         self.at += 1;
         self.table = std.meta.stringToEnum(Table, name) orelse .root;
         if (self.table == .root) return self.fail("'[{s}]' isn't a table zanity knows; the tables are [infer] and [paths.\"<pattern>\"].", .{name});
         if (self.table == .paths) try self.readPathSection(config);
-        if (self.at <= start) std.debug.panic("reading a table header at byte {d} consumed nothing", .{start});
+        if (self.at <= start) std.debug.panic("reading a table header at byte {d} consumed nothing; readHeader() must consume at least the '[' it starts at", .{start});
     }
 
     fn readKey(self: *TomlReader) ?[]const u8 {
@@ -233,32 +233,32 @@ const TomlReader = struct {
             const c = self.bytes[self.at];
             if (!(std.ascii.isAlphanumeric(c) or c == '_' or c == '-')) break;
         }
-        if (self.at < start) std.debug.panic("reading a key moved back from byte {d} to {d}", .{ start, self.at });
-        if (self.at > self.bytes.len) std.debug.panic("reading a key ran to byte {d} of {d}", .{ self.at, self.bytes.len });
+        if (self.at < start) std.debug.panic("reading a key moved back from byte {d} to {d}; readKey() must only move self.at forward", .{ start, self.at });
+        if (self.at > self.bytes.len) std.debug.panic("reading a key ran to byte {d} of {d}; readKey() must stop at the end of the file", .{ self.at, self.bytes.len });
         return if (self.at == start) null else self.bytes[start..self.at];
     }
 
     fn readPathSection(self: *TomlReader, config: *Config) Error!void {
-        if (self.table != .paths) std.debug.panic("starting a [paths] section while reading [{t}]", .{self.table});
+        if (self.table != .paths) std.debug.panic("starting a [paths] section while reading [{t}]; readHeader() must set the table to paths before starting a section", .{self.table});
         const glob = self.pending_glob;
         if (glob.len == 0) return self.fail("a [paths] pattern is empty; name the files it covers, such as \"tests/**\".", .{});
         if (config.paths_len == max_path_sections) return self.fail("there are more than {d} [paths] sections; combine patterns that disable the same rules.", .{max_path_sections});
         config.paths[config.paths_len] = .{ .glob = glob };
         config.paths_len += 1;
         self.pending_glob = "";
-        if (config.paths_len > max_path_sections) std.debug.panic("{d} [paths] sections in room for {d}", .{ config.paths_len, max_path_sections });
+        if (config.paths_len > max_path_sections) std.debug.panic("{d} [paths] sections in room for {d}; readPathSection() must refuse sections past max_path_sections", .{ config.paths_len, max_path_sections });
     }
 
     fn readPathSetting(self: *TomlReader, config: *Config, key: []const u8) Error!void {
-        if (self.table != .paths or config.paths_len == 0) std.debug.panic("reading '{s}' as a [paths] setting outside a [paths] section", .{key});
+        if (self.table != .paths or config.paths_len == 0) std.debug.panic("reading '{s}' as a [paths] setting outside a [paths] section; readSetting() must hand [paths] settings over only inside a section", .{key});
         if (!std.mem.eql(u8, key, "disable")) return self.fail("'{s}' isn't a [paths] setting; the only one is disable.", .{key});
         const section = &config.paths[config.paths_len - 1];
         for (try self.readStrings(key)) |name| section.disable.include((rules.find(name) orelse return self.fail("'{s}' isn't a rule; the rules are listed in the README, and 'zanity check --rules' takes the same names.", .{name})).name);
-        if (section.disable.len > rules.all.len) std.debug.panic("[paths.\"{s}\"] disables {d} rules of {d}", .{ section.glob, section.disable.len, rules.all.len });
+        if (section.disable.len > rules.all.len) std.debug.panic("[paths.\"{s}\"] disables {d} rules of {d}; Set.include() must add each rule once", .{ section.glob, section.disable.len, rules.all.len });
     }
 
     fn readSetting(self: *TomlReader, config: *Config, key: []const u8) Error!void {
-        if (key.len == 0) std.debug.panic("setting a key with no name at byte {d}", .{self.at});
+        if (key.len == 0) std.debug.panic("setting a key with no name at byte {d}; readEntry() must read a key before calling readSetting()", .{self.at});
         if (self.table == .paths) return self.readPathSetting(config, key);
         if (self.table == .infer) {
             if (!std.mem.eql(u8, key, "concurrency")) return self.fail("'{s}' isn't an [infer] setting; the only one is concurrency.", .{key});
@@ -283,7 +283,7 @@ const TomlReader = struct {
                 if (which == .rules) config.rules = set else config.disable = set;
             },
         }
-        if (config.exclude_len > max_excludes) std.debug.panic("{d} exclude patterns in room for {d}", .{ config.exclude_len, max_excludes });
+        if (config.exclude_len > max_excludes) std.debug.panic("{d} exclude patterns in room for {d}; readStrings() must refuse lists longer than max_excludes", .{ config.exclude_len, max_excludes });
     }
 
     fn readInteger(self: *TomlReader, key: []const u8) Error!i64 {
@@ -296,8 +296,8 @@ const TomlReader = struct {
             n += 1;
         };
         const value = std.fmt.parseInt(i64, digits[0..n], 10) catch return self.fail("'{s}' needs a whole number, such as {s} = 8.", .{ key, key });
-        if (self.at <= start) std.debug.panic("parsed {d} for '{s}' without reading a digit at byte {d}", .{ value, key, start });
-        if (n > digits.len) std.debug.panic("kept {d} digits in room for {d}", .{ n, digits.len });
+        if (self.at <= start) std.debug.panic("parsed {d} for '{s}' without reading a digit at byte {d}; readInteger() must fail before parsing when it read no digit", .{ value, key, start });
+        if (n > digits.len) std.debug.panic("kept {d} digits in room for {d}; readInteger() must keep at most the digit buffer's length", .{ n, digits.len });
         return value;
     }
 
@@ -312,7 +312,7 @@ const TomlReader = struct {
             if (self.at >= self.bytes.len) break;
             if (self.bytes[self.at] == ']') {
                 self.at += 1;
-                if (count > max_items) std.debug.panic("read {d} items of '{s}' in room for {d}", .{ count, key, max_items });
+                if (count > max_items) std.debug.panic("read {d} items of '{s}' in room for {d}; readStrings() must refuse lists longer than max_items", .{ count, key, max_items });
                 return self.items[0..count];
             }
             if (count == max_items) return self.fail("'{s}' has more than {d} items; use fewer, broader ones.", .{ key, max_items });
@@ -322,15 +322,15 @@ const TomlReader = struct {
             if (self.at < self.bytes.len and self.bytes[self.at] == ',') {
                 self.at += 1;
             } else if (self.at >= self.bytes.len or self.bytes[self.at] != ']') {
-                return self.fail("items in '{s}' must be separated by commas.", .{key});
+                return self.fail("items in '{s}' must be separated by commas, such as [\"a\", \"b\"].", .{key});
             }
         }
-        if (self.at <= start) std.debug.panic("reading '{s}' at byte {d} consumed nothing", .{ key, start });
-        return self.fail("'{s}' opens a list that is never closed with ']'.", .{key});
+        if (self.at <= start) std.debug.panic("reading '{s}' at byte {d} consumed nothing; readStrings() must consume at least the '[' it starts at", .{ key, start });
+        return self.fail("'{s}' opens a list that is never closed with ']'; add ']' after its last item.", .{key});
     }
 
     fn readString(self: *TomlReader, key: []const u8) Error![]const u8 {
-        if (self.at >= self.bytes.len) std.debug.panic("reading a string for '{s}' at byte {d} of {d}", .{ key, self.at, self.bytes.len });
+        if (self.at >= self.bytes.len) std.debug.panic("reading a string for '{s}' at byte {d} of {d}; call readString() only inside the file", .{ key, self.at, self.bytes.len });
         const quote = self.bytes[self.at];
         if (quote != '"' and quote != '\'') return self.fail("items in '{s}' must be quoted strings, such as \"recursion\".", .{key});
         self.at += 1;
@@ -338,7 +338,7 @@ const TomlReader = struct {
         var written = start;
         while (self.at < self.bytes.len and self.bytes[self.at] != quote) : (self.at += 1) {
             var c = self.bytes[self.at];
-            if (c == '\n') return self.fail("a string in '{s}' is not closed before the end of the line.", .{key});
+            if (c == '\n') return self.fail("a string in '{s}' is not closed before the end of the line; add the closing quote on the same line.", .{key});
             if (quote == '"' and c == '\\' and self.at + 1 < self.bytes.len) {
                 self.at += 1;
                 c = switch (self.bytes[self.at]) {
@@ -352,8 +352,8 @@ const TomlReader = struct {
             self.bytes[written] = c;
             written += 1;
         }
-        if (self.at >= self.bytes.len) return self.fail("a string in '{s}' is never closed.", .{key});
-        if (written > self.at) std.debug.panic("decoding a string for '{s}' wrote {d} bytes but read only {d}", .{ key, written - start, self.at - start });
+        if (self.at >= self.bytes.len) return self.fail("a string in '{s}' is never closed; add the matching closing quote.", .{key});
+        if (written > self.at) std.debug.panic("decoding a string for '{s}' wrote {d} bytes but read only {d}; decoding escapes can only shrink a string, so check how readString() writes", .{ key, written - start, self.at - start });
         self.at += 1;
         return self.bytes[start..written];
     }

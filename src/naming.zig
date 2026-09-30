@@ -57,7 +57,7 @@ pub fn crossCheck(s: *ConceptScratch, facts: *Facts, enabled: rules.Set, finding
 fn exempt(name: []const u8) bool {
     if (name.len == 0) std.debug.panic("asked whether an empty name is exempt from naming checks; the @name capture matched an empty node", .{});
     const dunder = name.len > 4 and std.mem.startsWith(u8, name, "__") and std.mem.endsWith(u8, name, "__");
-    if (dunder and name.len <= 4) std.debug.panic("'{s}' was taken for a dunder name, but those need at least 5 bytes, like __x__", .{name});
+    if (dunder and name.len <= 4) std.debug.panic("'{s}' was taken for a dunder name, but those need at least 5 bytes, like __x__; exempt() must check the length before treating a name as a dunder name", .{name});
     return dunder;
 }
 
@@ -88,7 +88,7 @@ fn caseBoundary(name: []const u8, i: usize) bool {
     const current = name[i];
     if (std.ascii.isUpper(current) and (std.ascii.isLower(previous) or std.ascii.isDigit(previous))) return true;
     const acronym_end = std.ascii.isUpper(previous) and std.ascii.isUpper(current) and i + 1 < name.len and std.ascii.isLower(name[i + 1]);
-    if (acronym_end and i + 1 >= name.len) std.debug.panic("'{s}': an acronym ending at byte {d} needs a lowercase byte after it", .{ name, i });
+    if (acronym_end and i + 1 >= name.len) std.debug.panic("'{s}': an acronym ending at byte {d} needs a lowercase byte after it; caseBoundary() must end an acronym before its last capital", .{ name, i });
     return acronym_end;
 }
 
@@ -104,7 +104,7 @@ fn conceptKey(s: *ConceptScratch, language: []const u8, name: []const u8) error{
         _ = try s.words.copy(token);
     }
     const key = s.words.buffer[start..s.words.used];
-    if (key.len <= language.len) std.debug.panic("the concept key for '{s}' is '{s}', with no words after the language {s}", .{ name, key, language });
+    if (key.len <= language.len) std.debug.panic("the concept key for '{s}' is '{s}', with no words after the language {s}; conceptKey() must write the words after the language prefix", .{ name, key, language });
     if (tokens.len == 0) std.debug.panic("'{s}' split into no words; names need at least one letter or digit", .{name});
     return key;
 }
@@ -149,7 +149,7 @@ fn drift(s: *ConceptScratch, text: *memory.Text, definitions: []const Definition
         });
     }
     if (start != keyed.len) std.debug.panic("name-drift stopped at definition {d} of {d}; runEnd must reach the end", .{ start, keyed.len });
-    if (findings.len < before) std.debug.panic("name-drift removed findings: {d} before, {d} after", .{ before, findings.len });
+    if (findings.len < before) std.debug.panic("name-drift removed findings: {d} before, {d} after; drift() must only add findings", .{ before, findings.len });
 }
 
 fn runEnd(keyed: []const Keyed, start: usize) usize {
@@ -175,7 +175,7 @@ fn addUnique(list: *memory.Bounded([]const u8), value: []const u8) error{LimitEx
     if (value.len == 0) std.debug.panic("asked to record an empty name among {d}; names are never empty", .{list.len});
     for (list.items()) |existing| if (std.mem.eql(u8, existing, value)) return;
     try list.add(value);
-    if (list.len == 0) std.debug.panic("recorded '{s}' but the list is still empty", .{value});
+    if (list.len == 0) std.debug.panic("recorded '{s}' but the list is still empty; addUnique() must add the name before returning", .{value});
 }
 
 fn caseOnlyAcrossKinds(names: []const []const u8, kinds: usize) bool {

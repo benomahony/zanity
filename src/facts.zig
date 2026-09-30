@@ -118,7 +118,7 @@ pub const Facts = struct {
     /// Keeps a function that reports an error; `at` is its name's line and column, `end_line` its last line.
     pub fn unit(self: *Facts, name: []const u8, at: [3]u32, source: []const u8) error{LimitExceeded}!void {
         if (self.path.len == 0 or self.language.len == 0) std.debug.panic("keeping function '{s}' before the file is known (path '{s}', language '{s}'); set facts.path and facts.language first", .{ name, self.path, self.language });
-        if (at[2] < at[0]) std.debug.panic("{s}: function '{s}' ends on line {d}, before its name on line {d}", .{ self.path, name, at[2] + 1, at[0] + 1 });
+        if (at[2] < at[0]) std.debug.panic("{s}: function '{s}' ends on line {d}, before its name on line {d}; pass the function's name position and its last line from the same node", .{ self.path, name, at[2] + 1, at[0] + 1 });
         try self.units.add(.{
             .path = self.path,
             .language = self.language,
@@ -131,7 +131,7 @@ pub const Facts = struct {
     }
 
     pub fn call(self: *Facts, caller: u32, callee: []const u8, reach: Reach) error{LimitExceeded}!void {
-        if (caller >= self.functions.len) std.debug.panic("call to '{s}' names caller {d}, but only {d} functions are recorded", .{ callee, caller, self.functions.len });
+        if (caller >= self.functions.len) std.debug.panic("call to '{s}' names caller {d}, but only {d} functions are recorded; record the calling function before its calls", .{ callee, caller, self.functions.len });
         if (callee.len == 0) std.debug.panic("function {d} calls something with an empty name; check the @call.name capture", .{caller});
         try self.calls.add(.{ .caller = caller, .callee = try self.text.copy(callee), .reach = reach });
     }

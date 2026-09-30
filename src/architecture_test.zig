@@ -36,7 +36,7 @@ fn learn(arena: std.mem.Allocator) !Knowledge {
 
 fn violations(arena: std.mem.Allocator, checker: Probe, path: []const u8, source: []const u8) !usize {
     const k = checker.knowledge;
-    if (path.len == 0) std.debug.panic("asked to scan a file with an empty path ({d} bytes)", .{source.len});
+    if (path.len == 0) std.debug.panic("asked to scan a file with an empty path ({d} bytes); the walk must pass each file's path relative to its root", .{source.len});
     const parser = ts.ts_parser_new() orelse return error.OutOfMemory;
     defer ts.ts_parser_delete(parser);
     _ = ts.ts_parser_set_language(parser, @ptrCast(checker.adapter.grammar()));
@@ -58,7 +58,7 @@ fn violations(arena: std.mem.Allocator, checker: Probe, path: []const u8, source
         const at = ts.ts_node_start_point(entry.node);
         std.debug.print("\n{s}:{d}:{d}: '{s}' is {s}; move it into the language's queries or name tables", .{ path, at.row + 1, at.column + 1, word, if (names_language) "a language name" else "a grammar node kind" });
     }
-    if (found > index.triples.len) std.debug.panic("{s}: reported {d} violations from {d} captured nodes", .{ path, found, index.triples.len });
+    if (found > index.triples.len) std.debug.panic("{s}: reported {d} violations from {d} captured nodes; count at most one violation per captured node, so check the loop's continue", .{ path, found, index.triples.len });
     return found;
 }
 

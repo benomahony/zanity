@@ -17,7 +17,7 @@ pub const Counts = struct {
 
 pub fn sortFindings(findings: []Finding) void {
     std.mem.sort(Finding, findings, {}, findingOrder);
-    if (!std.sort.isSorted(Finding, findings, {}, findingOrder)) std.debug.panic("expected findings sorted by path and position, got {d} findings out of order", .{findings.len});
+    if (!std.sort.isSorted(Finding, findings, {}, findingOrder)) std.debug.panic("expected findings sorted by path and position, got {d} findings out of order; sort with findingOrder before checking the order", .{findings.len});
     if (findings.len >= std.math.maxInt(u32)) std.debug.panic("{d} findings is more than a report can number; raise the u32 counts in report.zig", .{findings.len});
 }
 
@@ -64,7 +64,7 @@ pub const TableScratch = struct {
     pub fn initTableScratch(gpa: std.mem.Allocator, files: u32) std.mem.Allocator.Error!TableScratch {
         if (files == 0) std.debug.panic("the report table was given room for 0 files; memory.Limits.files must be above 0", .{});
         const cells = try gpa.alloc([3]zrich.Cell, files);
-        if (cells.len != files) std.debug.panic("the report table asked for {d} rows and got {d}", .{ files, cells.len });
+        if (cells.len != files) std.debug.panic("the report table asked for {d} rows and got {d}; raise the rows given to initTableScratch()", .{ files, cells.len });
         return .{ .tallies = try .initBounded(gpa, files, "files with findings"), .cells = cells, .rows = try gpa.alloc([]const zrich.Cell, files) };
     }
 };
@@ -153,7 +153,7 @@ fn renderFile(console: zrich.Console, tally: FileTally, findings: []const Findin
 }
 
 fn plural(n: u32, word: []const u8) []const u8 {
-    if (word.len == 0) std.debug.panic("asked for the plural of an empty word (count {d})", .{n});
+    if (word.len == 0) std.debug.panic("asked for the plural of an empty word (count {d}); pass the word to pluralise", .{n});
     if (word[word.len - 1] == 's') std.debug.panic("'{s}' already ends in 's'; pass the singular", .{word});
     return if (n == 1) word else if (std.mem.eql(u8, word, "error")) "errors" else "warnings";
 }
@@ -164,7 +164,7 @@ fn renderTable(sink: Sink) !void {
     const tallies = s.tallies.items();
     if (tallies.len == 0) return;
     std.mem.sort(FileTally, tallies, {}, worstFirst);
-    if (!std.sort.isSorted(FileTally, tallies, {}, worstFirst)) std.debug.panic("expected files worst first, got {d} files out of order", .{tallies.len});
+    if (!std.sort.isSorted(FileTally, tallies, {}, worstFirst)) std.debug.panic("expected files worst first, got {d} files out of order; sort the tallies worst first before rendering them", .{tallies.len});
     for (tallies, 0..) |t, row| {
         s.cells[row] = .{
             .{ .text = t.path },
@@ -236,7 +236,7 @@ fn renderRules(sink: Sink, findings: []const Finding) !void {
     };
     try sink.console.writer.writeByte('\n');
     try table.render(sink.console.context(), fixed.allocator());
-    if (fired == 0) std.debug.panic("{d} findings but no rule fired", .{findings.len});
+    if (fired == 0) std.debug.panic("{d} findings but no rule fired; renderRules() must count every finding under its rule", .{findings.len});
 }
 
 fn worstFirst(_: void, a: FileTally, b: FileTally) bool {
@@ -293,7 +293,7 @@ fn digits(value: usize) usize {
 }
 
 pub fn summarise(console: zrich.Console, counts: Counts) !void {
-    if (counts.flagged > counts.files) std.debug.panic("{d} files flagged out of {d} checked", .{ counts.flagged, counts.files });
+    if (counts.flagged > counts.files) std.debug.panic("{d} files flagged out of {d} checked; summarise() must count a file at most once", .{ counts.flagged, counts.files });
     const files = if (counts.files == 1) "file" else "files";
     var buffer: [256]u8 = undefined;
     if (counts.errors + counts.warnings == 0) {

@@ -114,7 +114,7 @@ const Workspace = struct {
             const slot = &ws.checkers[adapterIndex(adapter)];
             if (slot.* == null) slot.* = try check.Checker.initChecker(gpa, try language.load(adapter), selected);
         }
-        if (ws.checkers.len != adapters.all.len) std.debug.panic("{d} checker slots for {d} languages", .{ ws.checkers.len, adapters.all.len });
+        if (ws.checkers.len != adapters.all.len) std.debug.panic("{d} checker slots for {d} languages; initCheckers() must make one slot per adapter in adapters.all", .{ ws.checkers.len, adapters.all.len });
     }
 };
 
@@ -127,7 +127,7 @@ fn adapterIndex(adapter: *const language.Adapter) usize {
 
 pub fn main(init: std.process.Init) !u8 {
     const args = try init.minimal.args.toSlice(init.arena.allocator());
-    if (args.len == 0) std.debug.panic("the process has no arguments, not even its own name", .{});
+    if (args.len == 0) std.debug.panic("the process has no arguments, not even its own name; start zanity from a shell or exec, which always pass the program's name", .{});
     var out_buffer: [64 * 1024]u8 = undefined;
     var out_writer: Io.File.Writer = .initStreaming(.stdout(), init.io, &out_buffer);
     var err_buffer: [4096]u8 = undefined;
@@ -171,7 +171,7 @@ fn runCheck(ctx: *zcli.Context, options: CheckOptions) ![]const Row {
     };
     if (counts.errors > 0 or (options.strict and counts.warnings > 0)) ctx.status = .failure;
     if (ctx.format != .human) try report.summarise(console(ctx, ctx.runtime.err), counts);
-    if (ws.rows.len != counts.errors + counts.warnings) std.debug.panic("{d} output rows for {d} errors and {d} warnings", .{ ws.rows.len, counts.errors, counts.warnings });
+    if (ws.rows.len != counts.errors + counts.warnings) std.debug.panic("{d} output rows for {d} errors and {d} warnings; runCheck() must add one row per error or warning", .{ ws.rows.len, counts.errors, counts.warnings });
     return ws.rows.items();
 }
 
@@ -182,7 +182,7 @@ fn renderHuman(ctx: *zcli.Context, rows: []const Row) !void {
     if (rows.len != findings.len) std.debug.panic("rendering {d} rows for {d} findings; rows are built one per finding", .{ rows.len, findings.len });
     try report.render(.{ .console = console(ctx, ctx.runtime.out), .scratch = &ws.table, .text = &ws.text }, findings);
     try report.summarise(console(ctx, ctx.runtime.err), report.count(findings, ws.checked));
-    if (ws.checked > ws.files.len) std.debug.panic("checked {d} files out of {d} collected", .{ ws.checked, ws.files.len });
+    if (ws.checked > ws.files.len) std.debug.panic("checked {d} files out of {d} collected; count a file as checked only once, in checkFiles()", .{ ws.checked, ws.files.len });
 }
 
 fn console(ctx: *zcli.Context, stream: zcli.Stream) zrich.Console {
@@ -207,7 +207,7 @@ fn parseRules(ctx: *zcli.Context, ws: *Workspace, list: []const u8) !rules.Set {
     }
     if (set.len == 0) return ctx.fail(.usage, "--rules needs at least one rule.", "Pass a comma-separated list, such as --rules unbounded-loop,long-function, or --rules all.");
     if (set.len > std.mem.count(u8, list, ",") + 1 and std.mem.indexOf(u8, list, "all") == null) std.debug.panic("--rules '{s}' enabled {d} rules from {d} names; each name other than 'all' enables one rule, so check includeNamed()", .{ list, set.len, std.mem.count(u8, list, ",") + 1 });
-    if (rules.find(set.names()[0]) == null) std.debug.panic("--rules '{s}' enabled '{s}', which is not a rule", .{ list, set.names()[0] });
+    if (rules.find(set.names()[0]) == null) std.debug.panic("--rules '{s}' enabled '{s}', which is not a rule; parseRules() must add only rules that includeNamed() found", .{ list, set.names()[0] });
     return set;
 }
 
@@ -266,7 +266,7 @@ fn checkFiles(ctx: *zcli.Context, ws: *Workspace, selected: rules.Set) !void {
     if (ws.live) |live| live.restart();
     try naming.crossCheck(&ws.naming, &ws.facts, selected, &ws.findings);
     if (selected.enabled("recursion")) try graph.recursion(&ws.graph, &ws.facts, &ws.findings);
-    if (ws.checked > ws.files.len) std.debug.panic("checked {d} files out of {d} collected", .{ ws.checked, ws.files.len });
+    if (ws.checked > ws.files.len) std.debug.panic("checked {d} files out of {d} collected; count a file as checked only once per file collected", .{ ws.checked, ws.files.len });
 }
 
 fn reportInference(state: *anyopaque, done: usize, total: usize) void {
@@ -305,7 +305,7 @@ fn storeProblem(ws: *Workspace) ![]const u8 {
 /// `--rules` chose otherwise, turning on the rules only inference can decide.
 fn connectInference(ctx: *zcli.Context, ws: *Workspace, selected: *rules.Set, add_inferred: bool) !void {
     if (ws.inference != null) std.debug.panic("connecting to TypeSafe a second time; runCheck connects once per run", .{});
-    const environ = ws.environ orelse std.debug.panic("--infer needs the process environment, but main did not store it in the workspace", .{});
+    const environ = ws.environ orelse std.debug.panic("--infer needs the process environment, but main did not store it in the workspace; main() must store the environment in the workspace before running a command", .{});
     ws.inference = infer.Inference.initInference(std.heap.page_allocator, ws.io, environ, ws.limits) catch |e| switch (e) {
         error.MissingApiKey => return ctx.fail(.usage, "--infer asks TypeSafe to judge error messages, and needs an API key in TYPESAFE_API_KEY.", "Set TYPESAFE_API_KEY, or run without --infer to use only the deterministic checks."),
         error.StoreUnavailable => return ctx.fail(.io, try storeProblem(ws), "Check that the cache directory is writable, or set ZANITY_STORE to a file zanity can create."),
@@ -313,7 +313,7 @@ fn connectInference(ctx: *zcli.Context, ws: *Workspace, selected: *rules.Set, ad
     };
     ws.facts.collect_units = true;
     if (add_inferred) for (rules.all) |r| if (r.question.len > 0) selected.include(r.name);
-    if (selected.len == 0) std.debug.panic("--infer left no rules selected", .{});
+    if (selected.len == 0) std.debug.panic("--infer left no rules selected; connectInference() must keep the requested rules selected", .{});
 }
 
 /// Applies each file's edits, then drops the findings they fixed and moves the rest to their new lines.
@@ -354,7 +354,7 @@ fn dropDisabled(ws: *Workspace) !void {
     if (settings.pathRules().len == 0) return;
     const cwd = try Io.Dir.cwd().realPathFileAlloc(ws.io, ".", std.heap.page_allocator);
     defer std.heap.page_allocator.free(cwd);
-    if (!std.mem.startsWith(u8, cwd, settings.dir)) std.debug.panic("zanity.toml was found in {s}, which is not at or above the working directory {s}", .{ settings.dir, cwd });
+    if (!std.mem.startsWith(u8, cwd, settings.dir)) std.debug.panic("zanity.toml was found in {s}, which is not at or above the working directory {s}; initConfig() must search only the working directory and the folders above it", .{ settings.dir, cwd });
     const below = std.mem.trimStart(u8, cwd[settings.dir.len..], "/");
     const findings = ws.findings.items();
     var kept: usize = 0;
@@ -380,7 +380,7 @@ fn dropDisabled(ws: *Workspace) !void {
 /// An edit that overlaps an earlier one waits for the next run.
 fn fixFile(ctx: *zcli.Context, ws: *Workspace, findings: []Finding) !usize {
     const path = findings[0].path;
-    if (!std.mem.eql(u8, path, findings[findings.len - 1].path)) std.debug.panic("expected the findings of one file, got {s} and {s}", .{ path, findings[findings.len - 1].path });
+    if (!std.mem.eql(u8, path, findings[findings.len - 1].path)) std.debug.panic("expected the findings of one file, got {s} and {s}; fixFiles() must pass one file's findings at a time", .{ path, findings[findings.len - 1].path });
     var any = false;
     for (findings) |f| any = any or f.edit != null;
     if (!any) return 0;
@@ -411,12 +411,12 @@ fn fixFile(ctx: *zcli.Context, ws: *Workspace, findings: []Finding) !usize {
     out += rest.len;
     try replaceFile(ctx, ws, path, ws.fixed[0..out]);
     shiftLines(source, findings);
-    if (applied == 0) std.debug.panic("expected at least one edit to apply to {s}, got none", .{path});
+    if (applied == 0) std.debug.panic("expected at least one edit to apply to {s}, got none; fixFiles() must call fixFile() only for a file with an edit", .{path});
     return applied;
 }
 
 fn replaceFile(ctx: *zcli.Context, ws: *Workspace, path: []const u8, bytes: []const u8) !void {
-    if (!(path.len > 0 and bytes.len <= ws.fixed.len)) std.debug.panic("expected a path and at most {d} bytes, got '{s}' and {d} bytes", .{ ws.fixed.len, path, bytes.len });
+    if (!(path.len > 0 and bytes.len <= ws.fixed.len)) std.debug.panic("expected a path and at most {d} bytes, got '{s}' and {d} bytes; fixFile() must write at most the fixed buffer's size", .{ ws.fixed.len, path, bytes.len });
     const cwd = Io.Dir.cwd();
     const permissions = (cwd.statFile(ws.io, path, .{}) catch |e| {
         return ctx.fail(.io, try ws.text.format("Could not stat {s} to fix it: {t}.", .{ path, e }), "Check the file is still there and readable.");
@@ -427,7 +427,7 @@ fn replaceFile(ctx: *zcli.Context, ws: *Workspace, path: []const u8, bytes: []co
     defer atomic.deinit(ws.io);
     try atomic.file.writeStreamingAll(ws.io, bytes);
     try atomic.replace(ws.io);
-    if (bytes.len == 0) std.debug.panic("expected a fixed file with content, got an empty {s}", .{path});
+    if (bytes.len == 0) std.debug.panic("expected a fixed file with content, got an empty {s}; fixFile() must write the kept source and each edit", .{path});
 }
 
 /// Moves the findings that stay in a fixed file past the lines its edits added or removed.
@@ -487,7 +487,7 @@ fn collect(ctx: *zcli.Context, ws: *Workspace, path: []const u8) !void {
         memory.exceeded = "directory entries";
         return error.LimitExceeded;
     }
-    if (ws.files.len < before) std.debug.panic("collecting {s} dropped files: {d} before, {d} after", .{ path, before, ws.files.len });
+    if (ws.files.len < before) std.debug.panic("collecting {s} dropped files: {d} before, {d} after; collect() must only add files", .{ path, before, ws.files.len });
 }
 
 fn pathOrder(_: void, a: []const u8, b: []const u8) bool {
@@ -497,8 +497,8 @@ fn pathOrder(_: void, a: []const u8, b: []const u8) bool {
 }
 
 fn skipped(name: []const u8) bool {
-    if (name.len == 0) std.debug.panic("asked whether a directory with an empty name is skipped", .{});
-    if (std.mem.indexOfScalar(u8, name, '/') != null) std.debug.panic("'{s}' is a path, but skipped() takes one directory name", .{name});
+    if (name.len == 0) std.debug.panic("asked whether a directory with an empty name is skipped; skip empty names before calling skipped()", .{});
+    if (std.mem.indexOfScalar(u8, name, '/') != null) std.debug.panic("'{s}' is a path, but skipped() takes one directory name; pass the directory's base name", .{name});
     if (name[0] == '.') return true;
     for (skipped_dirs) |s| if (std.mem.eql(u8, s, name)) return true;
     return false;
