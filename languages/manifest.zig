@@ -87,6 +87,7 @@ pub const Tables = struct {
     assertion_braces_doubled: bool = false,
     /// What starts a comment that runs to the end of the line; fixes leave TODOs with it.
     line_comment: []const u8 = "",
+    protocol_affix: []const u8 = "",
 };
 
 pub const entries: []const Entry = @import("manifest.zon");

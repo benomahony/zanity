@@ -16,6 +16,7 @@
         .assertion_value = "$name={$name!r}",
         .assertion_braces_doubled = true,
         .line_comment = "#",
+        .protocol_affix = "__",
         .forbidden_calls = .{ "eval", "exec", "compile", "globals", "locals", "__import__", "setattr", "getattr" },
         .forbidden_methods = .{ "eval", "exec" },
         .attribute_calls = .{ "getattr", "setattr" },

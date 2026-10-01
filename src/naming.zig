@@ -56,9 +56,9 @@ pub fn crossCheck(s: *ConceptScratch, facts: *Facts, enabled: rules.Set, finding
 
 pub fn exempt(name: []const u8) bool {
     if (name.len == 0) std.debug.panic("asked whether an empty name is exempt from naming checks; the @name capture matched an empty node", .{});
-    const dunder = name.len > 4 and std.mem.startsWith(u8, name, "__") and std.mem.endsWith(u8, name, "__");
-    if (dunder and name.len <= 4) std.debug.panic("'{s}' was taken for a dunder name, but those need at least 5 bytes, like __x__; exempt() must check the length before treating a name as a dunder name", .{name});
-    return dunder or std.mem.indexOfNone(u8, name, "_") == null;
+    const wordless = std.mem.indexOfNone(u8, name, "_") == null;
+    if (wordless and name[0] != '_') std.debug.panic("'{s}' was taken for a name with no words, but it starts with a letter or digit; exempt() must only match names made of underscores", .{name});
+    return wordless;
 }
 
 /// Splits a name into lowercase words, which live in `s.words` until its next reset.
