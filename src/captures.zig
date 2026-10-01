@@ -1,4 +1,5 @@
 const std = @import("std");
+const assert = @import("assert.zig");
 const Allocator = std.mem.Allocator;
 const ts = @import("ts.zig");
 const memory = @import("memory.zig");
@@ -27,7 +28,7 @@ pub const Compiled = struct {
 
     pub fn initCompiled(arena: Allocator, query: *const ts.Query) !Compiled {
         const count = ts.ts_query_capture_count(query);
-        if (count > std.math.maxInt(Id)) std.debug.panic("the query has {d} capture names, more than a capture Id ({d}) can number; widen captures.Id", .{ count, std.math.maxInt(Id) });
+        if (count > std.math.maxInt(Id)) assert.panic("the query has {d} capture names, more than a capture Id ({d}) can number; widen captures.Id", .{ count, std.math.maxInt(Id) });
         const names = try arena.alloc(Name, count);
         for (names, 0..) |*n, i| {
             const full = ts.captureName(query, @intCast(i));
@@ -41,19 +42,19 @@ pub const Compiled = struct {
         const patterns = ts.ts_query_pattern_count(query);
         const predicates = try arena.alloc([]const Predicate, patterns);
         for (predicates, 0..) |*p, i| p.* = try initPredicates(arena, query, @intCast(i));
-        if (predicates.len != patterns) std.debug.panic("compiled predicates for {d} of {d} query patterns; initCompiled() must compile one predicate list per pattern", .{ predicates.len, patterns });
+        if (predicates.len != patterns) assert.panic("compiled predicates for {d} of {d} query patterns; initCompiled() must compile one predicate list per pattern", .{ predicates.len, patterns });
         return .{ .query = query, .names = names, .predicates = predicates };
     }
 
     pub fn has(self: Compiled, full: []const u8) bool {
-        if (full.len == 0) std.debug.panic("asked whether the query has a capture with an empty name; pass a name such as 'call.name'", .{});
-        if (self.names.len > std.math.maxInt(Id)) std.debug.panic("the query has {d} capture names, more than a capture Id can number; widen captures.Id, or split the language's queries", .{self.names.len});
+        if (full.len == 0) assert.panic("asked whether the query has a capture with an empty name; pass a name such as 'call.name'", .{});
+        if (self.names.len > std.math.maxInt(Id)) assert.panic("the query has {d} capture names, more than a capture Id can number; widen captures.Id, or split the language's queries", .{self.names.len});
         return self.id(full) != null;
     }
 
     pub fn id(self: Compiled, full: []const u8) ?Id {
-        if (full.len == 0) std.debug.panic("looked up a capture with an empty name; pass a name such as 'call.name'", .{});
-        if (std.mem.indexOfScalar(u8, full, '@') != null) std.debug.panic("looked up capture '{s}'; capture names are written without the '@'", .{full});
+        if (full.len == 0) assert.panic("looked up a capture with an empty name; pass a name such as 'call.name'", .{});
+        if (std.mem.indexOfScalar(u8, full, '@') != null) assert.panic("looked up capture '{s}'; capture names are written without the '@'", .{full});
         for (self.names, 0..) |n, i| if (std.mem.eql(u8, n.full, full)) return @intCast(i);
         return null;
     }
@@ -67,8 +68,8 @@ pub const CaptureScratch = struct {
     second: memory.Bounded(ts.Node),
 
     pub fn initCaptureScratch(gpa: Allocator, limits: memory.Limits) Allocator.Error!CaptureScratch {
-        if (limits.captures == 0) std.debug.panic("memory.Limits.captures is 0, so no query capture could be recorded", .{});
-        if (limits.per_file == 0) std.debug.panic("memory.Limits.per_file is 0, so no query match could be checked", .{});
+        if (limits.captures == 0) assert.panic("memory.Limits.captures is 0, so no query capture could be recorded", .{});
+        if (limits.per_file == 0) assert.panic("memory.Limits.per_file is 0, so no query match could be checked", .{});
         return .{
             .triples = try .initBounded(gpa, limits.captures, "captured nodes in one file"),
             .first = try .initBounded(gpa, limits.per_file, "captures in one query match"),
@@ -85,37 +86,37 @@ pub const Index = struct {
         const lo = std.sort.lowerBound(Triple, self.triples, key, compareKey);
         var hi = lo;
         while (hi < self.triples.len and keyEql(self.triples[hi].key, key)) hi += 1;
-        if (hi < lo) std.debug.panic("the captures of the node at byte {d} run backwards ({d}..{d}); index() must sort the triples by node key before lookups", .{ key.start, lo, hi });
-        if (hi > self.triples.len) std.debug.panic("the captures of the node at byte {d} end at {d}, past the {d} recorded; of() must stop at the recorded triples, so check its upper bound", .{ key.start, hi, self.triples.len });
+        if (hi < lo) assert.panic("the captures of the node at byte {d} run backwards ({d}..{d}); index() must sort the triples by node key before lookups", .{ key.start, lo, hi });
+        if (hi > self.triples.len) assert.panic("the captures of the node at byte {d} end at {d}, past the {d} recorded; of() must stop at the recorded triples, so check its upper bound", .{ key.start, hi, self.triples.len });
         return self.triples[lo..hi];
     }
 
     pub fn marks(self: *const Index, node: ts.Node, capture: ?Id) bool {
         const c = capture orelse return false;
-        if (c >= std.math.maxInt(Id)) std.debug.panic("capture id {d} is out of range; pass an id from Compiled.id() on this language's query, not another's", .{c});
+        if (c >= std.math.maxInt(Id)) assert.panic("capture id {d} is out of range; pass an id from Compiled.id() on this language's query, not another's", .{c});
         const found = self.of(node);
-        if (found.len > self.triples.len) std.debug.panic("found {d} captures on one node, more than the {d} recorded; of() must slice within the recorded triples, so check its bounds", .{ found.len, self.triples.len });
+        if (found.len > self.triples.len) assert.panic("found {d} captures on one node, more than the {d} recorded; of() must slice within the recorded triples, so check its bounds", .{ found.len, self.triples.len });
         for (found) |t| if (t.id == c) return true;
         return false;
     }
 };
 
 fn keyEql(a: ts.Node.Key, b: ts.Node.Key) bool {
-    if (a.id == 0 and a.start != 0) std.debug.panic("a node at byte {d} has no id; it came from a null node; check ts_node_is_null before taking a node's key", .{a.start});
-    if (b.id == 0 and b.start != 0) std.debug.panic("a node at byte {d} has no id; it came from a null node; check ts_node_is_null before taking a node's key", .{b.start});
+    if (a.id == 0 and a.start != 0) assert.panic("a node at byte {d} has no id; it came from a null node; check ts_node_is_null before taking a node's key", .{a.start});
+    if (b.id == 0 and b.start != 0) assert.panic("a node at byte {d} has no id; it came from a null node; check ts_node_is_null before taking a node's key", .{b.start});
     return a.start == b.start and a.id == b.id;
 }
 
 fn compareKey(key: ts.Node.Key, t: Triple) std.math.Order {
-    if (t.key.id == 0) std.debug.panic("a recorded capture at byte {d} has no node id; index() must skip null nodes when it records captures", .{t.key.start});
-    if (key.id == 0) std.debug.panic("looked up the captures of a null node (byte {d}); check ts_node_is_null before calling of() or marks()", .{key.start});
+    if (t.key.id == 0) assert.panic("a recorded capture at byte {d} has no node id; index() must skip null nodes when it records captures", .{t.key.start});
+    if (key.id == 0) assert.panic("looked up the captures of a null node (byte {d}); check ts_node_is_null before calling of() or marks()", .{key.start});
     if (key.start != t.key.start) return std.math.order(key.start, t.key.start);
     return std.math.order(key.id, t.key.id);
 }
 
 fn tripleOrder(_: void, a: Triple, b: Triple) bool {
-    if (a.key.id == 0) std.debug.panic("a recorded capture at byte {d} has no node id; index() must skip null nodes when it records captures", .{a.key.start});
-    if (b.key.id == 0) std.debug.panic("a recorded capture at byte {d} has no node id; index() must skip null nodes when it records captures", .{b.key.start});
+    if (a.key.id == 0) assert.panic("a recorded capture at byte {d} has no node id; index() must skip null nodes when it records captures", .{a.key.start});
+    if (b.key.id == 0) assert.panic("a recorded capture at byte {d} has no node id; index() must skip null nodes when it records captures", .{b.key.start});
     if (a.key.start != b.key.start) return a.key.start < b.key.start;
     if (a.key.id != b.key.id) return a.key.id < b.key.id;
     return a.id < b.id;
@@ -123,8 +124,8 @@ fn tripleOrder(_: void, a: Triple, b: Triple) bool {
 
 pub fn index(scratch: *CaptureScratch, compiled: Compiled, root: ts.Node, source: []const u8) !Index {
     const query = compiled.query;
-    if (compiled.predicates.len != ts.ts_query_pattern_count(query)) std.debug.panic("the query has {d} patterns but predicates were compiled for {d}; compile predicates from this query", .{ ts.ts_query_pattern_count(query), compiled.predicates.len });
-    if (ts.ts_node_end_byte(root) > source.len) std.debug.panic("the tree ends at byte {d} but the source has {d}; it was parsed from different text", .{ ts.ts_node_end_byte(root), source.len });
+    if (compiled.predicates.len != ts.ts_query_pattern_count(query)) assert.panic("the query has {d} patterns but predicates were compiled for {d}; compile predicates from this query", .{ ts.ts_query_pattern_count(query), compiled.predicates.len });
+    if (ts.ts_node_end_byte(root) > source.len) assert.panic("the tree ends at byte {d} but the source has {d}; it was parsed from different text", .{ ts.ts_node_end_byte(root), source.len });
     scratch.triples.clear();
     const cursor = ts.ts_query_cursor_new() orelse return error.OutOfMemory;
     defer ts.ts_query_cursor_delete(cursor);
@@ -148,15 +149,15 @@ pub fn index(scratch: *CaptureScratch, compiled: Compiled, root: ts.Node, source
         kept += 1;
     }
     scratch.triples.len = kept;
-    if (kept > all.len) std.debug.panic("removing duplicate captures kept {d} of {d}; the de-duplication must keep at least one of each node, so check its comparison", .{ kept, all.len });
+    if (kept > all.len) assert.panic("removing duplicate captures kept {d} of {d}; the de-duplication must keep at least one of each node, so check its comparison", .{ kept, all.len });
     return .{ .triples = scratch.triples.items() };
 }
 
 fn initPredicates(arena: Allocator, query: *const ts.Query, pattern: u32) ![]const Predicate {
-    if (pattern >= ts.ts_query_pattern_count(query)) std.debug.panic("asked for the predicates of pattern {d}, but the query has {d}; loop only over the ts_query_pattern_count patterns", .{ pattern, ts.ts_query_pattern_count(query) });
+    if (pattern >= ts.ts_query_pattern_count(query)) assert.panic("asked for the predicates of pattern {d}, but the query has {d}; loop only over the ts_query_pattern_count patterns", .{ pattern, ts.ts_query_pattern_count(query) });
     var count: u32 = 0;
     const steps = ts.ts_query_predicates_for_pattern(query, pattern, &count);
-    if (count != 0 and steps[count - 1].type != .done) std.debug.panic("pattern {d}'s {d} predicate steps do not end with a terminator; tree-sitter's predicate list is malformed, so check that the grammar and vendor/tree-sitter/REVISION are versions that work together", .{ pattern, count });
+    if (count != 0 and steps[count - 1].type != .done) assert.panic("pattern {d}'s {d} predicate steps do not end with a terminator; tree-sitter's predicate list is malformed, so check that the grammar and vendor/tree-sitter/REVISION are versions that work together", .{ pattern, count });
     var out: std.ArrayList(Predicate) = .empty;
     var i: u32 = 0;
     while (i < count) {
@@ -171,7 +172,7 @@ fn initPredicates(arena: Allocator, query: *const ts.Query, pattern: u32) ![]con
 
 /// One predicate from its steps, `#name? @capture args...`; null for directives such as `#set!`.
 fn initPredicate(arena: Allocator, query: *const ts.Query, args: []const ts.PredicateStep) !?Predicate {
-    if (args.len > 64) std.debug.panic("a query predicate has {d} arguments; no predicate takes that many, so the step list is corrupt, so check that the grammar and vendor/tree-sitter/REVISION are versions that work together", .{args.len});
+    if (args.len > 64) assert.panic("a query predicate has {d} arguments; no predicate takes that many, so the step list is corrupt, so check that the grammar and vendor/tree-sitter/REVISION are versions that work together", .{args.len});
     if (args.len == 0 or args[0].type != .string) return null;
     const name = ts.stringValue(query, args[0].value_id);
     if (oneOf(name, &.{ "set!", "offset!", "strip!", "set-adjacent!", "select-adjacent!" })) return null;
@@ -180,7 +181,7 @@ fn initPredicate(arena: Allocator, query: *const ts.Query, args: []const ts.Pred
         return error.InvalidQuery;
     }
     const capture = args[1].value_id;
-    if (capture >= ts.ts_query_capture_count(query)) std.debug.panic("#{s} names capture {d}, but the query has {d}; a predicate must name a capture in its own pattern, so fix it in the language's .scm files", .{ name, capture, ts.ts_query_capture_count(query) });
+    if (capture >= ts.ts_query_capture_count(query)) assert.panic("#{s} names capture {d}, but the query has {d}; a predicate must name a capture in its own pattern, so fix it in the language's .scm files", .{ name, capture, ts.ts_query_capture_count(query) });
     if (oneOf(name, &.{ "eq?", "not-eq?", "any-eq?", "any-not-eq?" })) {
         if (args.len != 3) return error.InvalidQuery;
         const positive = oneOf(name, &.{ "eq?", "any-eq?" });
@@ -201,14 +202,14 @@ fn initPredicate(arena: Allocator, query: *const ts.Query, args: []const ts.Pred
 }
 
 fn oneOf(name: []const u8, candidates: []const []const u8) bool {
-    if (name.len == 0) std.debug.panic("a query predicate has an empty name; predicates look like #eq?", .{});
-    if (candidates.len == 0) std.debug.panic("checked predicate #{s} against no known predicate names; add the predicate to the switch in initPredicate(), or remove it from the language's .scm files", .{name});
+    if (name.len == 0) assert.panic("a query predicate has an empty name; predicates look like #eq?", .{});
+    if (candidates.len == 0) assert.panic("checked predicate #{s} against no known predicate names; add the predicate to the switch in initPredicate(), or remove it from the language's .scm files", .{name});
     for (candidates) |c| if (std.mem.eql(u8, name, c)) return true;
     return false;
 }
 
 fn hasAncestor(node: ts.Node, kinds: []const []const u8) bool {
-    if (kinds.len == 0) std.debug.panic("#has-ancestor? names no node kinds; list at least one after the capture", .{});
+    if (kinds.len == 0) assert.panic("#has-ancestor? names no node kinds; list at least one after the capture", .{});
     var current = node.parent();
     for (0..ts.ts_node_start_point(node).row + 4096) |_| {
         const ancestor = current orelse return false;
@@ -216,12 +217,12 @@ fn hasAncestor(node: ts.Node, kinds: []const []const u8) bool {
         for (kinds) |k| if (std.mem.eql(u8, k, kind)) return true;
         current = ancestor.parent();
     }
-    if (current == null) std.debug.panic("the ancestor walk from {s} at byte {d} ran out of steps on a null node instead of returning; the walk must stop at the root, so check its loop condition", .{ ts.ts_node_type(node), ts.ts_node_start_byte(node) });
+    if (current == null) assert.panic("the ancestor walk from {s} at byte {d} ran out of steps on a null node instead of returning; the walk must stop at the root, so check its loop condition", .{ ts.ts_node_type(node), ts.ts_node_start_byte(node) });
     return false;
 }
 
 fn capturesOf(match: ts.QueryMatch, id: u32, buf: []ts.Node) []ts.Node {
-    if (buf.len < match.capture_count) std.debug.panic("room for {d} captures but the match has {d}; raise memory.Limits.per_file", .{ buf.len, match.capture_count });
+    if (buf.len < match.capture_count) assert.panic("room for {d} captures but the match has {d}; raise memory.Limits.per_file", .{ buf.len, match.capture_count });
     var n: usize = 0;
     for (match.captures[0..match.capture_count]) |c| {
         if (c.index == id and n < buf.len) {
@@ -229,7 +230,7 @@ fn capturesOf(match: ts.QueryMatch, id: u32, buf: []ts.Node) []ts.Node {
             n += 1;
         }
     }
-    if (n > match.capture_count) std.debug.panic("found {d} nodes for capture {d} in a match of {d} captures; capturesOf() must stop at the match's capture count", .{ n, id, match.capture_count });
+    if (n > match.capture_count) assert.panic("found {d} nodes for capture {d} in a match of {d} captures; capturesOf() must stop at the match's capture count", .{ n, id, match.capture_count });
     return buf[0..n];
 }
 
@@ -240,8 +241,8 @@ fn satisfies(scratch: *CaptureScratch, predicates: []const Predicate, match: ts.
         return error.LimitExceeded;
     }
     const buffers: Buffers = .{ .a = scratch.first.buffer[0..match.capture_count], .b = scratch.second.buffer[0..match.capture_count] };
-    if (buffers.a.len != match.capture_count or buffers.b.len != match.capture_count) std.debug.panic("predicate buffers hold {d} and {d} nodes for a match of {d}; raise the predicate buffers in satisfies() to the largest match", .{ buffers.a.len, buffers.b.len, match.capture_count });
-    if (match.capture_count > 0 and ts.ts_node_end_byte(match.captures[0].node) > text.len) std.debug.panic("a match ends at byte {d} but the source has {d}; the tree was parsed from different text", .{ ts.ts_node_end_byte(match.captures[0].node), text.len });
+    if (buffers.a.len != match.capture_count or buffers.b.len != match.capture_count) assert.panic("predicate buffers hold {d} and {d} nodes for a match of {d}; raise the predicate buffers in satisfies() to the largest match", .{ buffers.a.len, buffers.b.len, match.capture_count });
+    if (match.capture_count > 0 and ts.ts_node_end_byte(match.captures[0].node) > text.len) assert.panic("a match ends at byte {d} but the source has {d}; the tree was parsed from different text", .{ ts.ts_node_end_byte(match.captures[0].node), text.len });
     for (predicates) |p| if (!holds(p, match, buffers, text)) return false;
     return true;
 }
@@ -249,7 +250,7 @@ fn satisfies(scratch: *CaptureScratch, predicates: []const Predicate, match: ts.
 const Buffers = struct { a: []ts.Node, b: []ts.Node };
 
 fn holds(predicate: Predicate, match: ts.QueryMatch, buffers: Buffers, text: []const u8) bool {
-    if (buffers.a.len < match.capture_count) std.debug.panic("room for {d} captures but the match has {d}; raise the capture buffer in holds(), or split the pattern into smaller ones", .{ buffers.a.len, match.capture_count });
+    if (buffers.a.len < match.capture_count) assert.panic("room for {d} captures but the match has {d}; raise the capture buffer in holds(), or split the pattern into smaller ones", .{ buffers.a.len, match.capture_count });
     const result = switch (predicate) {
         .any_of => |q| for (capturesOf(match, q.capture, buffers.a)) |node| {
             if (oneOfText(node.text(text), q.values) != q.positive) break false;
@@ -263,16 +264,16 @@ fn holds(predicate: Predicate, match: ts.QueryMatch, buffers: Buffers, text: []c
         .eq_capture => |q| equalTexts(capturesOf(match, q.a, buffers.a), capturesOf(match, q.b, buffers.b), .{ .positive = q.positive, .any = q.any }, text),
         .eq_string => |q| equalToString(capturesOf(match, q.capture, buffers.a), q.value, .{ .positive = q.positive, .any = q.any }, text),
     };
-    if (buffers.b.len < match.capture_count) std.debug.panic("room for {d} second captures but the match has {d}; raise the capture buffer in holds(), or split the pattern into smaller ones", .{ buffers.b.len, match.capture_count });
+    if (buffers.b.len < match.capture_count) assert.panic("room for {d} second captures but the match has {d}; raise the capture buffer in holds(), or split the pattern into smaller ones", .{ buffers.b.len, match.capture_count });
     return result;
 }
 
 const Sense = struct { positive: bool, any: bool };
 
 fn oneOfText(text: []const u8, values: []const []const u8) bool {
-    if (values.len == 0) std.debug.panic("#any-of? lists no values to compare '{s}' with; give #any-of? at least one value in the language's .scm files", .{text});
+    if (values.len == 0) assert.panic("#any-of? lists no values to compare '{s}' with; give #any-of? at least one value in the language's .scm files", .{text});
     for (values) |v| {
-        if (v.len == 0) std.debug.panic("#any-of? lists an empty value alongside '{s}'; remove it from the query", .{values[0]});
+        if (v.len == 0) assert.panic("#any-of? lists an empty value alongside '{s}'; remove it from the query", .{values[0]});
         if (std.mem.eql(u8, text, v)) return true;
     }
     return false;
@@ -281,24 +282,24 @@ fn oneOfText(text: []const u8, values: []const []const u8) bool {
 /// `#eq? @a @b`: pairs of captures have equal text; with `any`, at least one pair does.
 fn equalTexts(a: []const ts.Node, b: []const ts.Node, sense: Sense, text: []const u8) bool {
     const n = @min(a.len, b.len);
-    if (n > a.len or n > b.len) std.debug.panic("compared {d} pairs of {d} and {d} captures; equalTexts() must compare pairs up to the shorter list, so check its loop", .{ n, a.len, b.len });
+    if (n > a.len or n > b.len) assert.panic("compared {d} pairs of {d} and {d} captures; equalTexts() must compare pairs up to the shorter list, so check its loop", .{ n, a.len, b.len });
     var result = true;
     for (a[0..n], b[0..n]) |x, y| {
         result = std.mem.eql(u8, x.text(text), y.text(text)) == sense.positive;
         if (result == sense.any) break;
     }
-    if (n > 0 and ts.ts_node_end_byte(a[0]) > text.len) std.debug.panic("compared a capture ending at byte {d} of a {d}-byte source; pass the source the tree was parsed from", .{ ts.ts_node_end_byte(a[0]), text.len });
+    if (n > 0 and ts.ts_node_end_byte(a[0]) > text.len) assert.panic("compared a capture ending at byte {d} of a {d}-byte source; pass the source the tree was parsed from", .{ ts.ts_node_end_byte(a[0]), text.len });
     return result;
 }
 
 /// `#eq? @a "text"`: each capture's text is `value`; with `any`, at least one is.
 fn equalToString(nodes: []const ts.Node, value: []const u8, sense: Sense, text: []const u8) bool {
-    if (nodes.len > 0 and ts.ts_node_end_byte(nodes[0]) > text.len) std.debug.panic("comparing a capture that ends at byte {d} of a {d}-byte source; pass the source the tree was parsed from", .{ ts.ts_node_end_byte(nodes[0]), text.len });
+    if (nodes.len > 0 and ts.ts_node_end_byte(nodes[0]) > text.len) assert.panic("comparing a capture that ends at byte {d} of a {d}-byte source; pass the source the tree was parsed from", .{ ts.ts_node_end_byte(nodes[0]), text.len });
     var result = true;
     for (nodes) |x| {
         result = std.mem.eql(u8, x.text(text), value) == sense.positive;
         if (result == sense.any) break;
     }
-    if (nodes.len == 0 and !result) std.debug.panic("#eq? with '{s}' failed with no captures to compare; the predicate's capture must be in the same pattern, so fix it in the language's .scm files", .{value});
+    if (nodes.len == 0 and !result) assert.panic("#eq? with '{s}' failed with no captures to compare; the predicate's capture must be in the same pattern, so fix it in the language's .scm files", .{value});
     return result;
 }

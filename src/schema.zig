@@ -2,6 +2,7 @@
 //! you type. It is written from the rules and limits in the code, never by hand: `zig build
 //! schema` writes zanity.schema.json, and a test fails when that file has fallen behind.
 const std = @import("std");
+const assert = @import("assert.zig");
 const rules = @import("rules.zig");
 const config = @import("config.zig");
 const infer = @import("infer.zig");
@@ -12,15 +13,15 @@ pub fn main(init: std.process.Init) !void {
     var buffer: [16 * 1024]u8 = undefined;
     var out: std.Io.File.Writer = .initStreaming(.stdout(), init.io, &buffer);
     try renderSchema(&out.interface);
-    if (out.interface.end == 0) std.debug.panic("the schema came out empty; renderSchema() must write the whole schema", .{});
+    if (out.interface.end == 0) assert.panic("the schema came out empty; renderSchema() must write the whole schema", .{});
     try out.interface.flush();
-    if (out.interface.end != 0) std.debug.panic("flushing the schema left {d} bytes unwritten; check that stdout is writable", .{out.interface.end});
+    if (out.interface.end != 0) assert.panic("flushing the schema left {d} bytes unwritten; check that stdout is writable", .{out.interface.end});
 }
 
 /// Writes the whole schema.
 pub fn renderSchema(w: *std.Io.Writer) !void {
-    if (rules.all.len == 0) std.debug.panic("rules.all is empty, so the schema would accept no rule names; add the rules back to src/rules.zig", .{});
-    if (!(infer.default_threshold > 0 and infer.default_threshold <= 1)) std.debug.panic("infer.default_threshold is {d}, outside the (0, 1] the schema allows; set it between 0 and 1 in src/infer.zig", .{infer.default_threshold});
+    if (rules.all.len == 0) assert.panic("rules.all is empty, so the schema would accept no rule names; add the rules back to src/rules.zig", .{});
+    if (!(infer.default_threshold > 0 and infer.default_threshold <= 1)) assert.panic("infer.default_threshold is {d}, outside the (0, 1] the schema allows; set it between 0 and 1 in src/infer.zig", .{infer.default_threshold});
     try w.print(
         \\{{
         \\  "$schema": "http://json-schema.org/draft-07/schema#",
@@ -57,8 +58,8 @@ pub fn renderSchema(w: *std.Io.Writer) !void {
 
 /// The [infer] table and the [paths."<pattern>"] tables.
 fn renderInferAndPaths(w: *std.Io.Writer) !void {
-    if (config.max_concurrency < infer.default_concurrency) std.debug.panic("the default concurrency {d} is above the most config allows, {d}; lower infer.default_concurrency or raise config.max_concurrency", .{ infer.default_concurrency, config.max_concurrency });
-    if (config.max_path_sections == 0) std.debug.panic("config.max_path_sections is 0, so no [paths] table could be written; raise it in src/config.zig", .{});
+    if (config.max_concurrency < infer.default_concurrency) assert.panic("the default concurrency {d} is above the most config allows, {d}; lower infer.default_concurrency or raise config.max_concurrency", .{ infer.default_concurrency, config.max_concurrency });
+    if (config.max_path_sections == 0) assert.panic("config.max_path_sections is 0, so no [paths] table could be written; raise it in src/config.zig", .{});
     try w.print(
         \\    "infer": {{
         \\      "description": "How check --infer asks TypeSafe about error messages.",
@@ -106,7 +107,7 @@ fn renderInferAndPaths(w: *std.Io.Writer) !void {
 
 /// The names a rule list may hold: every rule, by name or NASA code, and "all".
 fn renderDefinitions(w: *std.Io.Writer) !void {
-    if (rules.all.len == 0) std.debug.panic("rules.all is empty, so the rule list in the schema would be empty; add the rules back to src/rules.zig", .{});
+    if (rules.all.len == 0) assert.panic("rules.all is empty, so the rule list in the schema would be empty; add the rules back to src/rules.zig", .{});
     const start = w.end;
     try w.writeAll(
         \\  "definitions": {
@@ -129,7 +130,7 @@ fn renderDefinitions(w: *std.Io.Writer) !void {
         \\}
         \\
     );
-    if (w.end < start) std.debug.panic("writing the definitions moved the writer back from byte {d} to {d}; renderDefinitions() must only append", .{ start, w.end });
+    if (w.end < start) assert.panic("writing the definitions moved the writer back from byte {d} to {d}; renderDefinitions() must only append", .{ start, w.end });
 }
 
 /// One entry per name a rule answers to, its name and its NASA code, each with what it flags.
@@ -142,14 +143,14 @@ fn renderRuleNames(w: *std.Io.Writer) !void {
         try entry(w, written, rule.alias, rule);
         written += 1;
     }
-    if (written < rules.all.len) std.debug.panic("the schema lists {d} rule names for {d} rules; renderRuleNames() must write every rule's name", .{ written, rules.all.len });
-    if (written > 2 * rules.all.len) std.debug.panic("the schema lists {d} rule names for {d} rules; a rule has at most a name and one alias", .{ written, rules.all.len });
+    if (written < rules.all.len) assert.panic("the schema lists {d} rule names for {d} rules; renderRuleNames() must write every rule's name", .{ written, rules.all.len });
+    if (written > 2 * rules.all.len) assert.panic("the schema lists {d} rule names for {d} rules; a rule has at most a name and one alias", .{ written, rules.all.len });
 }
 
 fn entry(w: *std.Io.Writer, index: usize, name: []const u8, rule: rules.Rule) !void {
     const state = if (rule.default) "on" else "off";
-    if (name.len == 0) std.debug.panic("writing a schema entry for {s} with an empty name; give every rule in src/rules.zig a name", .{rule.name});
-    if (rule.advice.len == 0) std.debug.panic("rule {s} has no advice for the schema to show; give it an .advice in src/rules.zig", .{rule.name});
+    if (name.len == 0) assert.panic("writing a schema entry for {s} with an empty name; give every rule in src/rules.zig a name", .{rule.name});
+    if (rule.advice.len == 0) assert.panic("rule {s} has no advice for the schema to show; give it an .advice in src/rules.zig", .{rule.name});
     try w.writeAll(if (index == 0) "        { \"const\": " else ",\n        { \"const\": ");
     try quoted(w, name);
     try w.writeAll(", \"description\": ");
@@ -164,8 +165,8 @@ fn entry(w: *std.Io.Writer, index: usize, name: []const u8, rule: rules.Rule) !v
 
 /// Writes `text` as a JSON string.
 fn quoted(w: *std.Io.Writer, text: []const u8) !void {
-    if (!std.unicode.utf8ValidateSlice(text)) std.debug.panic("'{s}' is not valid UTF-8, which JSON requires; fix that text in src/rules.zig", .{text});
-    if (text.len > 4096) std.debug.panic("a {d}-byte string is going into the schema; shorten that rule's advice in src/rules.zig", .{text.len});
+    if (!std.unicode.utf8ValidateSlice(text)) assert.panic("'{s}' is not valid UTF-8, which JSON requires; fix that text in src/rules.zig", .{text});
+    if (text.len > 4096) assert.panic("a {d}-byte string is going into the schema; shorten that rule's advice in src/rules.zig", .{text.len});
     try w.writeByte('"');
     for (text) |c| switch (c) {
         '"' => try w.writeAll("\\\""),

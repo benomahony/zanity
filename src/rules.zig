@@ -1,4 +1,5 @@
 const std = @import("std");
+const assert = @import("assert.zig");
 
 pub const Severity = enum {
     @"error",
@@ -23,8 +24,8 @@ pub const Rule = struct {
     judgement: []const u8 = "",
 
     pub fn answers(rule: Rule, code: []const u8) bool {
-        if (rule.name.len == 0) std.debug.panic("a rule in rules.all has no name (advice: '{s}'); give every entry in rules.all a .name", .{rule.advice});
-        if (code.len == 0) std.debug.panic("asked whether rule {s} answers to an empty code; pass a rule name or alias", .{rule.name});
+        if (rule.name.len == 0) assert.panic("a rule in rules.all has no name (advice: '{s}'); give every entry in rules.all a .name", .{rule.advice});
+        if (code.len == 0) assert.panic("asked whether rule {s} answers to an empty code; pass a rule name or alias", .{rule.name});
         return std.mem.eql(u8, rule.name, code) or (rule.alias.len > 0 and std.mem.eql(u8, rule.alias, code));
     }
 };
@@ -95,8 +96,8 @@ pub const all = [_]Rule{
 };
 
 pub fn find(code: []const u8) ?Rule {
-    if (code.len == 0) std.debug.panic("looked up a rule by an empty name; pass a rule name or alias such as 'unbounded-loop'", .{});
-    if (all.len == 0) std.debug.panic("rules.all is empty, so '{s}' can't be found", .{code});
+    if (code.len == 0) assert.panic("looked up a rule by an empty name; pass a rule name or alias such as 'unbounded-loop'", .{});
+    if (all.len == 0) assert.panic("rules.all is empty, so '{s}' can't be found", .{code});
     for (all) |r| if (r.answers(code)) return r;
     return null;
 }
@@ -104,8 +105,8 @@ pub fn find(code: []const u8) ?Rule {
 pub const max_needs = 8;
 
 pub fn missing(rule: Rule, has: anytype, out: *[max_needs][]const u8) []const []const u8 {
-    if (rule.name.len == 0) std.debug.panic("a rule in rules.all has no name (advice: '{s}'); give every entry in rules.all a .name", .{rule.advice});
-    if (rule.needs.len > max_needs) std.debug.panic("rule {s} needs {d} captures; raise rules.max_needs above {d}", .{ rule.name, rule.needs.len, max_needs });
+    if (rule.name.len == 0) assert.panic("a rule in rules.all has no name (advice: '{s}'); give every entry in rules.all a .name", .{rule.advice});
+    if (rule.needs.len > max_needs) assert.panic("rule {s} needs {d} captures; raise rules.max_needs above {d}", .{ rule.name, rule.needs.len, max_needs });
     var count: usize = 0;
     for (rule.needs) |capture| {
         if (has.has(capture)) continue;
@@ -122,10 +123,10 @@ pub const Set = struct {
     /// Adds the rule `name` or `alias` answers to, or every rule for `all`, including those off
     /// by default. Returns false when no rule answers to it, so the caller can say which names do.
     pub fn includeNamed(self: *Set, name: []const u8) bool {
-        if (name.len == 0) std.debug.panic("including a rule by an empty name; trim and skip empty items before calling includeNamed()", .{});
+        if (name.len == 0) assert.panic("including a rule by an empty name; trim and skip empty items before calling includeNamed()", .{});
         if (std.mem.eql(u8, name, "all")) {
             for (all) |r| self.include(r.name);
-            if (self.len != all.len) std.debug.panic("'all' enabled {d} of the {d} rules; include() must add each rule once", .{ self.len, all.len });
+            if (self.len != all.len) assert.panic("'all' enabled {d} of the {d} rules; include() must add each rule once", .{ self.len, all.len });
             return true;
         }
         const rule = find(name) orelse return false;
@@ -136,28 +137,28 @@ pub const Set = struct {
     pub fn defaults() Set {
         var set: Set = .{};
         for (all) |r| if (r.default) set.include(r.name);
-        if (set.len == 0) std.debug.panic("no rule in rules.all is on by default; mark at least one with .default = true", .{});
-        if (set.len > all.len) std.debug.panic("the default set holds {d} rules but only {d} exist; Set.include() must refuse to add past rules.all.len, so check it", .{ set.len, all.len });
+        if (set.len == 0) assert.panic("no rule in rules.all is on by default; mark at least one with .default = true", .{});
+        if (set.len > all.len) assert.panic("the default set holds {d} rules but only {d} exist; Set.include() must refuse to add past rules.all.len, so check it", .{ set.len, all.len });
         return set;
     }
 
     pub fn include(self: *Set, name: []const u8) void {
-        if (find(name) == null) std.debug.panic("tried to enable '{s}', which is not a rule; check rules.all", .{name});
+        if (find(name) == null) assert.panic("tried to enable '{s}', which is not a rule; check rules.all", .{name});
         if (self.enabled(name)) return;
-        if (self.len >= all.len) std.debug.panic("the rule set already holds all {d} rules, yet '{s}' was not among them; include() must check enabled() before adding", .{ all.len, name });
+        if (self.len >= all.len) assert.panic("the rule set already holds all {d} rules, yet '{s}' was not among them; include() must check enabled() before adding", .{ all.len, name });
         self.buffer[self.len] = name;
         self.len += 1;
     }
 
     pub fn names(self: *const Set) []const []const u8 {
-        if (self.len > all.len) std.debug.panic("the rule set holds {d} rules but only {d} exist; Set.include() must refuse to add past rules.all.len, so check it", .{ self.len, all.len });
-        if (self.len > 0 and self.buffer[0].len == 0) std.debug.panic("the first of {d} rules in the set has an empty name; include() only stores names from rules.all", .{self.len});
+        if (self.len > all.len) assert.panic("the rule set holds {d} rules but only {d} exist; Set.include() must refuse to add past rules.all.len, so check it", .{ self.len, all.len });
+        if (self.len > 0 and self.buffer[0].len == 0) assert.panic("the first of {d} rules in the set has an empty name; include() only stores names from rules.all", .{self.len});
         return self.buffer[0..self.len];
     }
 
     pub fn enabled(self: *const Set, name: []const u8) bool {
-        if (name.len == 0) std.debug.panic("asked whether an empty rule name is enabled; pass a rule name", .{});
-        if (self.len > all.len) std.debug.panic("the rule set holds {d} rules but only {d} exist; Set.include() must refuse to add past rules.all.len, so check it", .{ self.len, all.len });
+        if (name.len == 0) assert.panic("asked whether an empty rule name is enabled; pass a rule name", .{});
+        if (self.len > all.len) assert.panic("the rule set holds {d} rules but only {d} exist; Set.include() must refuse to add past rules.all.len, so check it", .{ self.len, all.len });
         for (self.buffer[0..self.len]) |n| if (std.mem.eql(u8, n, name)) return true;
         return false;
     }

@@ -1,6 +1,7 @@
 //! Git's ignore rules: `.gitignore` files in the checked tree and its
 //! ancestors up to the repository root, plus `.git/info/exclude`.
 const std = @import("std");
+const assert = @import("assert.zig");
 const Allocator = std.mem.Allocator;
 const Io = std.Io;
 const memory = @import("memory.zig");
@@ -23,8 +24,8 @@ pub const Ignore = struct {
     file: []u8,
 
     pub fn initIgnore(gpa: Allocator, limits: memory.Limits) Allocator.Error!Ignore {
-        if (limits.ignore_patterns == 0) std.debug.panic("memory.Limits.ignore_patterns is 0, so no .gitignore line could be honoured; set it above 0", .{});
-        if (limits.ignore_bytes == 0) std.debug.panic("memory.Limits.ignore_bytes is 0, so no .gitignore file could be read; set it above 0", .{});
+        if (limits.ignore_patterns == 0) assert.panic("memory.Limits.ignore_patterns is 0, so no .gitignore line could be honoured; set it above 0", .{});
+        if (limits.ignore_bytes == 0) assert.panic("memory.Limits.ignore_bytes is 0, so no .gitignore file could be read; set it above 0", .{});
         return .{
             .patterns = try .initBounded(gpa, limits.ignore_patterns, "ignore patterns"),
             .text = try .initText(gpa, limits.ignore_bytes),
@@ -35,7 +36,7 @@ pub const Ignore = struct {
     /// Loads the ignore files that apply above `root`, an absolute directory:
     /// every ancestor's `.gitignore` up to the repository root and its `.git/info/exclude`.
     pub fn loadAncestors(self: *Ignore, io: Io, root: []const u8) !void {
-        if (!std.fs.path.isAbsolute(root)) std.debug.panic("ignore files are found by walking up from '{s}', which is relative; pass the directory's real path", .{root});
+        if (!std.fs.path.isAbsolute(root)) assert.panic("ignore files are found by walking up from '{s}', which is relative; pass the directory's real path", .{root});
         var chain: [64][]const u8 = undefined;
         var depth: usize = 0;
         var dir: ?[]const u8 = root;
@@ -48,13 +49,13 @@ pub const Ignore = struct {
         const top = repository orelse return;
         try self.loadFile(io, top, ".git/info/exclude");
         for (1..depth) |i| try self.loadFile(io, chain[depth - i], ".gitignore");
-        if (depth == 0) std.debug.panic("walking up from '{s}' visited no directory; it should visit at least '{s}' itself", .{ root, root });
+        if (depth == 0) assert.panic("walking up from '{s}' visited no directory; it should visit at least '{s}' itself", .{ root, root });
     }
 
     /// Loads `name` inside the absolute directory `base`, if it exists.
     pub fn loadFile(self: *Ignore, io: Io, base: []const u8, name: []const u8) !void {
-        if (!std.fs.path.isAbsolute(base)) std.debug.panic("'{s}/{s}' has a relative directory; ignore patterns are matched against absolute paths, so pass the real path", .{ base, name });
-        if (name.len == 0) std.debug.panic("asked to load an ignore file with no name from '{s}'; pass '.gitignore' or '.git/info/exclude'", .{base});
+        if (!std.fs.path.isAbsolute(base)) assert.panic("'{s}/{s}' has a relative directory; ignore patterns are matched against absolute paths, so pass the real path", .{ base, name });
+        if (name.len == 0) assert.panic("asked to load an ignore file with no name from '{s}'; pass '.gitignore' or '.git/info/exclude'", .{base});
         var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
         const path = std.fmt.bufPrint(&path_buffer, "{s}/{s}", .{ base, name }) catch return;
         const bytes = Io.Dir.cwd().readFile(io, path, self.file) catch return;
@@ -67,13 +68,13 @@ pub const Ignore = struct {
 
     /// Adds one pattern in gitignore syntax, relative to the absolute directory `base`, as zanity.toml's `exclude` does.
     pub fn exclude(self: *Ignore, base: []const u8, glob: []const u8) !void {
-        if (!std.fs.path.isAbsolute(base)) std.debug.panic("excluding '{s}' relative to '{s}', which is relative; pass the real path", .{ glob, base });
-        if (glob.len == 0) std.debug.panic("excluding an empty pattern relative to '{s}'; readStrings() must refuse empty exclude patterns", .{base});
+        if (!std.fs.path.isAbsolute(base)) assert.panic("excluding '{s}' relative to '{s}', which is relative; pass the real path", .{ glob, base });
+        if (glob.len == 0) assert.panic("excluding an empty pattern relative to '{s}'; readStrings() must refuse empty exclude patterns", .{base});
         try self.parse(try self.text.copy(base), glob);
     }
 
     fn parse(self: *Ignore, base: []const u8, bytes: []const u8) !void {
-        if (base.len == 0) std.debug.panic("parsing ignore patterns with no directory to anchor them; pass the directory the ignore file is in", .{});
+        if (base.len == 0) assert.panic("parsing ignore patterns with no directory to anchor them; pass the directory the ignore file is in", .{});
         const before = self.patterns.len;
         var lines = std.mem.splitScalar(u8, bytes, '\n');
         while (lines.next()) |raw| {
@@ -89,13 +90,13 @@ pub const Ignore = struct {
             if (line.len == 0) continue;
             try self.patterns.add(.{ .base = base, .glob = try self.text.copy(line), .negated = negated, .directories_only = directories_only, .anchored = anchored });
         }
-        if (self.patterns.len < before) std.debug.panic("parsing the ignore file in {s} removed patterns: {d} before, {d} after; parse() must only add patterns", .{ base, before, self.patterns.len });
+        if (self.patterns.len < before) assert.panic("parsing the ignore file in {s} removed patterns: {d} before, {d} after; parse() must only add patterns", .{ base, before, self.patterns.len });
     }
 
     /// Whether the entry at absolute `path` is ignored. The last matching pattern decides.
     pub fn ignored(self: *const Ignore, path: []const u8, kind: Kind) bool {
-        if (!std.fs.path.isAbsolute(path)) std.debug.panic("asked whether '{s}' is ignored, but ignore patterns match absolute paths; join it to the walk's real root first", .{path});
-        if (self.patterns.len > self.patterns.buffer.len) std.debug.panic("{d} ignore patterns recorded in room for {d}; raise memory.Limits for ignore patterns, or trim the ignore files", .{ self.patterns.len, self.patterns.buffer.len });
+        if (!std.fs.path.isAbsolute(path)) assert.panic("asked whether '{s}' is ignored, but ignore patterns match absolute paths; join it to the walk's real root first", .{path});
+        if (self.patterns.len > self.patterns.buffer.len) assert.panic("{d} ignore patterns recorded in room for {d}; raise memory.Limits for ignore patterns, or trim the ignore files", .{ self.patterns.len, self.patterns.buffer.len });
         var result = false;
         for (self.patterns.items()) |p| {
             if (p.directories_only and kind != .directory) continue;
@@ -109,8 +110,8 @@ pub const Ignore = struct {
 };
 
 fn exists(io: Io, dir: []const u8, name: []const u8) bool {
-    if (!std.fs.path.isAbsolute(dir)) std.debug.panic("looking for '{s}' in relative directory '{s}'; pass the real path", .{ name, dir });
-    if (name.len == 0) std.debug.panic("asked whether an unnamed entry exists in {s}; pass a name such as '.git'", .{dir});
+    if (!std.fs.path.isAbsolute(dir)) assert.panic("looking for '{s}' in relative directory '{s}'; pass the real path", .{ name, dir });
+    if (name.len == 0) assert.panic("asked whether an unnamed entry exists in {s}; pass a name such as '.git'", .{dir});
     var buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = std.fmt.bufPrint(&buffer, "{s}/{s}", .{ dir, name }) catch return false;
     Io.Dir.cwd().access(io, path, .{}) catch return false;
@@ -120,21 +121,21 @@ fn exists(io: Io, dir: []const u8, name: []const u8) bool {
 const max_segments = 128;
 
 fn segments(path: []const u8, out: *[max_segments][]const u8) ?[]const []const u8 {
-    if (path.len == 0) std.debug.panic("asked to split an empty path into segments; ignored() only passes paths below a pattern's directory", .{});
+    if (path.len == 0) assert.panic("asked to split an empty path into segments; ignored() only passes paths below a pattern's directory", .{});
     var count: usize = 0;
     var it = std.mem.splitScalar(u8, path, '/');
     while (it.next()) |segment| : (count += 1) {
         if (count == out.len) return null;
         out[count] = segment;
     }
-    if (count == 0) std.debug.panic("'{s}' split into no segments; splitting always yields at least one", .{path});
+    if (count == 0) assert.panic("'{s}' split into no segments; splitting always yields at least one", .{path});
     return out[0..count];
 }
 
 /// Matches `/`-separated segments, where a `**` segment spans any number of segments.
 pub fn matchPath(glob: []const u8, path: []const u8) bool {
-    if (glob.len == 0) std.debug.panic("matching '{s}' against an empty ignore pattern; parse() drops empty lines", .{path});
-    if (path.len == 0) std.debug.panic("matching ignore pattern '{s}' against an empty path; ignored() only passes paths below the pattern's directory", .{glob});
+    if (glob.len == 0) assert.panic("matching '{s}' against an empty ignore pattern; parse() drops empty lines", .{path});
+    if (path.len == 0) assert.panic("matching ignore pattern '{s}' against an empty path; ignored() only passes paths below the pattern's directory", .{glob});
     var glob_buffer: [max_segments][]const u8 = undefined;
     var path_buffer: [max_segments][]const u8 = undefined;
     const gs = segments(glob, &glob_buffer) orelse return false;
@@ -161,13 +162,13 @@ pub fn matchPath(glob: []const u8, path: []const u8) bool {
         gi = s + 1;
         pi = star_path;
     }
-    if (gi != gs.len or pi != ps.len) std.debug.panic("matching '{s}' against '{s}' stopped at segment {d} of {d} and {d} of {d}; matchPath() must consume both lists or return false, so check its exits", .{ glob, path, gi, gs.len, pi, ps.len });
+    if (gi != gs.len or pi != ps.len) assert.panic("matching '{s}' against '{s}' stopped at segment {d} of {d} and {d} of {d}; matchPath() must consume both lists or return false, so check its exits", .{ glob, path, gi, gs.len, pi, ps.len });
     return true;
 }
 
 /// Matches one segment with `*`, `?` and `[...]` classes; nothing crosses a `/`.
 pub fn matchSegment(glob: []const u8, name: []const u8) bool {
-    if (glob.len == 0) std.debug.panic("matching '{s}' against an empty segment pattern; matchPath handles empty segments itself, so call matchSegment() only with a non-empty pattern", .{name});
+    if (glob.len == 0) assert.panic("matching '{s}' against an empty segment pattern; matchPath handles empty segments itself, so call matchSegment() only with a non-empty pattern", .{name});
     var gi: usize = 0;
     var ni: usize = 0;
     var star: ?usize = null;
@@ -190,36 +191,36 @@ pub fn matchSegment(glob: []const u8, name: []const u8) bool {
         gi = s + 1;
         ni = star_name;
     }
-    if (gi != glob.len) std.debug.panic("matching '{s}' against '{s}' stopped at byte {d} of the pattern; matchSegment() must consume the whole pattern or return false, so check its exits", .{ glob, name, gi });
+    if (gi != glob.len) assert.panic("matching '{s}' against '{s}' stopped at byte {d} of the pattern; matchSegment() must consume the whole pattern or return false, so check its exits", .{ glob, name, gi });
     return true;
 }
 
 /// How many pattern bytes at `glob[gi]` match the one name byte `c`, or null if they don't.
 fn step(glob: []const u8, gi: usize, c: u8) ?usize {
-    if (gi >= glob.len) std.debug.panic("stepping past the end of pattern '{s}' at byte {d}; call step() only while bytes of the pattern remain", .{ glob, gi });
+    if (gi >= glob.len) assert.panic("stepping past the end of pattern '{s}' at byte {d}; call step() only while bytes of the pattern remain", .{ glob, gi });
     const width: ?usize = switch (glob[gi]) {
         '?' => 1,
         '[' => matchClass(glob[gi..], c),
         '\\' => if (gi + 1 < glob.len and glob[gi + 1] == c) 2 else null,
         else => if (glob[gi] == c) 1 else null,
     };
-    if (width) |w| if (gi + w > glob.len) std.debug.panic("a {d}-byte step at byte {d} runs past the end of '{s}'; step() must measure a [...] class up to its ']', so check how it finds the end", .{ w, gi, glob });
+    if (width) |w| if (gi + w > glob.len) assert.panic("a {d}-byte step at byte {d} runs past the end of '{s}'; step() must measure a [...] class up to its ']', so check how it finds the end", .{ w, gi, glob });
     return width;
 }
 
 /// The width of the class at the start of `glob` if it admits `c`, else null.
 fn matchClass(glob: []const u8, c: u8) ?usize {
-    if (glob.len == 0 or glob[0] != '[') std.debug.panic("matching a class, but '{s}' does not start with '['; call matchClass() only at a '['", .{glob});
+    if (glob.len == 0 or glob[0] != '[') assert.panic("matching a class, but '{s}' does not start with '['; call matchClass() only at a '['", .{glob});
     const negated = glob.len > 1 and (glob[1] == '!' or glob[1] == '^');
     const scan = scanClass(glob, if (negated) 2 else 1, c);
     if (scan.end >= glob.len) return null;
-    if (glob[scan.end] != ']') std.debug.panic("the class in '{s}' should close at byte {d}, but has '{c}' there; scanClass() must return the index of the class's ']'", .{ glob, scan.end, glob[scan.end] });
+    if (glob[scan.end] != ']') assert.panic("the class in '{s}' should close at byte {d}, but has '{c}' there; scanClass() must return the index of the class's ']'", .{ glob, scan.end, glob[scan.end] });
     return if (scan.hit != negated) scan.end + 1 else null;
 }
 
 /// Walks a class's members from `start` to its `]`, noting whether any single byte or range admits `c`.
 fn scanClass(glob: []const u8, start: usize, c: u8) struct { end: usize, hit: bool } {
-    if (start == 0 or start > 2) std.debug.panic("a class's members start at byte 1 or 2 of '{s}', not {d}; scanClass() must start after '[' and an optional '!' or '^'", .{ glob, start });
+    if (start == 0 or start > 2) assert.panic("a class's members start at byte 1 or 2 of '{s}', not {d}; scanClass() must start after '[' and an optional '!' or '^'", .{ glob, start });
     var i = start;
     var hit = false;
     while (i < glob.len and (i == start or glob[i] != ']')) {
@@ -227,7 +228,7 @@ fn scanClass(glob: []const u8, start: usize, c: u8) struct { end: usize, hit: bo
         hit = hit or (if (range) c >= glob[i] and c <= glob[i + 2] else c == glob[i]);
         i += if (range) 3 else 1;
     }
-    if (i < start) std.debug.panic("scanning the class in '{s}' went backwards from {d} to {d}; scanClass() must only scan forward", .{ glob, start, i });
+    if (i < start) assert.panic("scanning the class in '{s}' went backwards from {d} to {d}; scanClass() must only scan forward", .{ glob, start, i });
     return .{ .end = i, .hit = hit };
 }
 

@@ -1,21 +1,22 @@
 const std = @import("std");
+const assert = @import("assert.zig");
 const config = @import("config.zig");
 const rules = @import("rules.zig");
 
 fn parsed(arena: std.mem.Allocator, text: []const u8) !config.Config {
-    if (text.len == 0) std.debug.panic("parsing an empty test config; pass the TOML under test", .{});
+    if (text.len == 0) assert.panic("parsing an empty test config; pass the TOML under test", .{});
     const result = try config.parseConfig(try arena.dupe(u8, text));
-    if (result.exclude_len > config.max_excludes) std.debug.panic("parsed {d} exclude patterns in room for {d}; parseConfig() must refuse lists longer than max_excludes", .{ result.exclude_len, config.max_excludes });
+    if (result.exclude_len > config.max_excludes) assert.panic("parsed {d} exclude patterns in room for {d}; parseConfig() must refuse lists longer than max_excludes", .{ result.exclude_len, config.max_excludes });
     return result;
 }
 
 fn expectProblem(text: []const u8, expected: []const u8) !void {
-    if (!std.mem.startsWith(u8, expected, config.file_name)) std.debug.panic("expected problem '{s}' should start with the file name; start the expected problem with zanity.toml:<line>:", .{expected});
+    if (!std.mem.startsWith(u8, expected, config.file_name)) assert.panic("expected problem '{s}' should start with the file name; start the expected problem with zanity.toml:<line>:", .{expected});
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
     try std.testing.expectError(error.InvalidConfig, parsed(arena_state.allocator(), text));
     try std.testing.expectEqualStrings(expected, config.problem[0..config.problem_len]);
-    if (config.problem_len == 0) std.debug.panic("the problem for '{s}' is empty; fail() must record a description of the problem", .{text});
+    if (config.problem_len == 0) assert.panic("the problem for '{s}' is empty; fail() must record a description of the problem", .{text});
 }
 
 test "a zanity.toml chooses rules, excludes paths and sets concurrency" {

@@ -2,6 +2,7 @@
 //! start from the whole picture and delete what it doesn't need. Like the schema, it is written
 //! from the rules and limits in the code, so it never offers a setting or rule zanity lacks.
 const std = @import("std");
+const assert = @import("assert.zig");
 const rules = @import("rules.zig");
 const config = @import("config.zig");
 const infer = @import("infer.zig");
@@ -22,8 +23,8 @@ pub const Project = struct {
 
 /// Writes the whole zanity.toml.
 pub fn renderConfig(w: *std.Io.Writer, project: Project) !void {
-    if (project.present.len > usual_excludes.len) std.debug.panic("init found {d} usual excludes of {d}; pass only entries of init.usual_excludes that exist", .{ project.present.len, usual_excludes.len });
-    if (rules.all.len == 0) std.debug.panic("rules.all is empty, so zanity init would list no rules; add the rules back to src/rules.zig", .{});
+    if (project.present.len > usual_excludes.len) assert.panic("init found {d} usual excludes of {d}; pass only entries of init.usual_excludes that exist", .{ project.present.len, usual_excludes.len });
+    if (rules.all.len == 0) assert.panic("rules.all is empty, so zanity init would list no rules; add the rules back to src/rules.zig", .{});
     try w.print(
         \\#:schema {s}
         \\# zanity's settings for this project. Every line is optional: delete what you don't need.
@@ -55,7 +56,7 @@ pub fn renderConfig(w: *std.Io.Writer, project: Project) !void {
 }
 
 fn renderFound(w: *std.Io.Writer, project: Project) !void {
-    if (project.languages.len == 0) std.debug.panic("zanity init passed no language counts; pass one per language in adapters.all, even when it has no files", .{});
+    if (project.languages.len == 0) assert.panic("zanity init passed no language counts; pass one per language in adapters.all, even when it has no files", .{});
     var total: usize = 0;
     for (project.languages) |language| total += language.files;
     if (total == 0) {
@@ -70,7 +71,7 @@ fn renderFound(w: *std.Io.Writer, project: Project) !void {
         shown += 1;
     }
     try w.writeAll(".\n");
-    if (shown > project.languages.len) std.debug.panic("init listed {d} languages of {d}; renderFound() must list each language once", .{ shown, project.languages.len });
+    if (shown > project.languages.len) assert.panic("init listed {d} languages of {d}; renderFound() must list each language once", .{ shown, project.languages.len });
 }
 
 /// One commented line per rule, `#   "name",  # severity, on or off by default. advice`.
@@ -78,16 +79,16 @@ fn renderRuleList(w: *std.Io.Writer) !void {
     var widest: usize = 0;
     for (rules.all) |rule| widest = @max(widest, rule.name.len);
     for (rules.all) |rule| {
-        if (rule.advice.len == 0) std.debug.panic("rule {s} has no advice for zanity init to show; give it an .advice in src/rules.zig", .{rule.name});
+        if (rule.advice.len == 0) assert.panic("rule {s} has no advice for zanity init to show; give it an .advice in src/rules.zig", .{rule.name});
         try w.print("  # \"{s}\",", .{rule.name});
         try w.splatByteAll(' ', widest - rule.name.len + 1);
         try w.print("# {t}, {s} by default. {s}\n", .{ rule.severity, if (rule.default) "on" else "off", rule.advice });
     }
-    if (widest == 0) std.debug.panic("every rule in rules.all has an empty name; give each a .name in src/rules.zig", .{});
+    if (widest == 0) assert.panic("every rule in rules.all has an empty name; give each a .name in src/rules.zig", .{});
 }
 
 fn renderExcludes(w: *std.Io.Writer, present: []const []const u8) !void {
-    if (present.len > usual_excludes.len) std.debug.panic("{d} excludes found of {d} candidates; pass only entries of init.usual_excludes", .{ present.len, usual_excludes.len });
+    if (present.len > usual_excludes.len) assert.panic("{d} excludes found of {d} candidates; pass only entries of init.usual_excludes", .{ present.len, usual_excludes.len });
     if (present.len == 0) {
         try w.writeAll("# exclude = [\"vendor/\", \"tests/fixtures/\"]\n");
         return;
@@ -95,12 +96,12 @@ fn renderExcludes(w: *std.Io.Writer, present: []const []const u8) !void {
     try w.writeAll("# zanity init turned on the ones below that exist in this project.\nexclude = [");
     for (present, 0..) |dir, i| try w.print("{s}\"{s}/\"", .{ if (i == 0) "" else ", ", dir });
     try w.writeAll("]\n");
-    if (present[0].len == 0) std.debug.panic("an empty directory name reached the excludes; init must pass only entries of usual_excludes", .{});
+    if (present[0].len == 0) assert.panic("an empty directory name reached the excludes; init must pass only entries of usual_excludes", .{});
 }
 
 fn renderInferNotes(w: *std.Io.Writer) !void {
-    if (!(infer.default_threshold > 0 and infer.default_threshold <= 1)) std.debug.panic("infer.default_threshold is {d}, outside (0, 1]; set it between 0 and 1 in src/infer.zig", .{infer.default_threshold});
-    if (infer.default_concurrency > config.max_concurrency) std.debug.panic("the default concurrency {d} is above the most config allows, {d}; lower infer.default_concurrency or raise config.max_concurrency", .{ infer.default_concurrency, config.max_concurrency });
+    if (!(infer.default_threshold > 0 and infer.default_threshold <= 1)) assert.panic("infer.default_threshold is {d}, outside (0, 1]; set it between 0 and 1 in src/infer.zig", .{infer.default_threshold});
+    if (infer.default_concurrency > config.max_concurrency) assert.panic("the default concurrency {d} is above the most config allows, {d}; lower infer.default_concurrency or raise config.max_concurrency", .{ infer.default_concurrency, config.max_concurrency });
     try w.print(
         \\
         \\# `zanity check --infer` also asks a language model, through TypeSafe, what code structure

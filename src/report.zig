@@ -1,4 +1,5 @@
 const std = @import("std");
+const assert = @import("assert.zig");
 const zrich = @import("zrich");
 const rules = @import("rules.zig");
 const memory = @import("memory.zig");
@@ -17,13 +18,13 @@ pub const Counts = struct {
 
 pub fn sortFindings(findings: []Finding) void {
     std.mem.sort(Finding, findings, {}, findingOrder);
-    if (!std.sort.isSorted(Finding, findings, {}, findingOrder)) std.debug.panic("expected findings sorted by path and position, got {d} findings out of order; sort with findingOrder before checking the order", .{findings.len});
-    if (findings.len >= std.math.maxInt(u32)) std.debug.panic("{d} findings is more than a report can number; raise the u32 counts in report.zig", .{findings.len});
+    if (!std.sort.isSorted(Finding, findings, {}, findingOrder)) assert.panic("expected findings sorted by path and position, got {d} findings out of order; sort with findingOrder before checking the order", .{findings.len});
+    if (findings.len >= std.math.maxInt(u32)) assert.panic("{d} findings is more than a report can number; raise the u32 counts in report.zig", .{findings.len});
 }
 
 fn findingOrder(_: void, a: Finding, b: Finding) bool {
-    if (a.path.len == 0) std.debug.panic("a {s} finding at line {d} has no path; findings are added with the path of the file checked", .{ a.rule, a.line + 1 });
-    if (b.path.len == 0) std.debug.panic("a {s} finding at line {d} has no path; findings are added with the path of the file checked", .{ b.rule, b.line + 1 });
+    if (a.path.len == 0) assert.panic("a {s} finding at line {d} has no path; findings are added with the path of the file checked", .{ a.rule, a.line + 1 });
+    if (b.path.len == 0) assert.panic("a {s} finding at line {d} has no path; findings are added with the path of the file checked", .{ b.rule, b.line + 1 });
     const by_path = std.mem.order(u8, a.path, b.path);
     if (by_path != .eq) return by_path == .lt;
     if (a.line != b.line) return a.line < b.line;
@@ -42,8 +43,8 @@ pub fn count(findings: []const Finding, files: usize) Counts {
         if (!std.mem.eql(u8, previous, f.path)) counts.flagged += 1;
         previous = f.path;
     }
-    if (counts.errors + counts.warnings != findings.len) std.debug.panic("counted {d} errors and {d} warnings among {d} findings; a severity is missing from count()", .{ counts.errors, counts.warnings, findings.len });
-    if (counts.flagged > findings.len) std.debug.panic("counted {d} flagged files from {d} findings; findings must be sorted by path before counting", .{ counts.flagged, findings.len });
+    if (counts.errors + counts.warnings != findings.len) assert.panic("counted {d} errors and {d} warnings among {d} findings; a severity is missing from count()", .{ counts.errors, counts.warnings, findings.len });
+    if (counts.flagged > findings.len) assert.panic("counted {d} flagged files from {d} findings; findings must be sorted by path before counting", .{ counts.flagged, findings.len });
     return counts;
 }
 
@@ -62,9 +63,9 @@ pub const TableScratch = struct {
     rows: [][]const zrich.Cell,
 
     pub fn initTableScratch(gpa: std.mem.Allocator, files: u32) std.mem.Allocator.Error!TableScratch {
-        if (files == 0) std.debug.panic("the report table was given room for 0 files; memory.Limits.files must be above 0", .{});
+        if (files == 0) assert.panic("the report table was given room for 0 files; memory.Limits.files must be above 0", .{});
         const cells = try gpa.alloc([3]zrich.Cell, files);
-        if (cells.len != files) std.debug.panic("the report table asked for {d} rows and got {d}; raise the rows given to initTableScratch()", .{ files, cells.len });
+        if (cells.len != files) assert.panic("the report table asked for {d} rows and got {d}; raise the rows given to initTableScratch()", .{ files, cells.len });
         return .{ .tallies = try .initBounded(gpa, files, "files with findings"), .cells = cells, .rows = try gpa.alloc([]const zrich.Cell, files) };
     }
 };
@@ -73,8 +74,8 @@ pub const Sink = struct { console: zrich.Console, scratch: *TableScratch, text: 
 
 /// Each file's findings with their fixes, then a table of files, worst first, and a table of rules.
 pub fn render(sink: Sink, findings: []const Finding) !void {
-    if (!std.sort.isSorted(Finding, findings, {}, findingOrder)) std.debug.panic("expected findings sorted by path and position, got {d} findings out of order; call sortFindings() before render()", .{findings.len});
-    if (findings.len >= std.math.maxInt(u32)) std.debug.panic("{d} findings is more than a report can number; lower memory.Limits.findings below 4 billion", .{findings.len});
+    if (!std.sort.isSorted(Finding, findings, {}, findingOrder)) assert.panic("expected findings sorted by path and position, got {d} findings out of order; call sortFindings() before render()", .{findings.len});
+    if (findings.len >= std.math.maxInt(u32)) assert.panic("{d} findings is more than a report can number; lower memory.Limits.findings below 4 billion", .{findings.len});
     try summariseFiles(sink, findings);
     for (sink.scratch.tallies.items()) |t| try renderFile(sink.console, t, findings[t.start..t.end]);
     try renderTable(sink);
@@ -92,13 +93,13 @@ fn summariseFiles(sink: Sink, findings: []const Finding) !void {
         try tallies.add(summariseFile(findings[start].path, findings[start..end], start));
         start = end;
     }
-    if (start != findings.len) std.debug.panic("tallied files up to finding {d} of {d}; findings must be sorted by path so each file's run is contiguous", .{ start, findings.len });
-    if (tallies.len > findings.len) std.debug.panic("{d} file tallies from {d} findings; each tally needs a finding", .{ tallies.len, findings.len });
+    if (start != findings.len) assert.panic("tallied files up to finding {d} of {d}; findings must be sorted by path so each file's run is contiguous", .{ start, findings.len });
+    if (tallies.len > findings.len) assert.panic("{d} file tallies from {d} findings; each tally needs a finding", .{ tallies.len, findings.len });
 }
 
 /// Counts one file's errors and warnings.
 fn summariseFile(path: []const u8, findings: []const Finding, start: usize) FileTally {
-    if (findings.len == 0) std.debug.panic("tallying {s} with no findings; only files with findings get a row, so summarise() must skip files with none", .{path});
+    if (findings.len == 0) assert.panic("tallying {s} with no findings; only files with findings get a row, so summarise() must skip files with none", .{path});
     var tally: FileTally = .{ .path = path, .start = start, .end = start + findings.len };
     for (findings) |f| {
         switch (rules.all[ruleIndex(f.rule)].severity) {
@@ -106,14 +107,14 @@ fn summariseFile(path: []const u8, findings: []const Finding, start: usize) File
             .warning, .information => tally.warnings += 1,
         }
     }
-    if (tally.errors + tally.warnings != findings.len) std.debug.panic("{s}: counted {d} errors and {d} warnings among {d} findings; every finding is an error or a warning, so check the severity switch in summariseFile()", .{ path, tally.errors, tally.warnings, findings.len });
-    if (tally.end <= tally.start) std.debug.panic("{s}: tally covers findings {d}..{d}; the range must run forwards within the findings, so check how summarise() sets start and end", .{ path, tally.start, tally.end });
+    if (tally.errors + tally.warnings != findings.len) assert.panic("{s}: counted {d} errors and {d} warnings among {d} findings; every finding is an error or a warning, so check the severity switch in summariseFile()", .{ path, tally.errors, tally.warnings, findings.len });
+    if (tally.end <= tally.start) assert.panic("{s}: tally covers findings {d}..{d}; the range must run forwards within the findings, so check how summarise() sets start and end", .{ path, tally.start, tally.end });
     return tally;
 }
 
 fn ruleOrder(per_rule: *const [rules.all.len]u32, a: usize, b: usize) bool {
-    if (per_rule[a] == 0) std.debug.panic("sorting rule {s}, which did not fire; only fired rules are ordered", .{rules.all[a].name});
-    if (per_rule[b] == 0) std.debug.panic("sorting rule {s}, which did not fire; only fired rules are ordered", .{rules.all[b].name});
+    if (per_rule[a] == 0) assert.panic("sorting rule {s}, which did not fire; only fired rules are ordered", .{rules.all[a].name});
+    if (per_rule[b] == 0) assert.panic("sorting rule {s}, which did not fire; only fired rules are ordered", .{rules.all[b].name});
     const sa = @backingInt(rules.all[a].severity);
     const sb = @backingInt(rules.all[b].severity);
     if (sa != sb) return sa < sb;
@@ -148,13 +149,13 @@ fn renderFile(console: zrich.Console, tally: FileTally, findings: []const Findin
         try console.styled(f.advice(), fix_style);
         try out.writeByte('\n');
     }
-    if (findings.len != tally.end - tally.start) std.debug.panic("{s}: rendering {d} findings for a tally of {d} ({d}..{d}); render the tally's own range of findings", .{ tally.path, findings.len, tally.end - tally.start, tally.start, tally.end });
-    if (width < 3) std.debug.panic("{s}: the widest location is {d} characters; a location is at least '1:1', so locationWidth() must measure line and column counted from 1", .{ tally.path, width });
+    if (findings.len != tally.end - tally.start) assert.panic("{s}: rendering {d} findings for a tally of {d} ({d}..{d}); render the tally's own range of findings", .{ tally.path, findings.len, tally.end - tally.start, tally.start, tally.end });
+    if (width < 3) assert.panic("{s}: the widest location is {d} characters; a location is at least '1:1', so locationWidth() must measure line and column counted from 1", .{ tally.path, width });
 }
 
 fn plural(n: u32, word: []const u8) []const u8 {
-    if (word.len == 0) std.debug.panic("asked for the plural of an empty word (count {d}); pass the word to pluralise", .{n});
-    if (word[word.len - 1] == 's') std.debug.panic("'{s}' already ends in 's'; pass the singular", .{word});
+    if (word.len == 0) assert.panic("asked for the plural of an empty word (count {d}); pass the word to pluralise", .{n});
+    if (word[word.len - 1] == 's') assert.panic("'{s}' already ends in 's'; pass the singular", .{word});
     return if (n == 1) word else if (std.mem.eql(u8, word, "error")) "errors" else "warnings";
 }
 
@@ -164,7 +165,7 @@ fn renderTable(sink: Sink) !void {
     const tallies = s.tallies.items();
     if (tallies.len == 0) return;
     std.mem.sort(FileTally, tallies, {}, worstFirst);
-    if (!std.sort.isSorted(FileTally, tallies, {}, worstFirst)) std.debug.panic("expected files worst first, got {d} files out of order; sort the tallies worst first before rendering them", .{tallies.len});
+    if (!std.sort.isSorted(FileTally, tallies, {}, worstFirst)) assert.panic("expected files worst first, got {d} files out of order; sort the tallies worst first before rendering them", .{tallies.len});
     for (tallies, 0..) |t, row| {
         s.cells[row] = .{
             .{ .text = t.path },
@@ -185,7 +186,7 @@ fn renderTable(sink: Sink) !void {
     };
     try sink.console.writer.writeByte('\n');
     try table.render(sink.console.context(), fixed.allocator());
-    if (tallies.len > s.rows.len) std.debug.panic("{d} files have findings but the table has {d} rows; raise memory.Limits.files", .{ tallies.len, s.rows.len });
+    if (tallies.len > s.rows.len) assert.panic("{d} files have findings but the table has {d} rows; raise memory.Limits.files", .{ tallies.len, s.rows.len });
 }
 
 /// One row per rule that fired: errors first, then the rules that fired most, so the table says where to start.
@@ -203,7 +204,7 @@ fn renderRules(sink: Sink, findings: []const Finding) !void {
     }
     var total: usize = 0;
     for (per_rule) |n| total += n;
-    if (total != findings.len) std.debug.panic("the rule table counted {d} findings but was given {d}; every finding needs a known rule", .{ total, findings.len });
+    if (total != findings.len) assert.panic("the rule table counted {d} findings but was given {d}; every finding needs a known rule", .{ total, findings.len });
     var order: [rules.all.len]usize = undefined;
     var fired: usize = 0;
     for (per_rule, 0..) |n, i| if (n > 0) {
@@ -236,21 +237,21 @@ fn renderRules(sink: Sink, findings: []const Finding) !void {
     };
     try sink.console.writer.writeByte('\n');
     try table.render(sink.console.context(), fixed.allocator());
-    if (fired == 0) std.debug.panic("{d} findings but no rule fired; renderRules() must count every finding under its rule", .{findings.len});
+    if (fired == 0) assert.panic("{d} findings but no rule fired; renderRules() must count every finding under its rule", .{findings.len});
 }
 
 fn worstFirst(_: void, a: FileTally, b: FileTally) bool {
-    if (a.path.len == 0) std.debug.panic("a file tally with {d} errors has no path; summarise() must set each tally's path from its findings", .{a.errors});
-    if (b.path.len == 0) std.debug.panic("a file tally with {d} errors has no path; summarise() must set each tally's path from its findings", .{b.errors});
+    if (a.path.len == 0) assert.panic("a file tally with {d} errors has no path; summarise() must set each tally's path from its findings", .{a.errors});
+    if (b.path.len == 0) assert.panic("a file tally with {d} errors has no path; summarise() must set each tally's path from its findings", .{b.errors});
     if (a.errors != b.errors) return a.errors > b.errors;
     if (a.warnings != b.warnings) return a.warnings > b.warnings;
     return std.mem.order(u8, a.path, b.path) == .lt;
 }
 
 fn ruleIndex(name: []const u8) usize {
-    if (name.len == 0) std.debug.panic("looked up the report column of a finding with no rule name; report() must always pass a rule name", .{});
+    if (name.len == 0) assert.panic("looked up the report column of a finding with no rule name; report() must always pass a rule name", .{});
     for (rules.all, 0..) |r, i| if (std.mem.eql(u8, r.name, name)) {
-        if (rules.find(name).?.severity != r.severity) std.debug.panic("rule {s} has two severities: {t} by name, {t} in rules.all; take the severity from rules.find(), not from the finding", .{ name, rules.find(name).?.severity, r.severity });
+        if (rules.find(name).?.severity != r.severity) assert.panic("rule {s} has two severities: {t} by name, {t} in rules.all; take the severity from rules.find(), not from the finding", .{ name, rules.find(name).?.severity, r.severity });
         return i;
     };
     unreachable;
@@ -258,8 +259,8 @@ fn ruleIndex(name: []const u8) usize {
 
 fn locationWidth(f: Finding) usize {
     const width = digits(f.line + 1) + 1 + digits(f.column + 1);
-    if (width < 3) std.debug.panic("'{d}:{d}' is {d} characters wide; a location is at least '1:1', so pass line and column counted from 1", .{ f.line + 1, f.column + 1, width });
-    if (width > 21) std.debug.panic("'{d}:{d}' is {d} characters wide; the report pads locations to at most 21, so widen the padding in renderFile() for larger files", .{ f.line + 1, f.column + 1, width });
+    if (width < 3) assert.panic("'{d}:{d}' is {d} characters wide; a location is at least '1:1', so pass line and column counted from 1", .{ f.line + 1, f.column + 1, width });
+    if (width > 21) assert.panic("'{d}:{d}' is {d} characters wide; the report pads locations to at most 21, so widen the padding in renderFile() for larger files", .{ f.line + 1, f.column + 1, width });
     return width;
 }
 
@@ -269,8 +270,8 @@ fn label(severity: rules.Severity) []const u8 {
         .warning => "warning",
         .information => "info",
     };
-    if (text.len == 0) std.debug.panic("severity {t} has an empty label; give it a label in label()'s switch", .{severity});
-    if (text.len > "warning".len) std.debug.panic("severity label '{s}' is longer than 'warning', which the report pads to, so shorten it or widen the padding in renderFile()", .{text});
+    if (text.len == 0) assert.panic("severity {t} has an empty label; give it a label in label()'s switch", .{severity});
+    if (text.len > "warning".len) assert.panic("severity label '{s}' is longer than 'warning', which the report pads to, so shorten it or widen the padding in renderFile()", .{text});
     return text;
 }
 
@@ -280,20 +281,20 @@ fn severityStyle(severity: rules.Severity) zrich.Style {
         .warning => .yellow,
         .information => .blue,
     };
-    if (@backingInt(colour) >= 8) std.debug.panic("severity {t} uses colour {t}, outside the 8 basic terminal colours; pick one of zrich's named basic colours in severityStyle()", .{ severity, colour });
-    if (colour == .green) std.debug.panic("severity {t} is green, which the report keeps for 'no issues found'; pick another colour for it in severityStyle()", .{severity});
+    if (@backingInt(colour) >= 8) assert.panic("severity {t} uses colour {t}, outside the 8 basic terminal colours; pick one of zrich's named basic colours in severityStyle()", .{ severity, colour });
+    if (colour == .green) assert.panic("severity {t} is green, which the report keeps for 'no issues found'; pick another colour for it in severityStyle()", .{severity});
     return .{ .fg = .{ .named = colour }, .bold = severity == .@"error" };
 }
 
 fn digits(value: usize) usize {
-    if (value == 0) std.debug.panic("counting the digits of 0; line and column numbers start at 1, so pass them counted from 1", .{});
+    if (value == 0) assert.panic("counting the digits of 0; line and column numbers start at 1, so pass them counted from 1", .{});
     const result = std.math.log10_int(value) + 1;
-    if (result > 20) std.debug.panic("{d} has {d} digits, more than a usize can; the loop in digits() must stop at 0, so check its division", .{ value, result });
+    if (result > 20) assert.panic("{d} has {d} digits, more than a usize can; the loop in digits() must stop at 0, so check its division", .{ value, result });
     return result;
 }
 
 pub fn summarise(console: zrich.Console, counts: Counts) !void {
-    if (counts.flagged > counts.files) std.debug.panic("{d} files flagged out of {d} checked; summarise() must count a file at most once", .{ counts.flagged, counts.files });
+    if (counts.flagged > counts.files) assert.panic("{d} files flagged out of {d} checked; summarise() must count a file at most once", .{ counts.flagged, counts.files });
     const files = if (counts.files == 1) "file" else "files";
     var buffer: [256]u8 = undefined;
     if (counts.errors + counts.warnings == 0) {
@@ -302,7 +303,7 @@ pub fn summarise(console: zrich.Console, counts: Counts) !void {
         try console.writer.writeByte('\n');
         return;
     }
-    if (counts.flagged == 0) std.debug.panic("{d} errors and {d} warnings but no file flagged; count() must flag the file of every finding", .{ counts.errors, counts.warnings });
+    if (counts.flagged == 0) assert.panic("{d} errors and {d} warnings but no file flagged; count() must flag the file of every finding", .{ counts.errors, counts.warnings });
     const line = try std.fmt.bufPrint(&buffer, "zanity: {d} {s} and {d} {s} in {d} of {d} {s}", .{
         counts.errors,
         if (counts.errors == 1) "error" else "errors",

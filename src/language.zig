@@ -1,4 +1,5 @@
 const std = @import("std");
+const assert = @import("assert.zig");
 const adapters = @import("adapters");
 const ts = @import("ts.zig");
 const captures = @import("captures.zig");
@@ -16,7 +17,7 @@ pub const LoadError = error{ OutOfMemory, InvalidQuery };
 
 pub fn load(adapter: *const Adapter) LoadError!Loaded {
     const source = adapter.query;
-    if (source.len == 0 or source.len >= std.math.maxInt(u32)) std.debug.panic("{s} has {d} bytes of queries; it needs some, and fewer than 4 GiB", .{ adapter.name, source.len });
+    if (source.len == 0 or source.len >= std.math.maxInt(u32)) assert.panic("{s} has {d} bytes of queries; it needs some, and fewer than 4 GiB", .{ adapter.name, source.len });
     var offset: u32 = 0;
     var err: ts.QueryError = .none;
     const language: *const ts.Language = @ptrCast(adapter.grammar());
@@ -24,23 +25,23 @@ pub fn load(adapter: *const Adapter) LoadError!Loaded {
         std.log.err("{s} queries do not compile: {t} at byte {d}", .{ adapter.name, err, offset });
         return error.InvalidQuery;
     };
-    if (ts.ts_query_pattern_count(query) == 0) std.debug.panic("{s} queries compiled to no patterns; check the query files listed in languages/manifest.zon", .{adapter.name});
+    if (ts.ts_query_pattern_count(query) == 0) assert.panic("{s} queries compiled to no patterns; check the query files listed in languages/manifest.zon", .{adapter.name});
     return .{ .adapter = adapter, .query = query };
 }
 
 pub fn applies(adapter: *const Adapter, name: []const u8) bool {
     const rule = rules.find(name) orelse unreachable;
-    if (adapter.name.len == 0) std.debug.panic("an adapter has no name; check languages/manifest.zon", .{});
-    if (adapter.not_applicable.len >= rules.all.len) std.debug.panic("{s} lists {d} rules as not applicable out of {d}; drop the language instead", .{ adapter.name, adapter.not_applicable.len, rules.all.len });
+    if (adapter.name.len == 0) assert.panic("an adapter has no name; check languages/manifest.zon", .{});
+    if (adapter.not_applicable.len >= rules.all.len) assert.panic("{s} lists {d} rules as not applicable out of {d}; drop the language instead", .{ adapter.name, adapter.not_applicable.len, rules.all.len });
     for (adapter.not_applicable) |na| if (rule.answers(na)) return false;
     return true;
 }
 
 pub fn forPath(path: []const u8) ?*const Adapter {
-    if (path.len == 0) std.debug.panic("asked which language an empty path is written in; skip empty paths before calling forPath()", .{});
+    if (path.len == 0) assert.panic("asked which language an empty path is written in; skip empty paths before calling forPath()", .{});
     const ext = std.fs.path.extension(path);
     if (ext.len < 2) return null;
-    if (ext[0] != '.') std.debug.panic("the extension of '{s}' is '{s}', which does not start with '.'; std.fs.path.extension() must return the dot with the extension", .{ path, ext });
+    if (ext[0] != '.') assert.panic("the extension of '{s}' is '{s}', which does not start with '.'; std.fs.path.extension() must return the dot with the extension", .{ path, ext });
     for (adapters.all) |*adapter| {
         for (adapter.extensions) |e| if (std.mem.eql(u8, e, ext[1..])) return adapter;
     }

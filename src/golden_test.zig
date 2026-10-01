@@ -1,4 +1,5 @@
 const std = @import("std");
+const assert = @import("assert.zig");
 const paths = @import("paths");
 const rules = @import("rules.zig");
 const schema = @import("schema.zig");
@@ -14,10 +15,10 @@ fn behaviour(arena: std.mem.Allocator, output: []const u8) ![]const u8 {
         const rule = rules.find(line[open + 2 .. close]) orelse return error.UnknownRule;
         try findings.append(arena, try std.fmt.allocPrint(arena, "{s} [{s}]\n", .{ line[0..open], rule.name }));
     }
-    if (findings.items.len != std.mem.count(u8, std.mem.trim(u8, output, "\n"), "\n") + @intFromBool(output.len > 0)) std.debug.panic("read {d} findings from {d} lines of output; behaviour() must keep one finding per line, so check how it splits:\n{s}", .{ findings.items.len, std.mem.count(u8, std.mem.trim(u8, output, "\n"), "\n") + @intFromBool(output.len > 0), output });
+    if (findings.items.len != std.mem.count(u8, std.mem.trim(u8, output, "\n"), "\n") + @intFromBool(output.len > 0)) assert.panic("read {d} findings from {d} lines of output; behaviour() must keep one finding per line, so check how it splits:\n{s}", .{ findings.items.len, std.mem.count(u8, std.mem.trim(u8, output, "\n"), "\n") + @intFromBool(output.len > 0), output });
     std.mem.sort([]const u8, findings.items, {}, lineOrder);
     const joined = try std.mem.concat(arena, u8, findings.items);
-    if (joined.len < findings.items.len) std.debug.panic("joined {d} findings into {d} bytes; each needs at least a newline, so check that behaviour() writes each finding's line", .{ findings.items.len, joined.len });
+    if (joined.len < findings.items.len) assert.panic("joined {d} findings into {d} bytes; each needs at least a newline, so check that behaviour() writes each finding's line", .{ findings.items.len, joined.len });
     return joined;
 }
 
@@ -29,16 +30,16 @@ fn behaviourOfJson(arena: std.mem.Allocator, output: []const u8) ![]const u8 {
     var text: std.ArrayList(u8) = .empty;
     for (records) |r| {
         const rule = rules.find(r.rule) orelse return error.UnknownRule;
-        if (r.line == 0 or r.column == 0) std.debug.panic("{s}: zanity reported line {d} column {d}; --json counts both from 1, so fix the JSON row built in runCheck(), which adds 1 to both", .{ r.path, r.line, r.column });
+        if (r.line == 0 or r.column == 0) assert.panic("{s}: zanity reported line {d} column {d}; --json counts both from 1, so fix the JSON row built in runCheck(), which adds 1 to both", .{ r.path, r.line, r.column });
         try text.print(arena, "{s}:{d}:{d}: {s} [{s}]\n", .{ r.path, r.line, r.column, r.severity, rule.name });
     }
-    if (std.mem.count(u8, text.items, "\n") != records.len) std.debug.panic("wrote {d} lines for {d} JSON findings; behaviourOfJson() must write one line per finding, so check its loop:\n{s}", .{ std.mem.count(u8, text.items, "\n"), records.len, text.items });
+    if (std.mem.count(u8, text.items, "\n") != records.len) assert.panic("wrote {d} lines for {d} JSON findings; behaviourOfJson() must write one line per finding, so check its loop:\n{s}", .{ std.mem.count(u8, text.items, "\n"), records.len, text.items });
     return behaviour(arena, text.items);
 }
 
 fn lineOrder(_: void, a: []const u8, b: []const u8) bool {
-    if (a.len == 0) std.debug.panic("sorting an empty finding line against '{s}'; behaviour() must drop empty lines before sorting", .{b});
-    if (b.len == 0) std.debug.panic("sorting '{s}' against an empty finding line; behaviour() must drop empty lines before sorting", .{a});
+    if (a.len == 0) assert.panic("sorting an empty finding line against '{s}'; behaviour() must drop empty lines before sorting", .{b});
+    if (b.len == 0) assert.panic("sorting '{s}' against an empty finding line; behaviour() must drop empty lines before sorting", .{a});
     return std.mem.order(u8, a, b) == .lt;
 }
 
@@ -51,9 +52,9 @@ fn caseFailure(runner: Runner, suite: Suite, case: Case) !?[]const u8 {
     const arena = runner.arena;
     const io = runner.io;
     const zanity = runner.zanity;
-    if (!std.fs.path.isAbsolute(zanity)) std.debug.panic("the zanity binary path '{s}' is relative; golden cases run in other directories and need an absolute path", .{zanity});
+    if (!std.fs.path.isAbsolute(zanity)) assert.panic("the zanity binary path '{s}' is relative; golden cases run in other directories and need an absolute path", .{zanity});
     const stem = if (case.project) name else name[0 .. name.len - std.fs.path.extension(name).len];
-    if (stem.len == 0) std.debug.panic("golden case '{s}' has no name before its extension; name the case file, such as case.py, not .py", .{name});
+    if (stem.len == 0) assert.panic("golden case '{s}' has no name before its extension; name the case file, such as case.py, not .py", .{name});
     const expected_file = try suite.dir.readFileAlloc(io, try std.fmt.allocPrint(arena, "{s}.expected", .{stem}), arena, .unlimited);
     var lines = std.mem.splitScalar(u8, expected_file, '\n');
     const rules_line = lines.next() orelse "";
@@ -218,13 +219,13 @@ test "--strict fails a run with only warnings, which a plain run passes" {
 
 /// Starts tests/infer/mock_typesafe.py and returns it with the port it listens on.
 fn startMock(arena: std.mem.Allocator, io: Io, log: []const u8, env: *std.process.Environ.Map) !struct { child: std.process.Child, port: []const u8 } {
-    if (log.len == 0) std.debug.panic("the mock TypeSafe server needs a log path to record requests in; pass a scratch path for the mock's log", .{});
+    if (log.len == 0) assert.panic("the mock TypeSafe server needs a log path to record requests in; pass a scratch path for the mock's log", .{});
     try env.put("MOCK_TYPESAFE_LOG", log);
     var child = try std.process.spawn(io, .{ .argv = &.{ "python3", "tests/infer/mock_typesafe.py" }, .stdout = .pipe, .environ_map = env });
     var buffer: [64]u8 = undefined;
     var reader = child.stdout.?.reader(io, &buffer);
     const port = try reader.interface.takeDelimiterExclusive('\n');
-    if (port.len == 0 or port.len > 5) std.debug.panic("the mock TypeSafe server printed '{s}' instead of a port; the mock must print its port first, so check tests/infer/mock_typesafe.py", .{port});
+    if (port.len == 0 or port.len > 5) assert.panic("the mock TypeSafe server printed '{s}' instead of a port; the mock must print its port first, so check tests/infer/mock_typesafe.py", .{port});
     return .{ .child = child, .port = try arena.dupe(u8, port) };
 }
 
