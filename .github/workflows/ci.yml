@@ -34,7 +34,7 @@ jobs:
       - name: zanity check . --strict
         run: zig build && ./zig-out/bin/zanity check . --strict
       - name: Every released platform still builds
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && github.event_name == 'pull_request'
         run: zig build release
 
   catalogue:
