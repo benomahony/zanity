@@ -70,6 +70,8 @@ pub const TreeCursor = extern struct {
 
 pub const QueryCapture = extern struct { node: Node, index: u32 };
 
+pub const Quantifier = enum(c_int) { zero, zero_or_one, zero_or_more, one, one_or_more, _ };
+
 pub const QueryMatch = extern struct {
     id: u32,
     pattern_index: u16,
@@ -117,6 +119,7 @@ pub extern fn ts_tree_cursor_goto_parent(cursor: *TreeCursor) bool;
 pub extern fn ts_query_new(language: *const Language, source: [*]const u8, length: u32, error_offset: *u32, error_type: *QueryError) ?*Query;
 pub extern fn ts_query_delete(query: *Query) void;
 pub extern fn ts_query_pattern_count(query: *const Query) u32;
+pub extern fn ts_query_disable_pattern(query: *Query, pattern_index: u32) void;
 pub extern fn ts_query_capture_count(query: *const Query) u32;
 pub extern fn ts_query_string_count(query: *const Query) u32;
 pub extern fn ts_query_capture_name_for_id(query: *const Query, index: u32, length: *u32) [*]const u8;
@@ -144,3 +147,4 @@ pub fn stringValue(query: *const Query, id: u32) []const u8 {
     if (len >= std.math.maxInt(u16)) assert.panic("query string {d} is {d} bytes long; a predicate argument that long is a broken query, so fix the predicate in the language's .scm files", .{ id, len });
     return ptr[0..len];
 }
+pub extern fn ts_query_capture_quantifier_for_id(query: *const Query, pattern_index: u32, capture_index: u32) Quantifier;

@@ -5,6 +5,8 @@ const adapters = @import("adapters");
 const ts = @import("ts.zig");
 const language = @import("language.zig");
 const captures = @import("captures.zig");
+const unread = @import("unread.zig");
+const rules = @import("rules.zig");
 
 const Knowledge = struct {
     languages: std.StringHashMapUnmanaged(void) = .empty,
@@ -98,4 +100,53 @@ test "no Zig source names a language or a grammar node kind" {
         }
     }
     try std.testing.expectEqual(@as(usize, 0), total);
+}
+
+test "every capture the code looks up is one the query keeps" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    const io = std.testing.io;
+    var missing: usize = 0;
+    for (rules.all) |rule| {
+        for (rule.needs) |need| missing += reportUnread("src/rules.zig", need);
+    }
+    var dir = try Io.Dir.cwd().openDir(io, "src", .{ .iterate = true });
+    defer dir.close(io);
+    var walker = try dir.walk(arena);
+    defer walker.deinit();
+    var seen: usize = 0;
+    while (try walker.next(io)) |entry| {
+        if (entry.kind != .file or !std.mem.endsWith(u8, entry.basename, ".zig")) continue;
+        const path = try std.fs.path.join(arena, &.{ "src", entry.path });
+        const source = try dir.readFileAlloc(io, entry.path, arena, .unlimited);
+        // Names looked up whole, `.id("literal.true")`, and names built from a family, `"unless.{s}"`.
+        var at: usize = 0;
+        while (std.mem.indexOfPos(u8, source, at, ".id(\"")) |start| {
+            const begin = start + ".id(\"".len;
+            const end = std.mem.indexOfScalarPos(u8, source, begin, '"') orelse break;
+            at = end;
+            seen += 1;
+            missing += reportUnread(path, source[begin..end]);
+        }
+        at = 0;
+        while (std.mem.indexOfPos(u8, source, at, ".{s}\"")) |end| {
+            at = end + 1;
+            const begin = (std.mem.lastIndexOfScalar(u8, source[0..end], '"') orelse continue) + 1;
+            const family = source[begin..end];
+            if (family.len == 0 or std.mem.indexOfAny(u8, family, " {}") != null) continue;
+            seen += 1;
+            missing += reportUnread(path, try std.fmt.allocPrint(arena, "{s}.any", .{family}));
+        }
+    }
+    try std.testing.expect(seen > 0);
+    try std.testing.expectEqual(@as(usize, 0), missing);
+}
+
+fn reportUnread(path: []const u8, full: []const u8) usize {
+    if (path.len == 0) assert.panic("checking @{s} from a file with no path; pass the file that reads it", .{full});
+    if (full.len == 0) assert.panic("{s}: checking a capture with an empty name; the scan must skip empty names", .{path});
+    if (unread.reads(captures.nameOf(full))) return 0;
+    std.debug.print("\n{s}: reads @{s}, but unread.reads() says no check does, so the patterns capturing it are disabled; add it to unread.looked_up or unread.read_families", .{ path, full });
+    return 1;
 }

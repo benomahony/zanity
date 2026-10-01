@@ -21,6 +21,19 @@ const Predicate = union(enum) {
     empty: struct { capture: u32, positive: bool },
 };
 
+/// Splits `literal.true` into the family `literal` and the part `true`; a name with no dot is all family.
+pub fn nameOf(full: []const u8) Name {
+    if (full.len == 0) assert.panic("splitting an empty capture name; every capture in the .scm files is named", .{});
+    const dot = std.mem.lastIndexOfScalar(u8, full, '.');
+    const name: Name = .{
+        .full = full,
+        .family = if (dot) |d| full[0..d] else full,
+        .part = if (dot) |d| full[d + 1 ..] else "",
+    };
+    if (name.family.len + name.part.len + @intFromBool(dot != null) != full.len) assert.panic("split '{s}' into '{s}' and '{s}', which don't add back up to it; split at the last dot", .{ full, name.family, name.part });
+    return name;
+}
+
 pub const Compiled = struct {
     query: *const ts.Query,
     names: []const Name,
@@ -31,13 +44,7 @@ pub const Compiled = struct {
         if (count > std.math.maxInt(Id)) assert.panic("the query has {d} capture names, more than a capture Id ({d}) can number; widen captures.Id", .{ count, std.math.maxInt(Id) });
         const names = try arena.alloc(Name, count);
         for (names, 0..) |*n, i| {
-            const full = ts.captureName(query, @intCast(i));
-            const dot = std.mem.lastIndexOfScalar(u8, full, '.');
-            n.* = .{
-                .full = full,
-                .family = if (dot) |d| full[0..d] else full,
-                .part = if (dot) |d| full[d + 1 ..] else "",
-            };
+            n.* = nameOf(ts.captureName(query, @intCast(i)));
         }
         const patterns = ts.ts_query_pattern_count(query);
         const predicates = try arena.alloc([]const Predicate, patterns);

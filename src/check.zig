@@ -16,6 +16,7 @@ const suppress = @import("suppress.zig");
 const scope = @import("scope.zig");
 const test_quality = @import("test_quality.zig");
 const isolation = @import("isolation.zig");
+const unread = @import("unread.zig");
 
 pub const Diagnostic = struct {
     line: u32,
@@ -36,7 +37,7 @@ pub const Diagnostic = struct {
     }
 };
 
-const Family = enum { statement, function, class, call, loop, assertion, assignment, @"test", definition, control };
+pub const Family = enum { statement, function, class, call, loop, assertion, assignment, @"test", definition, control };
 
 const Parameter = struct { name: ts.Node, type: ?ts.Node = null };
 
@@ -232,6 +233,7 @@ pub const Checker = struct {
     pub fn initChecker(gpa: Allocator, loaded: language.Loaded, requested: rules.Set) !Checker {
         if (requested.len == 0) assert.panic("building a {s} checker with no rules requested; runCheck always requests at least one", .{loaded.adapter.name});
         const compiled = try captures.Compiled.initCompiled(gpa, loaded.query);
+        _ = unread.disableUnread(loaded.query, compiled);
         var supported: rules.Set = .{};
         for (requested.names()) |name| {
             if (language.applies(loaded.adapter, name)) supported.include(name);
