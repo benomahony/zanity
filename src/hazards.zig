@@ -27,9 +27,24 @@ pub fn checkSecret(self: *File, node: ts.Node, lhs: ts.Node, assigned: ts.Node) 
     const env_name = for (value) |c| {
         if (!(std.ascii.isUpper(c) or std.ascii.isDigit(c) or c == '_')) break false;
     } else true;
-    if (env_name) return;
+    if (env_name or placeholder(value)) return;
     _ = try self.report(node, "hardcoded-secret", try self.say("'{s}' is set to a secret written into the source, so the secret is in version control and in every copy of the code.", .{target}));
     if (value.len == 0) std.debug.panic("{s}: reported the empty value of '{s}' as a secret; checkSecret() must return before reporting an empty value", .{ self.work.facts.path, target });
+}
+
+fn placeholder(value: []const u8) bool {
+    if (value.len == 0) std.debug.panic("asked whether an empty value is a placeholder; checkSecret() returns before an empty value", .{});
+    if (rules.secret_placeholders.len == 0) std.debug.panic("rules.secret_placeholders is empty, so '{s}' can't be checked", .{value});
+    const masked = std.mem.indexOfScalar(u8, rules.secret_masks, value[0]) != null and std.mem.indexOfNone(u8, value, value[0..1]) == null;
+    if (masked) return true;
+    for (rules.secret_placeholders) |p| {
+        if (p.len > value.len) continue;
+        const rest = value.len - p.len;
+        const head = std.ascii.startsWithIgnoreCase(value, p) and (rest == 0 or std.mem.indexOfScalar(u8, "-_. ", value[p.len]) != null);
+        const tail = std.ascii.endsWithIgnoreCase(value, p) and (rest == 0 or std.mem.indexOfScalar(u8, "-_. ", value[rest - 1]) != null);
+        if (head or tail) return true;
+    }
+    return false;
 }
 
 /// Whether a node captured `@unless.<rule>` sits inside `node` and belongs to it rather than to
@@ -79,12 +94,16 @@ pub fn checkRiskyCall(self: *File, ctx: Context, name: []const u8) !void {
 }
 
 /// A call that runs code no one can review: a bare builtin such as Python's `compile(source, ...)`,
-/// or a method that evaluates code on any receiver, such as `obj.eval()`. `re.compile` is neither.
+/// or a method that evaluates code on any receiver, such as `obj.eval()`. `re.compile` is neither,
+/// and nor is `getattr(obj, 'name')`, whose attribute is named in the source.
 pub fn checkForbiddenCall(self: *File, ctx: Context, name: []const u8) !void {
     if (ctx.family != .call) std.debug.panic("{s}: checking {f} for a forbidden call, but it is a {t}; call checkForbiddenCall() only from closeCall()", .{ self.work.facts.path, ctx.node.where(), ctx.family });
     if (name.len == 0) std.debug.panic("{s}: the call {f} has an empty name; capture the callee as @call.name in the language's zanity.scm", .{ self.work.facts.path, ctx.node.where() });
     const forbidden = if (ctx.receiver == null) self.tables.forbidden_calls else self.tables.forbidden_methods;
     if (!contains(forbidden, name)) return;
+    if (contains(self.tables.attribute_calls, name)) if (ctx.arguments[1]) |attribute| {
+        if (self.index.marks(attribute, self.v.literal_string) and !self.index.marks(attribute, self.v.string_format)) return;
+    };
     _ = try self.report(ctx.callee orelse ctx.name.?, "forbidden-call", try self.say("Calling '{s}' runs code that can't be reviewed or checked before it runs.", .{name}));
 }
 
@@ -137,15 +156,17 @@ pub fn checkNesting(self: *File, node: ts.Node, chained: bool) !void {
     _ = try self.report(node, "deep-nesting", try self.say("'{s}' is nested {d} levels deep; past {d}, a reader has to hold every enclosing condition in mind at once.", .{ header(node.text(self.source)), depth, rules.max_nesting }));
 }
 
-/// Calls made as a statement to something asynchronous: this file's async functions, or the
-/// language's own awaitables. Their result is dropped, so the work may never run.
+/// Calls made as a statement to something asynchronous: this file's async functions, called bare
+/// or on `self`, or the language's own awaitables. Their result is dropped, so the work may never run.
 pub fn checkUnawaited(self: *File) !void {
     const names = self.s.async_names.items();
     if (names.len > self.s.async_names.buffer.len) std.debug.panic("{s}: {d} async names in room for {d}; raise memory.Limits.per_file, or split the file", .{ self.work.facts.path, names.len, self.s.async_names.buffer.len });
     for (self.s.statement_calls.items()) |callee| {
         const text = callee.text(self.source);
-        const last = text[if (std.mem.lastIndexOfScalar(u8, text, '.')) |dot| dot + 1 else 0..];
-        if (!contains(names, last) and !contains(self.tables.async_calls, text)) continue;
+        const dot = std.mem.lastIndexOfScalar(u8, text, '.');
+        const own = if (dot) |d| contains(self.tables.self_receivers, text[0..d]) else true;
+        const last = text[if (dot) |d| d + 1 else 0..];
+        if (!(own and contains(names, last)) and !contains(self.tables.async_calls, text)) continue;
         _ = try self.report(callee, "unawaited-call", try self.say("'{s}' is asynchronous and its result is dropped here, so the work may never run and its errors go unseen.", .{text}));
     }
     if (self.s.contexts.len != 0) std.debug.panic("{s}: checking unawaited calls with {d} constructs still open; call checkUnawaited() after walk() has closed every construct", .{ self.work.facts.path, self.s.contexts.len });

@@ -1,0 +1,3 @@
+rules: passthrough-wrapper
+exit: 0
+protocol_methods_zig.zig:1:4: warning [passthrough-wrapper]

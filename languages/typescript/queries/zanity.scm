@@ -457,3 +457,30 @@
   ]) @test.shared_state
   (#eq? @_process "process")
   (#eq? @_env "env"))
+
+(function_declaration
+  name: (identifier) @name) @definition.function
+
+(class_declaration
+  name: (type_identifier) @name) @definition.class
+
+(method_definition
+  name: (property_identifier) @name) @definition.method
+
+(program
+  (lexical_declaration
+    (variable_declarator
+      name: (identifier) @name
+      value: [
+        (arrow_function)
+        (function_expression)
+      ]) @definition.function))
+
+(export_statement
+  (lexical_declaration
+    (variable_declarator
+      name: (identifier) @name
+      value: [
+        (arrow_function)
+        (function_expression)
+      ]) @definition.function))

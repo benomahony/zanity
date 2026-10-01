@@ -26,6 +26,7 @@ pub const ConceptScratch = struct {
     keyed: memory.Bounded(Keyed),
     spellings: memory.Bounded([]const u8),
     kinds: memory.Bounded([]const u8),
+    publics: memory.Bounded([]const u8),
     shapes: memory.Bounded([]const u8),
     tokens: memory.Bounded([]const u8),
     words: memory.Text,
@@ -37,6 +38,7 @@ pub const ConceptScratch = struct {
             .keyed = try .initBounded(gpa, limits.definitions, "definitions across all files"),
             .spellings = try .initBounded(gpa, limits.definitions, "spellings of one concept"),
             .kinds = try .initBounded(gpa, limits.definitions, "kinds of one concept"),
+            .publics = try .initBounded(gpa, limits.definitions, "public spellings of one concept"),
             .shapes = try .initBounded(gpa, limits.definitions, "spellings of one concept"),
             .tokens = try .initBounded(gpa, max_tokens, "words in one name"),
             .words = try .initText(gpa, limits.text_bytes),
@@ -54,11 +56,11 @@ pub fn crossCheck(s: *ConceptScratch, facts: *Facts, enabled: rules.Set, finding
     if (findings.len - before > definitions.len * 2) std.debug.panic("naming checks reported {d} findings for {d} definitions; each definition can be in at most one drift and one duplicate", .{ findings.len - before, definitions.len });
 }
 
-fn exempt(name: []const u8) bool {
+pub fn exempt(name: []const u8) bool {
     if (name.len == 0) std.debug.panic("asked whether an empty name is exempt from naming checks; the @name capture matched an empty node", .{});
-    const dunder = name.len > 4 and std.mem.startsWith(u8, name, "__") and std.mem.endsWith(u8, name, "__");
-    if (dunder and name.len <= 4) std.debug.panic("'{s}' was taken for a dunder name, but those need at least 5 bytes, like __x__; exempt() must check the length before treating a name as a dunder name", .{name});
-    return dunder;
+    const wordless = std.mem.indexOfNone(u8, name, "_") == null;
+    if (wordless and name[0] != '_') std.debug.panic("'{s}' was taken for a name with no words, but it starts with a letter or digit; exempt() must only match names made of underscores", .{name});
+    return wordless;
 }
 
 /// Splits a name into lowercase words, which live in `s.words` until its next reset.
@@ -131,12 +133,14 @@ fn drift(s: *ConceptScratch, text: *memory.Text, definitions: []const Definition
         defer start = end;
         s.spellings.clear();
         s.kinds.clear();
+        s.publics.clear();
         for (keyed[start..end]) |k| {
             try addUnique(&s.spellings, definitions[k.index].name);
             try addUnique(&s.kinds, definitions[k.index].kind);
+            try addUnique(&s.publics, definitions[k.index].public);
         }
         const names = s.spellings.items();
-        if (names.len < 2 or caseOnlyAcrossKinds(names, s.kinds.len)) continue;
+        if (names.len < 2 or conventionOnly(definitions, keyed[start..end], s.publics.items(), s.kinds.len)) continue;
         if (try directionalNames(s, names)) continue;
         const first = definitions[keyed[start].index];
         const spellings = try joined(text, names);
@@ -178,11 +182,19 @@ fn addUnique(list: *memory.Bounded([]const u8), value: []const u8) error{LimitEx
     if (list.len == 0) std.debug.panic("recorded '{s}' but the list is still empty; addUnique() must add the name before returning", .{value});
 }
 
-fn caseOnlyAcrossKinds(names: []const []const u8, kinds: usize) bool {
-    if (names.len < 2) std.debug.panic("comparing the case of {d} names; drift needs at least 2 spellings", .{names.len});
-    if (kinds == 0) std.debug.panic("{d} names ('{s}' first) have no kinds recorded; every definition has a kind", .{ names.len, names[0] });
+fn conventionOnly(definitions: []const Definition, run: []const Keyed, publics: []const []const u8, kinds: usize) bool {
+    if (publics.len == 0 or publics.len > run.len) std.debug.panic("a run of {d} names has {d} public spellings; closeDefinition() records one for every definition", .{ run.len, publics.len });
+    if (kinds == 0) std.debug.panic("{d} public spellings ('{s}' first) have no kinds recorded; every definition has a kind", .{ publics.len, publics[0] });
+    if (publics.len == 1) return true;
     if (kinds < 2) return false;
-    for (names[1..]) |n| if (!std.ascii.eqlIgnoreCase(n, names[0])) return false;
+    for (publics[1..]) |p| if (!std.ascii.eqlIgnoreCase(p, publics[0])) return false;
+    for (run, 0..) |a, i| {
+        const first = definitions[a.index];
+        for (run[i + 1 ..]) |b| {
+            const second = definitions[b.index];
+            if (std.mem.eql(u8, first.kind, second.kind) and !std.mem.eql(u8, first.public, second.public)) return false;
+        }
+    }
     return true;
 }
 
@@ -222,7 +234,7 @@ fn duplicates(s: *ConceptScratch, text: *memory.Text, definitions: []const Defin
     s.words.used = 0;
     s.keyed.clear();
     for (definitions, 0..) |d, i| {
-        if (!exempt(d.name)) try s.keyed.add(.{ .key = try s.words.format("{s} {s}", .{ d.language, d.name }), .index = @intCast(i) });
+        if (!exempt(d.name) and !std.mem.eql(u8, d.kind, "method")) try s.keyed.add(.{ .key = try s.words.format("{s} {s}", .{ d.language, d.name }), .index = @intCast(i) });
     }
     const keyed = s.keyed.items();
     std.mem.sort(Keyed, keyed, {}, Keyed.order);

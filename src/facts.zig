@@ -10,6 +10,7 @@ pub const Definition = struct {
     kind: []const u8,
     line: u32,
     column: u32,
+    public: []const u8 = "",
 
     pub fn sourceOrder(_: void, a: Definition, b: Definition) bool {
         if (a.name.len == 0) std.debug.panic("a definition at {s}:{d} has no name; the @name capture matched an empty node", .{ a.path, a.line + 1 });

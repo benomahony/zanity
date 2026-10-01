@@ -270,7 +270,7 @@ Rules marked *off* run only with `--rules all`, `rules = ["all"]`, or when named
 | Rule | Severity | Flags |
 |---|---|---|
 | `name-drift` | warning | one concept spelled several ways, such as `order_total` and `total_order` |
-| `duplicate-name` | warning | the same name defined more than once in one language |
+| `duplicate-name` | warning | the same name defined more than once in one language, other than methods, which share names to implement one interface |
 
 **Error messages**
 
