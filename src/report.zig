@@ -64,9 +64,9 @@ pub const TableScratch = struct {
 
     pub fn initTableScratch(gpa: std.mem.Allocator, files: u32) std.mem.Allocator.Error!TableScratch {
         if (files == 0) assert.panic("the report table was given room for 0 files; memory.Limits.files must be above 0", .{});
-        const cells = try gpa.alloc([3]zrich.Cell, files);
+        const cells = try memory.reserve(gpa, [3]zrich.Cell, files);
         if (cells.len != files) assert.panic("the report table asked for {d} rows and got {d}; raise the rows given to initTableScratch()", .{ files, cells.len });
-        return .{ .tallies = try .initBounded(gpa, files, "files with findings"), .cells = cells, .rows = try gpa.alloc([]const zrich.Cell, files) };
+        return .{ .tallies = try .initBounded(gpa, files, "files with findings"), .cells = cells, .rows = try memory.reserve(gpa, []const zrich.Cell, files) };
     }
 };
 

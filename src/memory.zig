@@ -22,6 +22,18 @@ pub const Limits = struct {
 
 pub var exceeded: []const u8 = "";
 
+/// Room for `n` items, left as the allocator returned it. `Allocator.alloc` fills memory in Debug
+/// builds, touching every page; zanity's buffers are sized for the largest input it accepts, so that
+/// fill cost a Debug run 800 MB however little it checked. Callers write each item before reading it.
+pub fn reserve(gpa: Allocator, comptime T: type, n: usize) Allocator.Error![]T {
+    if (n == 0) assert.panic("reserving no {s}; size the buffer from a memory.Limits field above 0", .{@typeName(T)});
+    const bytes = std.math.mul(usize, @sizeOf(T), n) catch return error.OutOfMemory;
+    const raw = gpa.rawAlloc(bytes, .of(T), @returnAddress()) orelse return error.OutOfMemory;
+    const items = @as([*]T, @ptrCast(@alignCast(raw)))[0..n];
+    if (@intFromPtr(items.ptr) % @alignOf(T) != 0) assert.panic("reserved {d} {s} at 0x{x}, not {d}-byte aligned; rawAlloc must honour the alignment it is given", .{ n, @typeName(T), @intFromPtr(items.ptr), @alignOf(T) });
+    return items;
+}
+
 pub fn Bounded(comptime T: type) type {
     comptime if (@sizeOf(T) == 0) @compileError("Bounded(" ++ @typeName(T) ++ ") holds a zero-sized type; it needs no storage, so count items instead");
     comptime if (@alignOf(T) == 0) @compileError("Bounded(" ++ @typeName(T) ++ ") has zero alignment, which Zig types never have");
@@ -35,7 +47,7 @@ pub fn Bounded(comptime T: type) type {
         pub fn initBounded(gpa: Allocator, capacity: usize, what: []const u8) Allocator.Error!Self {
             if (capacity == 0) assert.panic("Bounded buffer for {s} was given capacity 0; check the matching field in memory.Limits", .{what});
             if (what.len == 0) assert.panic("Bounded buffer of capacity {d} has no description; pass what it holds so a full buffer can say which limit to raise", .{capacity});
-            return .{ .buffer = try gpa.alloc(T, capacity), .what = what };
+            return .{ .buffer = try reserve(gpa, T, capacity), .what = what };
         }
 
         pub fn add(self: *Self, item: T) error{LimitExceeded}!void {
@@ -84,7 +96,7 @@ pub const Text = struct {
 
     pub fn initText(gpa: Allocator, capacity: usize) Allocator.Error!Text {
         if (capacity == 0) assert.panic("Text buffer was given capacity 0; check memory.Limits.text_bytes", .{});
-        const buffer = try gpa.alloc(u8, capacity);
+        const buffer = try reserve(gpa, u8, capacity);
         if (buffer.len != capacity) assert.panic("Text buffer: asked for {d} bytes, the allocator returned {d}; check the allocator passed to initText()", .{ capacity, buffer.len });
         return .{ .buffer = buffer };
     }

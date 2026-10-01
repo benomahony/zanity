@@ -29,7 +29,7 @@ pub const Ignore = struct {
         return .{
             .patterns = try .initBounded(gpa, limits.ignore_patterns, "ignore patterns"),
             .text = try .initText(gpa, limits.ignore_bytes),
-            .file = try gpa.alloc(u8, limits.ignore_bytes),
+            .file = try memory.reserve(gpa, u8, limits.ignore_bytes),
         };
     }
 

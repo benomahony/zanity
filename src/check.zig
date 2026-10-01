@@ -136,8 +136,8 @@ pub const FileScratch = struct {
             .bare_calls = try .initBounded(gpa, limits.per_file, "unqualified calls in one file"),
             .async_names = try .initBounded(gpa, limits.per_file, "async functions in one file"),
             .statement_calls = try .initBounded(gpa, limits.per_file, "calls made as statements in one file"),
-            .in_comment = try gpa.alloc(bool, limits.file_bytes),
-            .code_lines = try gpa.alloc(bool, limits.file_bytes + 1),
+            .in_comment = try memory.reserve(gpa, bool, limits.file_bytes),
+            .code_lines = try memory.reserve(gpa, bool, limits.file_bytes + 1),
             .captures = try .initCaptureScratch(gpa, limits),
         };
     }

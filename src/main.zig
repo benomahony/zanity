@@ -123,8 +123,8 @@ const Workspace = struct {
             .files = try .initBounded(gpa, limits.files, "files"),
             .rows = try .initBounded(gpa, limits.findings, "findings across all files"),
             .table = try .initTableScratch(gpa, limits.files),
-            .source = try gpa.alloc(u8, limits.file_bytes + 1),
-            .fixed = try gpa.alloc(u8, 2 * limits.file_bytes),
+            .source = try memory.reserve(gpa, u8, limits.file_bytes + 1),
+            .fixed = try memory.reserve(gpa, u8, 2 * limits.file_bytes),
             .ignore = try .initIgnore(gpa, limits),
         };
         ws.facts = try .initFacts(gpa, limits, &ws.text);
