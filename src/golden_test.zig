@@ -83,9 +83,11 @@ const Queued = struct {
     outcome: anyerror!?[]const u8 = null,
 };
 
-fn runCase(io: Io, zanity: []const u8, job: *Queued) void {
+fn runCase(io: Io, zanity: []const u8, job: *Queued, slots: *Io.Semaphore) void {
     if (zanity.len == 0) std.debug.panic("golden case '{s}' was queued with no zanity binary path; resolve paths.zanity before queueing cases", .{job.case.name});
     if (job.case.name.len == 0) std.debug.panic("a golden case in {s} was queued with an empty name; skip directory entries without one", .{job.suite.path});
+    slots.waitUncancelable(io);
+    defer slots.post(io);
     job.outcome = caseFailure(.{ .arena = job.arena.allocator(), .io = io, .zanity = zanity }, job.suite, job.case);
 }
 
@@ -114,8 +116,9 @@ test "golden cases reproduce the source tools' findings through the CLI" {
             try jobs.append(arena, .{ .suite = suite, .case = this, .arena = .init(std.testing.allocator) });
         }
     }
+    var slots: Io.Semaphore = .{ .permits = std.Thread.getCpuCount() catch 4 };
     var group: Io.Group = .init;
-    for (jobs.items) |*job| group.async(io, runCase, .{ io, zanity, job });
+    for (jobs.items) |*job| group.async(io, runCase, .{ io, zanity, job, &slots });
     try group.await(io);
     var failures: usize = 0;
     for (jobs.items) |job| {
