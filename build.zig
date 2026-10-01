@@ -33,10 +33,11 @@ pub fn build(b: *std.Build) void {
 
     const test_module = module(b, "src/tests.zig", target, optimize);
     const options = b.addOptions();
-    options.addOptionPath("zanity", exe.getEmittedBin());
+    options.addOption([]const u8, "zanity", b.getInstallPath(.bin, exe.out_filename));
     test_module.addOptions("paths", options);
     test_module.addOptions("build_info", build_info);
     const tests = b.addRunArtifact(b.addTest(.{ .root_module = test_module }));
+    tests.step.dependOn(b.getInstallStep());
     tests.setCwd(b.path("."));
     tests.has_side_effects = true;
     b.step("test", "Run tests").dependOn(&tests.step);
