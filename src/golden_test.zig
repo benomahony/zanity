@@ -76,6 +76,19 @@ fn caseFailure(runner: Runner, suite: Suite, case: Case) !?[]const u8 {
     return try std.fmt.allocPrint(arena, "{s}\n--- expected (exit {d})\n{s}--- actual (exit {d})\n{s}{s}", .{ name, expected_exit, expected_out, exit_code, actual_out, result.stderr });
 }
 
+const Queued = struct {
+    suite: Suite,
+    case: Case,
+    arena: std.heap.ArenaAllocator,
+    outcome: anyerror!?[]const u8 = null,
+};
+
+fn runCase(io: Io, zanity: []const u8, job: *Queued) void {
+    if (zanity.len == 0) std.debug.panic("golden case '{s}' was queued with no zanity binary path; resolve paths.zanity before queueing cases", .{job.case.name});
+    if (job.case.name.len == 0) std.debug.panic("a golden case in {s} was queued with an empty name; skip directory entries without one", .{job.suite.path});
+    job.outcome = caseFailure(.{ .arena = job.arena.allocator(), .io = io, .zanity = zanity }, job.suite, job.case);
+}
+
 test "golden cases reproduce the source tools' findings through the CLI" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
@@ -84,28 +97,34 @@ test "golden cases reproduce the source tools' findings through the CLI" {
     const zanity = try Io.Dir.cwd().realPathFileAlloc(io, paths.zanity, arena);
     var root = try Io.Dir.cwd().openDir(io, "tests/golden", .{ .iterate = true });
     defer root.close(io);
-    var failures: usize = 0;
-    var total: usize = 0;
+    var suites_open: std.ArrayList(Io.Dir) = .empty;
+    defer for (suites_open.items) |dir| dir.close(io);
+    var jobs: std.ArrayList(Queued) = .empty;
+    defer for (jobs.items) |*job| job.arena.deinit();
     var suites = root.iterate();
     while (try suites.next(io)) |suite_entry| {
         if (suite_entry.kind != .directory) continue;
-        const suite_path = try std.fmt.allocPrint(arena, "tests/golden/{s}", .{suite_entry.name});
-        var suite = try root.openDir(io, suite_entry.name, .{ .iterate = true });
-        defer suite.close(io);
-        var cases = suite.iterate();
+        const suite: Suite = .{ .path = try std.fmt.allocPrint(arena, "tests/golden/{s}", .{suite_entry.name}), .dir = try root.openDir(io, suite_entry.name, .{ .iterate = true }) };
+        try suites_open.append(arena, suite.dir);
+        var cases = suite.dir.iterate();
         while (try cases.next(io)) |case| {
             if (std.mem.endsWith(u8, case.name, ".expected")) continue;
             if (case.kind != .file and case.kind != .directory) continue;
-            total += 1;
-            const this: Case = .{ .name = case.name, .project = case.kind == .directory };
-            if (try caseFailure(.{ .arena = arena, .io = io, .zanity = zanity }, .{ .path = suite_path, .dir = suite }, this)) |failure| {
-                failures += 1;
-                std.debug.print("\n[{s}] {s}\n", .{ suite_entry.name, failure });
-            }
+            const this: Case = .{ .name = try arena.dupe(u8, case.name), .project = case.kind == .directory };
+            try jobs.append(arena, .{ .suite = suite, .case = this, .arena = .init(std.testing.allocator) });
         }
     }
-    if (failures > 0) std.debug.print("\n{d} of {d} golden cases failed\n", .{ failures, total });
-    try std.testing.expect(total > 0);
+    var group: Io.Group = .init;
+    for (jobs.items) |*job| group.async(io, runCase, .{ io, zanity, job });
+    try group.await(io);
+    var failures: usize = 0;
+    for (jobs.items) |job| {
+        const failure = (try job.outcome) orelse continue;
+        failures += 1;
+        std.debug.print("\n[{s}] {s}\n", .{ std.fs.path.basename(job.suite.path), failure });
+    }
+    if (failures > 0) std.debug.print("\n{d} of {d} golden cases failed\n", .{ failures, jobs.items.len });
+    try std.testing.expect(jobs.items.len > 0);
     try std.testing.expectEqual(@as(usize, 0), failures);
 }
 
