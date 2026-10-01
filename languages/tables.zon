@@ -18,6 +18,7 @@
         .line_comment = "#",
         .forbidden_calls = .{ "eval", "exec", "compile", "globals", "locals", "__import__", "setattr", "getattr" },
         .forbidden_methods = .{ "eval", "exec" },
+        .attribute_calls = .{ "getattr", "setattr" },
         .constant_constructors = .{ "dict", "list", "set", "tuple", "frozenset" },
         .total_conversions = .{ "str", "repr", "format", "ascii" },
         .length_calls = .{"len"},

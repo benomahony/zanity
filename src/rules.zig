@@ -182,3 +182,4 @@ pub const vague_words = [_][]const u8{ "a", "an", "the", "error", "failed", "fai
 pub const filler_words = [_][]const u8{ "expected", "expect", "expects", "got", "assert", "assertion", "failed", "fail", "fails", "check", "must", "should", "be", "is", "are", "was", "not", "to", "that", "the", "a", "an", "condition", "holds", "true", "but", "and", "or", "of", "with", "any", "d", "s" };
 /// Name endings that mark a variable as holding a secret, lowercased without separators.
 pub const secret_names = [_][]const u8{ "password", "passwd", "secret", "token", "apikey", "privatekey", "accesskey", "credentials" };
+pub const secret_placeholders = [_][]const u8{ "not-set", "not_set", "dummy", "placeholder", "changeme", "change-me", "xxx" };

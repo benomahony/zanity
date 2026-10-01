@@ -15,6 +15,7 @@ const suppress = @import("suppress.zig");
 const scope = @import("scope.zig");
 const test_quality = @import("test_quality.zig");
 const isolation = @import("isolation.zig");
+const naming = @import("naming.zig");
 
 pub const Diagnostic = struct {
     line: u32,
@@ -704,7 +705,8 @@ pub const File = struct {
         if (std.mem.eql(u8, ctx.kind, "constant") and !std.ascii.isUpper(name[0])) return;
         if (contains(self.tables.protocol_names, name)) return;
         const at = ts.ts_node_start_point(name_node);
-        try self.work.facts.define(name, ctx.kind, .{ at.row, at.column });
+        const method = std.mem.eql(u8, ctx.kind, "function") and self.innermost(.function) != null and self.definedInClass();
+        try self.work.facts.define(name, if (method) "method" else ctx.kind, .{ at.row, at.column });
     }
 
     pub fn inAssertionCondition(self: *File, node: ts.Node) bool {
@@ -901,7 +903,7 @@ pub const File = struct {
         if (ctx.formal_parameters > rules.max_parameters) {
             _ = try self.report(name_node, "long-parameter-list", try self.say("'{s}' takes {d} parameters; functions should take at most {d}.", .{ name, ctx.formal_parameters, rules.max_parameters }));
         }
-        if (self.index.marks(ctx.span, self.v.function_passthrough) or self.index.marks(ctx.node, self.v.function_passthrough)) {
+        if ((self.index.marks(ctx.span, self.v.function_passthrough) or self.index.marks(ctx.node, self.v.function_passthrough)) and !naming.exempt(name)) {
             _ = try self.report(name_node, "passthrough-wrapper", try self.say("'{s}' only forwards to another call, so it adds a name without adding behaviour.", .{name}));
         }
         const meaningful = ctx.asserts -| self.weakLines(ctx);

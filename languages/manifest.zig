@@ -13,6 +13,7 @@ pub const Tables = struct {
     forbidden_calls: []const []const u8 = &.{},
     /// Methods that run code on any receiver, such as `obj.eval()`; `re.compile` is not one.
     forbidden_methods: []const []const u8 = &.{},
+    attribute_calls: []const []const u8 = &.{},
     constant_constructors: []const []const u8 = &.{},
     total_conversions: []const []const u8 = &.{},
     length_calls: []const []const u8 = &.{},

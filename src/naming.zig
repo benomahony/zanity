@@ -54,11 +54,11 @@ pub fn crossCheck(s: *ConceptScratch, facts: *Facts, enabled: rules.Set, finding
     if (findings.len - before > definitions.len * 2) std.debug.panic("naming checks reported {d} findings for {d} definitions; each definition can be in at most one drift and one duplicate", .{ findings.len - before, definitions.len });
 }
 
-fn exempt(name: []const u8) bool {
+pub fn exempt(name: []const u8) bool {
     if (name.len == 0) std.debug.panic("asked whether an empty name is exempt from naming checks; the @name capture matched an empty node", .{});
     const dunder = name.len > 4 and std.mem.startsWith(u8, name, "__") and std.mem.endsWith(u8, name, "__");
     if (dunder and name.len <= 4) std.debug.panic("'{s}' was taken for a dunder name, but those need at least 5 bytes, like __x__; exempt() must check the length before treating a name as a dunder name", .{name});
-    return dunder;
+    return dunder or std.mem.indexOfNone(u8, name, "_") == null;
 }
 
 /// Splits a name into lowercase words, which live in `s.words` until its next reset.
@@ -182,7 +182,8 @@ fn caseOnlyAcrossKinds(names: []const []const u8, kinds: usize) bool {
     if (names.len < 2) std.debug.panic("comparing the case of {d} names; drift needs at least 2 spellings", .{names.len});
     if (kinds == 0) std.debug.panic("{d} names ('{s}' first) have no kinds recorded; every definition has a kind", .{ names.len, names[0] });
     if (kinds < 2) return false;
-    for (names[1..]) |n| if (!std.ascii.eqlIgnoreCase(n, names[0])) return false;
+    const first = std.mem.trimStart(u8, names[0], "_");
+    for (names[1..]) |n| if (!std.ascii.eqlIgnoreCase(std.mem.trimStart(u8, n, "_"), first)) return false;
     return true;
 }
 
@@ -222,7 +223,7 @@ fn duplicates(s: *ConceptScratch, text: *memory.Text, definitions: []const Defin
     s.words.used = 0;
     s.keyed.clear();
     for (definitions, 0..) |d, i| {
-        if (!exempt(d.name)) try s.keyed.add(.{ .key = try s.words.format("{s} {s}", .{ d.language, d.name }), .index = @intCast(i) });
+        if (!exempt(d.name) and !std.mem.eql(u8, d.kind, "method")) try s.keyed.add(.{ .key = try s.words.format("{s} {s}", .{ d.language, d.name }), .index = @intCast(i) });
     }
     const keyed = s.keyed.items();
     std.mem.sort(Keyed, keyed, {}, Keyed.order);
