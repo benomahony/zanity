@@ -903,7 +903,7 @@ pub const File = struct {
         if (ctx.formal_parameters > rules.max_parameters) {
             _ = try self.report(name_node, "long-parameter-list", try self.say("'{s}' takes {d} parameters; functions should take at most {d}.", .{ name, ctx.formal_parameters, rules.max_parameters }));
         }
-        if ((self.index.marks(ctx.span, self.v.function_passthrough) or self.index.marks(ctx.node, self.v.function_passthrough)) and !naming.exempt(name)) {
+        if ((self.index.marks(ctx.span, self.v.function_passthrough) or self.index.marks(ctx.node, self.v.function_passthrough)) and !naming.exempt(name) and !contains(self.tables.protocol_names, name)) {
             _ = try self.report(name_node, "passthrough-wrapper", try self.say("'{s}' only forwards to another call, so it adds a name without adding behaviour.", .{name}));
         }
         const meaningful = ctx.asserts -| self.weakLines(ctx);

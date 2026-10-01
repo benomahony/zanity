@@ -1,0 +1,3 @@
+rules: unawaited-call
+exit: 1
+unawaited_receivers_ts.ts:12:5: error [unawaited-call]
