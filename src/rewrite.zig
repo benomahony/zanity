@@ -47,7 +47,7 @@ fn shownValue(self: *File, node: ts.Node, condition: ts.Node) []const u8 {
     const root = text[0..rootLength(text)];
     if (std.mem.indexOfScalar(u8, text, '"') != null) return root;
     var current: ?ts.Node = node;
-    while (current) |ancestor| : (current = ancestor.parent()) {
+    while (current) |ancestor| : (current = self.parentOf(ancestor)) {
         if (self.index.marks(ancestor, self.v.expression_conditional)) return root;
         if (ancestor.eql(condition)) break;
     }

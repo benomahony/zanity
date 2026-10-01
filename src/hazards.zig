@@ -46,8 +46,8 @@ pub fn cancelled(self: *File, node: ts.Node, rule: []const u8) !bool {
     for (self.index.triples[first..]) |t| {
         if (t.key.start >= end) break;
         if (t.id != unless or ts.ts_node_end_byte(t.node) > end) continue;
-        var current = t.node.parent();
-        const owner = while (current) |c| : (current = c.parent()) {
+        var current = self.parentOf(t.node);
+        const owner = while (current) |c| : (current = self.parentOf(c)) {
             if (self.index.marks(c, finding)) break c;
         } else null;
         if (owner) |o| if (o.eql(node)) return true;
@@ -70,7 +70,7 @@ pub fn checkRiskyCall(self: *File, ctx: Context, name: []const u8) !void {
         _ = try self.report(at, "unsafe-deserialization", try self.say("'{s}' can run code chosen by whoever wrote the data it reads.", .{m}));
     }
     if (ctx.arguments[0]) |first| try checkRiskyArgument(self, ctx, name, first);
-    if (self.calleeIn(ctx, name, t.wall_clocks)) |m| if (ctx.node.parent()) |parent| {
+    if (self.calleeIn(ctx, name, t.wall_clocks)) |m| if (self.parentOf(ctx.node)) |parent| {
         if (self.index.marks(parent, self.v.arith_difference)) {
             _ = try self.report(ctx.node, "wall-clock-duration", try self.say("'{s}' reads the wall clock, which jumps when the clock is set, so this difference can be negative or wildly wrong.", .{m}));
         }

@@ -116,6 +116,8 @@ pub const FileScratch = struct {
     bare_calls: memory.Bounded(Owned),
     async_names: memory.Bounded([]const u8),
     statement_calls: memory.Bounded(ts.Node),
+    /// The nodes the walk is inside, outermost first, so their parents need no search.
+    path: memory.Bounded(ts.Node),
     in_comment: []bool,
     code_lines: []bool,
     captures: captures.CaptureScratch,
@@ -137,6 +139,7 @@ pub const FileScratch = struct {
             .bare_calls = try .initBounded(gpa, limits.per_file, "unqualified calls in one file"),
             .async_names = try .initBounded(gpa, limits.per_file, "async functions in one file"),
             .statement_calls = try .initBounded(gpa, limits.per_file, "calls made as statements in one file"),
+            .path = try .initBounded(gpa, limits.depth, "nested syntax nodes in one file"),
             .in_comment = try memory.reserve(gpa, bool, limits.file_bytes),
             .code_lines = try memory.reserve(gpa, bool, limits.file_bytes + 1),
             .captures = try .initCaptureScratch(gpa, limits),
@@ -144,7 +147,7 @@ pub const FileScratch = struct {
     }
 
     pub fn clearFile(self: *FileScratch) void {
-        inline for (.{ "contexts", "opened", "diagnostics", "suppressions", "codes", "trail", "calls", "signature", "weak", "locals", "bare_calls", "async_names", "statement_calls" }) |field| {
+        inline for (.{ "contexts", "opened", "diagnostics", "suppressions", "codes", "trail", "calls", "signature", "weak", "locals", "bare_calls", "async_names", "statement_calls", "path" }) |field| {
             @field(self, field).clear();
         }
         if (self.contexts.len != 0) assert.panic("clearing the per-file scratch left {d} open constructs; clearFile() must clear contexts, so add it to the field list there", .{self.contexts.len});
@@ -322,6 +325,7 @@ pub const File = struct {
     }
 
     pub fn enter(self: *File, node: ts.Node) !void {
+        try self.s.path.add(node);
         const found = self.index.ofNext(&self.next_capture, node);
         const depth = self.s.contexts.len;
         for (found) |t| {
@@ -437,6 +441,24 @@ pub const File = struct {
             try self.close(ctx);
         }
         if (self.s.contexts.len != remaining) assert.panic("{s}: closing constructs left {d} open, expected {d}; close() must not open or drop contexts itself", .{ self.work.facts.path, self.s.contexts.len, remaining });
+        if (self.s.path.drop() == null) assert.panic("{s}: left a node, but the walk's path is empty; enter() must add each node it enters to the path", .{self.work.facts.path});
+    }
+
+    /// `node`'s parent. tree-sitter finds a parent by searching down from the root, so for the
+    /// nodes the walk is inside, which most lookups are about, it comes from the walk's path.
+    pub fn parentOf(self: *const File, node: ts.Node) ?ts.Node {
+        const path = self.s.path.items();
+        var i = path.len;
+        while (i > 1) {
+            i -= 1;
+            if (!path[i].eql(node)) continue;
+            if (ts.ts_node_end_byte(path[i - 1]) < ts.ts_node_end_byte(node)) assert.panic("{s}: {f} ends after the node before it on the walk's path; enter() and leave() must keep the path to the nodes the walk is inside", .{ self.work.facts.path, node.where() });
+            return path[i - 1];
+        }
+        if (path.len > 0 and path[0].eql(node)) return null;
+        const parent = node.parent();
+        if (parent) |p| if (ts.ts_node_start_byte(p) > ts.ts_node_start_byte(node)) assert.panic("{s}: {f}'s parent starts after it; tree-sitter returned a node from another tree", .{ self.work.facts.path, node.where() });
+        return parent;
     }
 
     pub fn parameter(self: *File, part: []const u8, node: ts.Node) !void {
@@ -486,7 +508,7 @@ pub const File = struct {
             if (std.mem.eql(u8, name.part, "outer") or std.mem.eql(u8, name.part, "passthrough")) continue;
             return null;
         }
-        const parent = node.parent() orelse return null;
+        const parent = self.parentOf(node) orelse return null;
         const items = self.s.contexts.items();
         var i = items.len;
         while (i > 0) {
@@ -523,7 +545,7 @@ pub const File = struct {
                 if (self.enclosingFunction()) |function| function.asserts += 1;
                 if (test_quality.enclosingTest(self)) |unit| unit.checks += 1;
             },
-            .statement => if (node.parent()) |parent| {
+            .statement => if (self.parentOf(node)) |parent| {
                 ctx.previous = self.trailFor(parent.key());
             },
             .control => {
@@ -548,7 +570,7 @@ pub const File = struct {
     }
 
     pub fn remember(self: *File, ctx: Context) !void {
-        const parent = ctx.node.parent() orelse return;
+        const parent = self.parentOf(ctx.node) orelse return;
         if (ctx.family != .statement) assert.panic("{s}: remembering a {t} ({f}) as the previous statement; only statements are remembered", .{ self.work.facts.path, ctx.family, ctx.node.where() });
         if (ctx.trail_mark > self.s.trail.len) assert.panic("{s}: the statement {f} marked {d} summaries, but only {d} remain; remember() must trim the trail back to the statement's mark, never below it", .{ self.work.facts.path, ctx.node.where(), ctx.trail_mark, self.s.trail.len });
         self.s.trail.len = ctx.trail_mark;
@@ -644,7 +666,7 @@ pub const File = struct {
         if (ts.ts_node_start_byte(node) < ts.ts_node_start_byte(statement.node)) assert.panic("{s}: {f} starts before its statement {f}; call statementOf() only with a node inside the innermost open statement", .{ self.work.facts.path, node.where(), statement.node.where() });
         if (ts.ts_node_end_byte(node) > ts.ts_node_end_byte(statement.node)) assert.panic("{s}: {f} ends after its statement {f}; call statementOf() only with a node inside the innermost open statement", .{ self.work.facts.path, node.where(), statement.node.where() });
         if (statement.node.eql(node)) return statement;
-        const parent = node.parent() orelse return null;
+        const parent = self.parentOf(node) orelse return null;
         return if (statement.node.eql(parent)) statement else null;
     }
 
