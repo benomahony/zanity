@@ -35,9 +35,14 @@ pub fn checkSecret(self: *File, node: ts.Node, lhs: ts.Node, assigned: ts.Node) 
 fn placeholder(value: []const u8) bool {
     if (value.len == 0) std.debug.panic("asked whether an empty value is a placeholder; checkSecret() returns before an empty value", .{});
     if (rules.secret_placeholders.len == 0) std.debug.panic("rules.secret_placeholders is empty, so '{s}' can't be checked", .{value});
-    if (std.mem.indexOfNone(u8, value, value[0..1]) == null) return true;
-    for (0..value.len) |i| {
-        for (rules.secret_placeholders) |p| if (std.ascii.startsWithIgnoreCase(value[i..], p)) return true;
+    const masked = std.mem.indexOfScalar(u8, rules.secret_masks, value[0]) != null and std.mem.indexOfNone(u8, value, value[0..1]) == null;
+    if (masked) return true;
+    for (rules.secret_placeholders) |p| {
+        if (p.len > value.len) continue;
+        const rest = value.len - p.len;
+        const head = std.ascii.startsWithIgnoreCase(value, p) and (rest == 0 or std.mem.indexOfScalar(u8, "-_. ", value[p.len]) != null);
+        const tail = std.ascii.endsWithIgnoreCase(value, p) and (rest == 0 or std.mem.indexOfScalar(u8, "-_. ", value[rest - 1]) != null);
+        if (head or tail) return true;
     }
     return false;
 }

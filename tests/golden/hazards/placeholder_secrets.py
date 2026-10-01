@@ -12,4 +12,6 @@ def defaults() -> list[str]:
     db_password = "ChangeMe"
     auth_token = "********"
     access_token = "tok-123"
-    return [db_password, auth_token, access_token]
+    admin_password = "aaaaaaaa"
+    backup_token = "prod-dummy-backup"
+    return [db_password, auth_token, access_token, admin_password, backup_token]

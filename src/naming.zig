@@ -140,7 +140,7 @@ fn drift(s: *ConceptScratch, text: *memory.Text, definitions: []const Definition
             try addUnique(&s.publics, definitions[k.index].public);
         }
         const names = s.spellings.items();
-        if (names.len < 2 or conventionOnly(s.publics.items(), s.kinds.len)) continue;
+        if (names.len < 2 or conventionOnly(definitions, keyed[start..end], s.publics.items(), s.kinds.len)) continue;
         if (try directionalNames(s, names)) continue;
         const first = definitions[keyed[start].index];
         const spellings = try joined(text, names);
@@ -182,12 +182,19 @@ fn addUnique(list: *memory.Bounded([]const u8), value: []const u8) error{LimitEx
     if (list.len == 0) std.debug.panic("recorded '{s}' but the list is still empty; addUnique() must add the name before returning", .{value});
 }
 
-fn conventionOnly(publics: []const []const u8, kinds: usize) bool {
-    if (publics.len == 0) std.debug.panic("a run of names has no public spellings; closeDefinition() records one for every definition", .{});
+fn conventionOnly(definitions: []const Definition, run: []const Keyed, publics: []const []const u8, kinds: usize) bool {
+    if (publics.len == 0 or publics.len > run.len) std.debug.panic("a run of {d} names has {d} public spellings; closeDefinition() records one for every definition", .{ run.len, publics.len });
     if (kinds == 0) std.debug.panic("{d} public spellings ('{s}' first) have no kinds recorded; every definition has a kind", .{ publics.len, publics[0] });
     if (publics.len == 1) return true;
     if (kinds < 2) return false;
     for (publics[1..]) |p| if (!std.ascii.eqlIgnoreCase(p, publics[0])) return false;
+    for (run, 0..) |a, i| {
+        const first = definitions[a.index];
+        for (run[i + 1 ..]) |b| {
+            const second = definitions[b.index];
+            if (std.mem.eql(u8, first.kind, second.kind) and !std.mem.eql(u8, first.public, second.public)) return false;
+        }
+    }
     return true;
 }
 

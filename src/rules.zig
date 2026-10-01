@@ -183,3 +183,4 @@ pub const filler_words = [_][]const u8{ "expected", "expect", "expects", "got", 
 /// Name endings that mark a variable as holding a secret, lowercased without separators.
 pub const secret_names = [_][]const u8{ "password", "passwd", "secret", "token", "apikey", "privatekey", "accesskey", "credentials" };
 pub const secret_placeholders = [_][]const u8{ "not-set", "not_set", "dummy", "placeholder", "changeme", "change-me", "xxx" };
+pub const secret_masks = "*xX#.";
