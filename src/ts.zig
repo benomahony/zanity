@@ -89,6 +89,7 @@ pub const SymbolType = enum(c_uint) { regular = 0, anonymous, supertype, auxilia
 pub extern fn ts_language_symbol_count(language: *const Language) u32;
 pub extern fn ts_language_symbol_name(language: *const Language, symbol: u16) [*:0]const u8;
 pub extern fn ts_language_symbol_type(language: *const Language, symbol: u16) SymbolType;
+pub extern fn ts_language_symbol_for_name(language: *const Language, name: [*]const u8, length: u32, is_named: bool) u16;
 pub extern fn ts_parser_new() ?*Parser;
 pub extern fn ts_parser_delete(parser: *Parser) void;
 pub extern fn ts_parser_set_language(parser: *Parser, language: *const Language) bool;

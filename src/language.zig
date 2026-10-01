@@ -89,6 +89,31 @@ test "every @finding capture names a rule with a pattern message" {
     try std.testing.expectEqual(@as(usize, 0), wrong);
 }
 
+test "every node kind a predicate names is a kind in its grammar" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    var unknown: usize = 0;
+    for (adapters.all) |*adapter| {
+        const loaded = try load(adapter);
+        defer ts.ts_query_delete(loaded.query);
+        const compiled = try captures.Compiled.initCompiled(arena_state.allocator(), loaded.query);
+        const grammar: *const ts.Language = @ptrCast(adapter.grammar());
+        for (compiled.predicates) |predicates| for (predicates) |predicate| {
+            const kinds = switch (predicate) {
+                .kind => |q| q.kinds,
+                .ancestor => |q| q.kinds,
+                else => continue,
+            };
+            for (kinds) |kind| {
+                if (ts.ts_language_symbol_for_name(grammar, kind.ptr, @intCast(kind.len), true) != 0) continue;
+                std.debug.print("\n{s}'s queries name the node kind '{s}', which its grammar doesn't have", .{ adapter.name, kind });
+                unknown += 1;
+            }
+        };
+    }
+    try std.testing.expectEqual(@as(usize, 0), unknown);
+}
+
 test "every adapter supplies the captures of every rule that applies to its language" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();

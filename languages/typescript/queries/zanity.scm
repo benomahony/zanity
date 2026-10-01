@@ -244,55 +244,56 @@
 
 ; CWE-561: the statement right after one that always leaves the block.
 ; Function and class declarations are hoisted, so they still take effect and are not listed.
+; One pattern per way of leaving, and a kind check on the next statement, rather than an
+; alternation on each side: the query engine tracks an alternation one state per kind through
+; every nested block, which made this the costliest TypeScript pattern.
 (statement_block
-  [
-    (return_statement)
-    (throw_statement)
-    (break_statement)
-    (continue_statement)
-  ]
+  (return_statement)
   .
-  [
-    (expression_statement)
-    (lexical_declaration)
-    (variable_declaration)
-    (if_statement)
-    (for_statement)
-    (for_in_statement)
-    (while_statement)
-    (do_statement)
-    (return_statement)
-    (throw_statement)
-    (try_statement)
-    (switch_statement)
-    (break_statement)
-    (continue_statement)
-  ] @finding.unreachable-code)
+  (_) @finding.unreachable-code
+  (#kind-eq? @finding.unreachable-code "expression_statement" "lexical_declaration" "variable_declaration" "if_statement" "for_statement" "for_in_statement" "while_statement" "do_statement" "return_statement" "throw_statement" "try_statement" "switch_statement" "break_statement" "continue_statement"))
+
+(statement_block
+  (throw_statement)
+  .
+  (_) @finding.unreachable-code
+  (#kind-eq? @finding.unreachable-code "expression_statement" "lexical_declaration" "variable_declaration" "if_statement" "for_statement" "for_in_statement" "while_statement" "do_statement" "return_statement" "throw_statement" "try_statement" "switch_statement" "break_statement" "continue_statement"))
+
+(statement_block
+  (break_statement)
+  .
+  (_) @finding.unreachable-code
+  (#kind-eq? @finding.unreachable-code "expression_statement" "lexical_declaration" "variable_declaration" "if_statement" "for_statement" "for_in_statement" "while_statement" "do_statement" "return_statement" "throw_statement" "try_statement" "switch_statement" "break_statement" "continue_statement"))
+
+(statement_block
+  (continue_statement)
+  .
+  (_) @finding.unreachable-code
+  (#kind-eq? @finding.unreachable-code "expression_statement" "lexical_declaration" "variable_declaration" "if_statement" "for_statement" "for_in_statement" "while_statement" "do_statement" "return_statement" "throw_statement" "try_statement" "switch_statement" "break_statement" "continue_statement"))
 
 (switch_case
-  [
-    (return_statement)
-    (throw_statement)
-    (break_statement)
-    (continue_statement)
-  ]
+  (return_statement)
   .
-  [
-    (expression_statement)
-    (lexical_declaration)
-    (variable_declaration)
-    (if_statement)
-    (for_statement)
-    (for_in_statement)
-    (while_statement)
-    (do_statement)
-    (return_statement)
-    (throw_statement)
-    (try_statement)
-    (switch_statement)
-    (break_statement)
-    (continue_statement)
-  ] @finding.unreachable-code)
+  (_) @finding.unreachable-code
+  (#kind-eq? @finding.unreachable-code "expression_statement" "lexical_declaration" "variable_declaration" "if_statement" "for_statement" "for_in_statement" "while_statement" "do_statement" "return_statement" "throw_statement" "try_statement" "switch_statement" "break_statement" "continue_statement"))
+
+(switch_case
+  (throw_statement)
+  .
+  (_) @finding.unreachable-code
+  (#kind-eq? @finding.unreachable-code "expression_statement" "lexical_declaration" "variable_declaration" "if_statement" "for_statement" "for_in_statement" "while_statement" "do_statement" "return_statement" "throw_statement" "try_statement" "switch_statement" "break_statement" "continue_statement"))
+
+(switch_case
+  (break_statement)
+  .
+  (_) @finding.unreachable-code
+  (#kind-eq? @finding.unreachable-code "expression_statement" "lexical_declaration" "variable_declaration" "if_statement" "for_statement" "for_in_statement" "while_statement" "do_statement" "return_statement" "throw_statement" "try_statement" "switch_statement" "break_statement" "continue_statement"))
+
+(switch_case
+  (continue_statement)
+  .
+  (_) @finding.unreachable-code
+  (#kind-eq? @finding.unreachable-code "expression_statement" "lexical_declaration" "variable_declaration" "if_statement" "for_statement" "for_in_statement" "while_statement" "do_statement" "return_statement" "throw_statement" "try_statement" "switch_statement" "break_statement" "continue_statement"))
 
 (debugger_statement) @finding.debug-leftover
 

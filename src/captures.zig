@@ -12,11 +12,14 @@ pub const Name = struct {
     part: []const u8,
 };
 
-const Predicate = union(enum) {
+pub const Predicate = union(enum) {
     eq_capture: struct { a: u32, b: u32, positive: bool, any: bool },
     eq_string: struct { capture: u32, value: []const u8, positive: bool, any: bool },
     any_of: struct { capture: u32, values: []const []const u8, positive: bool },
     ancestor: struct { capture: u32, kinds: []const []const u8, positive: bool },
+    /// `#kind-eq? @x kind...`: `@x` is one of these node kinds. A wildcard child with this costs
+    /// the query engine far less than an alternation of kinds, which it tracks one state per kind.
+    kind: struct { capture: u32, kinds: []const []const u8, positive: bool },
     /// zanity's own `#empty? @x`: `@x` has no named children, not even a comment.
     empty: struct { capture: u32, positive: bool },
 };
@@ -196,15 +199,16 @@ fn initPredicate(arena: Allocator, query: *const ts.Query, args: []const ts.Pred
         if (args[2].type == .capture) return .{ .eq_capture = .{ .a = capture, .b = args[2].value_id, .positive = positive, .any = any } };
         return .{ .eq_string = .{ .capture = capture, .value = ts.stringValue(query, args[2].value_id), .positive = positive, .any = any } };
     }
-    if (oneOf(name, &.{ "any-of?", "not-any-of?", "has-ancestor?", "not-has-ancestor?" })) {
+    if (oneOf(name, &.{ "any-of?", "not-any-of?", "has-ancestor?", "not-has-ancestor?", "kind-eq?", "not-kind-eq?" })) {
         if (args.len < 3) return error.InvalidQuery;
         const values = try arena.alloc([]const u8, args.len - 2);
         for (args[2..], values) |arg, *v| v.* = ts.stringValue(query, arg.value_id);
         if (std.mem.endsWith(u8, name, "any-of?")) return .{ .any_of = .{ .capture = capture, .values = values, .positive = name[0] != 'n' } };
+        if (std.mem.endsWith(u8, name, "kind-eq?")) return .{ .kind = .{ .capture = capture, .kinds = values, .positive = name[0] != 'n' } };
         return .{ .ancestor = .{ .capture = capture, .kinds = values, .positive = name[0] != 'n' } };
     }
     if (oneOf(name, &.{ "empty?", "not-empty?" })) return .{ .empty = .{ .capture = capture, .positive = name[0] != 'n' } };
-    std.log.err("zanity does not evaluate the query predicate #{s}; rewrite the pattern with #eq?, #any-of?, #has-ancestor? or #empty?, or capture the construct structurally", .{name});
+    std.log.err("zanity does not evaluate the query predicate #{s}; rewrite the pattern with #eq?, #any-of?, #kind-eq?, #has-ancestor? or #empty?, or capture the construct structurally", .{name});
     return error.InvalidQuery;
 }
 
@@ -264,6 +268,9 @@ fn holds(predicate: Predicate, match: ts.QueryMatch, buffers: Buffers, text: []c
         } else true,
         .ancestor => |q| for (capturesOf(match, q.capture, buffers.a)) |node| {
             if (hasAncestor(node, q.kinds) != q.positive) break false;
+        } else true,
+        .kind => |q| for (capturesOf(match, q.capture, buffers.a)) |node| {
+            if (oneOfText(std.mem.span(ts.ts_node_type(node)), q.kinds) != q.positive) break false;
         } else true,
         .empty => |q| for (capturesOf(match, q.capture, buffers.a)) |node| {
             if ((ts.ts_node_named_child_count(node) == 0) != q.positive) break false;
