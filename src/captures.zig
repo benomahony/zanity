@@ -101,6 +101,21 @@ pub const Index = struct {
         return self.triples[lo..hi];
     }
 
+    /// The captures of `node`, for a walk that visits nodes in order of where they start, as a
+    /// pre-order walk does. `next` is where the previous lookup left off; it only moves forward,
+    /// so a whole walk costs one pass over the captures instead of a search per node.
+    pub fn ofNext(self: *const Index, next: *usize, node: ts.Node) []const Triple {
+        const key = node.key();
+        if (next.* > 0 and next.* <= self.triples.len and self.triples[next.* - 1].key.start > key.start) assert.panic("looked up the node at byte {d} after one at byte {d}; ofNext() needs nodes in the order they start, so use of() for anything else", .{ key.start, self.triples[next.* - 1].key.start });
+        while (next.* < self.triples.len and self.triples[next.*].key.start < key.start) next.* += 1;
+        var lo = next.*;
+        while (lo < self.triples.len and self.triples[lo].key.start == key.start and self.triples[lo].key.id < key.id) lo += 1;
+        var hi = lo;
+        while (hi < self.triples.len and keyEql(self.triples[hi].key, key)) hi += 1;
+        if (hi < lo or lo < next.*) assert.panic("the captures of the node at byte {d} run from {d} to {d}, before the cursor at {d}; ofNext() only moves forward", .{ key.start, lo, hi, next.* });
+        return self.triples[lo..hi];
+    }
+
     pub fn marks(self: *const Index, node: ts.Node, capture: ?Id) bool {
         const c = capture orelse return false;
         if (c >= std.math.maxInt(Id)) assert.panic("capture id {d} is out of range; pass an id from Compiled.id() on this language's query, not another's", .{c});

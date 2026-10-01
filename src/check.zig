@@ -293,6 +293,8 @@ pub const File = struct {
     index: captures.Index,
     code_lines: []const bool = &.{},
     serials: u32 = 0,
+    /// Where the walk's capture lookups have reached in `index`.
+    next_capture: usize = 0,
 
     pub fn walk(self: *File, root: ts.Node) !void {
         if (self.s.contexts.len != 0) assert.panic("{s}: starting a walk with {d} constructs already open; clear the scratch first", .{ self.work.facts.path, self.s.contexts.len });
@@ -320,7 +322,7 @@ pub const File = struct {
     }
 
     pub fn enter(self: *File, node: ts.Node) !void {
-        const found = self.index.of(node);
+        const found = self.index.ofNext(&self.next_capture, node);
         const depth = self.s.contexts.len;
         for (found) |t| {
             if (t.id >= self.checker.compiled.names.len) assert.panic("{s}: {f} carries capture id {d}, but the query has {d} captures; build the capture index with this checker's compiled query", .{ self.work.facts.path, node.where(), t.id, self.checker.compiled.names.len });
