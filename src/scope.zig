@@ -75,7 +75,7 @@ pub fn checkWideScope(self: *File) !void {
     for (self.index.triples) |t| {
         if (t.id != ids.outer) continue;
         checked += 1;
-        const group = gather(self, ids, t.node) orelse continue;
+        const group = try gather(self, ids, t.node) orelse continue;
         try checkGroup(self, ids, &group);
     }
     if (checked > self.index.triples.len) assert.panic("{s}: checked {d} declarations among {d} captures; count one declaration per captured statement", .{ self.work.facts.path, checked, self.index.triples.len });
@@ -83,7 +83,7 @@ pub fn checkWideScope(self: *File) !void {
 
 /// The names `statement` declares itself, not those declared inside its initializer; null when
 /// there are none, too many, or the initializer can leave the block.
-fn gather(self: *File, ids: Ids, statement: ts.Node) ?Group {
+fn gather(self: *File, ids: Ids, statement: ts.Node) !?Group {
     const end = ts.ts_node_end_byte(statement);
     if (end <= ts.ts_node_start_byte(statement)) assert.panic("{s}: @declaration.outer matched the empty {f}; capture the declaration statement", .{ self.work.facts.path, statement.where() });
     const first = std.sort.lowerBound(captures.Triple, self.index.triples, ts.ts_node_start_byte(statement), hazards.startsBefore);
@@ -92,7 +92,7 @@ fn gather(self: *File, ids: Ids, statement: ts.Node) ?Group {
         if (t.key.start >= end) break;
         if (t.id == ids.exit) return null;
         if (t.id != ids.name) continue;
-        const owner = enclosing(self, t.node, ids.outer) orelse continue;
+        const owner = try enclosing(self, t.node, ids.outer) orelse continue;
         if (!owner.eql(statement)) continue;
         if (group.len == max_group) return null;
         group.names[group.len] = t.node;
@@ -105,10 +105,10 @@ fn gather(self: *File, ids: Ids, statement: ts.Node) ?Group {
 
 fn checkGroup(self: *File, ids: Ids, group: *const Group) !void {
     const declared = group.declared()[0];
-    const home = enclosing(self, group.statement, ids.block) orelse return;
-    const uses = findUses(self, ids, group, home);
-    const target = innermostBlock(self, ids, uses, home) orelse return;
-    if (crossesBarrier(self, ids, target, home)) return;
+    const home = try enclosing(self, group.statement, ids.block) orelse return;
+    const uses = try findUses(self, ids, group, home);
+    const target = try innermostBlock(self, ids, uses, home) orelse return;
+    if (try crossesBarrier(self, ids, target, home)) return;
     if (ts.ts_node_start_byte(target) < group.after()) assert.panic("{s}: the block {f} that '{s}' would move into starts before the declaration ends; findUses() must start after the declaration ends", .{ self.work.facts.path, target.where(), declared.text(self.source) });
     const line = ts.ts_node_start_point(target).row + 1;
     if (!try self.report(declared, "wide-scope", try wideScopeMessage(self, group, line))) return;
@@ -193,7 +193,7 @@ fn wideScopeMessage(self: *File, group: *const Group, line: u32) ![]const u8 {
 
 /// The uses of the group's names after the declaration and before `home` ends. A reference that
 /// an inner definition of the same name shadows is not a use; a string that mentions a name is.
-fn findUses(self: *File, ids: Ids, group: *const Group, home: ts.Node) Uses {
+fn findUses(self: *File, ids: Ids, group: *const Group, home: ts.Node) !Uses {
     const end = ts.ts_node_end_byte(home);
     if (group.after() > end) assert.panic("{s}: the declaration {f} ends after its block {f}; pass the block that encloses the declaration, from enclosing()", .{ self.work.facts.path, group.statement.where(), home.where() });
     const first = std.sort.lowerBound(captures.Triple, self.index.triples, group.after(), hazards.startsBefore);
@@ -201,7 +201,7 @@ fn findUses(self: *File, ids: Ids, group: *const Group, home: ts.Node) Uses {
     for (self.index.triples[first..]) |t| {
         if (t.key.start >= end) break;
         const used = if (t.id == ids.reference)
-            referencesGroup(self, ids, group, t.node)
+            try referencesGroup(self, ids, group, t.node)
         else if (t.id == ids.string)
             mentionsGroup(self, group, t.node)
         else
@@ -216,13 +216,13 @@ fn findUses(self: *File, ids: Ids, group: *const Group, home: ts.Node) Uses {
 
 /// Whether `reference` uses one of the group's names: it spells one, it defines nothing itself
 /// (a parameter or an inner declaration of the same name), and no inner definition shadows it.
-fn referencesGroup(self: *File, ids: Ids, group: *const Group, reference: ts.Node) bool {
+fn referencesGroup(self: *File, ids: Ids, group: *const Group, reference: ts.Node) !bool {
     const text = reference.text(self.source);
     if (text.len == 0) assert.panic("{s}: @local.reference matched the empty {f}; capture a named node as @local.reference in the language's locals.scm", .{ self.work.facts.path, reference.where() });
     if (isDefinition(self, reference)) return false;
     for (group.declared()) |name| {
         if (!std.mem.eql(u8, name.text(self.source), text)) continue;
-        return !shadowed(self, ids, group.after(), reference);
+        return !try shadowed(self, ids, group.after(), reference);
     }
     if (ts.ts_node_start_byte(reference) < group.after()) assert.panic("{s}: the reference {f} precedes the declaration it was checked against; findUses() must start after the declaration", .{ self.work.facts.path, reference.where() });
     return false;
@@ -250,7 +250,7 @@ fn isDefinition(self: *File, node: ts.Node) bool {
 }
 
 /// Whether a definition of the same name, made after `after`, holds `reference` in its scope.
-fn shadowed(self: *File, ids: Ids, after: u32, reference: ts.Node) bool {
+fn shadowed(self: *File, ids: Ids, after: u32, reference: ts.Node) !bool {
     const text = reference.text(self.source);
     const at = ts.ts_node_start_byte(reference);
     if (at < after) assert.panic("{s}: the reference {f} comes before the declaration it might use ends at byte {d}; findUses() must start after the declaration", .{ self.work.facts.path, reference.where(), after });
@@ -260,7 +260,7 @@ fn shadowed(self: *File, ids: Ids, after: u32, reference: ts.Node) bool {
         if (t.key.start >= at) break;
         if (!std.mem.eql(u8, names[t.id].family, "local.definition")) continue;
         if (!std.mem.eql(u8, t.node.text(self.source), text)) continue;
-        const scope = enclosing(self, t.node, ids.scope) orelse continue;
+        const scope = try enclosing(self, t.node, ids.scope) orelse continue;
         if (ts.ts_node_end_byte(scope) >= ts.ts_node_end_byte(reference)) return true;
     }
     if (first > self.index.triples.len) assert.panic("{s}: the captures after byte {d} start at {d}, past the {d} recorded; take the start from lowerBound over the recorded captures", .{ self.work.facts.path, after, first, self.index.triples.len });
@@ -268,13 +268,16 @@ fn shadowed(self: *File, ids: Ids, after: u32, reference: ts.Node) bool {
 }
 
 /// The innermost block strictly inside `home` that holds every use.
-fn innermostBlock(self: *File, ids: Ids, uses: Uses, home: ts.Node) ?ts.Node {
+fn innermostBlock(self: *File, ids: Ids, uses: Uses, home: ts.Node) !?ts.Node {
     const first = uses.first orelse return null;
     const start = ts.ts_node_start_byte(first);
     if (uses.end > ts.ts_node_end_byte(home)) assert.panic("{s}: the uses end at byte {d}, after their declaration's block {f}; findUses() must stop at the block's end", .{ self.work.facts.path, uses.end, home.where() });
     if (uses.end < start) assert.panic("{s}: the uses end at byte {d}, before the first one {f}; findUses() must track the furthest end of any use", .{ self.work.facts.path, uses.end, first.where() });
-    var current = first.parent();
-    while (current) |node| : (current = node.parent()) {
+    const chain = try self.ancestorsOf(first);
+    var i = chain.len;
+    while (i > 0) {
+        i -= 1;
+        const node = chain[i];
         if (node.eql(home)) return null;
         if (!self.index.marks(node, ids.block)) continue;
         if (ts.ts_node_start_byte(node) <= start and ts.ts_node_end_byte(node) >= uses.end) return node;
@@ -284,11 +287,15 @@ fn innermostBlock(self: *File, ids: Ids, uses: Uses, home: ts.Node) ?ts.Node {
 
 /// Whether a loop, function or closure sits between `target` and `home`, so a declaration moved
 /// into `target` would run on every iteration, or at a later time.
-fn crossesBarrier(self: *File, ids: Ids, target: ts.Node, home: ts.Node) bool {
+fn crossesBarrier(self: *File, ids: Ids, target: ts.Node, home: ts.Node) !bool {
     if (target.eql(home)) assert.panic("{s}: the block {f} to move into is the one the declaration is already in; innermostBlock() must return a block inside the declaration's own", .{ self.work.facts.path, home.where() });
     if (ts.ts_node_end_byte(target) > ts.ts_node_end_byte(home)) assert.panic("{s}: the block {f} ends after {f}, which should hold it; innermostBlock() must return a block inside the declaration's own", .{ self.work.facts.path, target.where(), home.where() });
-    var current: ?ts.Node = target;
-    while (current) |node| : (current = node.parent()) {
+    for (ids.barriers) |id| if (self.index.marks(target, id)) return true;
+    const chain = try self.ancestorsOf(target);
+    var i = chain.len;
+    while (i > 0) {
+        i -= 1;
+        const node = chain[i];
         if (node.eql(home)) return false;
         for (ids.barriers) |id| if (self.index.marks(node, id)) return true;
     }
@@ -296,12 +303,14 @@ fn crossesBarrier(self: *File, ids: Ids, target: ts.Node, home: ts.Node) bool {
 }
 
 /// The nearest ancestor of `node` that carries capture `id`.
-fn enclosing(self: *File, node: ts.Node, id: captures.Id) ?ts.Node {
+fn enclosing(self: *File, node: ts.Node, id: captures.Id) !?ts.Node {
     if (id >= self.checker.compiled.names.len) assert.panic("{s}: capture id {d} is out of range; the query has {d} captures; pass an id from Ids.fromQuery() on this language's query", .{ self.work.facts.path, id, self.checker.compiled.names.len });
     if (node.id == null) assert.panic("{s}: looked for an enclosing capture of a null node; check ts_node_is_null before calling enclosing()", .{self.work.facts.path});
-    var current = node.parent();
-    while (current) |ancestor| : (current = ancestor.parent()) {
-        if (self.index.marks(ancestor, id)) return ancestor;
+    const chain = try self.ancestorsOf(node);
+    var i = chain.len;
+    while (i > 0) {
+        i -= 1;
+        if (self.index.marks(chain[i], id)) return chain[i];
     }
     return null;
 }

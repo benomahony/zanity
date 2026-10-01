@@ -96,6 +96,7 @@ pub extern fn ts_parser_set_language(parser: *Parser, language: *const Language)
 pub extern fn ts_parser_parse_string(parser: *Parser, old_tree: ?*const Tree, string: [*]const u8, length: u32) ?*Tree;
 pub extern fn ts_tree_delete(tree: *Tree) void;
 pub extern fn ts_tree_root_node(tree: *const Tree) Node;
+pub extern fn ts_node_child_with_descendant(self: Node, descendant: Node) Node;
 
 pub extern fn ts_node_type(node: Node) [*:0]const u8;
 pub extern fn ts_node_start_byte(node: Node) u32;

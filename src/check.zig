@@ -118,6 +118,8 @@ pub const FileScratch = struct {
     statement_calls: memory.Bounded(ts.Node),
     /// The nodes the walk is inside, outermost first, so their parents need no search.
     path: memory.Bounded(ts.Node),
+    /// The chain from the root to a node, from ancestorsOf().
+    ancestors: memory.Bounded(ts.Node),
     in_comment: []bool,
     code_lines: []bool,
     captures: captures.CaptureScratch,
@@ -140,6 +142,7 @@ pub const FileScratch = struct {
             .async_names = try .initBounded(gpa, limits.per_file, "async functions in one file"),
             .statement_calls = try .initBounded(gpa, limits.per_file, "calls made as statements in one file"),
             .path = try .initBounded(gpa, limits.depth, "nested syntax nodes in one file"),
+            .ancestors = try .initBounded(gpa, limits.depth, "nested syntax nodes in one file"),
             .in_comment = try memory.reserve(gpa, bool, limits.file_bytes),
             .code_lines = try memory.reserve(gpa, bool, limits.file_bytes + 1),
             .captures = try .initCaptureScratch(gpa, limits),
@@ -147,7 +150,7 @@ pub const FileScratch = struct {
     }
 
     pub fn clearFile(self: *FileScratch) void {
-        inline for (.{ "contexts", "opened", "diagnostics", "suppressions", "codes", "trail", "calls", "signature", "weak", "locals", "bare_calls", "async_names", "statement_calls", "path" }) |field| {
+        inline for (.{ "contexts", "opened", "diagnostics", "suppressions", "codes", "trail", "calls", "signature", "weak", "locals", "bare_calls", "async_names", "statement_calls", "path", "ancestors" }) |field| {
             @field(self, field).clear();
         }
         if (self.contexts.len != 0) assert.panic("clearing the per-file scratch left {d} open constructs; clearFile() must clear contexts, so add it to the field list there", .{self.contexts.len});
@@ -442,6 +445,23 @@ pub const File = struct {
         }
         if (self.s.contexts.len != remaining) assert.panic("{s}: closing constructs left {d} open, expected {d}; close() must not open or drop contexts itself", .{ self.work.facts.path, self.s.contexts.len, remaining });
         if (self.s.path.drop() == null) assert.panic("{s}: left a node, but the walk's path is empty; enter() must add each node it enters to the path", .{self.work.facts.path});
+    }
+
+    /// `node`'s ancestors, root first. Climbing with parent() makes tree-sitter search down from
+    /// the root again at every step; this finds the whole chain in one descent. The slice lasts
+    /// until the next call.
+    pub fn ancestorsOf(self: *File, node: ts.Node) error{LimitExceeded}![]const ts.Node {
+        const chain = &self.s.ancestors;
+        chain.clear();
+        var current = ts.ts_tree_root_node(node.tree orelse assert.panic("{s}: looked for the ancestors of a node whose tree was deleted; look while the tree is alive", .{self.work.facts.path}));
+        for (0..chain.buffer.len + 1) |_| {
+            if (current.eql(node)) return chain.items();
+            try chain.add(current);
+            current = ts.ts_node_child_with_descendant(current, node);
+            if (ts.ts_node_is_null(current)) assert.panic("{s}: {f} is not in the tree being checked; pass a node from this file's tree", .{ self.work.facts.path, node.where() });
+            if (ts.ts_node_end_byte(current) < ts.ts_node_end_byte(node)) assert.panic("{s}: the step towards {f} landed on {f}, which ends before it; ts_node_child_with_descendant() returns the child holding the node", .{ self.work.facts.path, node.where(), current.where() });
+        }
+        assert.panic("{s}: {f} is deeper than the {d} nodes the chain has room for, yet adding past that did not fail; Bounded.add() must refuse to grow past its buffer", .{ self.work.facts.path, node.where(), chain.buffer.len });
     }
 
     /// `node`'s parent. tree-sitter finds a parent by searching down from the root, so for the
