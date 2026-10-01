@@ -7,6 +7,8 @@ const rules = @import("rules.zig");
 
 pub const Adapter = adapters.Adapter;
 pub const Tables = adapters.Tables;
+/// How many languages zanity checks.
+pub const count = adapters.all.len;
 
 pub const Loaded = struct {
     adapter: *const Adapter,
@@ -35,6 +37,14 @@ pub fn applies(adapter: *const Adapter, name: []const u8) bool {
     if (adapter.not_applicable.len >= rules.all.len) assert.panic("{s} lists {d} rules as not applicable out of {d}; drop the language instead", .{ adapter.name, adapter.not_applicable.len, rules.all.len });
     for (adapter.not_applicable) |na| if (rule.answers(na)) return false;
     return true;
+}
+
+/// Where `adapter` sits in adapters.all, for arrays with one slot per language.
+pub fn indexOf(adapter: *const Adapter) usize {
+    const index = (@intFromPtr(adapter) - @intFromPtr(adapters.all.ptr)) / @sizeOf(Adapter);
+    if (index >= adapters.all.len) assert.panic("adapter {s} is at index {d}, past the {d} languages; it is not from adapters.all", .{ adapter.name, index, adapters.all.len });
+    if (&adapters.all[index] != adapter) assert.panic("adapter {s} is not adapters.all[{d}] ({s}); pass a pointer into adapters.all", .{ adapter.name, index, adapters.all[index].name });
+    return index;
 }
 
 pub fn forPath(path: []const u8) ?*const Adapter {

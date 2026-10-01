@@ -31,6 +31,17 @@ pub fn build(b: *std.Build) void {
     run.addPassthruArgs();
     b.step("run", "Run zanity").dependOn(&run.step);
 
+    // `zig build bench` always measures optimised builds: a Debug zanity fills its buffers and
+    // keeps every safety check, so its timings say nothing about a release.
+    const bench = b.addRunArtifact(b.addExecutable(.{ .name = "bench", .root_module = module(b, "src/bench.zig", b.graph.host, .ReleaseFast) }));
+    const fast = b.addExecutable(.{ .name = "zanity", .root_module = module(b, "src/main.zig", b.graph.host, .ReleaseFast) });
+    fast.root_module.addOptions("build_info", build_info);
+    bench.addArtifactArg(fast);
+    bench.addArg(b.graph.zig_exe);
+    if (b.option([]const u8, "corpus", "The directory zig build bench checks; Zig's standard library by default")) |corpus| bench.addArg(corpus);
+    bench.has_side_effects = true;
+    b.step("bench", "Time zanity check against the fastest this machine could parse the corpus").dependOn(&bench.step);
+
     const test_module = module(b, "src/tests.zig", target, optimize);
     const options = b.addOptions();
     options.addOptionPath("zanity", exe.getEmittedBin());

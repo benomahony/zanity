@@ -104,7 +104,7 @@ const Workspace = struct {
     ignore: Ignore,
     environ: ?*const std.process.Environ.Map = null,
     inference: ?infer.Inference = null,
-    checkers: [adapters.all.len]?check.Checker = @splat(null),
+    checkers: [language.count]?check.Checker = @splat(null),
     checked: usize = 0,
     io: Io = undefined,
 
@@ -136,19 +136,12 @@ const Workspace = struct {
         if (selected.len == 0) assert.panic("compiling checkers with no rules selected; runCheck always selects at least one", .{});
         for (ws.files.items()) |path| {
             const adapter = language.forPath(path) orelse continue;
-            const slot = &ws.checkers[adapterIndex(adapter)];
+            const slot = &ws.checkers[language.indexOf(adapter)];
             if (slot.* == null) slot.* = try check.Checker.initChecker(gpa, try language.load(adapter), selected);
         }
         if (ws.checkers.len != adapters.all.len) assert.panic("{d} checker slots for {d} languages; initCheckers() must make one slot per adapter in adapters.all", .{ ws.checkers.len, adapters.all.len });
     }
 };
-
-fn adapterIndex(adapter: *const language.Adapter) usize {
-    const index = (@intFromPtr(adapter) - @intFromPtr(adapters.all.ptr)) / @sizeOf(language.Adapter);
-    if (index >= adapters.all.len) assert.panic("adapter {s} is at index {d}, past the {d} languages; it is not from adapters.all", .{ adapter.name, index, adapters.all.len });
-    if (&adapters.all[index] != adapter) assert.panic("adapter {s} is not adapters.all[{d}] ({s}); pass a pointer into adapters.all", .{ adapter.name, index, adapters.all[index].name });
-    return index;
-}
 
 pub fn main(init: std.process.Init) !u8 {
     const args = try init.minimal.args.toSlice(init.arena.allocator());
@@ -221,10 +214,10 @@ fn runInit(ctx: *zcli.Context, options: InitOptions) ![]const InitRow {
     const exists = if (Io.Dir.cwd().access(ws.io, target, .{})) true else |_| false;
     if (exists and !options.force) return ctx.fail(.usage, try ws.text.format("{s} already exists.", .{target}), "Edit it, or pass --force to replace it with a fresh one.");
     try collect(ctx, ws, dir);
-    var counts: [adapters.all.len]starter.Project.Count = undefined;
+    var counts: [language.count]starter.Project.Count = undefined;
     for (adapters.all, &counts) |*adapter, *count| count.* = .{ .name = adapter.name, .files = 0 };
     for (ws.files.items()) |path| if (language.forPath(path)) |adapter| {
-        counts[adapterIndex(adapter)].files += 1;
+        counts[language.indexOf(adapter)].files += 1;
     };
     var present: [starter.usual_excludes.len][]const u8 = undefined;
     var found: usize = 0;
@@ -317,7 +310,7 @@ fn checkFiles(ctx: *zcli.Context, ws: *Workspace, selected: rules.Set) !void {
     const work: check.Work = .{ .scratch = &ws.check, .text = &ws.text, .facts = &ws.facts };
     for (ws.files.items()) |path| {
         const adapter = language.forPath(path) orelse continue;
-        const checker = &(ws.checkers[adapterIndex(adapter)] orelse unreachable);
+        const checker = &(ws.checkers[language.indexOf(adapter)] orelse unreachable);
         ws.checked += 1;
         const source = Io.Dir.cwd().readFile(ws.io, path, ws.source) catch |e| {
             return ctx.fail(.io, try ws.text.format("Could not read {s}: {t}.", .{ path, e }), "Check the file exists and is readable.");
