@@ -59,12 +59,11 @@ pub fn build(b: *std.Build) void {
     // `zig build test-integration` runs the built zanity: the golden fixtures, the CLI, and
     // zanity checking its own source, which must pass every rule.
     const integration_module = module(b, "src/golden_test.zig", target, test_optimize);
-    const checked = if (test_optimize == optimize) exe else b.addExecutable(.{ .name = "zanity", .root_module = module(b, "src/main.zig", target, test_optimize) });
-    if (checked != exe) checked.root_module.addOptions("build_info", build_info);
     const options = b.addOptions();
-    options.addOptionPath("zanity", checked.getEmittedBin());
+    options.addOptionPathUntracked("zanity", .{ .relative = .{ .base = .install_bin, .sub_path = b.fmt("zanity{s}", .{target.result.exeFileExt()}) } });
     integration_module.addOptions("paths", options);
     const integration = b.addRunArtifact(b.addTest(.{ .root_module = integration_module }));
+    integration.step.dependOn(b.getInstallStep());
     integration.setCwd(b.path("."));
     integration.has_side_effects = true;
     // Under a coding agent, check would speak to it; the tests expect the output anyone else gets.
