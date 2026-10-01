@@ -329,7 +329,7 @@ Golden cases in `tests/golden/` run through the real binary and compare where ea
 
 ### Releasing
 
-Every commit that passes CI on `main` is released automatically, one patch version up from the latest release: the workflow builds every platform with `zig build release -Dversion=<version>` and publishes the binaries as a GitHub release, tagging that commit. To raise the minor or major version instead, run the release workflow by hand:
+Every commit that passes CI on `main` is released automatically, one patch version up from the latest release: the workflow builds each platform on its own runner with `zig build release -Dplatform=<platform> -Dversion=<version>` and publishes the binaries as a GitHub release, tagging that commit. To raise the minor or major version instead, run the release workflow by hand:
 
 ```sh
 gh workflow run release -f bump=minor   # or bump=major
