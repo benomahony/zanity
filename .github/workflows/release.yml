@@ -30,7 +30,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/ci.yml
 
-  release:
+  version:
     needs: test
     if: >-
       always() &&
@@ -40,15 +40,19 @@ jobs:
     env:
       COMMIT: ${{ github.event.workflow_run.head_sha || github.sha }}
       BUMP: ${{ inputs.bump || 'patch' }}
+    outputs:
+      commit: ${{ steps.version.outputs.commit }}
+      version: ${{ steps.version.outputs.version }}
+      skip: ${{ steps.version.outputs.skip }}
     steps:
       - uses: actions/checkout@v5
         with:
           ref: ${{ env.COMMIT }}
           fetch-depth: 0
-      - uses: mlugg/setup-zig@v2
       - name: Choose the version
         id: version
         run: |
+          echo "commit=$COMMIT" >> "$GITHUB_OUTPUT"
           if [ "$GITHUB_EVENT_NAME" = workflow_run ] && git tag --points-at HEAD | grep -q '^v'; then
             echo "::notice::$COMMIT is already released as $(git tag --points-at HEAD | head -n1)."
             echo "skip=true" >> "$GITHUB_OUTPUT"
@@ -67,20 +71,55 @@ jobs:
           fi
           echo "Releasing v$next (after ${latest:-no release})."
           echo "version=$next" >> "$GITHUB_OUTPUT"
-      - name: Build every platform
-        if: steps.version.outputs.skip != 'true'
+
+  build:
+    needs: version
+    if: always() && needs.version.result == 'success' && needs.version.outputs.skip != 'true'
+    strategy:
+      matrix:
+        platform: [linux-x86_64, linux-aarch64, macos-x86_64, macos-aarch64, windows-x86_64]
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.version.outputs.commit }}
+      - uses: mlugg/setup-zig@v2
+        with:
+          cache-key: ${{ matrix.platform }}
+      - name: Build ${{ matrix.platform }}
+        run: zig build release -Dplatform=${{ matrix.platform }} -Dversion=$VERSION
+      - name: Check the version it reports
+        if: matrix.platform == 'linux-x86_64'
         run: |
-          zig build release -Dversion=${{ steps.version.outputs.version }}
           built=$(./zig-out/release/zanity-linux-x86_64 --version)
-          if [ "$built" != "zanity ${{ steps.version.outputs.version }}" ]; then
-            echo "::error::The release binary reports '$built', not zanity ${{ steps.version.outputs.version }}; check that build.zig passes -Dversion into build_info."
+          if [ "$built" != "zanity $VERSION" ]; then
+            echo "::error::The release binary reports '$built', not zanity $VERSION; check that build.zig passes -Dversion into build_info."
             exit 1
           fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zanity-${{ matrix.platform }}
+          path: zig-out/release/*
+          if-no-files-found: error
+
+  publish:
+    needs: [version, build]
+    if: always() && needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release
+          merge-multiple: true
       # Creates the tag on the tested commit. GitHub lists each binary's SHA-256 on the release.
       - name: Publish the release
-        if: steps.version.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: >-
-          gh release create "v${{ steps.version.outputs.version }}" zig-out/release/*
-          --target "$COMMIT" --title "zanity v${{ steps.version.outputs.version }}" --generate-notes
+          gh release create "v$VERSION" release/*
+          --repo "$GITHUB_REPOSITORY" --target "${{ needs.version.outputs.commit }}"
+          --title "zanity v$VERSION" --generate-notes
