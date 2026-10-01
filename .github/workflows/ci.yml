@@ -22,10 +22,14 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
+    env:
+      ZIG_CACHE_LIMIT_MB: 1024
     steps:
       - uses: actions/checkout@v5
       # Installs the Zig in build.zig.zon's minimum_zig_version.
       - uses: mlugg/setup-zig@v2
+        with:
+          cache-size-limit: ${{ env.ZIG_CACHE_LIMIT_MB }}
       - name: Formatting
         run: zig fmt --check build.zig build.zig.zon src languages/*.zig languages/*.zon
       # Unit, golden, architecture and catalogue tests, and zanity checking its own Zig source.
@@ -36,6 +40,14 @@ jobs:
       - name: Every released platform still builds
         if: runner.os == 'Linux'
         run: zig build release
+      - name: Zig cache size
+        if: always()
+        run: |
+          used=$(du -sm "$ZIG_GLOBAL_CACHE_DIR" | cut -f1)
+          echo "Zig cache: ${used} MB of ${ZIG_CACHE_LIMIT_MB} MB" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$used" -gt "$ZIG_CACHE_LIMIT_MB" ]; then
+            echo "::warning::The Zig cache is ${used} MB, past its ${ZIG_CACHE_LIMIT_MB} MB limit, so it is emptied and the next run builds from scratch. If this shows on every run, one build needs more: raise ZIG_CACHE_LIMIT_MB in .github/workflows/ci.yml."
+          fi
 
   catalogue:
     runs-on: ubuntu-latest
