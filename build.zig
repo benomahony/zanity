@@ -52,9 +52,10 @@ pub fn build(b: *std.Build) void {
     // zanity checking its own source, which must pass every rule.
     const integration_module = module(b, "src/golden_test.zig", target, optimize);
     const options = b.addOptions();
-    options.addOptionPath("zanity", exe.getEmittedBin());
+    options.addOptionPathUntracked("zanity", .{ .relative = .{ .base = .install_bin, .sub_path = b.fmt("zanity{s}", .{target.result.exeFileExt()}) } });
     integration_module.addOptions("paths", options);
     const integration = b.addRunArtifact(b.addTest(.{ .root_module = integration_module }));
+    integration.step.dependOn(b.getInstallStep());
     integration.setCwd(b.path("."));
     integration.has_side_effects = true;
     b.step("test-integration", "Run the built zanity end to end, on the golden fixtures and on its own source").dependOn(&integration.step);
