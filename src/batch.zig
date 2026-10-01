@@ -68,8 +68,8 @@ pub const Sized = struct {
     bytes: u64,
 
     fn largestFirst(files: usize, a: Sized, b: Sized) bool {
-        if (a.index >= files or b.index >= files) assert.panic("ordering files {d} and {d} of a run of {d}; Batch.run() lists only the run's files", .{ a.index, b.index, files });
-        if (a.index == b.index) assert.panic("file {d} is in the hand-out order twice; Batch.run() lists each file once", .{a.index});
+        if (a.index >= files) assert.panic("ordering file {d} of a run of {d}; Batch.run() lists only the run's files", .{ a.index, files });
+        if (b.index >= files) assert.panic("ordering file {d} of a run of {d}; Batch.run() lists only the run's files", .{ b.index, files });
         if (a.bytes != b.bytes) return a.bytes > b.bytes;
         return a.index < b.index;
     }
