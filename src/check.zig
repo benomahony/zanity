@@ -707,6 +707,7 @@ pub const File = struct {
         const at = ts.ts_node_start_point(name_node);
         const method = std.mem.eql(u8, ctx.kind, "function") and self.innermost(.function) != null and self.definedInClass();
         try self.work.facts.define(name, if (method) "method" else ctx.kind, .{ at.row, at.column });
+        self.work.facts.definitions.last().?.public = try self.publicSpelling(name);
     }
 
     pub fn inAssertionCondition(self: *File, node: ts.Node) bool {
@@ -723,6 +724,15 @@ pub const File = struct {
         const wrapped = affix.len > 0 and name.len > affix.len * 2 and std.mem.startsWith(u8, name, affix) and std.mem.endsWith(u8, name, affix);
         if (wrapped and name.len <= affix.len * 2) std.debug.panic("{s}: '{s}' was taken as wrapped in '{s}', but it has no name inside the affixes; isProtocolName() must check the length first", .{ self.work.facts.path, name, affix });
         return wrapped or contains(self.tables.protocol_names, name);
+    }
+
+    pub fn publicSpelling(self: *File, name: []const u8) ![]const u8 {
+        if (name.len == 0) std.debug.panic("{s}: asked for the public spelling of an empty name; the @name capture matched an empty node", .{self.work.facts.path});
+        const bare = std.mem.trimStart(u8, name, self.tables.private_prefixes);
+        const public = try self.work.facts.text.copy(if (bare.len == 0) name else bare);
+        if (self.tables.exported_by_case) @constCast(public)[0] = std.ascii.toUpper(public[0]);
+        if (public.len > name.len) std.debug.panic("{s}: the public spelling '{s}' is longer than '{s}'; publicSpelling() may only drop privacy marks", .{ self.work.facts.path, public, name });
+        return public;
     }
 
     pub fn isTestName(self: *File, name: []const u8) bool {

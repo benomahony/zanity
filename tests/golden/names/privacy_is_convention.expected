@@ -1,0 +1,4 @@
+rules: name-drift,duplicate-name
+exit: 0
+client.go:11:6: warning [name-drift]
+orders.ts:1:17: warning [name-drift]

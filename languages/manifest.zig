@@ -88,6 +88,8 @@ pub const Tables = struct {
     /// What starts a comment that runs to the end of the line; fixes leave TODOs with it.
     line_comment: []const u8 = "",
     protocol_affix: []const u8 = "",
+    private_prefixes: []const u8 = "",
+    exported_by_case: bool = false,
 };
 
 pub const entries: []const Entry = @import("manifest.zon");

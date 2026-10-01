@@ -26,6 +26,7 @@ pub const ConceptScratch = struct {
     keyed: memory.Bounded(Keyed),
     spellings: memory.Bounded([]const u8),
     kinds: memory.Bounded([]const u8),
+    publics: memory.Bounded([]const u8),
     shapes: memory.Bounded([]const u8),
     tokens: memory.Bounded([]const u8),
     words: memory.Text,
@@ -37,6 +38,7 @@ pub const ConceptScratch = struct {
             .keyed = try .initBounded(gpa, limits.definitions, "definitions across all files"),
             .spellings = try .initBounded(gpa, limits.definitions, "spellings of one concept"),
             .kinds = try .initBounded(gpa, limits.definitions, "kinds of one concept"),
+            .publics = try .initBounded(gpa, limits.definitions, "public spellings of one concept"),
             .shapes = try .initBounded(gpa, limits.definitions, "spellings of one concept"),
             .tokens = try .initBounded(gpa, max_tokens, "words in one name"),
             .words = try .initText(gpa, limits.text_bytes),
@@ -131,12 +133,14 @@ fn drift(s: *ConceptScratch, text: *memory.Text, definitions: []const Definition
         defer start = end;
         s.spellings.clear();
         s.kinds.clear();
+        s.publics.clear();
         for (keyed[start..end]) |k| {
             try addUnique(&s.spellings, definitions[k.index].name);
             try addUnique(&s.kinds, definitions[k.index].kind);
+            try addUnique(&s.publics, definitions[k.index].public);
         }
         const names = s.spellings.items();
-        if (names.len < 2 or caseOnlyAcrossKinds(names, s.kinds.len)) continue;
+        if (names.len < 2 or conventionOnly(s.publics.items(), s.kinds.len)) continue;
         if (try directionalNames(s, names)) continue;
         const first = definitions[keyed[start].index];
         const spellings = try joined(text, names);
@@ -178,12 +182,12 @@ fn addUnique(list: *memory.Bounded([]const u8), value: []const u8) error{LimitEx
     if (list.len == 0) std.debug.panic("recorded '{s}' but the list is still empty; addUnique() must add the name before returning", .{value});
 }
 
-fn caseOnlyAcrossKinds(names: []const []const u8, kinds: usize) bool {
-    if (names.len < 2) std.debug.panic("comparing the case of {d} names; drift needs at least 2 spellings", .{names.len});
-    if (kinds == 0) std.debug.panic("{d} names ('{s}' first) have no kinds recorded; every definition has a kind", .{ names.len, names[0] });
+fn conventionOnly(publics: []const []const u8, kinds: usize) bool {
+    if (publics.len == 0) std.debug.panic("a run of names has no public spellings; closeDefinition() records one for every definition", .{});
+    if (kinds == 0) std.debug.panic("{d} public spellings ('{s}' first) have no kinds recorded; every definition has a kind", .{ publics.len, publics[0] });
+    if (publics.len == 1) return true;
     if (kinds < 2) return false;
-    const first = std.mem.trimStart(u8, names[0], "_");
-    for (names[1..]) |n| if (!std.ascii.eqlIgnoreCase(std.mem.trimStart(u8, n, "_"), first)) return false;
+    for (publics[1..]) |p| if (!std.ascii.eqlIgnoreCase(p, publics[0])) return false;
     return true;
 }
 

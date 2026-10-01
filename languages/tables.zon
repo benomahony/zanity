@@ -17,6 +17,7 @@
         .assertion_braces_doubled = true,
         .line_comment = "#",
         .protocol_affix = "__",
+        .private_prefixes = "_",
         .forbidden_calls = .{ "eval", "exec", "compile", "globals", "locals", "__import__", "setattr", "getattr" },
         .forbidden_methods = .{ "eval", "exec" },
         .attribute_calls = .{ "getattr", "setattr" },
@@ -70,6 +71,7 @@
     },
     .{
         .ecosystem = "go",
+        .exported_by_case = true,
         .weak_hashes = .{ "md5.New", "md5.Sum", "sha1.New", "sha1.Sum" },
         .sql_methods = .{ "Query", "QueryRow", "Exec", "QueryContext", "QueryRowContext", "ExecContext", "Prepare" },
         .log_calls = .{ "log.Print", "log.Printf", "log.Println", "fmt.Print", "fmt.Printf", "fmt.Println", "slog.Info", "slog.Debug", "slog.Warn", "slog.Error" },
@@ -94,6 +96,7 @@
     },
     .{
         .ecosystem = "node",
+        .private_prefixes = "_",
         .unsafe_deserializers = .{ "serialize.unserialize", "unserialize", "yaml.load" },
         .shell_calls = .{ "child_process.exec", "child_process.execSync", "exec", "execSync" },
         .sql_methods = .{ "query", "raw", "execute" },
