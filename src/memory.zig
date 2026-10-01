@@ -20,7 +20,8 @@ pub const Limits = struct {
     judgement_bytes: u32 = 1 << 26,
 };
 
-pub var exceeded: []const u8 = "";
+/// Which limit ran out, for the thread whose add() or copy() returned error.LimitExceeded.
+pub threadlocal var exceeded: []const u8 = "";
 
 /// Room for `n` items, left as the allocator returned it. `Allocator.alloc` fills memory in Debug
 /// builds, touching every page; zanity's buffers are sized for the largest input it accepts, so that

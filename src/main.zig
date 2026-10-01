@@ -7,6 +7,7 @@ const zrich = @import("zrich");
 const adapters = @import("adapters");
 const language = @import("language.zig");
 const check = @import("check.zig");
+const batch = @import("batch.zig");
 const rules = @import("rules.zig");
 const report = @import("report.zig");
 const naming = @import("naming.zig");
@@ -92,11 +93,12 @@ const Workspace = struct {
     limits: memory.Limits,
     text: memory.Text,
     facts: Facts,
-    check: check.FileScratch,
     naming: naming.ConceptScratch,
     graph: graph.CycleScratch,
     findings: memory.Bounded(Finding),
     files: memory.Bounded([]const u8),
+    /// The order checkFiles() hands files to its workers in.
+    order: []batch.Sized,
     rows: memory.Bounded(Row),
     table: report.TableScratch,
     source: []u8,
@@ -116,11 +118,11 @@ const Workspace = struct {
             .limits = limits,
             .text = try .initText(gpa, limits.text_bytes),
             .facts = undefined,
-            .check = try .initCheckScratch(gpa, limits),
             .naming = try .initNamingScratch(gpa, limits),
             .graph = try .initGraphScratch(gpa, limits),
             .findings = try .initBounded(gpa, limits.findings, "findings across all files"),
             .files = try .initBounded(gpa, limits.files, "files"),
+            .order = try memory.reserve(gpa, batch.Sized, limits.files),
             .rows = try .initBounded(gpa, limits.findings, "findings across all files"),
             .table = try .initTableScratch(gpa, limits.files),
             .source = try memory.reserve(gpa, u8, limits.file_bytes + 1),
@@ -307,25 +309,25 @@ fn checkPaths(ctx: *zcli.Context, ws: *Workspace, options: CheckOptions, selecte
 fn checkFiles(ctx: *zcli.Context, ws: *Workspace, selected: rules.Set) !void {
     if (selected.len == 0) assert.panic("checking files with no rules selected; runCheck always selects at least one", .{});
     if (ws.findings.len != 0) assert.panic("{d} findings are left from an earlier run; checkFiles expects a fresh workspace", .{ws.findings.len});
-    const work: check.Work = .{ .scratch = &ws.check, .text = &ws.text, .facts = &ws.facts };
-    for (ws.files.items()) |path| {
-        const adapter = language.forPath(path) orelse continue;
-        const checker = &(ws.checkers[language.indexOf(adapter)] orelse unreachable);
-        ws.checked += 1;
-        const source = Io.Dir.cwd().readFile(ws.io, path, ws.source) catch |e| {
-            return ctx.fail(.io, try ws.text.format("Could not read {s}: {t}.", .{ path, e }), "Check the file exists and is readable.");
+    if (ws.files.len > 0) {
+        var run: batch.Batch = .{
+            .io = ws.io,
+            .files = ws.files.items(),
+            .order = ws.order,
+            .checkers = &ws.checkers,
+            .file_bytes = ws.limits.file_bytes,
+            .text = &ws.text,
+            .facts = &ws.facts,
+            .findings = &ws.findings,
+            .live = ws.live,
         };
-        if (source.len > ws.limits.file_bytes) {
-            memory.exceeded = "bytes in one file";
-            return error.LimitExceeded;
+        if (try run.run(try batch.initWorkers(std.heap.page_allocator, ws.limits, ws.files.len))) |failure| {
+            const path = ws.files.items()[failure.index];
+            if (failure.unreadable) return ctx.fail(.io, try ws.text.format("Could not read {s}: {t}.", .{ path, failure.err }), "Check the file exists and is readable.");
+            memory.exceeded = failure.exceeded;
+            return failure.err;
         }
-        ws.facts.path = path;
-        ws.facts.language = adapter.name;
-        const result = try checker.check(work, source);
-        for (result.diagnostics) |d| {
-            try ws.findings.add(.{ .path = path, .line = d.line, .column = d.column, .rule = d.rule, .message = d.message, .fix = d.fix, .edit = d.edit });
-        }
-        if (ws.live) |live| live.update("Checking files", ws.checked, ws.files.len);
+        ws.checked = run.checked;
     }
     if (ws.live) |live| live.restart();
     try naming.crossCheck(&ws.naming, &ws.facts, selected, &ws.findings);
