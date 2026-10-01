@@ -55,12 +55,18 @@ pub fn crossCheck(s: *ConceptScratch, facts: *Facts, enabled: rules.Set, finding
     if (findings.len - before > definitions.len * 2) assert.panic("naming checks reported {d} findings for {d} definitions; each definition can be in at most one drift and one duplicate", .{ findings.len - before, definitions.len });
 }
 
+/// Dunder names, which a language defines rather than the author, and names with no words, like
+/// Go's blank identifier `_`, which say nothing a reader could confuse.
 fn exempt(name: []const u8) bool {
     if (name.len == 0) assert.panic("asked whether an empty name is exempt from naming checks; the @name capture matched an empty node", .{});
     const dunder = name.len > 4 and std.mem.startsWith(u8, name, "__") and std.mem.endsWith(u8, name, "__");
     if (dunder and name.len <= 4) assert.panic("'{s}' was taken for a dunder name, but those need at least 5 bytes, like __x__; exempt() must check the length before treating a name as a dunder name", .{name});
-    return dunder;
+    const wordless = std.mem.indexOfNone(u8, name, separators) == null;
+    return dunder or wordless;
 }
+
+/// The bytes tokenise() splits words on: underscores, hyphens and whitespace.
+const separators = "_-" ++ std.ascii.whitespace;
 
 /// Splits a name into lowercase words, which live in `s.words` until its next reset.
 pub fn tokenise(s: *ConceptScratch, name: []const u8) error{LimitExceeded}![]const []const u8 {
@@ -69,7 +75,7 @@ pub fn tokenise(s: *ConceptScratch, name: []const u8) error{LimitExceeded}![]con
     var start: usize = 0;
     for (0..name.len + 1) |i| {
         const at_end = i == name.len;
-        const separator = !at_end and (name[i] == '_' or name[i] == '-' or std.ascii.isWhitespace(name[i]));
+        const separator = !at_end and std.mem.indexOfScalar(u8, separators, name[i]) != null;
         const boundary = !at_end and i > start and caseBoundary(name, i);
         if (!at_end and !separator and !boundary) continue;
         if (i > start) {
@@ -248,6 +254,12 @@ fn duplicates(s: *ConceptScratch, text: *memory.Text, definitions: []const Defin
     }
     if (start != keyed.len) assert.panic("duplicate-name stopped at definition {d} of {d}; runEnd must reach the end", .{ start, keyed.len });
     if (findings.len - before > definitions.len) assert.panic("duplicate-name reported {d} findings for {d} definitions; each definition can be reported once", .{ findings.len - before, definitions.len });
+}
+
+test "names with no words, like Go's blank identifier, are exempt" {
+    try std.testing.expect(exempt("_"));
+    try std.testing.expect(exempt("__"));
+    try std.testing.expect(!exempt("_x"));
 }
 
 test "names split on separators, case changes and acronyms" {
