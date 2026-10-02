@@ -87,10 +87,12 @@ fn widestPaths(self: *File, start: u32, end: u32, widest: *[8]ts.Node) usize {
     var found: usize = 0;
     for (self.index.triples) |t| {
         if (t.id != self.v.expression_path or t.key.start < start or ts.ts_node_end_byte(t.node) > end) continue;
-        if (found > 0 and t.key.start < ts.ts_node_end_byte(widest[found - 1])) {
-            const last = widest[found - 1];
-            if (t.key.start == ts.ts_node_start_byte(last) and ts.ts_node_end_byte(t.node) > ts.ts_node_end_byte(last)) widest[found - 1] = t.node;
-            continue;
+        if (found > 0) {
+            const last = &widest[found - 1];
+            if (t.key.start < ts.ts_node_end_byte(last.*)) {
+                if (t.key.start == ts.ts_node_start_byte(last.*) and ts.ts_node_end_byte(t.node) > ts.ts_node_end_byte(last.*)) last.* = t.node;
+                continue;
+            }
         }
         if (found == widest.len) break;
         widest[found] = t.node;

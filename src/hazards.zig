@@ -128,8 +128,9 @@ pub fn checkNesting(self: *File, node: ts.Node, chained: bool) !void {
     var i = items.len;
     const function = while (i > 0) {
         i -= 1;
-        if (items[i].family == .function or items[i].family == .class or items[i].family == .@"test") break &items[i];
-        if (items[i].family == .control and !items[i].chained) depth += 1;
+        const ctx = &items[i];
+        if (ctx.family == .function or ctx.family == .class or ctx.family == .@"test") break ctx;
+        if (ctx.family == .control and !ctx.chained) depth += 1;
     } else null;
     if (depth > items.len + 1) assert.panic("{s}: {f} counted {d} levels among {d} open constructs; checkNesting() must count at most one level per open construct", .{ self.work.facts.path, node.where(), depth, items.len });
     const owner = function orelse return;

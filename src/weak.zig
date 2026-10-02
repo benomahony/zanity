@@ -64,7 +64,8 @@ pub fn callFor(self: *File, node: ts.Node) ?Call {
     var i = calls.len;
     while (i > 0) {
         i -= 1;
-        if (calls[i].key.id == key.id and calls[i].key.start == key.start) return calls[i];
+        const call = calls[i];
+        if (call.key.id == key.id and call.key.start == key.start) return call;
     }
     if (i != 0) assert.panic("{s}: the search for the call at {f} stopped at {d} without returning; the loop in callFor() must return from inside, so check its exits", .{ self.work.facts.path, node.where(), i });
     return null;

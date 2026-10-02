@@ -214,7 +214,8 @@ fn runInit(ctx: *zcli.Context, options: InitOptions) ![]const InitRow {
     if (options.paths.len != 1) return ctx.fail(.usage, "zanity init takes one directory.", "Run it in the project's root, or pass that directory, such as zanity init path/to/project.");
     const dir = options.paths[0];
     const target = if (std.mem.eql(u8, dir, ".")) config.file_name else try ws.text.format("{s}/{s}", .{ std.mem.trimEnd(u8, dir, "/"), config.file_name });
-    const exists = if (Io.Dir.cwd().access(ws.io, target, .{})) true else |_| false;
+    const cwd = Io.Dir.cwd();
+    const exists = if (cwd.access(ws.io, target, .{})) true else |_| false;
     if (exists and !options.force) return ctx.fail(.usage, try ws.text.format("{s} already exists.", .{target}), "Edit it, or pass --force to replace it with a fresh one.");
     try collect(ctx, ws, dir);
     var counts: [language.count]starter.Project.Count = undefined;
@@ -226,14 +227,14 @@ fn runInit(ctx: *zcli.Context, options: InitOptions) ![]const InitRow {
     var found: usize = 0;
     for (starter.usual_excludes) |candidate| {
         const path = if (std.mem.eql(u8, dir, ".")) candidate else try ws.text.format("{s}/{s}", .{ std.mem.trimEnd(u8, dir, "/"), candidate });
-        Io.Dir.cwd().access(ws.io, path, .{}) catch continue;
+        cwd.access(ws.io, path, .{}) catch continue;
         present[found] = candidate;
         found += 1;
     }
     var buffer: [64 * 1024]u8 = undefined;
     var w: std.Io.Writer = .fixed(&buffer);
     try starter.renderConfig(&w, .{ .languages = &counts, .present = present[0..found] });
-    Io.Dir.cwd().writeFile(ws.io, .{ .sub_path = target, .data = w.buffered() }) catch |e| {
+    cwd.writeFile(ws.io, .{ .sub_path = target, .data = w.buffered() }) catch |e| {
         return ctx.fail(.io, try ws.text.format("Could not write {s}: {t}.", .{ target, e }), "Check that the directory exists and is writable.");
     };
     if (w.buffered().len == 0) assert.panic("zanity init wrote an empty {s}; renderConfig() in src/init.zig must write the whole file", .{target});

@@ -20,10 +20,11 @@ pub fn enclosingTest(self: *File) ?*Context {
     var i = items.len;
     while (i > 0) {
         i -= 1;
-        switch (items[i].family) {
+        const ctx = &items[i];
+        switch (ctx.family) {
             .class => return null,
-            .@"test" => return &items[i],
-            .function => if (items[i].is_test) return &items[i],
+            .@"test" => return ctx,
+            .function => if (ctx.is_test) return ctx,
             else => {},
         }
     }

@@ -167,6 +167,26 @@ const TomlReader = struct {
         return error.InvalidConfig;
     }
 
+    /// The byte at the reading position, or null at the end of the file.
+    fn peek(self: *const TomlReader) ?u8 {
+        if (self.at > self.bytes.len) assert.panic("reading at byte {d} of a {d}-byte file; nothing may move self.at past the end", .{ self.at, self.bytes.len });
+        if (self.at == self.bytes.len) return null;
+        const c = self.bytes[self.at];
+        if (self.at >= self.bytes.len) assert.panic("read byte {d} of a {d}-byte file; peek() must check the end before reading", .{ self.at, self.bytes.len });
+        return c;
+    }
+
+    /// Skips spaces and tabs, staying on the line.
+    fn skipSpaces(self: *TomlReader) void {
+        const start = self.at;
+        while (self.peek()) |c| {
+            if (c != ' ' and c != '\t') break;
+            self.at += 1;
+        }
+        if (self.at < start) assert.panic("skipping spaces moved back from byte {d} to {d}; skipSpaces() must only move self.at forward", .{ start, self.at });
+        if (self.at > self.bytes.len) assert.panic("skipping spaces ran to byte {d} of {d}; skipSpaces() must stop at the end of the file", .{ self.at, self.bytes.len });
+    }
+
     /// Skips spaces, newlines and comments between entries and list items.
     fn skipBlank(self: *TomlReader) void {
         const start = self.at;
@@ -185,11 +205,11 @@ const TomlReader = struct {
     /// Skips spaces and tabs, then requires the rest of the line to be empty or a comment.
     fn endLine(self: *TomlReader) Error!void {
         const start = self.at;
-        while (self.at < self.bytes.len and (self.bytes[self.at] == ' ' or self.bytes[self.at] == '\t')) self.at += 1;
-        if (self.at < self.bytes.len and self.bytes[self.at] == '#') self.at = std.mem.indexOfScalarPos(u8, self.bytes, self.at, '\n') orelse self.bytes.len;
-        if (self.at < self.bytes.len and self.bytes[self.at] != '\n' and self.bytes[self.at] != '\r') {
-            return self.fail("unexpected '{c}' after a value; put each setting on its own line.", .{self.bytes[self.at]});
-        }
+        self.skipSpaces();
+        if (self.peek() == '#') self.at = std.mem.indexOfScalarPos(u8, self.bytes, self.at, '\n') orelse self.bytes.len;
+        if (self.peek()) |c| if (c != '\n' and c != '\r') {
+            return self.fail("unexpected '{c}' after a value; put each setting on its own line.", .{c});
+        };
         if (self.at < start) assert.panic("ending a line moved back from byte {d} to {d}; endLine() must only move self.at forward", .{ start, self.at });
         if (self.at > self.bytes.len) assert.panic("ending a line ran to byte {d} of {d}; endLine() must stop at the end of the file", .{ self.at, self.bytes.len });
     }
@@ -201,10 +221,10 @@ const TomlReader = struct {
             try self.readHeader(config);
         } else {
             const key = self.readKey() orelse return self.fail("expected a setting such as 'rules = [...]' or a table such as '[infer]'.", .{});
-            while (self.at < self.bytes.len and (self.bytes[self.at] == ' ' or self.bytes[self.at] == '\t')) self.at += 1;
-            if (self.at >= self.bytes.len or self.bytes[self.at] != '=') return self.fail("expected '=' after '{s}'; write each setting as name = value.", .{key});
+            self.skipSpaces();
+            if (self.peek() != '=') return self.fail("expected '=' after '{s}'; write each setting as name = value.", .{key});
             self.at += 1;
-            while (self.at < self.bytes.len and (self.bytes[self.at] == ' ' or self.bytes[self.at] == '\t')) self.at += 1;
+            self.skipSpaces();
             try self.readSetting(config, key);
         }
         try self.endLine();
@@ -218,12 +238,12 @@ const TomlReader = struct {
         self.at += 1;
         const name = self.readKey() orelse return self.fail("expected a table name after '['; write [infer] or [paths.\"<pattern>\"].", .{});
         if (std.mem.eql(u8, name, "paths")) {
-            if (self.at >= self.bytes.len or self.bytes[self.at] != '.') return self.fail("'[paths]' needs a pattern for the files it covers, such as [paths.\"tests/**\"].", .{});
+            if (self.peek() != '.') return self.fail("'[paths]' needs a pattern for the files it covers, such as [paths.\"tests/**\"].", .{});
             self.at += 1;
             if (self.at >= self.bytes.len) return self.fail("expected a quoted pattern after '[paths.'; write it as [paths.\"tests/**\"].", .{});
             self.pending_glob = try self.readString("paths");
         }
-        if (self.at >= self.bytes.len or self.bytes[self.at] != ']') return self.fail("expected ']' after '[{s}'; close the table name with ']'.", .{name});
+        if (self.peek() != ']') return self.fail("expected ']' after '[{s}'; close the table name with ']'.", .{name});
         self.at += 1;
         self.table = std.meta.stringToEnum(Table, name) orelse .root;
         if (self.table == .root) return self.fail("'[{s}]' isn't a table zanity knows; the tables are [infer] and [paths.\"<pattern>\"].", .{name});
@@ -304,7 +324,10 @@ const TomlReader = struct {
 
     fn readInteger(self: *TomlReader, key: []const u8) Error!i64 {
         const start = self.at;
-        while (self.at < self.bytes.len and (std.ascii.isDigit(self.bytes[self.at]) or self.bytes[self.at] == '_' or self.bytes[self.at] == '-' or self.bytes[self.at] == '+')) self.at += 1;
+        while (self.peek()) |c| {
+            if (!std.ascii.isDigit(c) and c != '_' and c != '-' and c != '+') break;
+            self.at += 1;
+        }
         var digits: [32]u8 = undefined;
         var n: usize = 0;
         for (self.bytes[start..self.at]) |c| if (c != '_' and n < digits.len) {
@@ -319,7 +342,10 @@ const TomlReader = struct {
 
     fn readDecimal(self: *TomlReader, key: []const u8) Error!f64 {
         const start = self.at;
-        while (self.at < self.bytes.len and (std.ascii.isDigit(self.bytes[self.at]) or self.bytes[self.at] == '.' or self.bytes[self.at] == '_')) self.at += 1;
+        while (self.peek()) |c| {
+            if (!std.ascii.isDigit(c) and c != '.' and c != '_') break;
+            self.at += 1;
+        }
         var digits: [32]u8 = undefined;
         var n: usize = 0;
         for (self.bytes[start..self.at]) |c| if (c != '_' and n < digits.len) {
@@ -335,7 +361,7 @@ const TomlReader = struct {
 
     /// Reads a list of strings, which may span lines and end with a comma.
     fn readStrings(self: *TomlReader, key: []const u8) Error![]const []const u8 {
-        if (self.at >= self.bytes.len or self.bytes[self.at] != '[') return self.fail("'{s}' needs a list of strings, such as {s} = [\"a\", \"b\"].", .{ key, key });
+        if (self.peek() != '[') return self.fail("'{s}' needs a list of strings, such as {s} = [\"a\", \"b\"].", .{ key, key });
         const start = self.at;
         self.at += 1;
         var count: usize = 0;
@@ -351,9 +377,9 @@ const TomlReader = struct {
             self.items[count] = try self.readString(key);
             count += 1;
             self.skipBlank();
-            if (self.at < self.bytes.len and self.bytes[self.at] == ',') {
+            if (self.peek() == ',') {
                 self.at += 1;
-            } else if (self.at >= self.bytes.len or self.bytes[self.at] != ']') {
+            } else if (self.peek() != ']') {
                 return self.fail("items in '{s}' must be separated by commas, such as [\"a\", \"b\"].", .{key});
             }
         }

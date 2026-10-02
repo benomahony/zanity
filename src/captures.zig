@@ -22,6 +22,17 @@ pub const Predicate = union(enum) {
     kind: struct { capture: u32, kinds: []const []const u8, positive: bool },
     /// zanity's own `#empty? @x`: `@x` has no named children, not even a comment.
     empty: struct { capture: u32, positive: bool },
+
+    /// The capture the predicate tests, the first of the two that #eq? compares.
+    pub fn subject(self: Predicate) u32 {
+        const capture = switch (self) {
+            .eq_capture => |q| q.a,
+            inline else => |q| q.capture,
+        };
+        if (self == .eq_capture and capture != self.eq_capture.a) assert.panic("#eq? compares capture {d} with {d} but its subject came out as {d}; subject() must return the first", .{ self.eq_capture.a, self.eq_capture.b, capture });
+        if (capture > std.math.maxInt(Id)) assert.panic("the predicate tests capture {d}, more than a capture Id can number; it was read from a query that overflowed captures.Id", .{capture});
+        return capture;
+    }
 };
 
 /// Splits `literal.true` into the family `literal` and the part `true`; a name with no dot is all family.
@@ -221,15 +232,16 @@ fn initPredicate(arena: Allocator, query: *const ts.Query, args: []const ts.Pred
         if (args[2].type == .capture) return .{ .eq_capture = .{ .a = capture, .b = args[2].value_id, .positive = positive, .any = any } };
         return .{ .eq_string = .{ .capture = capture, .value = ts.stringValue(query, args[2].value_id), .positive = positive, .any = any } };
     }
+    const negated = name[0] == 'n';
     if (oneOf(name, &.{ "any-of?", "not-any-of?", "has-ancestor?", "not-has-ancestor?", "kind-eq?", "not-kind-eq?" })) {
         if (args.len < 3) return error.InvalidQuery;
         const values = try arena.alloc([]const u8, args.len - 2);
         for (args[2..], values) |arg, *v| v.* = ts.stringValue(query, arg.value_id);
-        if (std.mem.endsWith(u8, name, "any-of?")) return .{ .any_of = .{ .capture = capture, .values = values, .positive = name[0] != 'n' } };
-        if (std.mem.endsWith(u8, name, "kind-eq?")) return .{ .kind = .{ .capture = capture, .kinds = values, .positive = name[0] != 'n' } };
-        return .{ .ancestor = .{ .capture = capture, .kinds = values, .positive = name[0] != 'n' } };
+        if (std.mem.endsWith(u8, name, "any-of?")) return .{ .any_of = .{ .capture = capture, .values = values, .positive = !negated } };
+        if (std.mem.endsWith(u8, name, "kind-eq?")) return .{ .kind = .{ .capture = capture, .kinds = values, .positive = !negated } };
+        return .{ .ancestor = .{ .capture = capture, .kinds = values, .positive = !negated } };
     }
-    if (oneOf(name, &.{ "empty?", "not-empty?" })) return .{ .empty = .{ .capture = capture, .positive = name[0] != 'n' } };
+    if (oneOf(name, &.{ "empty?", "not-empty?" })) return .{ .empty = .{ .capture = capture, .positive = !negated } };
     std.log.err("zanity does not evaluate the query predicate #{s}; rewrite the pattern with #eq?, #any-of?, #kind-eq?, #has-ancestor? or #empty?, or capture the construct structurally", .{name});
     return error.InvalidQuery;
 }
@@ -284,21 +296,22 @@ const Buffers = struct { a: []ts.Node, b: []ts.Node };
 
 fn holds(predicate: Predicate, match: ts.QueryMatch, buffers: Buffers, text: []const u8) bool {
     if (buffers.a.len < match.capture_count) assert.panic("room for {d} captures but the match has {d}; raise the capture buffer in holds(), or split the pattern into smaller ones", .{ buffers.a.len, match.capture_count });
+    const nodes = capturesOf(match, predicate.subject(), buffers.a);
     const result = switch (predicate) {
-        .any_of => |q| for (capturesOf(match, q.capture, buffers.a)) |node| {
+        .any_of => |q| for (nodes) |node| {
             if (oneOfText(node.text(text), q.values) != q.positive) break false;
         } else true,
-        .ancestor => |q| for (capturesOf(match, q.capture, buffers.a)) |node| {
+        .ancestor => |q| for (nodes) |node| {
             if (hasAncestor(node, q.kinds) != q.positive) break false;
         } else true,
-        .kind => |q| for (capturesOf(match, q.capture, buffers.a)) |node| {
+        .kind => |q| for (nodes) |node| {
             if (oneOfText(std.mem.span(ts.ts_node_type(node)), q.kinds) != q.positive) break false;
         } else true,
-        .empty => |q| for (capturesOf(match, q.capture, buffers.a)) |node| {
+        .empty => |q| for (nodes) |node| {
             if ((ts.ts_node_named_child_count(node) == 0) != q.positive) break false;
         } else true,
-        .eq_capture => |q| equalTexts(capturesOf(match, q.a, buffers.a), capturesOf(match, q.b, buffers.b), .{ .positive = q.positive, .any = q.any }, text),
-        .eq_string => |q| equalToString(capturesOf(match, q.capture, buffers.a), q.value, .{ .positive = q.positive, .any = q.any }, text),
+        .eq_capture => |q| equalTexts(nodes, capturesOf(match, q.b, buffers.b), .{ .positive = q.positive, .any = q.any }, text),
+        .eq_string => |q| equalToString(nodes, q.value, .{ .positive = q.positive, .any = q.any }, text),
     };
     if (buffers.b.len < match.capture_count) assert.panic("room for {d} second captures but the match has {d}; raise the capture buffer in holds(), or split the pattern into smaller ones", .{ buffers.b.len, match.capture_count });
     return result;

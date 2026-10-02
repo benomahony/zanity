@@ -55,12 +55,13 @@ pub const Graph = struct {
         if (functions.len >= unvisited) assert.panic("{d} functions reach the 'unvisited' marker {d}; lower memory.Limits.functions", .{ functions.len, unvisited });
         s.by_name.clear();
         for (0..functions.len) |i| try s.by_name.add(@intCast(i));
-        std.mem.sort(u32, s.by_name.items(), functions, nameOrder);
+        const sorted = s.by_name.items();
+        std.mem.sort(u32, sorted, functions, nameOrder);
         s.offsets.clear();
         for (0..functions.len + 1) |_| try s.offsets.add(0);
         const offsets = s.offsets.items();
         for (facts.calls.items()) |call| {
-            const lookup: Lookup = .{ .functions = functions, .sorted = s.by_name.items(), .call = call };
+            const lookup: Lookup = .{ .functions = functions, .sorted = sorted, .call = call };
             for (lookup.candidates()) |c| {
                 if (lookup.accepts(c)) offsets[call.caller + 1] += 1;
             }
@@ -71,7 +72,7 @@ pub const Graph = struct {
         const cursor = s.low[0..functions.len];
         @memcpy(cursor, offsets[0..functions.len]);
         for (facts.calls.items()) |call| {
-            const lookup: Lookup = .{ .functions = functions, .sorted = s.by_name.items(), .call = call };
+            const lookup: Lookup = .{ .functions = functions, .sorted = sorted, .call = call };
             for (lookup.candidates()) |c| {
                 if (!lookup.accepts(c)) continue;
                 s.targets.items()[cursor[call.caller]] = c;
