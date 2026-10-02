@@ -31,6 +31,9 @@ pub fn checkIsolation(self: *File, ctx: Context, name: []const u8) !void {
     if (self.calleeIn(ctx, name, t.database_calls)) |m| if (!inMemory(self, ctx)) {
         _ = try self.report(at, "database-in-test", try self.say("'{s}' connects to a real database, so the test needs it running and can share rows with other tests.", .{m}));
     };
+    if (self.calleeIn(ctx, name, t.stdin_reads)) |m| {
+        _ = try self.report(at, "stdin-in-test", try self.say("'{s}' waits for someone to type, so the test hangs wherever nobody is at the keyboard, such as CI.", .{m}));
+    }
     if (self.calleeIn(ctx, name, t.process_calls)) |m| {
         _ = try self.report(at, "process-in-test", try self.say("'{s}' starts a real process, so the test depends on what the machine has installed and how fast it runs.", .{m}));
     }

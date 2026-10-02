@@ -1,0 +1,4 @@
+rules: stdin-in-test
+exit: 0
+StdinTest.java:4:27: warning [stdin-in-test]
+StdinTest.java:5:30: warning [stdin-in-test]

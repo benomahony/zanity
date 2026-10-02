@@ -1,0 +1,3 @@
+rules: stdin-in-test
+exit: 0
+stdin_go_test.go:10:2: warning [stdin-in-test]

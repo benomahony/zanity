@@ -1,0 +1,5 @@
+rules: stdin-in-test
+exit: 0
+test_stdin.py:6:12: warning [stdin-in-test]
+test_stdin.py:7:14: warning [stdin-in-test]
+test_stdin.py:8:12: warning [stdin-in-test]

@@ -42,6 +42,8 @@ pub const Tables = struct {
     temp_roots: []const []const u8 = &.{},
     /// Calls that make a temporary file or directory the test framework doesn't clean up.
     unmanaged_temp_calls: []const []const u8 = &.{},
+    /// Calls that read what someone types, so a test that makes them waits for a person.
+    stdin_reads: []const []const u8 = &.{},
     /// Calls that make a real network request or connection.
     network_calls: []const []const u8 = &.{},
     /// Calls that connect to a real database.

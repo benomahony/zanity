@@ -1,6 +1,7 @@
 .{
     .{
         .ecosystem = "python",
+        .stdin_reads = .{ "input", "raw_input", "getpass.getpass", "getpass", "sys.stdin.read", "sys.stdin.readline", "sys.stdin.readlines", "click.prompt", "click.confirm", "typer.prompt", "typer.confirm" },
         .weak_hashes = .{ "hashlib.md5", "hashlib.sha1", "md5.new", "sha.new" },
         .unsafe_deserializers = .{ "pickle.load", "pickle.loads", "cPickle.load", "cPickle.loads", "marshal.load", "marshal.loads", "yaml.unsafe_load", "yaml.full_load", "shelve.open", "dill.load", "dill.loads", "jsonpickle.decode" },
         .shell_calls = .{ "os.system", "os.popen", "subprocess.getoutput", "subprocess.getstatusoutput", "commands.getoutput" },
@@ -45,6 +46,7 @@
     },
     .{
         .ecosystem = "zig",
+        .stdin_reads = .{ "std.io.getStdIn", "std.fs.File.stdin", "std.Io.File.stdin", "File.stdin" },
         .weak_hashes = .{ "std.crypto.hash.Md5.hash", "std.crypto.hash.Md5.init", "std.crypto.hash.Sha1.hash", "std.crypto.hash.Sha1.init", "Md5.hash", "Md5.init", "Sha1.hash", "Sha1.init" },
         .log_calls = .{ "std.debug.print", "std.log.debug", "std.log.info", "std.log.warn", "std.log.err", "log.debug", "log.info", "log.warn", "log.err" },
         .wall_clocks = .{ "std.time.timestamp", "std.time.milliTimestamp", "std.time.microTimestamp", "std.time.nanoTimestamp" },
@@ -69,6 +71,7 @@
     },
     .{
         .ecosystem = "go",
+        .stdin_reads = .{ "fmt.Scan", "fmt.Scanln", "fmt.Scanf", "os.Stdin.Read", "term.ReadPassword" },
         .weak_hashes = .{ "md5.New", "md5.Sum", "sha1.New", "sha1.Sum" },
         .sql_methods = .{ "Query", "QueryRow", "Exec", "QueryContext", "QueryRowContext", "ExecContext", "Prepare" },
         .log_calls = .{ "log.Print", "log.Printf", "log.Println", "fmt.Print", "fmt.Printf", "fmt.Println", "slog.Info", "slog.Debug", "slog.Warn", "slog.Error" },
@@ -96,6 +99,7 @@
     },
     .{
         .ecosystem = "node",
+        .stdin_reads = .{ "prompt", "readline.createInterface", "readlineSync.question", "process.stdin.read", "process.stdin.on", "inquirer.prompt" },
         .unsafe_deserializers = .{ "serialize.unserialize", "unserialize", "yaml.load" },
         .shell_calls = .{ "child_process.exec", "child_process.execSync", "exec", "execSync" },
         .sql_methods = .{ "query", "raw", "execute" },
@@ -126,6 +130,7 @@
     },
     .{
         .ecosystem = "rust",
+        .stdin_reads = .{ "std::io::stdin", "io::stdin", "stdin", "rpassword::read_password" },
         .weak_hashes = .{ "md5::compute", "Md5::new", "Md5::digest", "Sha1::new", "Sha1::digest" },
         .wall_clocks = .{ "SystemTime::now", "std::time::SystemTime::now" },
         .error_methods = .{ "expect", "expect_err" },
@@ -150,6 +155,7 @@
     },
     .{
         .ecosystem = "jvm",
+        .stdin_reads = .{ "System.in.read", "System.console" },
         .sql_methods = .{ "executeQuery", "executeUpdate", "execute", "addBatch", "prepareStatement", "createQuery", "createNativeQuery" },
         .log_calls = .{ "System.out.println", "System.out.print", "System.err.println", "logger.info", "logger.debug", "logger.warn", "logger.error", "log.info", "log.debug", "log.warn", "log.error", "LOG.info", "LOG.debug", "LOG.warn", "LOG.error" },
         .wall_clocks = .{"System.currentTimeMillis"},

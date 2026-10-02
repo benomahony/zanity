@@ -101,6 +101,7 @@
         { "const": "network-in-test", "description": "warning, on by default. Stub the service at its boundary with a fake that answers like it, or move this to an integration suite." },
         { "const": "database-in-test", "description": "warning, on by default. Use an in-memory database or a fake repository, or move this to an integration suite." },
         { "const": "unmanaged-temp-in-test", "description": "warning, on by default. Use the framework's temporary directory (tmp_path, t.TempDir(), @TempDir, std.testing.tmpDir), which it cleans up." },
+        { "const": "stdin-in-test", "description": "warning, on by default. Pass the input in as a value, or as a reader the test controls." },
         { "const": "process-in-test", "description": "warning, on by default. Call the code the process would run directly, or move this to an end-to-end suite." },
         { "const": "nondeterministic-test", "description": "warning, on by default. Inject a seeded generator or a fixed value." },
         { "const": "test-double", "description": "warning, on by default. Use the real object, or a fake that behaves like it." },

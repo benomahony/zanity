@@ -1,0 +1,4 @@
+rules: stdin-in-test
+exit: 0
+stdin.test.ts:2:16: warning [stdin-in-test]
+stdin.test.ts:3:14: warning [stdin-in-test]

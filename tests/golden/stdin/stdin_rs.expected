@@ -1,0 +1,3 @@
+rules: stdin-in-test
+exit: 0
+stdin_rs.rs:4:5: warning [stdin-in-test]
