@@ -72,6 +72,7 @@
     },
     .{
         .ecosystem = "go",
+        .exported_by_case = true,
         .fixed_signatures = .{ "ServeHTTP", "Read", "Write", "Less", "Swap", "MarshalJSON", "UnmarshalJSON", "MarshalText", "UnmarshalText", "Is", "As", "Format", "Scan", "Value" },
         .stdin_reads = .{ "fmt.Scan", "fmt.Scanln", "fmt.Scanf", "os.Stdin.Read", "term.ReadPassword" },
         .weak_hashes = .{ "md5.New", "md5.Sum", "sha1.New", "sha1.Sum" },

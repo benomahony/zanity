@@ -360,3 +360,49 @@
 ; A returned value: each early return computes it once, on its own way out.
 (return_statement
   (_) @expression.returned)
+
+; Public or protected, so code outside the class's package can use it.
+(_
+  (modifiers
+    [
+      "public"
+      "protected"
+    ])) @visibility.public
+
+; Names the code refers to, for dead-symbol: every name other than where it is defined.
+[
+  (identifier)
+  (type_identifier)
+] @reference.name
+
+; Interfaces and abstract classes, and what classes implement or extend, for single-impl-abstraction.
+(interface_declaration
+  name: (identifier) @abstraction.name)
+
+(class_declaration
+  (modifiers
+    "abstract")
+  name: (identifier) @abstraction.name)
+
+(super_interfaces
+  (type_list
+    [
+      (type_identifier) @implementation.base
+      (generic_type
+        (type_identifier) @implementation.base)
+    ]))
+
+(superclass
+  [
+    (type_identifier) @implementation.base
+    (generic_type
+      (type_identifier) @implementation.base)
+  ])
+
+; Annotated, so a framework can reach it, as @Bean, @GetMapping and @Test do.
+(_
+  (modifiers
+    [
+      (marker_annotation)
+      (annotation)
+    ])) @visibility.public

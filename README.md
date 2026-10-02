@@ -245,6 +245,9 @@ Rules marked *off* run only with `--rules all`, `rules = ["all"]`, or when named
 | `passthrough-wrapper` | warning | a function whose whole body forwards to another call |
 | `message-chain` | warning | code that reaches through objects, such as `order.customer.address.city`: three member accesses from a local or parameter, or two from a field of `self`; module paths such as `xml.etree.ElementTree` are fine |
 | `duplicated-expression` | warning | a computed expression (a call, an index or arithmetic) written three or more times in one function with nothing it reads changing in between; not plain field reads, calls made for their effect, or values returned on separate early exits |
+| `structural-twins` | warning | functions whose bodies have the same structure, differing only in names and values, across files; tests and functions under six lines are left out |
+| `dead-symbol` | warning | a function, method, class or type nothing anywhere refers to; not exported or `pub` API, decorated or annotated code a framework reaches, tests, or entry points such as `main` |
+| `single-impl-abstraction` | information | an interface, trait, protocol or abstract class with exactly one implementation (not Go, whose interfaces are implicit) |
 | `swallowed-error` | warning | an error handler that does nothing |
 | `empty-block` | warning | an empty block where code was expected |
 | `deep-nesting` | warning | code nested too deep to follow |

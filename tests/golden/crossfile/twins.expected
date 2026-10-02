@@ -1,0 +1,4 @@
+rules: structural-twins
+exit: 0
+invoices.py:1:5: warning [structural-twins]
+orders.py:1:5: warning [structural-twins]

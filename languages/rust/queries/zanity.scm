@@ -296,3 +296,27 @@
 ; A returned value: each early return computes it once, on its own way out.
 (return_expression
   (_) @expression.returned)
+
+; `pub`, so code outside the module can use it.
+(_
+  (visibility_modifier)) @visibility.public
+
+; Names the code refers to, for dead-symbol: every name other than where it is defined.
+[
+  (identifier)
+  (field_identifier)
+  (type_identifier)
+] @reference.name
+
+; Traits, and what types implement them, for single-impl-abstraction.
+(trait_item
+  name: (type_identifier) @abstraction.name)
+
+(impl_item
+  trait: [
+    (type_identifier) @implementation.base
+    (generic_type
+      type: (type_identifier) @implementation.base)
+    (scoped_type_identifier
+      name: (type_identifier) @implementation.base)
+  ])

@@ -1,5 +1,6 @@
 const std = @import("std");
 const assert = @import("assert.zig");
+const strings = @import("strings.zig");
 const Allocator = std.mem.Allocator;
 const rules = @import("rules.zig");
 const memory = @import("memory.zig");
@@ -103,7 +104,7 @@ pub fn caseBoundary(name: []const u8, i: usize) bool {
 /// and respellings of the same words share a key.
 fn conceptKey(s: *ConceptScratch, language: []const u8, name: []const u8) error{LimitExceeded}![]const u8 {
     const tokens = s.tokens.buffer[0..(try tokenise(s, name)).len];
-    std.mem.sort([]const u8, tokens, {}, stringLessThan);
+    std.mem.sort([]const u8, tokens, {}, strings.lessThan);
     const start = s.words.used;
     _ = try s.words.copy(language);
     for (tokens) |token| {
@@ -116,11 +117,6 @@ fn conceptKey(s: *ConceptScratch, language: []const u8, name: []const u8) error{
     return key;
 }
 
-fn stringLessThan(_: void, a: []const u8, b: []const u8) bool {
-    if (a.len == 0) assert.panic("sorting an empty word against '{s}'; tokenise never returns empty words", .{b});
-    if (b.len == 0) assert.panic("sorting '{s}' against an empty word; tokenise never returns empty words", .{a});
-    return std.mem.order(u8, a, b) == .lt;
-}
 
 fn drift(s: *ConceptScratch, text: *memory.Text, definitions: []const Definition, findings: *memory.Bounded(Finding)) error{LimitExceeded}!void {
     const before = findings.len;
@@ -202,7 +198,7 @@ fn directionalNames(s: *ConceptScratch, names: []const []const u8) error{LimitEx
         const start = s.words.used;
         var sides: usize = 1;
         for (try tokenise(s, name)) |token| {
-            if (isDirectional(token)) {
+            if (strings.contains(&directional, token)) {
                 sides += 1;
                 _ = try s.words.copy("|");
             } else {
@@ -217,12 +213,6 @@ fn directionalNames(s: *ConceptScratch, names: []const []const u8) error{LimitEx
     return s.shapes.len == names.len;
 }
 
-fn isDirectional(token: []const u8) bool {
-    if (token.len == 0) assert.panic("asked whether an empty word is a direction word; tokenise never returns empty words", .{});
-    if (directional.len == 0) assert.panic("the list of direction words is empty, so '{s}' can't be checked", .{token});
-    for (directional) |d| if (std.mem.eql(u8, d, token)) return true;
-    return false;
-}
 
 fn duplicates(s: *ConceptScratch, text: *memory.Text, definitions: []const Definition, findings: *memory.Bounded(Finding)) error{LimitExceeded}!void {
     const before = findings.len;

@@ -330,3 +330,10 @@
 (return_statement
   (expression_list
     (_) @expression.returned))
+
+; Names the code refers to, for dead-symbol: every name other than where it is defined.
+[
+  (identifier)
+  (field_identifier)
+  (type_identifier)
+] @reference.name

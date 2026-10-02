@@ -425,3 +425,14 @@
 ; A returned value: each early return computes it once, on its own way out.
 (return_expression
   (_) @expression.returned)
+
+; `pub`, so code outside the file can use it.
+[
+  (function_declaration
+    "pub")
+  (variable_declaration
+    "pub")
+] @visibility.public
+
+; Names the code refers to, for dead-symbol: every name other than where it is defined.
+(identifier) @reference.name

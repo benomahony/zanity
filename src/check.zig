@@ -17,9 +17,11 @@ const scope = @import("scope.zig");
 const test_quality = @import("test_quality.zig");
 const isolation = @import("isolation.zig");
 const unread = @import("unread.zig");
+const strings = @import("strings.zig");
 const parameters = @import("parameters.zig");
-const chains = @import("chains.zig");
 const repeats = @import("repeats.zig");
+const shapes = @import("shapes.zig");
+const notes = @import("notes.zig");
 
 pub const Diagnostic = struct {
     line: u32,
@@ -125,6 +127,7 @@ pub const FileScratch = struct {
     statement_calls: memory.Bounded(ts.Node),
     repeats: memory.Bounded(repeats.Repeat),
     writes: memory.Bounded(repeats.Write),
+    names: notes.NameCounts,
     /// The nodes the walk is inside, outermost first, so their parents need no search.
     path: memory.Bounded(ts.Node),
     /// The chain from the root to a node, from ancestorsOf().
@@ -152,6 +155,7 @@ pub const FileScratch = struct {
             .statement_calls = try .initBounded(gpa, limits.per_file, "calls made as statements in one file"),
             .repeats = try .initBounded(gpa, limits.per_file, "repeatable expressions in one function"),
             .writes = try .initBounded(gpa, limits.per_file, "assignments in one file"),
+            .names = try .initNameCounts(gpa, limits.per_file),
             .path = try .initBounded(gpa, limits.depth, "syntax nodes on the walk's path in one file"),
             .ancestors = try .initBounded(gpa, limits.depth, "ancestors of one syntax node"),
             .in_comment = try memory.reserve(gpa, bool, limits.file_bytes),
@@ -164,6 +168,7 @@ pub const FileScratch = struct {
         inline for (.{ "contexts", "opened", "diagnostics", "suppressions", "codes", "trail", "calls", "signature", "weak", "locals", "bare_calls", "async_names", "statement_calls", "repeats", "writes", "path", "ancestors" }) |field| {
             @field(self, field).clear();
         }
+        self.names.reset();
         if (self.contexts.len != 0) assert.panic("clearing the per-file scratch left {d} open constructs; clearFile() must clear contexts, so add it to the field list there", .{self.contexts.len});
         if (self.diagnostics.len != 0) assert.panic("clearing the per-file scratch left {d} findings; clearFile() must clear diagnostics, so add it to the field list there", .{self.diagnostics.len});
     }
@@ -207,6 +212,10 @@ const Vocabulary = struct {
     chain_link: ?captures.Id,
     expression_repeatable: ?captures.Id,
     write_target: ?captures.Id,
+    reference_name: ?captures.Id,
+    abstraction_name: ?captures.Id,
+    implementation_base: ?captures.Id,
+    visibility_public: ?captures.Id,
 
     fn lookup(c: captures.Compiled) Vocabulary {
         if (c.names.len == 0) assert.panic("the query has no captures, so no rule could run; check the language's query files", .{});
@@ -243,6 +252,10 @@ const Vocabulary = struct {
             .chain_link = c.id("chain.link"),
             .expression_repeatable = c.id("expression.repeatable"),
             .write_target = c.id("write.target"),
+            .reference_name = c.id("reference.name"),
+            .abstraction_name = c.id("abstraction.name"),
+            .implementation_base = c.id("implementation.base"),
+            .visibility_public = c.id("visibility.public"),
         };
     }
 };
@@ -301,6 +314,8 @@ pub const Checker = struct {
         try hazards.checkUnawaited(&file);
         try hazards.checkLength(&file, root);
         try scope.checkWideScope(&file);
+        const scratch = work.scratch;
+        try scratch.names.drain(&work.facts.references);
         const walked = file.s;
         if (walked.contexts.len != 0) assert.panic("{s}: the walk ended with {d} constructs still open; every node entered must be left", .{ work.facts.path, walked.contexts.len });
         if (walked.opened.len != 0) assert.panic("{s}: the walk ended with {d} nodes still open; every node entered must be left", .{ work.facts.path, walked.opened.len });
@@ -363,6 +378,7 @@ pub const File = struct {
     /// error message. Returns whether `id` was one of them.
     pub fn enterSignal(self: *File, node: ts.Node, id: captures.Id, found: []const captures.Triple) !bool {
         if (found.len == 0) assert.panic("{s}: {f} carries capture {d} but no captures were found on it; call enterSignal() only with captures found on this node", .{ self.work.facts.path, node.where(), id });
+        if (try notes.note(self, node, id)) return true;
         const v = self.v;
         if (v.catch_swallowed == id) {
             _ = try self.report(node, "swallowed-error", try self.say("This error handler does nothing, so the failure disappears silently.", .{}));
@@ -374,12 +390,6 @@ pub const File = struct {
             };
         } else if (v.test_shared_state == id) {
             try isolation.checkSharedStatement(self, node);
-        } else if (v.chain_link == id) {
-            try chains.checkChain(self, node);
-        } else if (v.expression_repeatable == id) {
-            try repeats.noteRepeatable(self, node);
-        } else if (v.write_target == id) {
-            try repeats.noteWrite(self, node, node.text(self.source));
         } else if (v.test_check == id) {
             if (test_quality.enclosingTest(self)) |unit| unit.checks += 1;
         } else if (v.async_name == id) {
@@ -784,10 +794,12 @@ pub const File = struct {
         if (ctx.kind.len == 0) assert.panic("{s}: the definition {f} has no kind; capture it as @definition.function, @definition.class and so on", .{ self.work.facts.path, ctx.node.where() });
         const name_node = ctx.name orelse return;
         const name = name_node.text(self.source);
+        if (self.checker.enabled.enabled("dead-symbol")) try self.s.names.tally(facts_module.nameHash(name), -1);
         if (std.mem.eql(u8, ctx.kind, "constant") and !std.ascii.isUpper(name[0])) return;
         if (contains(self.tables.protocol_names, name)) return;
         const at = ts.ts_node_start_point(name_node);
-        try self.work.facts.define(name, ctx.kind, .{ at.row, at.column });
+        const public = self.index.marks(ctx.node, self.v.visibility_public) or (self.tables.exported_by_case and std.ascii.isUpper(name[0]));
+        try self.work.facts.define(name, ctx.kind, .{ .at = .{ at.row, at.column }, .public = public });
     }
 
     pub fn inAssertionCondition(self: *File, node: ts.Node) bool {
@@ -949,6 +961,7 @@ pub const File = struct {
         }
         try parameters.checkUnusedParameters(self, ctx, name);
         try repeats.checkRepeats(self, ctx, name);
+        try shapes.recordShape(self, ctx);
         if (self.index.marks(ctx.span, self.v.function_passthrough) or self.index.marks(ctx.node, self.v.function_passthrough)) {
             _ = try self.report(name_node, "passthrough-wrapper", try self.say("'{s}' only forwards to another call, so it adds a name without adding behaviour.", .{name}));
         }
@@ -1044,14 +1057,7 @@ pub const File = struct {
     }
 };
 
-pub fn contains(haystack: []const []const u8, needle: []const u8) bool {
-    if (needle.len == 0) assert.panic("looked up an empty name in a table of {d} names; skip empty names before calling contains()", .{haystack.len});
-    for (haystack) |h| {
-        if (h.len == 0) assert.panic("a name table holds an empty entry while looking up '{s}'; remove it from languages/tables.zon", .{needle});
-        if (std.mem.eql(u8, h, needle)) return true;
-    }
-    return false;
-}
+pub const contains = strings.contains;
 
 pub fn sameText(a: []const u8, b: []const u8) bool {
     var i: usize = 0;

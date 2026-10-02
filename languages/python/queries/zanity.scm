@@ -531,3 +531,67 @@
 ; A returned value: each early return computes it once, on its own way out.
 (return_statement
   (_) @expression.returned)
+
+; Names the code refers to, for dead-symbol: every identifier other than where it is defined.
+(identifier) @reference.name
+
+; An abstract class or protocol, and the classes that build on a base, for single-impl-abstraction.
+((class_definition
+  name: (identifier) @abstraction.name
+  superclasses: (argument_list
+    [
+      (identifier) @_base
+      (attribute
+        attribute: (identifier) @_base)
+    ]))
+  (#any-of? @_base "ABC" "Protocol"))
+
+((class_definition
+  name: (identifier) @abstraction.name
+  superclasses: (argument_list
+    (keyword_argument
+      name: (identifier) @_metaclass
+      value: [
+        (identifier) @_meta
+        (attribute
+          attribute: (identifier) @_meta)
+      ])))
+  (#eq? @_metaclass "metaclass")
+  (#eq? @_meta "ABCMeta"))
+
+; A class with a method left for subclasses to write: a body of only pass, ... or
+; raise NotImplementedError.
+((class_definition
+  name: (identifier) @abstraction.name
+  body: (block
+    (function_definition
+      body: (block
+        .
+        [
+          (pass_statement)
+          (ellipsis)
+          (expression_statement
+            (ellipsis))
+          (raise_statement
+            [
+              (identifier) @_not_implemented
+              (call
+                function: (identifier) @_not_implemented)
+            ])
+        ]
+        .))))
+  (#eq? @_not_implemented "NotImplementedError"))
+
+(class_definition
+  superclasses: (argument_list
+    [
+      (identifier) @implementation.base
+      (attribute
+        attribute: (identifier) @implementation.base)
+      (subscript
+        value: (identifier) @implementation.base)
+    ]))
+
+; Decorated, so a framework can reach it by registering it, as @app.route and @pytest.fixture do.
+(decorated_definition
+  definition: (_) @visibility.public)

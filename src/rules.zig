@@ -47,6 +47,9 @@ pub const all = [_]Rule{
     .{ .name = "passthrough-wrapper", .advice = "Call the target directly, or give the wrapper work of its own.", .severity = .warning, .default = true, .needs = &.{ "function.outer", "function.name", "function.passthrough" }, .catalogue = &.{"CWE-1041"} },
     .{ .name = "message-chain", .advice = "Ask the nearest object for what you need, so only it knows how to find it, or pass that value in.", .severity = .warning, .default = true, .needs = &.{"chain.link"} },
     .{ .name = "duplicated-expression", .advice = "Compute it once into a variable named for what it is, and use that.", .severity = .warning, .default = true, .catalogue = &.{"CWE-1041"}, .needs = &.{ "function.outer", "function.name", "expression.repeatable" } },
+    .{ .name = "structural-twins", .advice = "Keep one, and make the other call it with what differs passed in.", .severity = .warning, .default = true, .catalogue = &.{"CWE-1041"}, .needs = &.{ "function.outer", "function.name" } },
+    .{ .name = "dead-symbol", .advice = "Delete it; if something reaches it by name at runtime, such as a framework or a config file, say so in a comment where it is defined and suppress this finding there.", .severity = .warning, .default = true, .catalogue = &.{"CWE-561"}, .needs = &.{ "name", "reference.name" } },
+    .{ .name = "single-impl-abstraction", .advice = "Use the one implementation directly until a second one is needed.", .severity = .information, .default = true, .needs = &.{ "abstraction.name", "implementation.base" } },
     .{ .name = "swallowed-error", .advice = "Handle the error, log it with context, or let it propagate.", .severity = .warning, .default = true, .needs = &.{"catch.swallowed"}, .catalogue = &.{ "CWE-390", "CWE-1069" } },
     .{ .name = "sleep-in-test", .advice = "Wait for the event itself, or use a fake clock.", .severity = .warning, .default = true, .needs = &.{ "call.outer", "call.name", "function.name" } },
     .{ .name = "polling-loop", .advice = "Wait on an event or callback, or inject a clock.", .severity = .warning, .default = true, .needs = &.{ "call.outer", "call.name", "loop.outer", "function.name" } },
@@ -186,6 +189,10 @@ pub const min_chain_links = 3;
 pub const min_repeats = 3;
 /// Visible characters an expression needs before writing it again is duplication, not idiom.
 pub const min_repeated_expression = 8;
+/// Functions shorter than this many lines of code, or with fewer syntax nodes in their body, can
+/// share a shape by chance, such as getters, so structural-twins leaves them out.
+pub const min_twin_lines = 6;
+pub const min_twin_nodes = 40;
 /// Deeper than this many nested branches and loops in one function is hard to follow.
 pub const max_nesting = 4;
 /// McCabe complexity: one plus the decisions a function makes.
@@ -199,5 +206,7 @@ pub const filler_words = [_][]const u8{ "expected", "expect", "expects", "got", 
 /// Words a test's name can be made of and still not say what it checks, such as "it works".
 /// Compared ignoring case; a trailing number is dropped first, so "test2" is "test".
 pub const filler_test_words = [_][]const u8{ "test", "tests", "testing", "it", "works", "work", "working", "ok", "okay", "basic", "basics", "simple", "foo", "bar", "baz", "qux", "quux", "something", "stuff", "thing", "things", "case", "cases", "example", "examples", "sample", "demo", "dummy", "misc", "todo", "wip", "temp", "tmp", "new", "my", "the", "a", "an", "and", "x", "y", "z" };
+/// Names a framework, a runner or the operating system calls without the code naming them.
+pub const entry_points = [_][]const u8{ "main", "app", "cli", "setup", "teardown", "setUp", "tearDown", "setUpClass", "tearDownClass", "setUpModule", "tearDownModule", "conftest", "init", "deinit", "panic" };
 /// Name endings that mark a variable as holding a secret, lowercased without separators.
 pub const secret_names = [_][]const u8{ "password", "passwd", "secret", "token", "apikey", "privatekey", "accesskey", "credentials" };

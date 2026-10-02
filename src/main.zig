@@ -7,11 +7,13 @@ const zrich = @import("zrich");
 const adapters = @import("adapters");
 const language = @import("language.zig");
 const check = @import("check.zig");
+const strings = @import("strings.zig");
 const batch = @import("batch.zig");
 const rules = @import("rules.zig");
 const report = @import("report.zig");
 const naming = @import("naming.zig");
 const graph = @import("graph.zig");
+const structure = @import("structure.zig");
 const memory = @import("memory.zig");
 const Ignore = @import("ignore.zig").Ignore;
 const infer = @import("infer.zig");
@@ -284,7 +286,7 @@ fn checkPaths(ctx: *zcli.Context, ws: *Workspace, options: CheckOptions, selecte
     if (paths.len == 0) assert.panic("check ran with no paths; zcli supplies '.' when none are given", .{});
     if (selected.len == 0) assert.panic("check ran with no rules selected; runCheck always selects at least one", .{});
     for (paths) |path| try collect(ctx, ws, path);
-    std.mem.sort([]const u8, ws.files.items(), {}, pathOrder);
+    std.mem.sort([]const u8, ws.files.items(), {}, strings.lessThan);
     try ws.initCheckers(std.heap.page_allocator, selected);
     try checkFiles(ctx, ws, selected);
     if (ws.inference) |*inference| if (ws.live) |live| {
@@ -335,6 +337,7 @@ fn checkFiles(ctx: *zcli.Context, ws: *Workspace, selected: rules.Set) !void {
     if (ws.live) |live| live.restart();
     try naming.crossCheck(&ws.naming, &ws.facts, selected, &ws.findings);
     if (selected.enabled("recursion")) try graph.recursion(&ws.graph, &ws.facts, &ws.findings);
+    try structure.checkStructure(&ws.facts, selected, &ws.findings);
     if (ws.checked > ws.files.len) assert.panic("checked {d} files out of {d} collected; count a file as checked only once per file collected", .{ ws.checked, ws.files.len });
 }
 
@@ -559,11 +562,6 @@ fn collect(ctx: *zcli.Context, ws: *Workspace, path: []const u8) !void {
     if (ws.files.len < before) assert.panic("collecting {s} dropped files: {d} before, {d} after; collect() must only add files", .{ path, before, ws.files.len });
 }
 
-fn pathOrder(_: void, a: []const u8, b: []const u8) bool {
-    if (a.len == 0) assert.panic("sorting an empty path against '{s}'; collect() must never add an empty path", .{b});
-    if (b.len == 0) assert.panic("sorting '{s}' against an empty path; collect() must never add an empty path", .{a});
-    return std.mem.order(u8, a, b) == .lt;
-}
 
 fn skipped(name: []const u8) bool {
     if (name.len == 0) assert.panic("asked whether a directory with an empty name is skipped; skip empty names before calling skipped()", .{});

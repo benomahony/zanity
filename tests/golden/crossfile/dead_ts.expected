@@ -1,0 +1,5 @@
+rules: dead-symbol
+exit: 0
+index.ts:9:10: warning [dead-symbol]
+index.ts:13:7: warning [dead-symbol]
+index.ts:14:3: warning [dead-symbol]

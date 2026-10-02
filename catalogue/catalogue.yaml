@@ -23984,6 +23984,7 @@ entries:
   detection_review: unreviewed
   implementation_status: partial
   rule_ids:
+  - dead-symbol
   - unreachable-code
   tags: []
 - id: CWE-562
@@ -35559,6 +35560,7 @@ entries:
   rule_ids:
   - duplicated-expression
   - passthrough-wrapper
+  - structural-twins
   tags: []
 - id: CWE-1042
   title: Static Member Data Element outside of a Singleton Class Element

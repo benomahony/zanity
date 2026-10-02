@@ -43,7 +43,7 @@ pub const Worker = struct {
     fn startFile(self: *Worker, path: []const u8, name: []const u8, collect_units: bool) void {
         if (path.len == 0 or name.len == 0) assert.panic("starting a worker on path '{s}' in language '{s}'; both must be known before checking", .{ path, name });
         self.text.used = 0;
-        inline for (.{ "definitions", "functions", "calls", "units" }) |field| @field(self.facts, field).clear();
+        inline for (.{ "definitions", "functions", "calls", "units", "references", "shapes", "abstractions", "implemented" }) |field| @field(self.facts, field).clear();
         self.facts.path = path;
         self.facts.language = name;
         self.facts.collect_units = collect_units;
@@ -169,6 +169,23 @@ pub const Batch = struct {
         }
         for (recorded.calls.items()) |c| {
             try facts.calls.add(.{ .caller = @intCast(first + c.caller), .callee = try worker.retain(self.text, c.callee), .reach = c.reach });
+        }
+        for (recorded.shapes.items()) |shape| {
+            try facts.shapes.add(.{ .function = @intCast(first + shape.function), .hash = shape.hash, .size = shape.size });
+        }
+        for (recorded.abstractions.items()) |a| {
+            var kept = a;
+            kept.name = try worker.retain(self.text, a.name);
+            try facts.abstractions.add(kept);
+        }
+        for (recorded.implemented.items()) |hash| try facts.implemented.add(hash);
+        const references = recorded.references.items();
+        std.mem.sort(u64, references, {}, std.sort.asc(u64));
+        var previous: ?u64 = null;
+        for (references) |hash| {
+            if (previous == hash) continue;
+            previous = hash;
+            try facts.references.add(hash);
         }
         for (recorded.units.items()) |u| {
             var kept = u;

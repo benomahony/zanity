@@ -11,6 +11,8 @@ pub const Definition = struct {
     kind: []const u8,
     line: u32,
     column: u32,
+    /// Whether code outside the module can use it: exported, `pub`, `public`, or capitalised in Go.
+    public: bool = false,
 
     pub fn sourceOrder(_: void, a: Definition, b: Definition) bool {
         if (a.name.len == 0) assert.panic("a definition at {s}:{d} has no name; the @name capture matched an empty node", .{ a.path, a.line + 1 });
@@ -59,6 +61,26 @@ pub const Finding = struct {
 
 pub const Reach = enum { any, functions, methods };
 
+/// A function's body reduced to the kinds of its syntax nodes, so bodies that differ only in their
+/// names and values hash the same.
+pub const Shape = struct { function: u32, hash: u64, size: u32 };
+
+/// The hash of a name in one language, so a Python and a Java `Logger` count apart.
+pub fn typeHash(language: []const u8, name: []const u8) u64 {
+    if (language.len == 0) assert.panic("hashing '{s}' with no language; facts record each file's language before its types", .{name});
+    const hash = std.hash.Wyhash.hash(nameHash(language), name);
+    if (name.len == 0) assert.panic("hashing an empty type name in {s}; skip empty names before calling typeHash()", .{language});
+    return hash;
+}
+
+/// The hash of a name, for comparing names across files without keeping their text.
+pub fn nameHash(name: []const u8) u64 {
+    if (name.len == 0) assert.panic("hashing an empty name; skip empty names before calling nameHash()", .{});
+    const hash = std.hash.Wyhash.hash(0, name);
+    if (hash == 0 and name.len > 64) assert.panic("'{s}' hashed to 0; Wyhash returns a well-mixed hash for any input", .{name});
+    return hash;
+}
+
 pub const Edge = struct { caller: u32, callee: []const u8, reach: Reach };
 
 /// A function that reports an error, kept whole so `check --infer` can ask about its messages.
@@ -80,6 +102,13 @@ pub const Facts = struct {
     functions: memory.Bounded(Function),
     calls: memory.Bounded(Edge),
     units: memory.Bounded(Unit),
+    /// Hashes of the names each file refers to, other than where they are defined.
+    references: memory.Bounded(u64),
+    shapes: memory.Bounded(Shape),
+    /// Interfaces, traits, protocols and abstract classes, for single-impl-abstraction.
+    abstractions: memory.Bounded(Definition),
+    /// Hashes of the names types implement or extend, once per implementing type.
+    implemented: memory.Bounded(u64),
     /// Whether to keep `units`; only `check --infer` needs them.
     collect_units: bool = false,
 
@@ -92,10 +121,18 @@ pub const Facts = struct {
             .functions = try .initBounded(gpa, limits.functions, "functions across all files"),
             .calls = try .initBounded(gpa, limits.calls, "calls across all files"),
             .units = try .initBounded(gpa, limits.functions, "functions with error messages across all files"),
+            .references = try .initBounded(gpa, limits.references, "names referred to across all files"),
+            .shapes = try .initBounded(gpa, limits.functions, "function shapes across all files"),
+            .abstractions = try .initBounded(gpa, limits.definitions, "interfaces and abstract types across all files"),
+            .implemented = try .initBounded(gpa, limits.definitions, "implemented interfaces across all files"),
         };
     }
 
-    pub fn define(self: *Facts, name: []const u8, kind: []const u8, at: [2]u32) error{LimitExceeded}!void {
+    /// Where a definition is and whether code outside its module can use it.
+    pub const Place = struct { at: [2]u32, public: bool };
+
+    pub fn define(self: *Facts, name: []const u8, kind: []const u8, place: Place) error{LimitExceeded}!void {
+        const at = place.at;
         if (self.path.len == 0 or self.language.len == 0) assert.panic("defining '{s}' before the file is known (path '{s}', language '{s}'); set facts.path and facts.language first", .{ name, self.path, self.language });
         if (name.len == 0) assert.panic("a {s} in {s} at {d}:{d} has an empty name; the query's @name capture matched an empty node", .{ kind, self.path, at[0] + 1, at[1] + 1 });
         try self.definitions.add(.{
@@ -105,7 +142,15 @@ pub const Facts = struct {
             .kind = kind,
             .line = at[0],
             .column = at[1],
+            .public = place.public,
         });
+    }
+
+    /// Records an interface, trait, protocol or abstract class by its name.
+    pub fn abstraction(self: *Facts, name: []const u8, at: [2]u32) error{LimitExceeded}!void {
+        if (self.path.len == 0 or self.language.len == 0) assert.panic("recording abstraction '{s}' before the file is known; set facts.path and facts.language first", .{name});
+        if (name.len == 0) assert.panic("an abstraction in {s} at {d}:{d} has an empty name; check the @abstraction.name capture", .{ self.path, at[0] + 1, at[1] + 1 });
+        try self.abstractions.add(.{ .path = self.path, .language = self.language, .name = try self.text.copy(name), .kind = "abstraction", .line = at[0], .column = at[1] });
     }
 
     pub fn function(self: *Facts, name: []const u8, at: [2]u32, method: bool) error{LimitExceeded}!u32 {

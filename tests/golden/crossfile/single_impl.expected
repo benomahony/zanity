@@ -1,0 +1,6 @@
+rules: single-impl-abstraction
+exit: 0
+Notifier.java:1:11: information [single-impl-abstraction]
+lib.rs:1:7: information [single-impl-abstraction]
+repo.py:4:7: information [single-impl-abstraction]
+shapes.ts:1:11: information [single-impl-abstraction]

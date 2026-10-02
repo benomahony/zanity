@@ -14,6 +14,7 @@ pub const read_families = [_][]const u8{ "finding", "unless", "name", "parameter
 /// Captures outside those families read by their full name, through `Compiled.id`;
 /// architecture_test.zig checks every name the code looks up is read.
 pub const looked_up = [_][]const u8{
+    "abstraction.name",
     "arith.difference",
     "async.name",
     "catch.swallowed",
@@ -37,16 +38,19 @@ pub const looked_up = [_][]const u8{
     "expression.path",
     "expression.repeatable",
     "expression.returned",
+    "implementation.base",
     "literal.collection",
     "literal.constant",
     "literal.falsy",
     "literal.none",
     "literal.string",
     "literal.true",
+    "reference.name",
     "local.reference",
     "local.scope",
     "string.built",
     "string.format",
+    "visibility.public",
     "write.target",
 };
 

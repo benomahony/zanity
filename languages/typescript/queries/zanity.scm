@@ -540,3 +540,74 @@
 ; A returned value: each early return computes it once, on its own way out.
 (return_statement
   (_) @expression.returned)
+
+; Functions, classes and methods, which the upstream tags leave to JavaScript's.
+(function_declaration
+  name: (identifier) @name) @definition.function
+
+(generator_function_declaration
+  name: (identifier) @name) @definition.function
+
+(class_declaration
+  name: (type_identifier) @name) @definition.class
+
+(method_definition
+  name: (property_identifier) @name) @definition.method
+
+(lexical_declaration
+  (variable_declarator
+    name: (identifier) @name
+    value: [
+      (arrow_function)
+      (function_expression)
+    ])) @definition.function
+
+; Exported, so code outside the module can use it, and so can a method of an exported class.
+(export_statement
+  declaration: (_) @visibility.public)
+
+(export_statement
+  declaration: (class_declaration
+    body: (class_body
+      (method_definition) @visibility.public)))
+
+(export_statement
+  declaration: (abstract_class_declaration
+    body: (class_body
+      (method_definition) @visibility.public)))
+
+; Names the code refers to, for dead-symbol: every name other than where it is defined.
+[
+  (identifier)
+  (property_identifier)
+  (type_identifier)
+  (shorthand_property_identifier)
+  (shorthand_property_identifier_pattern)
+] @reference.name
+
+; Interfaces and abstract classes, and what classes implement or extend, for single-impl-abstraction.
+(interface_declaration
+  name: (type_identifier) @abstraction.name)
+
+(abstract_class_declaration
+  name: (type_identifier) @abstraction.name)
+
+(implements_clause
+  [
+    (type_identifier) @implementation.base
+    (generic_type
+      name: (type_identifier) @implementation.base)
+  ])
+
+(class_heritage
+  (extends_clause
+    value: (identifier) @implementation.base))
+
+; Decorated, so a framework can reach it, as Angular's @Component and NestJS's @Get do.
+(class_declaration
+  (decorator)) @visibility.public
+
+(class_body
+  (decorator)
+  .
+  (method_definition) @visibility.public)

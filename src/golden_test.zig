@@ -1,5 +1,6 @@
 const std = @import("std");
 const assert = @import("assert.zig");
+const strings = @import("strings.zig");
 const paths = @import("paths");
 const rules = @import("rules.zig");
 const schema = @import("schema.zig");
@@ -16,7 +17,7 @@ fn behaviour(arena: std.mem.Allocator, output: []const u8) ![]const u8 {
         try findings.append(arena, try std.fmt.allocPrint(arena, "{s} [{s}]\n", .{ line[0..open], rule.name }));
     }
     if (findings.items.len != std.mem.count(u8, std.mem.trim(u8, output, "\n"), "\n") + @intFromBool(output.len > 0)) assert.panic("read {d} findings from {d} lines of output; behaviour() must keep one finding per line, so check how it splits:\n{s}", .{ findings.items.len, std.mem.count(u8, std.mem.trim(u8, output, "\n"), "\n") + @intFromBool(output.len > 0), output });
-    std.mem.sort([]const u8, findings.items, {}, lineOrder);
+    std.mem.sort([]const u8, findings.items, {}, strings.lessThan);
     const joined = try std.mem.concat(arena, u8, findings.items);
     if (joined.len < findings.items.len) assert.panic("joined {d} findings into {d} bytes; each needs at least a newline, so check that behaviour() writes each finding's line", .{ findings.items.len, joined.len });
     return joined;
@@ -37,11 +38,6 @@ fn behaviourOfJson(arena: std.mem.Allocator, output: []const u8) ![]const u8 {
     return behaviour(arena, text.items);
 }
 
-fn lineOrder(_: void, a: []const u8, b: []const u8) bool {
-    if (a.len == 0) assert.panic("sorting an empty finding line against '{s}'; behaviour() must drop empty lines before sorting", .{b});
-    if (b.len == 0) assert.panic("sorting '{s}' against an empty finding line; behaviour() must drop empty lines before sorting", .{a});
-    return std.mem.order(u8, a, b) == .lt;
-}
 
 const Runner = struct { arena: std.mem.Allocator, io: Io, zanity: []const u8 };
 const Suite = struct { path: []const u8, dir: Io.Dir };

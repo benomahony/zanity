@@ -1,5 +1,6 @@
 const std = @import("std");
 const assert = @import("assert.zig");
+const strings = @import("strings.zig");
 const Allocator = std.mem.Allocator;
 const ts = @import("ts.zig");
 const memory = @import("memory.zig");
@@ -218,22 +219,22 @@ fn initPredicate(arena: Allocator, query: *const ts.Query, args: []const ts.Pred
     if (args.len > 64) assert.panic("a query predicate has {d} arguments; no predicate takes that many, so the step list is corrupt, so check that the grammar and vendor/tree-sitter/REVISION are versions that work together", .{args.len});
     if (args.len == 0 or args[0].type != .string) return null;
     const name = ts.stringValue(query, args[0].value_id);
-    if (oneOf(name, &.{ "set!", "offset!", "strip!", "set-adjacent!", "select-adjacent!" })) return null;
+    if (strings.contains(&.{ "set!", "offset!", "strip!", "set-adjacent!", "select-adjacent!" }, name)) return null;
     if (args.len < 2 or args[1].type != .capture) {
         std.log.err("#{s} needs a @capture as its first argument", .{name});
         return error.InvalidQuery;
     }
     const capture = args[1].value_id;
     if (capture >= ts.ts_query_capture_count(query)) assert.panic("#{s} names capture {d}, but the query has {d}; a predicate must name a capture in its own pattern, so fix it in the language's .scm files", .{ name, capture, ts.ts_query_capture_count(query) });
-    if (oneOf(name, &.{ "eq?", "not-eq?", "any-eq?", "any-not-eq?" })) {
+    if (strings.contains(&.{ "eq?", "not-eq?", "any-eq?", "any-not-eq?" }, name)) {
         if (args.len != 3) return error.InvalidQuery;
-        const positive = oneOf(name, &.{ "eq?", "any-eq?" });
+        const positive = strings.contains(&.{ "eq?", "any-eq?" }, name);
         const any = std.mem.startsWith(u8, name, "any");
         if (args[2].type == .capture) return .{ .eq_capture = .{ .a = capture, .b = args[2].value_id, .positive = positive, .any = any } };
         return .{ .eq_string = .{ .capture = capture, .value = ts.stringValue(query, args[2].value_id), .positive = positive, .any = any } };
     }
     const negated = name[0] == 'n';
-    if (oneOf(name, &.{ "any-of?", "not-any-of?", "has-ancestor?", "not-has-ancestor?", "kind-eq?", "not-kind-eq?" })) {
+    if (strings.contains(&.{ "any-of?", "not-any-of?", "has-ancestor?", "not-has-ancestor?", "kind-eq?", "not-kind-eq?" }, name)) {
         if (args.len < 3) return error.InvalidQuery;
         const values = try arena.alloc([]const u8, args.len - 2);
         for (args[2..], values) |arg, *v| v.* = ts.stringValue(query, arg.value_id);
@@ -241,17 +242,11 @@ fn initPredicate(arena: Allocator, query: *const ts.Query, args: []const ts.Pred
         if (std.mem.endsWith(u8, name, "kind-eq?")) return .{ .kind = .{ .capture = capture, .kinds = values, .positive = !negated } };
         return .{ .ancestor = .{ .capture = capture, .kinds = values, .positive = !negated } };
     }
-    if (oneOf(name, &.{ "empty?", "not-empty?" })) return .{ .empty = .{ .capture = capture, .positive = !negated } };
+    if (strings.contains(&.{ "empty?", "not-empty?" }, name)) return .{ .empty = .{ .capture = capture, .positive = !negated } };
     std.log.err("zanity does not evaluate the query predicate #{s}; rewrite the pattern with #eq?, #any-of?, #kind-eq?, #has-ancestor? or #empty?, or capture the construct structurally", .{name});
     return error.InvalidQuery;
 }
 
-fn oneOf(name: []const u8, candidates: []const []const u8) bool {
-    if (name.len == 0) assert.panic("a query predicate has an empty name; predicates look like #eq?", .{});
-    if (candidates.len == 0) assert.panic("checked predicate #{s} against no known predicate names; add the predicate to the switch in initPredicate(), or remove it from the language's .scm files", .{name});
-    for (candidates) |c| if (std.mem.eql(u8, name, c)) return true;
-    return false;
-}
 
 fn hasAncestor(node: ts.Node, kinds: []const []const u8) bool {
     if (kinds.len == 0) assert.panic("#has-ancestor? names no node kinds; list at least one after the capture", .{});

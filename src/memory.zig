@@ -13,6 +13,8 @@ pub const Limits = struct {
     definitions: u32 = 1 << 18,
     functions: u32 = 1 << 18,
     calls: u32 = 1 << 20,
+    /// Distinct names each file refers to, summed over all files, for dead-symbol.
+    references: u32 = 1 << 22,
     edges: u32 = 1 << 21,
     ignore_patterns: u32 = 1 << 14,
     ignore_bytes: u32 = 1 << 20,

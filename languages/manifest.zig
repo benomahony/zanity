@@ -83,6 +83,8 @@ pub const Tables = struct {
     mutating_calls: []const []const u8 = &.{},
     self_receivers: []const []const u8 = &.{},
     methods_need_receiver: bool = false,
+    /// Whether a name's case says it is exported, as Go's capitalised names are.
+    exported_by_case: bool = false,
     allocating_calls: []const []const u8 = &.{},
     initializer_prefixes: []const []const u8 = &.{},
     test_file_prefixes: []const []const u8 = &.{},

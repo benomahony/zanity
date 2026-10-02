@@ -105,6 +105,8 @@ pub extern fn ts_node_start_point(node: Node) Point;
 pub extern fn ts_node_end_point(node: Node) Point;
 pub extern fn ts_node_is_named(node: Node) bool;
 pub extern fn ts_node_has_error(node: Node) bool;
+pub extern fn ts_node_is_extra(node: Node) bool;
+pub extern fn ts_node_symbol(node: Node) u16;
 pub extern fn ts_node_parent(node: Node) Node;
 pub extern fn ts_node_descendant_count(node: Node) u32;
 pub extern fn ts_node_named_child_count(node: Node) u32;

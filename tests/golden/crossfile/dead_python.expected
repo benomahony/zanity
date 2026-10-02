@@ -1,0 +1,5 @@
+rules: dead-symbol
+exit: 0
+app.py:8:5: warning [dead-symbol]
+app.py:17:7: warning [dead-symbol]
+helpers.py:5:5: warning [dead-symbol]

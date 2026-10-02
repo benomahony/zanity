@@ -61,6 +61,14 @@ pub fn indexOf(adapter: *const Adapter) usize {
     return index;
 }
 
+/// The language named `name`, as facts record it.
+pub fn named(name: []const u8) ?*const Adapter {
+    if (name.len == 0) assert.panic("looked up a language by an empty name; facts record each file's language before its definitions", .{});
+    for (adapters.all) |*adapter| if (std.mem.eql(u8, adapter.name, name)) return adapter;
+    if (adapters.all.len == 0) assert.panic("no languages are compiled in, so '{s}' can't be found; check languages/manifest.zon", .{name});
+    return null;
+}
+
 pub fn forPath(path: []const u8) ?*const Adapter {
     if (path.len == 0) assert.panic("asked which language an empty path is written in; skip empty paths before calling forPath()", .{});
     const ext = std.fs.path.extension(path);
