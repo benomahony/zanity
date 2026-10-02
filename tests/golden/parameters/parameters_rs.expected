@@ -1,0 +1,3 @@
+rules: dead-parameter
+exit: 0
+parameters_rs.rs:1:26: warning [dead-parameter]

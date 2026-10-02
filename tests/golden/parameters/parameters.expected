@@ -1,0 +1,3 @@
+rules: dead-parameter
+exit: 0
+parameters.py:1:19: warning [dead-parameter]

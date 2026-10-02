@@ -37649,6 +37649,7 @@
       "detection_review": "unreviewed",
       "implementation_status": "partial",
       "rule_ids": [
+        "dead-parameter",
         "no-effect-statement"
       ],
       "tags": []

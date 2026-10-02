@@ -241,6 +241,7 @@ Rules marked *off* run only with `--rules all`, `rules = ["all"]`, or when named
 | Rule | Severity | Flags |
 |---|---|---|
 | `long-parameter-list` | warning | more than four parameters |
+| `dead-parameter` | warning | a parameter the function's body never uses; not stubs, tests, `_`-prefixed names, or methods an interface fixes such as `__exit__` (not Zig, whose compiler already rejects these) |
 | `passthrough-wrapper` | warning | a function whose whole body forwards to another call |
 | `swallowed-error` | warning | an error handler that does nothing |
 | `empty-block` | warning | an empty block where code was expected |

@@ -1,0 +1,3 @@
+rules: dead-parameter
+exit: 0
+Parameters_java.java:2:36: warning [dead-parameter]

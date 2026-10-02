@@ -17,6 +17,7 @@ const scope = @import("scope.zig");
 const test_quality = @import("test_quality.zig");
 const isolation = @import("isolation.zig");
 const unread = @import("unread.zig");
+const parameters = @import("parameters.zig");
 
 pub const Diagnostic = struct {
     line: u32,
@@ -61,6 +62,8 @@ pub const Context = struct {
     span: ts.Node,
     serial: u32,
     body: bool = false,
+    /// Where the body starts, from its @inner capture; parameters are declared before it.
+    body_start: u32 = std.math.maxInt(u32),
     name: ?ts.Node = null,
     callee: ?ts.Node = null,
     receiver: ?ts.Node = null,
@@ -511,6 +514,7 @@ pub const File = struct {
             }
         }
         if (std.mem.eql(u8, part, "inner")) {
+            if (!ctx.body) ctx.body_start = ts.ts_node_start_byte(node);
             ctx.body = true;
         } else if (std.mem.eql(u8, part, "argument")) {
             if (ctx.argument_count < ctx.arguments.len) ctx.arguments[ctx.argument_count] = node;
@@ -952,6 +956,7 @@ pub const File = struct {
         if (ctx.formal_parameters > rules.max_parameters) {
             _ = try self.report(name_node, "long-parameter-list", try self.say("'{s}' takes {d} parameters; functions should take at most {d}.", .{ name, ctx.formal_parameters, rules.max_parameters }));
         }
+        try parameters.checkUnusedParameters(self, ctx, name);
         if (self.index.marks(ctx.span, self.v.function_passthrough) or self.index.marks(ctx.node, self.v.function_passthrough)) {
             _ = try self.report(name_node, "passthrough-wrapper", try self.say("'{s}' only forwards to another call, so it adds a name without adding behaviour.", .{name}));
         }

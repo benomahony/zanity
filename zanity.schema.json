@@ -92,6 +92,7 @@
         { "const": "dynamic-allocation", "description": "error, on by default. Allocate what it needs up front in an init function and reuse it." },
         { "const": "assertion-side-effect", "description": "error, on by default. Do the work before the assertion and assert on its result." },
         { "const": "long-parameter-list", "description": "warning, on by default. Group related parameters into a struct or split the function." },
+        { "const": "dead-parameter", "description": "warning, on by default. Remove it and stop passing it, or name it with a leading underscore where the signature is fixed by an interface or a callback." },
         { "const": "passthrough-wrapper", "description": "warning, on by default. Call the target directly, or give the wrapper work of its own." },
         { "const": "swallowed-error", "description": "warning, on by default. Handle the error, log it with context, or let it propagate." },
         { "const": "sleep-in-test", "description": "warning, on by default. Wait for the event itself, or use a fake clock." },

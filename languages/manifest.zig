@@ -18,6 +18,9 @@ pub const Tables = struct {
     length_calls: []const []const u8 = &.{},
     type_checks: []const []const u8 = &.{},
     null_types: []const []const u8 = &.{},
+    /// Methods whose parameters an interface or protocol fixes, such as Python's `__exit__` or
+    /// Go's `ServeHTTP`, so a parameter they don't use can't be removed.
+    fixed_signatures: []const []const u8 = &.{},
     test_prefixes: []const []const u8 = &.{},
     /// How many words a test's name needs, besides filler such as "test" or "works", to say
     /// what behaviour it expects. Go names a test after the function and its cases in t.Run, so 1.

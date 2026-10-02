@@ -1,0 +1,4 @@
+rules: dead-parameter
+exit: 0
+parameters_ts.ts:1:34: warning [dead-parameter]
+parameters_ts.ts:13:59: warning [dead-parameter]

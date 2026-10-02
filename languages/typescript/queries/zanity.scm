@@ -204,6 +204,20 @@
 (optional_parameter
   pattern: (identifier) @parameter.name)
 
+; A constructor parameter with an access modifier also declares a field, so it is used even when
+; the constructor's body never reads it.
+(required_parameter
+  (accessibility_modifier)
+  pattern: (identifier) @parameter.field)
+
+(optional_parameter
+  (accessibility_modifier)
+  pattern: (identifier) @parameter.field)
+
+(required_parameter
+  "readonly"
+  pattern: (identifier) @parameter.field)
+
 ; Engineering error catalogue rules: each `@finding.<rule>` capture is a finding of that rule.
 
 (string) @literal.string

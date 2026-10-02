@@ -1,6 +1,7 @@
 .{
     .{
         .ecosystem = "python",
+        .fixed_signatures = .{ "__exit__", "__aexit__", "__eq__", "__ne__", "__lt__", "__le__", "__gt__", "__ge__", "__get__", "__set__", "__delete__", "__set_name__", "__format__", "__getattr__", "__getattribute__", "__setattr__", "__delattr__", "__missing__", "__class_getitem__", "__init_subclass__", "__reduce_ex__", "__deepcopy__", "__array__" },
         .stdin_reads = .{ "input", "raw_input", "getpass.getpass", "getpass", "sys.stdin.read", "sys.stdin.readline", "sys.stdin.readlines", "click.prompt", "click.confirm", "typer.prompt", "typer.confirm" },
         .weak_hashes = .{ "hashlib.md5", "hashlib.sha1", "md5.new", "sha.new" },
         .unsafe_deserializers = .{ "pickle.load", "pickle.loads", "cPickle.load", "cPickle.loads", "marshal.load", "marshal.loads", "yaml.unsafe_load", "yaml.full_load", "shelve.open", "dill.load", "dill.loads", "jsonpickle.decode" },
@@ -71,6 +72,7 @@
     },
     .{
         .ecosystem = "go",
+        .fixed_signatures = .{ "ServeHTTP", "Read", "Write", "Less", "Swap", "MarshalJSON", "UnmarshalJSON", "MarshalText", "UnmarshalText", "Is", "As", "Format", "Scan", "Value" },
         .stdin_reads = .{ "fmt.Scan", "fmt.Scanln", "fmt.Scanf", "os.Stdin.Read", "term.ReadPassword" },
         .weak_hashes = .{ "md5.New", "md5.Sum", "sha1.New", "sha1.Sum" },
         .sql_methods = .{ "Query", "QueryRow", "Exec", "QueryContext", "QueryRowContext", "ExecContext", "Prepare" },
@@ -99,6 +101,7 @@
     },
     .{
         .ecosystem = "node",
+        .fixed_signatures = .{ "toJSON", "then" },
         .stdin_reads = .{ "prompt", "readline.createInterface", "readlineSync.question", "process.stdin.read", "process.stdin.on", "inquirer.prompt" },
         .unsafe_deserializers = .{ "serialize.unserialize", "unserialize", "yaml.load" },
         .shell_calls = .{ "child_process.exec", "child_process.execSync", "exec", "execSync" },
@@ -130,6 +133,7 @@
     },
     .{
         .ecosystem = "rust",
+        .fixed_signatures = .{ "fmt", "from", "try_from", "eq", "ne", "partial_cmp", "cmp", "hash", "deref", "deref_mut", "as_ref", "drop", "index", "index_mut", "add", "sub", "mul", "div", "poll", "visit_str", "serialize", "deserialize" },
         .stdin_reads = .{ "std::io::stdin", "io::stdin", "stdin", "rpassword::read_password" },
         .weak_hashes = .{ "md5::compute", "Md5::new", "Md5::digest", "Sha1::new", "Sha1::digest" },
         .wall_clocks = .{ "SystemTime::now", "std::time::SystemTime::now" },
@@ -155,6 +159,7 @@
     },
     .{
         .ecosystem = "jvm",
+        .fixed_signatures = .{ "main", "equals", "compareTo", "compare", "apply", "accept", "call", "run", "handle", "test", "onError", "onNext", "onComplete", "doFilter", "service", "init", "destroy" },
         .stdin_reads = .{ "System.in.read", "System.console" },
         .sql_methods = .{ "executeQuery", "executeUpdate", "execute", "addBatch", "prepareStatement", "createQuery", "createNativeQuery" },
         .log_calls = .{ "System.out.println", "System.out.print", "System.err.println", "logger.info", "logger.debug", "logger.warn", "logger.error", "log.info", "log.debug", "log.warn", "log.error", "LOG.info", "LOG.debug", "LOG.warn", "LOG.error" },

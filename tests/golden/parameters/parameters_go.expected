@@ -1,0 +1,3 @@
+rules: dead-parameter
+exit: 0
+parameters_go.go:3:26: warning [dead-parameter]
