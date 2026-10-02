@@ -1,0 +1,6 @@
+rules: vague-test-name
+exit: 0
+test_names.py:1:5: warning [vague-test-name]
+test_names.py:5:5: warning [vague-test-name]
+test_names.py:9:5: warning [vague-test-name]
+test_names.py:17:5: warning [vague-test-name]

@@ -6,6 +6,7 @@ const ts = @import("ts.zig");
 const rules = @import("rules.zig");
 const check = @import("check.zig");
 const isolation = @import("isolation.zig");
+const naming = @import("naming.zig");
 const File = check.File;
 const Context = check.Context;
 const contains = check.contains;
@@ -44,6 +45,7 @@ pub fn closeTest(self: *File, ctx: Context) !void {
     const name_node = self.functionNameOf(ctx.node);
     const at = name_node orelse ctx.node;
     const shown = if (name_node) |n| n.text(self.source) else header(ctx.node.text(self.source));
+    if (name_node orelse ctx.name) |named| try checkTestName(self, named, named.text(self.source));
     const lines = self.codeLinesIn(ctx.span);
     if (lines >= rules.max_test_lines) {
         _ = try self.report(at, "long-test", try self.say("'{s}' has {d} lines of code; tests must have fewer than {d}.", .{ shown, lines, rules.max_test_lines }));
@@ -72,4 +74,41 @@ pub fn checkTestCall(self: *File, ctx: Context, name: []const u8) !void {
         _ = try self.report(ctx.node, "test-double", try self.say("'{s}' replaces real behaviour with a stand-in, so the test can pass while the real code is broken.", .{callee}));
     }
     try isolation.checkIsolation(self, ctx, name);
+}
+
+/// A test whose name doesn't say what behaviour it expects, such as `test_1`, `it("works")`, or,
+/// outside Go, `test_parse`: a failure then names the test without saying what broke.
+pub fn checkTestName(self: *File, at: ts.Node, name: []const u8) !void {
+    if (ts.ts_node_end_byte(at) <= ts.ts_node_start_byte(at)) assert.panic("{s}: the test name '{s}' is reported at the empty {f}; pass the node of the test's name or string", .{ self.work.facts.path, name, at.where() });
+    const shown = std.mem.trim(u8, name, "\"'`");
+    if (shown.len == 0) return;
+    var words: u32 = 0;
+    var start: usize = 0;
+    for (0..shown.len + 1) |i| {
+        const at_end = i == shown.len;
+        const separator = !at_end and !std.ascii.isAlphanumeric(shown[i]);
+        const boundary = !at_end and !separator and i > start and naming.caseBoundary(shown, i);
+        if (!at_end and !separator and !boundary) continue;
+        if (i > start and !fillerWord(shown[start..i])) words += 1;
+        start = if (separator) i + 1 else i;
+    }
+    if (words > shown.len) assert.panic("{s}: counted {d} words in the {d}-byte test name '{s}'; a word needs at least one byte, so check the loop in checkTestName()", .{ self.work.facts.path, words, shown.len, shown });
+    if (words >= self.tables.test_name_words) return;
+    const message = if (words == 0)
+        try self.say("'{s}' doesn't say what it tests, so when it fails nobody knows what broke.", .{shown})
+    else
+        try self.say("'{s}' names what it tests but not what should happen, so when it fails nobody knows which behaviour broke.", .{shown});
+    _ = try self.report(at, "vague-test-name", message);
+}
+
+/// Whether a word of a test's name says nothing about what it checks, once a trailing number is dropped.
+fn fillerWord(word: []const u8) bool {
+    if (word.len == 0) assert.panic("asked whether an empty word is filler; checkTestName() must skip empty words", .{});
+    const stem = std.mem.trimEnd(u8, word, "0123456789");
+    if (stem.len == 0) return true;
+    for (rules.filler_test_words) |filler| {
+        if (filler.len == 0) assert.panic("rules.filler_test_words holds an empty word, which would match nothing; remove it", .{});
+        if (std.ascii.eqlIgnoreCase(stem, filler)) return true;
+    }
+    return false;
 }

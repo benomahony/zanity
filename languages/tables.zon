@@ -76,6 +76,7 @@
         .protocol_names = .{ "main", "String", "Error", "Len", "Less", "Swap", "MarshalJSON", "UnmarshalJSON", "ServeHTTP", "Read", "Write", "Close", "Unwrap", "Is", "As" },
         .debug_calls = .{"runtime.Breakpoint"},
         .test_prefixes = .{"Test"},
+        .test_name_words = 1,
         .methods_need_receiver = true,
         .sleeps = .{"time.Sleep"},
         .nondeterministic = .{ "rand.Int", "rand.Intn", "rand.Int63", "rand.Float64", "rand.Perm", "rand.Shuffle", "time.Now", "uuid.New", "uuid.NewString" },

@@ -975,7 +975,10 @@ pub const File = struct {
         if (ctx.family != .function) assert.panic("{s}: measuring {f} as a function, but it is a {t}; call checkFunctionLength() only from closeFunction()", .{ self.work.facts.path, ctx.node.where(), ctx.family });
         if (!std.mem.eql(u8, name, name_node.text(self.source))) assert.panic("{s}: measuring '{s}' under the name of {f}; pass the function's own name node and its text", .{ self.work.facts.path, name, name_node.where() });
         if (self.index.marks(ctx.node, self.v.test_outer)) return;
-        if (ctx.is_test) try test_quality.checkEager(self, ctx, name_node, name);
+        if (ctx.is_test) {
+            try test_quality.checkEager(self, ctx, name_node, name);
+            try test_quality.checkTestName(self, name_node, name);
+        }
         const lines = self.codeLinesIn(ctx.span);
         if (ctx.is_test and lines >= rules.max_test_lines) {
             _ = try self.report(name_node, "long-test", try self.say("'{s}' has {d} lines of code; tests must have fewer than {d}.", .{ name, lines, rules.max_test_lines }));

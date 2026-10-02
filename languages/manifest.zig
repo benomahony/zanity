@@ -19,6 +19,9 @@ pub const Tables = struct {
     type_checks: []const []const u8 = &.{},
     null_types: []const []const u8 = &.{},
     test_prefixes: []const []const u8 = &.{},
+    /// How many words a test's name needs, besides filler such as "test" or "works", to say
+    /// what behaviour it expects. Go names a test after the function and its cases in t.Run, so 1.
+    test_name_words: u8 = 2,
     sleeps: []const []const u8 = &.{},
     nondeterministic: []const []const u8 = &.{},
     test_doubles: []const []const u8 = &.{},

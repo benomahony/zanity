@@ -212,6 +212,12 @@
 
 (test_declaration) @test.outer
 
+(test_declaration
+  [
+    (string)
+    (identifier)
+  ] @test.name)
+
 (function_declaration
   name: (identifier) @name) @definition.function
 

@@ -89,7 +89,7 @@ pub fn tokenise(s: *ConceptScratch, name: []const u8) error{LimitExceeded}![]con
     return s.tokens.items();
 }
 
-fn caseBoundary(name: []const u8, i: usize) bool {
+pub fn caseBoundary(name: []const u8, i: usize) bool {
     if (i == 0 or i >= name.len) assert.panic("checked for a word boundary at byte {d} of '{s}' ({d} bytes); only bytes 1..{d} can start a word", .{ i, name, name.len, name.len -| 1 });
     const previous = name[i - 1];
     const current = name[i];

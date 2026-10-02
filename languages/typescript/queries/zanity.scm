@@ -126,7 +126,7 @@
   function: (identifier) @_test
   arguments: (arguments
     .
-    (string)
+    (string) @test.name
     .
     [
       (arrow_function)

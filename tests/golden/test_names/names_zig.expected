@@ -1,0 +1,4 @@
+rules: vague-test-name
+exit: 0
+names_zig.zig:1:6: warning [vague-test-name]
+names_zig.zig:3:6: warning [vague-test-name]

@@ -1,0 +1,4 @@
+rules: vague-test-name
+exit: 0
+names_ts.ts:1:4: warning [vague-test-name]
+names_ts.ts:3:6: warning [vague-test-name]

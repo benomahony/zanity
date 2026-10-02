@@ -1,0 +1,4 @@
+rules: vague-test-name
+exit: 0
+names_go.go:7:6: warning [vague-test-name]
+names_go.go:9:6: warning [vague-test-name]

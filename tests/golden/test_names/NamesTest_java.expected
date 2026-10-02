@@ -1,0 +1,4 @@
+rules: vague-test-name
+exit: 0
+NamesTest_java.java:5:10: warning [vague-test-name]
+NamesTest_java.java:8:10: warning [vague-test-name]
