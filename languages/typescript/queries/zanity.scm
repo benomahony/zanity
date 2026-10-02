@@ -472,3 +472,22 @@
   function: (identifier) @_skipped
   arguments: (arguments)) @finding.skipped-test
   (#any-of? @_skipped "xit" "xtest" "xdescribe" "xcontext"))
+
+; A test that expects any error at all, so it passes when the code fails for the wrong reason:
+; `toThrow()` with nothing to match, or `toThrow(Error)`.
+((call_expression
+  function: (member_expression
+    property: (property_identifier) @_throw)
+  arguments: (arguments) @_expected) @finding.broad-expected-error
+  (#any-of? @_throw "toThrow" "toThrowError" "rejects.toThrow")
+  (#empty? @_expected))
+
+((call_expression
+  function: (member_expression
+    property: (property_identifier) @_throw)
+  arguments: (arguments
+    .
+    (identifier) @_error
+    .)) @finding.broad-expected-error
+  (#any-of? @_throw "toThrow" "toThrowError")
+  (#eq? @_error "Error"))

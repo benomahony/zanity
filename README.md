@@ -267,6 +267,7 @@ Rules marked *off* run only with `--rules all`, `rules = ["all"]`, or when named
 | `stdin-in-test` | warning | a test that reads what someone types, such as `input()`, `fmt.Scanln` or `prompt`, so it hangs in CI |
 | `process-in-test` | warning | a test that starts a real process |
 | `vague-test-name` | warning | a test name that doesn't say what behaviour it expects: `test_1`, `it("works")`, or a single word like `test_parse` (Go's `TestParse`, named after the function, is fine) |
+| `broad-expected-error` | warning | a test that expects any error at all: `pytest.raises(Exception)`, `assertThrows(Exception.class, ...)`, a bare `toThrow()`, or `#[should_panic]` without `expected` |
 | `skipped-test` | warning | a test turned off with no condition: a skip mark, `t.Skip()` as the test's own statement, `#[ignore]`, `@Disabled`, `it.skip`, or an expected failure that isn't strict |
 
 **Names**

@@ -106,6 +106,7 @@
         { "const": "nondeterministic-test", "description": "warning, on by default. Inject a seeded generator or a fixed value." },
         { "const": "test-double", "description": "warning, on by default. Use the real object, or a fake that behaves like it." },
         { "const": "call-verification", "description": "warning, on by default. Assert on the result, or the state the code leaves behind; check a call only where the call is the behaviour, such as a message sent to another system." },
+        { "const": "broad-expected-error", "description": "warning, on by default. Expect the specific error type, and match its message where the type is shared, such as pytest.raises(ValueError, match=...) or #[should_panic(expected = \"...\")]." },
         { "const": "skipped-test", "description": "warning, on by default. Fix the test and turn it back on, or delete it; to skip only where it can't run, put the skip under a condition (skipif, an if around t.Skip), or use xfail(strict=True)." },
         { "const": "vague-test-name", "description": "warning, on by default. Name the behaviour it expects, such as test_rejects_expired_token or it(\"returns 404 for an unknown id\")." },
         { "const": "name-drift", "description": "warning, on by default. Pick one spelling and use it everywhere." },

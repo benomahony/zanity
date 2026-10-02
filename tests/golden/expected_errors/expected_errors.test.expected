@@ -1,0 +1,4 @@
+rules: broad-expected-error
+exit: 0
+expected_errors.test.ts:2:3: warning [broad-expected-error]
+expected_errors.test.ts:3:3: warning [broad-expected-error]

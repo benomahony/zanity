@@ -1,0 +1,3 @@
+rules: broad-expected-error
+exit: 0
+ExpectedErrorsTest.java:4:9: warning [broad-expected-error]

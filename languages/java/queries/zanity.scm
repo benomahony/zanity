@@ -322,3 +322,13 @@
 ((annotation
   name: (identifier) @_disabled) @finding.skipped-test
   (#any-of? @_disabled "Disabled" "Ignore"))
+
+; A test that expects any exception at all, so it passes when the code fails for the wrong reason.
+((method_invocation
+  name: (identifier) @_throws
+  arguments: (argument_list
+    .
+    (class_literal
+      (type_identifier) @_exception))) @finding.broad-expected-error
+  (#any-of? @_throws "assertThrows" "assertThrowsExactly")
+  (#any-of? @_exception "Exception" "Throwable" "RuntimeException"))

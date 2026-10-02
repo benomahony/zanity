@@ -13,11 +13,11 @@
         .ecosystem = "zig",
         .scanner = false,
         .queries = .{ "locals", "textobjects", "zanity" },
-        .not_applicable = .{ "NASA05-M1", "NASA05-M3", "NASA05-M4", "NASA05-M5", "discarded-comparison", "unreachable-code", "generic-catch", "return-in-finally", "identity-comparison", "precedence-trap", "generic-throw", "switch-fallthrough", "missing-default", "no-effect-statement", "tls-verification-disabled", "unsafe-deserialization", "shell-command", "sql-built-from-strings", "unawaited-call" },
+        .not_applicable = .{ "broad-expected-error", "NASA05-M1", "NASA05-M3", "NASA05-M4", "NASA05-M5", "discarded-comparison", "unreachable-code", "generic-catch", "return-in-finally", "identity-comparison", "precedence-trap", "generic-throw", "switch-fallthrough", "missing-default", "no-effect-statement", "tls-verification-disabled", "unsafe-deserialization", "shell-command", "sql-built-from-strings", "unawaited-call" },
     },
     .{
         .name = "go",
-        .not_applicable = .{ "dynamic-allocation", "restated-type", "constant-assertion", "redundant-null-check", "conversion-assertion", "guaranteed-length", "discarded-comparison", "generic-catch", "return-in-finally", "identity-comparison", "precedence-trap", "generic-throw", "switch-fallthrough", "no-effect-statement", "unsafe-deserialization", "shell-command", "wall-clock-duration", "unawaited-call" },
+        .not_applicable = .{ "broad-expected-error", "dynamic-allocation", "restated-type", "constant-assertion", "redundant-null-check", "conversion-assertion", "guaranteed-length", "discarded-comparison", "generic-catch", "return-in-finally", "identity-comparison", "precedence-trap", "generic-throw", "switch-fallthrough", "no-effect-statement", "unsafe-deserialization", "shell-command", "wall-clock-duration", "unawaited-call" },
         .extensions = .{"go"},
         .ecosystem = "go",
         .scanner = false,

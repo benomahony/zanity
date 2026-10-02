@@ -252,3 +252,11 @@
   (attribute
     (identifier) @_ignore)) @finding.skipped-test
   (#eq? @_ignore "ignore"))
+
+; A test that expects any panic at all, so it passes when the code panics for the wrong reason:
+; #[should_panic] without `expected = "..."`.
+((attribute_item
+  (attribute
+    (identifier) @_panic
+    .)) @finding.broad-expected-error
+  (#eq? @_panic "should_panic"))

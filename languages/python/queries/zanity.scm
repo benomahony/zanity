@@ -486,3 +486,15 @@
         attribute: (identifier) @_skip)) @finding.skipped-test))
   (#any-of? @_owner "pytest" "self")
   (#any-of? @_skip "skip" "skipTest"))
+
+; A test that expects any exception at all, so it passes when the code fails for the wrong reason.
+((call
+  function: (attribute
+    object: (identifier) @_owner
+    attribute: (identifier) @_raises)
+  arguments: (argument_list
+    .
+    (identifier) @_exception)) @finding.broad-expected-error
+  (#any-of? @_owner "pytest" "self")
+  (#any-of? @_raises "raises" "assertRaises" "assertRaisesRegex")
+  (#any-of? @_exception "Exception" "BaseException"))
