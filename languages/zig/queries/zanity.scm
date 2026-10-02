@@ -215,8 +215,16 @@
 (function_declaration
   name: (identifier) @name) @definition.function
 
+; The value is anchored right after `=`, allowing one comment between: left unanchored, the
+; query engine keeps every enclosing declaration's match open through the whole container it
+; defines, which in Zig is often the rest of the file. The anchor also leaves out a container
+; that is only a variable's type, as in `const state: enum { a, b } = .a`.
 (variable_declaration
   (identifier) @name
+  "="
+  .
+  (comment)?
+  .
   [
     (struct_declaration)
     (enum_declaration)
@@ -227,6 +235,10 @@
 (source_file
   (variable_declaration
     (identifier) @name
+    "="
+    .
+    (comment)?
+    .
     [
       (integer)
       (float)
