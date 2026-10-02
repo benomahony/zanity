@@ -29,7 +29,7 @@ jobs:
       - name: Formatting
         run: zig fmt --check build.zig build.zig.zon src languages/*.zig languages/*.zon
       # Unit, golden, architecture and catalogue tests, and zanity checking its own Zig source.
-      - run: zig build test --summary all
+      - run: zig build test test-integration --summary all
       # Every file in the repository, every rule, warnings included, as a user's CI would run it.
       - name: zanity check . --strict
         run: zig build && ./zig-out/bin/zanity check . --strict

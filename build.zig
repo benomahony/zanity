@@ -42,15 +42,22 @@ pub fn build(b: *std.Build) void {
     bench.has_side_effects = true;
     b.step("bench", "Time zanity check against the fastest this machine could parse the corpus").dependOn(&bench.step);
 
-    const test_module = module(b, "src/tests.zig", target, optimize);
+    // `zig build test` is the fast loop: the code's own tests, with no zanity binary to build.
+    const unit = b.addRunArtifact(b.addTest(.{ .root_module = module(b, "src/tests.zig", target, optimize) }));
+    unit.setCwd(b.path("."));
+    unit.has_side_effects = true;
+    b.step("test", "Run the unit tests").dependOn(&unit.step);
+
+    // `zig build test-integration` runs the built zanity: the golden fixtures, the CLI, and
+    // zanity checking its own source, which must pass every rule.
+    const integration_module = module(b, "src/golden_test.zig", target, optimize);
     const options = b.addOptions();
     options.addOptionPath("zanity", exe.getEmittedBin());
-    test_module.addOptions("paths", options);
-    test_module.addOptions("build_info", build_info);
-    const tests = b.addRunArtifact(b.addTest(.{ .root_module = test_module }));
-    tests.setCwd(b.path("."));
-    tests.has_side_effects = true;
-    b.step("test", "Run tests").dependOn(&tests.step);
+    integration_module.addOptions("paths", options);
+    const integration = b.addRunArtifact(b.addTest(.{ .root_module = integration_module }));
+    integration.setCwd(b.path("."));
+    integration.has_side_effects = true;
+    b.step("test-integration", "Run the built zanity end to end, on the golden fixtures and on its own source").dependOn(&integration.step);
 }
 
 /// The platforms a release ships for. Linux builds link musl statically, so one binary runs on

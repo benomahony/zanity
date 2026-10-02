@@ -321,7 +321,8 @@ No Zig code changes. Add:
 ### Testing
 
 ```sh
-zig build test              # unit, golden, architecture, catalogue and self-check tests
+zig build test              # unit, architecture and catalogue tests: the fast loop, no binary to build
+zig build test-integration  # the built zanity on the golden fixtures, --fix, the CLI, and its own source
 zig build test --fuzz=100K  # fuzz the checker with arbitrary bytes in every language
 ```
 

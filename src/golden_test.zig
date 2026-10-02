@@ -77,6 +77,28 @@ fn caseFailure(runner: Runner, suite: Suite, case: Case) !?[]const u8 {
     return try std.fmt.allocPrint(arena, "{s}\n--- expected (exit {d})\n{s}--- actual (exit {d})\n{s}{s}", .{ name, expected_exit, expected_out, exit_code, actual_out, result.stderr });
 }
 
+/// One golden case, run on its own thread with its own arena.
+const GoldenRun = struct {
+    runner: Runner,
+    suite: Suite,
+    suite_name: []const u8,
+    case: Case,
+    arena: std.heap.ArenaAllocator,
+    failure: ?[]const u8 = null,
+    err: ?anyerror = null,
+
+    fn checkCase(job: *GoldenRun) void {
+        if (job.case.name.len == 0) assert.panic("a golden case in {s} has no name; the suite's directory listing never gives empty names", .{job.suite_name});
+        var runner = job.runner;
+        runner.arena = job.arena.allocator();
+        job.failure = caseFailure(runner, job.suite, job.case) catch |e| {
+            job.err = e;
+            return;
+        };
+        if (job.failure != null and job.err != null) assert.panic("{s}: the case both failed and errored; checkCase() records one or the other", .{job.case.name});
+    }
+};
+
 test "golden cases reproduce the source tools' findings through the CLI" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
@@ -85,28 +107,41 @@ test "golden cases reproduce the source tools' findings through the CLI" {
     const zanity = try Io.Dir.cwd().realPathFileAlloc(io, paths.zanity, arena);
     var root = try Io.Dir.cwd().openDir(io, "tests/golden", .{ .iterate = true });
     defer root.close(io);
-    var failures: usize = 0;
-    var total: usize = 0;
-    var suites = root.iterate();
-    while (try suites.next(io)) |suite_entry| {
+    var jobs: std.ArrayList(GoldenRun) = .empty;
+    var suites: std.ArrayList(Io.Dir) = .empty;
+    defer for (suites.items) |suite| suite.close(io);
+    var entries = root.iterate();
+    while (try entries.next(io)) |suite_entry| {
         if (suite_entry.kind != .directory) continue;
-        const suite_path = try std.fmt.allocPrint(arena, "tests/golden/{s}", .{suite_entry.name});
-        var suite = try root.openDir(io, suite_entry.name, .{ .iterate = true });
-        defer suite.close(io);
-        var cases = suite.iterate();
+        const suite_name = try arena.dupe(u8, suite_entry.name);
+        const suite: Suite = .{ .path = try std.fmt.allocPrint(arena, "tests/golden/{s}", .{suite_name}), .dir = try root.openDir(io, suite_name, .{ .iterate = true }) };
+        try suites.append(arena, suite.dir);
+        var cases = suite.dir.iterate();
         while (try cases.next(io)) |case| {
             if (std.mem.endsWith(u8, case.name, ".expected")) continue;
             if (case.kind != .file and case.kind != .directory) continue;
-            total += 1;
-            const this: Case = .{ .name = case.name, .project = case.kind == .directory };
-            if (try caseFailure(.{ .arena = arena, .io = io, .zanity = zanity }, .{ .path = suite_path, .dir = suite }, this)) |failure| {
-                failures += 1;
-                std.debug.print("\n[{s}] {s}\n", .{ suite_entry.name, failure });
-            }
+            try jobs.append(arena, .{
+                .runner = .{ .arena = arena, .io = io, .zanity = zanity },
+                .suite = suite,
+                .suite_name = suite_name,
+                .case = .{ .name = try arena.dupe(u8, case.name), .project = case.kind == .directory },
+                .arena = .init(std.heap.page_allocator),
+            });
         }
     }
-    if (failures > 0) std.debug.print("\n{d} of {d} golden cases failed\n", .{ failures, total });
-    try std.testing.expect(total > 0);
+    defer for (jobs.items) |*job| job.arena.deinit();
+    var group: Io.Group = .init;
+    for (jobs.items) |*job| group.async(io, GoldenRun.checkCase, .{job});
+    try group.await(io);
+    var failures: usize = 0;
+    for (jobs.items) |job| {
+        if (job.err) |e| return e;
+        const failure = job.failure orelse continue;
+        failures += 1;
+        std.debug.print("\n[{s}] {s}\n", .{ job.suite_name, failure });
+    }
+    if (failures > 0) std.debug.print("\n{d} of {d} golden cases failed\n", .{ failures, jobs.items.len });
+    try std.testing.expect(jobs.items.len > 0);
     try std.testing.expectEqual(@as(usize, 0), failures);
 }
 
@@ -135,6 +170,43 @@ test "a run ends with a summary on stderr" {
     try std.testing.expectEqualStrings("zanity: 15 errors and 3 warnings in 2 of 2 files\n", dirty.stderr);
 }
 
+/// One --fix fixture, fixed twice in its own copy on its own thread.
+const FixRun = struct {
+    name: []const u8,
+    zanity: []const u8,
+    fixtures: Io.Dir,
+    work: []const u8,
+    io: Io,
+    arena: std.heap.ArenaAllocator,
+    matched: bool = false,
+    err: ?anyerror = null,
+
+    fn fixTwice(job: *FixRun) void {
+        if (job.name.len == 0) assert.panic("a --fix fixture has no name; the directory listing never gives empty names", .{});
+        job.matched = job.compare() catch |e| {
+            job.err = e;
+            return;
+        };
+        if (job.matched and job.err != null) assert.panic("tests/fix/{s} both matched and errored; fixTwice() records one or the other", .{job.name});
+    }
+
+    fn compare(job: *FixRun) !bool {
+        if (!std.fs.path.isAbsolute(job.zanity)) assert.panic("running --fix with zanity at '{s}', a relative path, from {s}; resolve it before changing directory", .{ job.zanity, job.work });
+        if (std.mem.endsWith(u8, job.name, ".fixed")) assert.panic("treating the expected output tests/fix/{s} as a fixture; the test must skip .fixed files", .{job.name});
+        const arena = job.arena.allocator();
+        const input = try job.fixtures.readFileAlloc(job.io, job.name, arena, .unlimited);
+        const expected = try job.fixtures.readFileAlloc(job.io, try std.fmt.allocPrint(arena, "{s}.fixed", .{job.name}), arena, .unlimited);
+        var work = try Io.Dir.cwd().openDir(job.io, job.work, .{});
+        defer work.close(job.io);
+        try work.writeFile(job.io, .{ .sub_path = job.name, .data = input });
+        for (0..2) |_| _ = try std.process.run(arena, job.io, .{ .argv = &.{ job.zanity, "check", "--fix", job.name }, .cwd = .{ .path = job.work } });
+        const actual = try work.readFileAlloc(job.io, job.name, arena, .unlimited);
+        if (std.mem.eql(u8, expected, actual)) return true;
+        std.debug.print("\n--fix of tests/fix/{s} differs from its .fixed file\n--- expected\n{s}--- actual\n{s}", .{ job.name, expected, actual });
+        return false;
+    }
+};
+
 test "--fix rewrites each fixture into its .fixed file and leaves nothing more to fix" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
@@ -146,22 +218,23 @@ test "--fix rewrites each fixture into its .fixed file and leaves nothing more t
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
     const work = try std.fs.path.join(arena, &.{ ".zig-cache", "tmp", &tmp.sub_path });
-    var cases: usize = 0;
+    var jobs: std.ArrayList(FixRun) = .empty;
+    defer for (jobs.items) |*job| job.arena.deinit();
     var it = fixtures.iterate();
     while (try it.next(io)) |entry| {
         if (entry.kind != .file or std.mem.endsWith(u8, entry.name, ".fixed")) continue;
-        cases += 1;
-        const input = try fixtures.readFileAlloc(io, entry.name, arena, .unlimited);
-        const expected = try fixtures.readFileAlloc(io, try std.fmt.allocPrint(arena, "{s}.fixed", .{entry.name}), arena, .unlimited);
-        try tmp.dir.writeFile(io, .{ .sub_path = entry.name, .data = input });
-        for (0..2) |_| _ = try std.process.run(arena, io, .{ .argv = &.{ zanity, "check", "--fix", entry.name }, .cwd = .{ .path = work } });
-        const actual = try tmp.dir.readFileAlloc(io, entry.name, arena, .unlimited);
-        std.testing.expectEqualStrings(expected, actual) catch |e| {
-            std.debug.print("\n--fix of tests/fix/{s} differs from its .fixed file\n", .{entry.name});
-            return e;
-        };
+        try jobs.append(arena, .{ .name = try arena.dupe(u8, entry.name), .zanity = zanity, .fixtures = fixtures, .work = work, .io = io, .arena = .init(std.heap.page_allocator) });
     }
-    try std.testing.expect(cases > 0);
+    var group: Io.Group = .init;
+    for (jobs.items) |*job| group.async(io, FixRun.fixTwice, .{job});
+    try group.await(io);
+    var differ: usize = 0;
+    for (jobs.items) |job| {
+        if (job.err) |e| return e;
+        differ += @intFromBool(!job.matched);
+    }
+    try std.testing.expect(jobs.items.len > 0);
+    try std.testing.expectEqual(@as(usize, 0), differ);
 }
 
 test "zanity.schema.json matches the rules and settings in the code" {
