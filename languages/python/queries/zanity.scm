@@ -280,13 +280,25 @@
   (comparison_operator) @finding.discarded-comparison)
 
 ; CWE-561: the statement right after one that always leaves the block.
+; One pattern per way of leaving: an alternation made the query engine track one state per
+; kind through every nested block.
 (block
-  [
-    (return_statement)
-    (raise_statement)
-    (break_statement)
-    (continue_statement)
-  ]
+  (return_statement)
+  .
+  (_) @finding.unreachable-code)
+
+(block
+  (raise_statement)
+  .
+  (_) @finding.unreachable-code)
+
+(block
+  (break_statement)
+  .
+  (_) @finding.unreachable-code)
+
+(block
+  (continue_statement)
   .
   (_) @finding.unreachable-code)
 
@@ -330,8 +342,18 @@
   (#any-of? @_type "Exception" "BaseException"))
 
 ; CWE-1164: a bare name, attribute or number as a statement. Strings are left alone: they document.
+; One pattern per kind, for the same reason.
 (block
-  [(identifier) (attribute) (integer) (float)] @finding.no-effect-statement)
+  (identifier) @finding.no-effect-statement)
+
+(block
+  (attribute) @finding.no-effect-statement)
+
+(block
+  (integer) @finding.no-effect-statement)
+
+(block
+  (float) @finding.no-effect-statement)
 
 ; CWE-295: requests and httpx calls with certificate checks turned off.
 ((keyword_argument
