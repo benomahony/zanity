@@ -1,0 +1,4 @@
+rules: call-verification
+exit: 0
+verification.test.ts:4:3: warning [call-verification]
+verification.test.ts:5:3: warning [call-verification]

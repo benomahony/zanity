@@ -1,0 +1,4 @@
+rules: call-verification
+exit: 0
+verification_rs.rs:4:5: warning [call-verification]
+verification_rs.rs:5:5: warning [call-verification]

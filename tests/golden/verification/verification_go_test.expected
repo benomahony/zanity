@@ -1,0 +1,4 @@
+rules: call-verification
+exit: 0
+verification_go_test.go:9:2: warning [call-verification]
+verification_go_test.go:10:2: warning [call-verification]

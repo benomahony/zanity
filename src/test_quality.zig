@@ -70,6 +70,11 @@ pub fn checkTestCall(self: *File, ctx: Context, name: []const u8) !void {
         _ = try self.report(ctx.node, "nondeterministic-test", try self.say("'{s}' returns a different value on every run, so this test can pass or fail by chance.", .{callee}));
     }
     try checkTestDouble(self, ctx, name);
+    const verification = self.calleeIn(ctx, name, self.tables.verification_calls) orelse
+        (if (ctx.receiver != null and contains(self.tables.verification_methods, name)) name else null);
+    if (verification) |callee| {
+        _ = try self.report(ctx.callee orelse ctx.name.?, "call-verification", try self.say("'{s}' checks how the code was called rather than what it did, so a change that keeps the behaviour breaks the test.", .{callee}));
+    }
     try isolation.checkIsolation(self, ctx, name);
 }
 

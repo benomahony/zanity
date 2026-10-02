@@ -25,6 +25,11 @@ pub const Tables = struct {
     sleeps: []const []const u8 = &.{},
     nondeterministic: []const []const u8 = &.{},
     test_doubles: []const []const u8 = &.{},
+    /// Calls that check how a test double was called, such as Mockito's `verify(mock)`.
+    verification_calls: []const []const u8 = &.{},
+    /// Methods, on any receiver, that check how a test double was called, such as
+    /// `assert_called_with` or `toHaveBeenCalledWith`.
+    verification_methods: []const []const u8 = &.{},
     /// Calls that change state the whole process shares, such as an environment variable or the
     /// working directory, so a test that makes them changes the tests after it.
     process_state_calls: []const []const u8 = &.{},

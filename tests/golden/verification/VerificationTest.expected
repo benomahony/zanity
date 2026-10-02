@@ -1,0 +1,4 @@
+rules: call-verification
+exit: 0
+VerificationTest.java:5:9: warning [call-verification]
+VerificationTest.java:6:17: warning [call-verification]

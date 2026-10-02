@@ -1,0 +1,4 @@
+rules: call-verification
+exit: 0
+test_verification.py:7:5: warning [call-verification]
+test_verification.py:8:5: warning [call-verification]
