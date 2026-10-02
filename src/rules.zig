@@ -45,6 +45,7 @@ pub const all = [_]Rule{
     .{ .name = "long-parameter-list", .advice = "Group related parameters into a struct or split the function.", .severity = .warning, .default = true, .needs = &.{ "function.outer", "function.name", "function.parameter" }, .catalogue = &.{"CWE-1064"} },
     .{ .name = "dead-parameter", .advice = "Remove it and stop passing it, or name it with a leading underscore where the signature is fixed by an interface or a callback.", .severity = .warning, .default = true, .catalogue = &.{"CWE-1164"}, .needs = &.{ "function.outer", "function.name", "local.reference" } },
     .{ .name = "passthrough-wrapper", .advice = "Call the target directly, or give the wrapper work of its own.", .severity = .warning, .default = true, .needs = &.{ "function.outer", "function.name", "function.passthrough" }, .catalogue = &.{"CWE-1041"} },
+    .{ .name = "message-chain", .advice = "Ask the nearest object for what you need, so only it knows how to find it, or pass that value in.", .severity = .warning, .default = true, .needs = &.{"chain.link"} },
     .{ .name = "swallowed-error", .advice = "Handle the error, log it with context, or let it propagate.", .severity = .warning, .default = true, .needs = &.{"catch.swallowed"}, .catalogue = &.{ "CWE-390", "CWE-1069" } },
     .{ .name = "sleep-in-test", .advice = "Wait for the event itself, or use a fake clock.", .severity = .warning, .default = true, .needs = &.{ "call.outer", "call.name", "function.name" } },
     .{ .name = "polling-loop", .advice = "Wait on an event or callback, or inject a clock.", .severity = .warning, .default = true, .needs = &.{ "call.outer", "call.name", "loop.outer", "function.name" } },
@@ -177,6 +178,9 @@ pub const max_test_lines = 50;
 pub const max_test_checks = 10;
 pub const min_asserts_per_function = 2;
 pub const max_parameters = 4;
+/// Member accesses in a row, as in `order.customer.address.city`, from which code reaches through
+/// objects it shouldn't know about.
+pub const min_chain_links = 3;
 /// Deeper than this many nested branches and loops in one function is hard to follow.
 pub const max_nesting = 4;
 /// McCabe complexity: one plus the decisions a function makes.

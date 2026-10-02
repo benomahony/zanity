@@ -498,3 +498,6 @@
   (#any-of? @_owner "pytest" "self")
   (#any-of? @_raises "raises" "assertRaises" "assertRaisesRegex")
   (#any-of? @_exception "Exception" "BaseException"))
+
+; A member access, so chains of them can be measured.
+(attribute) @chain.link

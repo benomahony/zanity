@@ -505,3 +505,6 @@
     .)) @finding.broad-expected-error
   (#any-of? @_throw "toThrow" "toThrowError")
   (#eq? @_error "Error"))
+
+; A member access, so chains of them can be measured.
+(member_expression) @chain.link

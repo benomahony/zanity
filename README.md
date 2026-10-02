@@ -243,6 +243,7 @@ Rules marked *off* run only with `--rules all`, `rules = ["all"]`, or when named
 | `long-parameter-list` | warning | more than four parameters |
 | `dead-parameter` | warning | a parameter the function's body never uses; not stubs, tests, `_`-prefixed names, or methods an interface fixes such as `__exit__` (not Zig, whose compiler already rejects these) |
 | `passthrough-wrapper` | warning | a function whose whole body forwards to another call |
+| `message-chain` | warning | code that reaches through objects, such as `order.customer.address.city`: three member accesses from a local or parameter, or two from a field of `self`; module paths such as `xml.etree.ElementTree` are fine |
 | `swallowed-error` | warning | an error handler that does nothing |
 | `empty-block` | warning | an empty block where code was expected |
 | `deep-nesting` | warning | code nested too deep to follow |

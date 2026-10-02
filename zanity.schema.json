@@ -94,6 +94,7 @@
         { "const": "long-parameter-list", "description": "warning, on by default. Group related parameters into a struct or split the function." },
         { "const": "dead-parameter", "description": "warning, on by default. Remove it and stop passing it, or name it with a leading underscore where the signature is fixed by an interface or a callback." },
         { "const": "passthrough-wrapper", "description": "warning, on by default. Call the target directly, or give the wrapper work of its own." },
+        { "const": "message-chain", "description": "warning, on by default. Ask the nearest object for what you need, so only it knows how to find it, or pass that value in." },
         { "const": "swallowed-error", "description": "warning, on by default. Handle the error, log it with context, or let it propagate." },
         { "const": "sleep-in-test", "description": "warning, on by default. Wait for the event itself, or use a fake clock." },
         { "const": "polling-loop", "description": "warning, on by default. Wait on an event or callback, or inject a clock." },

@@ -298,3 +298,6 @@
           function: (selector_expression
             field: (field_identifier) @_skip)) @finding.skipped-test))))
   (#any-of? @_skip "Skip" "SkipNow" "Skipf"))
+
+; A member access, so chains of them can be measured.
+(selector_expression) @chain.link

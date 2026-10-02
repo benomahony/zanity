@@ -1,0 +1,4 @@
+rules: message-chain
+exit: 0
+chains.py:5:12: warning [message-chain]
+chains.py:13:9: warning [message-chain]

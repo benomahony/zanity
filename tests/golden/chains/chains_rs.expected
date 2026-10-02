@@ -1,0 +1,4 @@
+rules: message-chain
+exit: 0
+chains_rs.rs:2:16: warning [message-chain]
+chains_rs.rs:3:16: warning [message-chain]

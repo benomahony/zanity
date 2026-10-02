@@ -1,0 +1,3 @@
+rules: message-chain
+exit: 0
+chains_zig.zig:4:18: warning [message-chain]

@@ -332,3 +332,6 @@
       (type_identifier) @_exception))) @finding.broad-expected-error
   (#any-of? @_throws "assertThrows" "assertThrowsExactly")
   (#any-of? @_exception "Exception" "Throwable" "RuntimeException"))
+
+; A member access, so chains of them can be measured.
+(field_access) @chain.link

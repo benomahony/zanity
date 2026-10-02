@@ -260,3 +260,6 @@
     (identifier) @_panic
     .)) @finding.broad-expected-error
   (#eq? @_panic "should_panic"))
+
+; A member access, so chains of them can be measured.
+(field_expression) @chain.link

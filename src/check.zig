@@ -18,6 +18,7 @@ const test_quality = @import("test_quality.zig");
 const isolation = @import("isolation.zig");
 const unread = @import("unread.zig");
 const parameters = @import("parameters.zig");
+const chains = @import("chains.zig");
 
 pub const Diagnostic = struct {
     line: u32,
@@ -196,6 +197,7 @@ const Vocabulary = struct {
     test_outer: ?captures.Id,
     test_check: ?captures.Id,
     test_shared_state: ?captures.Id,
+    chain_link: ?captures.Id,
 
     fn lookup(c: captures.Compiled) Vocabulary {
         if (c.names.len == 0) assert.panic("the query has no captures, so no rule could run; check the language's query files", .{});
@@ -229,6 +231,7 @@ const Vocabulary = struct {
             .test_outer = c.id("test.outer"),
             .test_check = c.id("test.check"),
             .test_shared_state = c.id("test.shared_state"),
+            .chain_link = c.id("chain.link"),
         };
     }
 };
@@ -360,6 +363,8 @@ pub const File = struct {
             };
         } else if (v.test_shared_state == id) {
             try isolation.checkSharedStatement(self, node);
+        } else if (v.chain_link == id) {
+            try chains.checkChain(self, node);
         } else if (v.test_check == id) {
             if (test_quality.enclosingTest(self)) |unit| unit.checks += 1;
         } else if (v.async_name == id) {

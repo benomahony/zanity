@@ -17,6 +17,7 @@ pub const looked_up = [_][]const u8{
     "arith.difference",
     "async.name",
     "catch.swallowed",
+    "chain.link",
     "comment.outer",
     "compare.equal",
     "compare.non_negative",

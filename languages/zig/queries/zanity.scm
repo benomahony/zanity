@@ -391,3 +391,6 @@
         (error_type
           (identifier) @_skip)) @finding.skipped-test)))
   (#eq? @_skip "SkipZigTest"))
+
+; A member access, so chains of them can be measured.
+(field_expression) @chain.link
