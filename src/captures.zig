@@ -42,6 +42,13 @@ pub const Compiled = struct {
     names: []const Name,
     predicates: []const []const Predicate,
 
+    /// How many capture names the query has; capture ids run below it.
+    pub fn captureCount(self: Compiled) usize {
+        if (self.names.len != ts.ts_query_capture_count(self.query)) assert.panic("holds {d} capture names for a query with {d}; build Compiled with initCompiled() from this query", .{ self.names.len, ts.ts_query_capture_count(self.query) });
+        if (self.names.len > std.math.maxInt(Id)) assert.panic("the query has {d} capture names, more than a capture Id can number; widen captures.Id", .{self.names.len});
+        return self.names.len;
+    }
+
     pub fn initCompiled(arena: Allocator, query: *const ts.Query) !Compiled {
         const count = ts.ts_query_capture_count(query);
         if (count > std.math.maxInt(Id)) assert.panic("the query has {d} capture names, more than a capture Id ({d}) can number; widen captures.Id", .{ count, std.math.maxInt(Id) });
@@ -262,7 +269,7 @@ fn capturesOf(match: ts.QueryMatch, id: u32, buf: []ts.Node) []ts.Node {
 
 fn satisfies(scratch: *CaptureScratch, predicates: []const Predicate, match: ts.QueryMatch, text: []const u8) error{LimitExceeded}!bool {
     if (predicates.len == 0) return true;
-    if (match.capture_count > scratch.first.buffer.len) {
+    if (match.capture_count > scratch.first.capacity()) {
         memory.exceeded = scratch.first.what;
         return error.LimitExceeded;
     }

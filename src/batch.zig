@@ -155,21 +155,22 @@ pub const Batch = struct {
     fn commit(self: *Batch, worker: *const Worker, path: []const u8, diagnostics: []const check.Diagnostic) !void {
         if (!std.mem.eql(u8, worker.facts.path, path)) assert.panic("committing {s} with facts recorded for {s}; startFile() must set the path of the file being checked", .{ path, worker.facts.path });
         const facts = self.facts;
+        const recorded = worker.facts;
         const first = facts.functions.len;
-        for (worker.facts.definitions.items()) |d| {
+        for (recorded.definitions.items()) |d| {
             var kept = d;
             kept.name = try worker.retain(self.text, d.name);
             try facts.definitions.add(kept);
         }
-        for (worker.facts.functions.items()) |f| {
+        for (recorded.functions.items()) |f| {
             var kept = f;
             kept.name = try worker.retain(self.text, f.name);
             try facts.functions.add(kept);
         }
-        for (worker.facts.calls.items()) |c| {
+        for (recorded.calls.items()) |c| {
             try facts.calls.add(.{ .caller = @intCast(first + c.caller), .callee = try worker.retain(self.text, c.callee), .reach = c.reach });
         }
-        for (worker.facts.units.items()) |u| {
+        for (recorded.units.items()) |u| {
             var kept = u;
             kept.name = try worker.retain(self.text, u.name);
             kept.source = try worker.retain(self.text, u.source);
@@ -181,7 +182,7 @@ pub const Batch = struct {
         }
         self.checked += 1;
         if (self.live) |live| live.update("Checking files", self.checked, self.files.len);
-        if (facts.functions.len != first + worker.facts.functions.len) assert.panic("committed {d} functions from a file that recorded {d}; commit() must add each once", .{ facts.functions.len - first, worker.facts.functions.len });
+        if (facts.functions.len != first + recorded.functions.len) assert.panic("committed {d} functions from a file that recorded {d}; commit() must add each once", .{ facts.functions.len - first, recorded.functions.len });
     }
 
     /// Keeps the failure of the earliest file, so the same run fails the same way however it was scheduled.

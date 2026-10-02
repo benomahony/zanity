@@ -88,7 +88,8 @@ const GoldenRun = struct {
     err: ?anyerror = null,
 
     fn checkCase(job: *GoldenRun) void {
-        if (job.case.name.len == 0) assert.panic("a golden case in {s} has no name; the suite's directory listing never gives empty names", .{job.suite_name});
+        const case_name = job.case.name;
+        if (case_name.len == 0) assert.panic("a golden case in {s} has no name; the suite's directory listing never gives empty names", .{job.suite_name});
         var runner = job.runner;
         runner.arena = job.arena.allocator();
         job.failure = caseFailure(runner, job.suite, job.case) catch |e| {

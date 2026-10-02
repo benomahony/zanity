@@ -67,7 +67,8 @@ pub const Inference = struct {
             .jobs = try .initBounded(gpa, limits.functions, "functions to ask TypeSafe about"),
             .json = try .initText(gpa, limits.judgement_bytes),
         };
-        if (inference.client.model.len == 0) assert.panic("the TypeSafe client has no model name; answers are stored by model", .{});
+        const model = inference.client.model;
+        if (model.len == 0) assert.panic("the TypeSafe client has no model name; answers are stored by model", .{});
         return inference;
     }
 
@@ -104,7 +105,7 @@ pub const Inference = struct {
     }
 
     fn askAll(self: *Inference) !void {
-        if (self.jobs.len > self.jobs.buffer.len) assert.panic("{d} functions queued in room for {d}; raise memory.Limits for --infer functions, or check fewer files at once", .{ self.jobs.len, self.jobs.buffer.len });
+        if (self.jobs.len > self.jobs.capacity()) assert.panic("{d} functions queued in room for {d}; raise memory.Limits for --infer functions, or check fewer files at once", .{ self.jobs.len, self.jobs.capacity() });
         var pending: usize = 0;
         var waiting: usize = 0;
         for (self.jobs.items()) |job| {

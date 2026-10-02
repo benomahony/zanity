@@ -16,7 +16,7 @@ const header = check.header;
 /// Code in a callback or helper inside a test counts toward that test.
 pub fn enclosingTest(self: *File) ?*Context {
     const items = self.s.contexts.items();
-    if (items.len > self.s.contexts.buffer.len) assert.panic("{s}: {d} open constructs in room for {d}; raise memory.Limits.depth, or check that leave() pops what enter() opened", .{ self.work.facts.path, items.len, self.s.contexts.buffer.len });
+    if (items.len > self.s.contexts.capacity()) assert.panic("{s}: {d} open constructs in room for {d}; raise memory.Limits.depth, or check that leave() pops what enter() opened", .{ self.work.facts.path, items.len, self.s.contexts.capacity() });
     var i = items.len;
     while (i > 0) {
         i -= 1;

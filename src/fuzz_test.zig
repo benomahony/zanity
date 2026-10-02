@@ -25,7 +25,8 @@ fn checkerFor(adapter: *const language.Adapter) !*const check.Checker {
     const slot = &checkers[language.indexOf(adapter)];
     if (slot.* == null) slot.* = try check.Checker.initChecker(std.heap.page_allocator, try language.load(adapter), everyRule());
     const checker = &slot.*.?;
-    if (checker.loaded.adapter != adapter) assert.panic("the fuzz checker for {s} was built for {s}; checkerFor() keeps one slot per adapter", .{ adapter.name, checker.loaded.adapter.name });
+    const built = checker.loaded.adapter;
+    if (built != adapter) assert.panic("the fuzz checker for {s} was built for {s}; checkerFor() keeps one slot per adapter", .{ adapter.name, built.name });
     if (checker.enabled.len == 0) assert.panic("the fuzz checker for {s} runs no rules; build it from everyRule()", .{adapter.name});
     return checker;
 }

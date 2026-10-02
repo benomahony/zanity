@@ -260,7 +260,8 @@ pub const Checker = struct {
 
     pub fn check(self: *const Checker, work: Work, source: []const u8) !Result {
         if (source.len >= std.math.maxInt(u32)) assert.panic("{s}: {d} bytes is more than tree-sitter can parse; lower memory.Limits.file_bytes below 4 GiB", .{ work.facts.path, source.len });
-        if (source.len > work.scratch.in_comment.len) assert.panic("{s}: {d} bytes but the scratch has room for {d}; main.zig must reject files over memory.Limits.file_bytes", .{ work.facts.path, source.len, work.scratch.in_comment.len });
+        const room = work.scratch.in_comment;
+        if (source.len > room.len) assert.panic("{s}: {d} bytes but the scratch has room for {d}; main.zig must reject files over memory.Limits.file_bytes", .{ work.facts.path, source.len, room.len });
         const parser = ts.ts_parser_new() orelse return error.OutOfMemory;
         defer ts.ts_parser_delete(parser);
         _ = ts.ts_parser_set_language(parser, @ptrCast(self.loaded.adapter.grammar()));
@@ -286,8 +287,9 @@ pub const Checker = struct {
         try hazards.checkUnawaited(&file);
         try hazards.checkLength(&file, root);
         try scope.checkWideScope(&file);
-        if (file.s.contexts.len != 0) assert.panic("{s}: the walk ended with {d} constructs still open; every node entered must be left", .{ work.facts.path, file.s.contexts.len });
-        if (file.s.opened.len != 0) assert.panic("{s}: the walk ended with {d} nodes still open; every node entered must be left", .{ work.facts.path, file.s.opened.len });
+        const walked = file.s;
+        if (walked.contexts.len != 0) assert.panic("{s}: the walk ended with {d} constructs still open; every node entered must be left", .{ work.facts.path, walked.contexts.len });
+        if (walked.opened.len != 0) assert.panic("{s}: the walk ended with {d} nodes still open; every node entered must be left", .{ work.facts.path, walked.opened.len });
         return .{ .diagnostics = file.finish(), .parse_error = ts.ts_node_has_error(root) };
     }
 };
@@ -335,7 +337,7 @@ pub const File = struct {
         const found = self.index.ofNext(&self.next_capture, node);
         const depth = self.s.contexts.len;
         for (found) |t| {
-            if (t.id >= self.checker.compiled.names.len) assert.panic("{s}: {f} carries capture id {d}, but the query has {d} captures; build the capture index with this checker's compiled query", .{ self.work.facts.path, node.where(), t.id, self.checker.compiled.names.len });
+            if (t.id >= self.checker.compiled.captureCount()) assert.panic("{s}: {f} carries capture id {d}, but the query has {d} captures; build the capture index with this checker's compiled query", .{ self.work.facts.path, node.where(), t.id, self.checker.compiled.captureCount() });
             if (!try self.enterSignal(node, t.id, found)) try self.enterCapture(node, self.checker.compiled.names[t.id]);
         }
         const opened = try self.openFamilies(node, found);
@@ -367,7 +369,7 @@ pub const File = struct {
         } else if (v.error_message == id) {
             if (self.innermost(.assertion) == null) try messages.checkMessage(self, node, null);
         } else return false;
-        if (self.s.statement_calls.len > self.s.statement_calls.buffer.len) assert.panic("{s}: {d} statement calls in room for {d}; raise memory.Limits.per_file, or split the file", .{ self.work.facts.path, self.s.statement_calls.len, self.s.statement_calls.buffer.len });
+        if (self.s.statement_calls.len > self.s.statement_calls.capacity()) assert.panic("{s}: {d} statement calls in room for {d}; raise memory.Limits.per_file, or split the file", .{ self.work.facts.path, self.s.statement_calls.len, self.s.statement_calls.capacity() });
         return true;
     }
 
@@ -397,7 +399,7 @@ pub const File = struct {
     /// Opens a construct for each family the node is the outer node of; returns how many.
     pub fn openFamilies(self: *File, node: ts.Node, found: []const captures.Triple) !u8 {
         const before = self.s.contexts.len;
-        if (before > self.s.contexts.buffer.len) assert.panic("{s}: {d} open constructs in room for {d}; raise memory.Limits.depth, or check that leave() pops what enter() opened", .{ self.work.facts.path, before, self.s.contexts.buffer.len });
+        if (before > self.s.contexts.capacity()) assert.panic("{s}: {d} open constructs in room for {d}; raise memory.Limits.depth, or check that leave() pops what enter() opened", .{ self.work.facts.path, before, self.s.contexts.capacity() });
         var opened: u8 = 0;
         for (std.enums.values(Family)) |family| {
             if (!self.hasOuter(found, family)) continue;
@@ -583,7 +585,7 @@ pub const File = struct {
 
     pub fn trailFor(self: *File, parent: ts.Node.Key) Summary {
         const trail = self.s.trail.items();
-        if (trail.len > self.s.trail.buffer.len) assert.panic("{s}: {d} statement summaries in room for {d}; raise memory.Limits.depth, or check that remember() trims the trail", .{ self.work.facts.path, trail.len, self.s.trail.buffer.len });
+        if (trail.len > self.s.trail.capacity()) assert.panic("{s}: {d} statement summaries in room for {d}; raise memory.Limits.depth, or check that remember() trims the trail", .{ self.work.facts.path, trail.len, self.s.trail.capacity() });
         var i = trail.len;
         while (i > 0) {
             i -= 1;
@@ -610,7 +612,7 @@ pub const File = struct {
 
     pub fn innermost(self: *File, family: Family) ?*Context {
         const items = self.s.contexts.items();
-        if (items.len > self.s.contexts.buffer.len) assert.panic("{s}: {d} open constructs in room for {d}; raise memory.Limits.depth, or check that leave() pops what enter() opened", .{ self.work.facts.path, items.len, self.s.contexts.buffer.len });
+        if (items.len > self.s.contexts.capacity()) assert.panic("{s}: {d} open constructs in room for {d}; raise memory.Limits.depth, or check that leave() pops what enter() opened", .{ self.work.facts.path, items.len, self.s.contexts.capacity() });
         var i = items.len;
         while (i > 0) {
             i -= 1;
@@ -637,7 +639,7 @@ pub const File = struct {
             }
         }
         if (i != 0) assert.panic("{s}: the search for an enclosing unit stopped at depth {d} without returning; the loop in enclosingUnit() must return from inside, so check its exits", .{ self.work.facts.path, i });
-        if (items.len > self.s.contexts.buffer.len) assert.panic("{s}: {d} open constructs in room for {d}; raise memory.Limits.depth, or check that leave() pops what enter() opened", .{ self.work.facts.path, items.len, self.s.contexts.buffer.len });
+        if (items.len > self.s.contexts.capacity()) assert.panic("{s}: {d} open constructs in room for {d}; raise memory.Limits.depth, or check that leave() pops what enter() opened", .{ self.work.facts.path, items.len, self.s.contexts.capacity() });
         return null;
     }
 
@@ -656,7 +658,7 @@ pub const File = struct {
     /// `#[test]` or `@Test`; null for a test block or a test call.
     pub fn functionNameOf(self: *File, node: ts.Node) ?ts.Node {
         const items = self.s.contexts.items();
-        if (items.len > self.s.contexts.buffer.len) assert.panic("{s}: {d} open constructs in room for {d}; raise memory.Limits.depth, or check that leave() pops what enter() opened", .{ self.work.facts.path, items.len, self.s.contexts.buffer.len });
+        if (items.len > self.s.contexts.capacity()) assert.panic("{s}: {d} open constructs in room for {d}; raise memory.Limits.depth, or check that leave() pops what enter() opened", .{ self.work.facts.path, items.len, self.s.contexts.capacity() });
         var i = items.len;
         while (i > 0) {
             i -= 1;
@@ -779,7 +781,7 @@ pub const File = struct {
 
     pub fn inTest(self: *File) bool {
         const items = self.s.contexts.items();
-        if (items.len > self.s.contexts.buffer.len) assert.panic("{s}: {d} open constructs in room for {d}; raise memory.Limits.depth, or check that leave() pops what enter() opened", .{ self.work.facts.path, items.len, self.s.contexts.buffer.len });
+        if (items.len > self.s.contexts.capacity()) assert.panic("{s}: {d} open constructs in room for {d}; raise memory.Limits.depth, or check that leave() pops what enter() opened", .{ self.work.facts.path, items.len, self.s.contexts.capacity() });
         for (items) |ctx| if (ctx.is_test) {
             if (ctx.family != .function and ctx.family != .@"test") assert.panic("{s}: the {t} {f} is marked as a test; only functions and test blocks can be", .{ self.work.facts.path, ctx.family, ctx.node.where() });
             return true;

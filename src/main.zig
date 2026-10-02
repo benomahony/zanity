@@ -146,7 +146,8 @@ const Workspace = struct {
 };
 
 pub fn main(init: std.process.Init) !u8 {
-    const args = try init.minimal.args.toSlice(init.arena.allocator());
+    const minimal = init.minimal;
+    const args = try minimal.args.toSlice(init.arena.allocator());
     if (args.len == 0) assert.panic("the process has no arguments, not even its own name; start zanity from a shell or exec, which always pass the program's name", .{});
     var out_buffer: [64 * 1024]u8 = undefined;
     var out_writer: Io.File.Writer = .initStreaming(.stdout(), init.io, &out_buffer);
@@ -165,7 +166,7 @@ pub fn main(init: std.process.Init) !u8 {
 fn workspaceOf(ctx: *zcli.Context) *Workspace {
     const ws: *Workspace = @ptrCast(@alignCast(ctx.runtime.user_data orelse unreachable));
     if (ws.limits.files == 0) assert.panic("the workspace allows 0 files; it was not built by initWorkspace", .{});
-    if (ws.files.buffer.len != ws.limits.files) assert.panic("the workspace has room for {d} files but its limit is {d}; it was not built by initWorkspace", .{ ws.files.buffer.len, ws.limits.files });
+    if (ws.files.capacity() != ws.limits.files) assert.panic("the workspace has room for {d} files but its limit is {d}; it was not built by initWorkspace", .{ ws.files.capacity(), ws.limits.files });
     return ws;
 }
 
@@ -288,7 +289,8 @@ fn checkPaths(ctx: *zcli.Context, ws: *Workspace, options: CheckOptions, selecte
     if (ws.inference) |*inference| if (ws.live) |live| {
         inference.reporter = .{ .state = live, .report = reportInference };
     };
-    if (ws.inference) |*inference| inference.judge(ws.facts.units.items(), &ws.findings, selected) catch |e| switch (e) {
+    const units = ws.facts.units;
+    if (ws.inference) |*inference| inference.judge(units.items(), &ws.findings, selected) catch |e| switch (e) {
         error.AskFailed => return ctx.fail(.io, infer.failure, "Check TYPESAFE_API_KEY and TYPESAFE_BASE_URL, then run again; answers already received are cached."),
         error.StoreUnavailable => return ctx.fail(.io, try storeProblem(ws), "Check that the cache directory is writable and not full, then run again."),
         else => return e,

@@ -60,7 +60,7 @@ pub fn annotationIs(self: *File, annotation: []const u8, type_text: []const u8) 
 pub fn callFor(self: *File, node: ts.Node) ?Call {
     const key = node.key();
     const calls = self.s.calls.items();
-    if (calls.len > self.s.calls.buffer.len) assert.panic("{s}: {d} calls recorded in room for {d}; raise memory.Limits.captures", .{ self.work.facts.path, calls.len, self.s.calls.buffer.len });
+    if (calls.len > self.s.calls.capacity()) assert.panic("{s}: {d} calls recorded in room for {d}; raise memory.Limits.captures", .{ self.work.facts.path, calls.len, self.s.calls.capacity() });
     var i = calls.len;
     while (i > 0) {
         i -= 1;

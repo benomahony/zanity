@@ -96,7 +96,7 @@ pub const Ignore = struct {
     /// Whether the entry at absolute `path` is ignored. The last matching pattern decides.
     pub fn ignored(self: *const Ignore, path: []const u8, kind: Kind) bool {
         if (!std.fs.path.isAbsolute(path)) assert.panic("asked whether '{s}' is ignored, but ignore patterns match absolute paths; join it to the walk's real root first", .{path});
-        if (self.patterns.len > self.patterns.buffer.len) assert.panic("{d} ignore patterns recorded in room for {d}; raise memory.Limits for ignore patterns, or trim the ignore files", .{ self.patterns.len, self.patterns.buffer.len });
+        if (self.patterns.len > self.patterns.capacity()) assert.panic("{d} ignore patterns recorded in room for {d}; raise memory.Limits for ignore patterns, or trim the ignore files", .{ self.patterns.len, self.patterns.capacity() });
         var result = false;
         for (self.patterns.items()) |p| {
             if (p.directories_only and kind != .directory) continue;

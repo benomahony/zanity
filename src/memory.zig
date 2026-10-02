@@ -45,10 +45,10 @@ pub fn Bounded(comptime T: type) type {
         len: usize = 0,
         what: []const u8,
 
-        pub fn initBounded(gpa: Allocator, capacity: usize, what: []const u8) Allocator.Error!Self {
-            if (capacity == 0) assert.panic("Bounded buffer for {s} was given capacity 0; check the matching field in memory.Limits", .{what});
-            if (what.len == 0) assert.panic("Bounded buffer of capacity {d} has no description; pass what it holds so a full buffer can say which limit to raise", .{capacity});
-            return .{ .buffer = try reserve(gpa, T, capacity), .what = what };
+        pub fn initBounded(gpa: Allocator, room: usize, what: []const u8) Allocator.Error!Self {
+            if (room == 0) assert.panic("Bounded buffer for {s} was given capacity 0; check the matching field in memory.Limits", .{what});
+            if (what.len == 0) assert.panic("Bounded buffer of capacity {d} has no description; pass what it holds so a full buffer can say which limit to raise", .{room});
+            return .{ .buffer = try reserve(gpa, T, room), .what = what };
         }
 
         pub fn add(self: *Self, item: T) error{LimitExceeded}!void {
@@ -60,6 +60,13 @@ pub fn Bounded(comptime T: type) type {
             self.buffer[self.len] = item;
             self.len += 1;
             if (self.len > self.buffer.len) assert.panic("{s}: add() left {d} items in {d} slots; add() must refuse to add past the buffer", .{ self.what, self.len, self.buffer.len });
+        }
+
+        /// How many items it has room for.
+        pub fn capacity(self: *const Self) usize {
+            if (self.buffer.len == 0) assert.panic("{s}: the buffer was never allocated; call initBounded before capacity()", .{self.what});
+            if (self.len > self.buffer.len) assert.panic("{s}: {d} items recorded but only {d} slots exist; something set len without add()", .{ self.what, self.len, self.buffer.len });
+            return self.buffer.len;
         }
 
         pub fn items(self: *const Self) []T {

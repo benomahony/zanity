@@ -65,7 +65,8 @@ const Corpus = struct {
 pub fn main(init: std.process.Init) !void {
     const arena = init.arena.allocator();
     const io = init.io;
-    const args = try init.minimal.args.toSlice(arena);
+    const minimal = init.minimal;
+    const args = try minimal.args.toSlice(arena);
     if (args.len < 3 or args.len > 4) assert.panic("bench takes the zanity binary, the compiler and an optional corpus directory, but got {d} arguments; run it with zig build bench", .{args.len - 1});
     const limits: memory.Limits = .{};
     var corpus = try Corpus.initCorpus(arena, if (args.len == 4) args[3] else try stdDir(arena, io, args[2]), limits);

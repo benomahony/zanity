@@ -46,7 +46,7 @@ pub fn checkSharedStatement(self: *File, node: ts.Node) !void {
     const code = header(node.text(self.source));
     if (code.len == 0) assert.panic("{s}: the statement {f} that changes shared state covers no text, so the query matched an empty node; in that language's zanity.scm, put @test.shared_state on the whole statement", .{ self.work.facts.path, node.where() });
     _ = try self.report(node, "shared-state-in-test", try self.say("'{s}' changes state shared beyond this test, so the tests that run after it see the change.", .{code}));
-    if (self.s.diagnostics.len > self.s.diagnostics.buffer.len) assert.panic("{s}: {d} findings in room for {d}; raise memory.Limits.per_file, or split the file", .{ self.work.facts.path, self.s.diagnostics.len, self.s.diagnostics.buffer.len });
+    if (self.s.diagnostics.len > self.s.diagnostics.capacity()) assert.panic("{s}: {d} findings in room for {d}; raise memory.Limits.per_file, or split the file", .{ self.work.facts.path, self.s.diagnostics.len, self.s.diagnostics.capacity() });
 }
 
 /// The file system call `ctx` makes, unless it works under the test's own temporary directory.

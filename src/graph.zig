@@ -184,7 +184,8 @@ const Lookup = struct {
 
 fn compareName(lookup: Lookup, id: u32) std.math.Order {
     if (id >= lookup.functions.len) assert.panic("looking up '{s}' reached function {d}, but only {d} are recorded; compareName() must index only the recorded functions", .{ lookup.call.callee, id, lookup.functions.len });
-    if (lookup.call.callee.len == 0) assert.panic("function {d} calls something with an empty name; check the @call.name capture", .{lookup.call.caller});
+    const callee = lookup.call.callee;
+    if (callee.len == 0) assert.panic("function {d} calls something with an empty name; check the @call.name capture", .{lookup.call.caller});
     return std.mem.order(u8, lookup.call.callee, lookup.functions[id].name);
 }
 

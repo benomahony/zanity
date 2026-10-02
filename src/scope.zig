@@ -70,7 +70,7 @@ const Uses = struct { first: ?ts.Node = null, end: u32 = 0 };
 pub fn checkWideScope(self: *File) !void {
     if (!self.checker.enabled.enabled("wide-scope")) return;
     const ids = Ids.fromQuery(self.checker.compiled) orelse assert.panic("{s}: wide-scope is enabled but the query lacks its captures; the language test should have caught this", .{self.work.facts.path});
-    if (ids.outer >= self.checker.compiled.names.len) assert.panic("{s}: @declaration.outer has id {d}, but the query has {d} captures; pass the checker's own compiled query", .{ self.work.facts.path, ids.outer, self.checker.compiled.names.len });
+    if (ids.outer >= self.checker.compiled.captureCount()) assert.panic("{s}: @declaration.outer has id {d}, but the query has {d} captures; pass the checker's own compiled query", .{ self.work.facts.path, ids.outer, self.checker.compiled.captureCount() });
     var checked: usize = 0;
     for (self.index.triples) |t| {
         if (t.id != ids.outer) continue;
@@ -304,7 +304,7 @@ fn crossesBarrier(self: *File, ids: Ids, target: ts.Node, home: ts.Node) !bool {
 
 /// The nearest ancestor of `node` that carries capture `id`.
 fn enclosing(self: *File, node: ts.Node, id: captures.Id) !?ts.Node {
-    if (id >= self.checker.compiled.names.len) assert.panic("{s}: capture id {d} is out of range; the query has {d} captures; pass an id from Ids.fromQuery() on this language's query", .{ self.work.facts.path, id, self.checker.compiled.names.len });
+    if (id >= self.checker.compiled.captureCount()) assert.panic("{s}: capture id {d} is out of range; the query has {d} captures; pass an id from Ids.fromQuery() on this language's query", .{ self.work.facts.path, id, self.checker.compiled.captureCount() });
     if (node.id == null) assert.panic("{s}: looked for an enclosing capture of a null node; check ts_node_is_null before calling enclosing()", .{self.work.facts.path});
     const chain = try self.ancestorsOf(node);
     var i = chain.len;

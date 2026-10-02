@@ -123,7 +123,7 @@ pub fn checkLoggedSecret(self: *File, ctx: Context, callee: ts.Node) !void {
 /// Reports a branch or loop nested deeper than `rules.max_nesting`, once per function.
 pub fn checkNesting(self: *File, node: ts.Node, chained: bool) !void {
     const items = self.s.contexts.items();
-    if (items.len > self.s.contexts.buffer.len) assert.panic("{s}: {d} open constructs in room for {d}; raise memory.Limits.depth, or check that leave() pops what enter() opened", .{ self.work.facts.path, items.len, self.s.contexts.buffer.len });
+    if (items.len > self.s.contexts.capacity()) assert.panic("{s}: {d} open constructs in room for {d}; raise memory.Limits.depth, or check that leave() pops what enter() opened", .{ self.work.facts.path, items.len, self.s.contexts.capacity() });
     var depth: u32 = @intFromBool(!chained);
     var i = items.len;
     const function = while (i > 0) {
@@ -142,7 +142,7 @@ pub fn checkNesting(self: *File, node: ts.Node, chained: bool) !void {
 /// language's own awaitables. Their result is dropped, so the work may never run.
 pub fn checkUnawaited(self: *File) !void {
     const names = self.s.async_names.items();
-    if (names.len > self.s.async_names.buffer.len) assert.panic("{s}: {d} async names in room for {d}; raise memory.Limits.per_file, or split the file", .{ self.work.facts.path, names.len, self.s.async_names.buffer.len });
+    if (names.len > self.s.async_names.capacity()) assert.panic("{s}: {d} async names in room for {d}; raise memory.Limits.per_file, or split the file", .{ self.work.facts.path, names.len, self.s.async_names.capacity() });
     for (self.s.statement_calls.items()) |callee| {
         const text = callee.text(self.source);
         const last = text[if (std.mem.lastIndexOfScalar(u8, text, '.')) |dot| dot + 1 else 0..];

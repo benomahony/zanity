@@ -77,7 +77,8 @@ pub fn render(sink: Sink, findings: []const Finding) !void {
     if (!std.sort.isSorted(Finding, findings, {}, findingOrder)) assert.panic("expected findings sorted by path and position, got {d} findings out of order; call sortFindings() before render()", .{findings.len});
     if (findings.len >= std.math.maxInt(u32)) assert.panic("{d} findings is more than a report can number; lower memory.Limits.findings below 4 billion", .{findings.len});
     try summariseFiles(sink, findings);
-    for (sink.scratch.tallies.items()) |t| try renderFile(sink.console, t, findings[t.start..t.end]);
+    const tallies = sink.scratch.tallies;
+    for (tallies.items()) |t| try renderFile(sink.console, t, findings[t.start..t.end]);
     try renderTable(sink);
     try renderRules(sink, findings);
 }
@@ -184,7 +185,8 @@ fn renderTable(sink: Sink) !void {
         },
         .rows = s.rows[0..tallies.len],
     };
-    try sink.console.writer.writeByte('\n');
+    const console = sink.console;
+    try console.writer.writeByte('\n');
     try table.render(sink.console.context(), fixed.allocator());
     if (tallies.len > s.rows.len) assert.panic("{d} files have findings but the table has {d} rows; raise memory.Limits.files", .{ tallies.len, s.rows.len });
 }
@@ -235,7 +237,8 @@ fn renderRules(sink: Sink, findings: []const Finding) !void {
         },
         .rows = rows[0..fired],
     };
-    try sink.console.writer.writeByte('\n');
+    const console = sink.console;
+    try console.writer.writeByte('\n');
     try table.render(sink.console.context(), fixed.allocator());
     if (fired == 0) assert.panic("{d} findings but no rule fired; renderRules() must count every finding under its rule", .{findings.len});
 }
