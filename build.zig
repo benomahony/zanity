@@ -44,10 +44,11 @@ pub fn build(b: *std.Build) void {
 
     const test_module = module(b, "src/tests.zig", target, optimize);
     const options = b.addOptions();
-    options.addOptionPath("zanity", exe.getEmittedBin());
+    options.addOptionPathUntracked("zanity", .{ .relative = .{ .base = .install_bin, .sub_path = b.fmt("zanity{s}", .{target.result.exeFileExt()}) } });
     test_module.addOptions("paths", options);
     test_module.addOptions("build_info", build_info);
     const tests = b.addRunArtifact(b.addTest(.{ .root_module = test_module }));
+    tests.step.dependOn(b.getInstallStep());
     tests.setCwd(b.path("."));
     tests.has_side_effects = true;
     b.step("test", "Run tests").dependOn(&tests.step);
@@ -68,8 +69,10 @@ const release_targets = [_]struct { name: []const u8, query: std.Target.Query }{
 /// has the same download URLs. ReleaseSafe keeps bounds and overflow checks, so a bug stops with a
 /// message instead of silently checking the wrong thing.
 fn addRelease(b: *std.Build, build_info: *std.Build.Step.Options) void {
+    const only = b.option([]const u8, "platform", "Build only this release platform, such as linux-x86_64; the release workflow builds each on its own runner");
     const release = b.step("release", "Build every released platform into zig-out/release");
     for (release_targets) |platform| {
+        if (only) |name| if (!std.mem.eql(u8, name, platform.name)) continue;
         const target = b.resolveTargetQuery(platform.query);
         const os = @tagName(target.result.os.tag);
         if (!std.mem.startsWith(u8, platform.name, os)) std.debug.panic("the release platform '{s}' builds for {s}, so its download would be misnamed; start its name in release_targets with '{s}-'", .{ platform.name, os, os });
@@ -83,7 +86,8 @@ fn addRelease(b: *std.Build, build_info: *std.Build.Step.Options) void {
         });
         release.dependOn(&install.step);
     }
-    if (release.dependencies.items.len != release_targets.len) std.debug.panic("the release step builds {d} binaries for {d} platforms; add each platform's install step once", .{ release.dependencies.items.len, release_targets.len });
+    if (only) |name| if (release.dependencies.items.len != 1) std.debug.panic("-Dplatform={s} matches {d} release platforms; name one from release_targets, such as linux-x86_64", .{ name, release.dependencies.items.len });
+    if (only == null and release.dependencies.items.len != release_targets.len) std.debug.panic("the release step builds {d} binaries for {d} platforms; add each platform's install step once", .{ release.dependencies.items.len, release_targets.len });
 }
 
 /// Vendored C (tree-sitter and the grammars) is built optimised and without UBSan in every mode:
