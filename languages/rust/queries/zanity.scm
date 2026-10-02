@@ -246,3 +246,9 @@
   (compound_assignment_expr)
   (unsafe_block)
 ] @declaration.effect
+
+; A test turned off with #[ignore], which `cargo test` skips unless asked.
+((attribute_item
+  (attribute
+    (identifier) @_ignore)) @finding.skipped-test
+  (#eq? @_ignore "ignore"))

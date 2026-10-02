@@ -458,3 +458,17 @@
   ]) @test.shared_state
   (#eq? @_process "process")
   (#eq? @_env "env"))
+
+; A test or suite turned off: `it.skip`, `describe.skip`, `test.skip`, or the `x`-prefixed forms.
+((call_expression
+  function: (member_expression
+    object: (identifier) @_suite
+    property: (property_identifier) @_skip)
+  arguments: (arguments)) @finding.skipped-test
+  (#any-of? @_suite "it" "test" "describe" "suite" "context")
+  (#eq? @_skip "skip"))
+
+((call_expression
+  function: (identifier) @_skipped
+  arguments: (arguments)) @finding.skipped-test
+  (#any-of? @_skipped "xit" "xtest" "xdescribe" "xcontext"))

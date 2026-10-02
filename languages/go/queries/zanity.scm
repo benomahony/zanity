@@ -287,3 +287,14 @@
   function: (selector_expression
     operand: (identifier) @_package)) @test.check
   (#any-of? @_package "assert" "require"))
+
+; A test turned off with no condition: a skip as the test body's own statement. A skip under an
+; `if` says when the test can't run, so it is left alone.
+((function_declaration
+  body: (block
+    (statement_list
+      (expression_statement
+        (call_expression
+          function: (selector_expression
+            field: (field_identifier) @_skip)) @finding.skipped-test))))
+  (#any-of? @_skip "Skip" "SkipNow" "Skipf"))

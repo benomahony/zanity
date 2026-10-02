@@ -1,0 +1,8 @@
+rules: skipped-test
+exit: 0
+test_skips.py:7:1: warning [skipped-test]
+test_skips.py:12:1: warning [skipped-test]
+test_skips.py:22:1: warning [skipped-test]
+test_skips.py:33:5: warning [skipped-test]
+test_skips.py:43:5: warning [skipped-test]
+test_skips.py:45:9: warning [skipped-test]

@@ -438,3 +438,51 @@
       attribute: (identifier) @_environ))) @test.shared_state
   (#eq? @_os "os")
   (#eq? @_environ "environ"))
+
+; A test turned off with no condition: a skip mark, an expected failure that passes silently when
+; the test starts passing, or a skip as the test body's own statement. A skip under an `if` or a
+; `skipif` mark says when the test can't run, so it is left alone.
+((decorator
+  [
+    (attribute
+      object: (attribute
+        object: (identifier) @_pytest
+        attribute: (identifier) @_mark)
+      attribute: (identifier) @_skip)
+    (call
+      function: (attribute
+        object: (attribute
+          object: (identifier) @_pytest
+          attribute: (identifier) @_mark)
+        attribute: (identifier) @_skip))
+  ]) @finding.skipped-test
+  (#eq? @_pytest "pytest")
+  (#eq? @_mark "mark")
+  (#any-of? @_skip "skip" "xfail"))
+
+((decorator
+  [
+    (attribute
+      object: (identifier) @_unittest
+      attribute: (identifier) @_skip)
+    (call
+      function: (attribute
+        object: (identifier) @_unittest
+        attribute: (identifier) @_skip))
+  ]) @finding.skipped-test
+  (#eq? @_unittest "unittest")
+  (#any-of? @_skip "skip" "expectedFailure"))
+
+((keyword_argument
+  name: (identifier) @_strict
+  value: (true)) @unless.skipped-test
+  (#eq? @_strict "strict"))
+
+((function_definition
+  body: (block
+    (call
+      function: (attribute
+        object: (identifier) @_owner
+        attribute: (identifier) @_skip)) @finding.skipped-test))
+  (#any-of? @_owner "pytest" "self")
+  (#any-of? @_skip "skip" "skipTest"))

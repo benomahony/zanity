@@ -1,0 +1,4 @@
+rules: skipped-test
+exit: 0
+SkipsTest_java.java:5:5: warning [skipped-test]
+SkipsTest_java.java:9:5: warning [skipped-test]

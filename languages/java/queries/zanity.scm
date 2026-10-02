@@ -313,3 +313,12 @@
 ((method_invocation
   name: (identifier) @_check) @test.check
   (#any-of? @_check "assertEquals" "assertNotEquals" "assertTrue" "assertFalse" "assertNull" "assertNotNull" "assertSame" "assertNotSame" "assertArrayEquals" "assertIterableEquals" "assertLinesMatch" "assertThrows" "assertDoesNotThrow" "assertTimeout" "assertAll" "assertThat" "fail"))
+
+; A test turned off: JUnit's @Disabled, or @Ignore from JUnit 4.
+((marker_annotation
+  name: (identifier) @_disabled) @finding.skipped-test
+  (#any-of? @_disabled "Disabled" "Ignore"))
+
+((annotation
+  name: (identifier) @_disabled) @finding.skipped-test
+  (#any-of? @_disabled "Disabled" "Ignore"))

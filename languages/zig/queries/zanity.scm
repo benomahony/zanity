@@ -375,3 +375,13 @@
   function: (field_expression
     member: (identifier) @_check)) @test.check
   (#any-of? @_check "expect" "expectEqual" "expectEqualStrings" "expectEqualSlices" "expectEqualDeep" "expectError" "expectApproxEqAbs" "expectApproxEqRel" "expectFmt" "expectStringStartsWith" "expectStringEndsWith"))
+
+; A test turned off with no condition: `return error.SkipZigTest;` as the test's own statement.
+; A skip under an `if` says when the test can't run, so it is left alone.
+((test_declaration
+  (block
+    (expression_statement
+      (return_expression
+        (error_type
+          (identifier) @_skip)) @finding.skipped-test)))
+  (#eq? @_skip "SkipZigTest"))

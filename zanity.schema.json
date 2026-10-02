@@ -104,6 +104,7 @@
         { "const": "process-in-test", "description": "warning, on by default. Call the code the process would run directly, or move this to an end-to-end suite." },
         { "const": "nondeterministic-test", "description": "warning, on by default. Inject a seeded generator or a fixed value." },
         { "const": "test-double", "description": "warning, on by default. Use the real object, or a fake that behaves like it." },
+        { "const": "skipped-test", "description": "warning, on by default. Fix the test and turn it back on, or delete it; to skip only where it can't run, put the skip under a condition (skipif, an if around t.Skip), or use xfail(strict=True)." },
         { "const": "name-drift", "description": "warning, on by default. Pick one spelling and use it everywhere." },
         { "const": "duplicate-name", "description": "warning, on by default. Give each a name that says how it differs." },
         { "const": "restated-type", "description": "warning, off by default. Assert something about its value instead." },

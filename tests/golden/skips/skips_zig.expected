@@ -1,0 +1,3 @@
+rules: skipped-test
+exit: 0
+skips_zig.zig:4:5: warning [skipped-test]

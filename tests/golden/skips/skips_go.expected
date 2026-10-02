@@ -1,0 +1,3 @@
+rules: skipped-test
+exit: 0
+skips_go.go:6:2: warning [skipped-test]

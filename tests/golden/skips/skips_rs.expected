@@ -1,0 +1,4 @@
+rules: skipped-test
+exit: 0
+skips_rs.rs:2:1: warning [skipped-test]
+skips_rs.rs:6:1: warning [skipped-test]

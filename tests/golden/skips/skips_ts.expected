@@ -1,0 +1,5 @@
+rules: skipped-test
+exit: 0
+skips_ts.ts:1:1: warning [skipped-test]
+skips_ts.ts:3:1: warning [skipped-test]
+skips_ts.ts:5:1: warning [skipped-test]
