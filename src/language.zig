@@ -31,6 +31,20 @@ pub fn load(adapter: *const Adapter) LoadError!Loaded {
     return .{ .adapter = adapter, .query = query };
 }
 
+/// Each language's queries, compiled once for every test that only reads them: tree-sitter takes
+/// about 50 ms to compile a language's queries. A checker turns patterns off in its query, so a
+/// test that builds one compiles its own.
+pub fn loadedOnce(adapter: *const Adapter) LoadError!Loaded {
+    const slot = &compiled_once[indexOf(adapter)];
+    if (slot.* == null) slot.* = try load(adapter);
+    const loaded = slot.*.?;
+    if (loaded.adapter != adapter) assert.panic("the queries compiled for {s} belong to {s}; loadedOnce() keeps one slot per adapter, indexed by indexOf()", .{ adapter.name, loaded.adapter.name });
+    if (ts.ts_query_pattern_count(loaded.query) == 0) assert.panic("{s}'s cached queries have no patterns; load() rejects a query without any", .{adapter.name});
+    return loaded;
+}
+
+var compiled_once: [count]?Loaded = @splat(null);
+
 pub fn applies(adapter: *const Adapter, name: []const u8) bool {
     const rule = rules.find(name) orelse unreachable;
     if (adapter.name.len == 0) assert.panic("an adapter has no name; check languages/manifest.zon", .{});
@@ -60,8 +74,7 @@ pub fn forPath(path: []const u8) ?*const Adapter {
 
 test "every adapter's queries compile against its grammar" {
     for (adapters.all) |*adapter| {
-        const loaded = try load(adapter);
-        ts.ts_query_delete(loaded.query);
+        _ = try loadedOnce(adapter);
     }
 }
 
@@ -71,8 +84,7 @@ test "every @finding capture names a rule with a pattern message" {
     const arena = arena_state.allocator();
     var wrong: usize = 0;
     for (adapters.all) |*adapter| {
-        const loaded = try load(adapter);
-        defer ts.ts_query_delete(loaded.query);
+        const loaded = try loadedOnce(adapter);
         const compiled = try captures.Compiled.initCompiled(arena, loaded.query);
         for (compiled.names) |n| {
             if (!std.mem.eql(u8, n.family, "finding")) continue;
@@ -94,8 +106,7 @@ test "every node kind a predicate names is a kind in its grammar" {
     defer arena_state.deinit();
     var unknown: usize = 0;
     for (adapters.all) |*adapter| {
-        const loaded = try load(adapter);
-        defer ts.ts_query_delete(loaded.query);
+        const loaded = try loadedOnce(adapter);
         const compiled = try captures.Compiled.initCompiled(arena_state.allocator(), loaded.query);
         const grammar: *const ts.Language = @ptrCast(adapter.grammar());
         for (compiled.predicates) |predicates| for (predicates) |predicate| {
@@ -120,8 +131,7 @@ test "every adapter supplies the captures of every rule that applies to its lang
     const arena = arena_state.allocator();
     var incomplete: usize = 0;
     for (adapters.all) |*adapter| {
-        const loaded = try load(adapter);
-        defer ts.ts_query_delete(loaded.query);
+        const loaded = try loadedOnce(adapter);
         const compiled = try captures.Compiled.initCompiled(arena, loaded.query);
         for (rules.all) |rule| {
             if (applies(adapter, rule.name) == false) continue;

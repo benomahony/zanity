@@ -17,6 +17,19 @@ fn everyRule() rules.Set {
     return set;
 }
 
+/// One checker per language for the whole fuzz run: compiling a language's queries for every
+/// input took most of each run.
+var checkers: [language.count]?check.Checker = @splat(null);
+
+fn checkerFor(adapter: *const language.Adapter) !*const check.Checker {
+    const slot = &checkers[language.indexOf(adapter)];
+    if (slot.* == null) slot.* = try check.Checker.initChecker(std.heap.page_allocator, try language.load(adapter), everyRule());
+    const checker = &slot.*.?;
+    if (checker.loaded.adapter != adapter) assert.panic("the fuzz checker for {s} was built for {s}; checkerFor() keeps one slot per adapter", .{ adapter.name, checker.loaded.adapter.name });
+    if (checker.enabled.len == 0) assert.panic("the fuzz checker for {s} runs no rules; build it from everyRule()", .{adapter.name});
+    return checker;
+}
+
 fn checkAnything(_: void, smith: *std.testing.Smith) anyerror!void {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
@@ -24,8 +37,7 @@ fn checkAnything(_: void, smith: *std.testing.Smith) anyerror!void {
     const adapter = &adapters.all[smith.value(u8) % adapters.all.len];
     var buffer: [4096]u8 = undefined;
     const source = buffer[0..smith.slice(&buffer)];
-    const loaded = try language.load(adapter);
-    const checker = try check.Checker.initChecker(arena, loaded, everyRule());
+    const checker = try checkerFor(adapter);
     var text = try memory.Text.initText(arena, limits.text_bytes);
     var facts = try Facts.initFacts(arena, limits, &text);
     facts.path = "fuzz";

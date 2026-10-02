@@ -24,8 +24,7 @@ fn learn(arena: std.mem.Allocator) !Knowledge {
             if (ts.ts_language_symbol_type(grammar, symbol) != .regular) continue;
             try k.kinds.put(arena, std.mem.span(ts.ts_language_symbol_name(grammar, symbol)), {});
         }
-        const loaded = try language.load(adapter);
-        defer ts.ts_query_delete(loaded.query);
+        const loaded = try language.loadedOnce(adapter);
         const compiled = try captures.Compiled.initCompiled(arena, loaded.query);
         for (compiled.names) |n| {
             try k.vocabulary.put(arena, try arena.dupe(u8, n.family), {});
@@ -80,8 +79,7 @@ test "no Zig source names a language or a grammar node kind" {
     const io = std.testing.io;
     const k = try learn(arena);
     const adapter = language.forPath("build.zig") orelse return error.NoAdapterForZigSource;
-    const loaded = try language.load(adapter);
-    defer ts.ts_query_delete(loaded.query);
+    const loaded = try language.loadedOnce(adapter);
     const compiled = try captures.Compiled.initCompiled(arena, loaded.query);
     const probe: Probe = .{ .knowledge = k, .adapter = adapter, .compiled = compiled, .constant = compiled.id("literal.constant"), .path = compiled.id("expression.path") };
     var total: usize = 0;
