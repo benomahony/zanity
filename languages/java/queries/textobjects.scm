@@ -7,8 +7,8 @@
   body: (block
     .
     "{"
-    _+ @function.inner
-    "}"))
+    .
+    (_) @function.inner))
 
 (constructor_declaration) @function.outer
 
@@ -16,8 +16,8 @@
   body: (constructor_body
     .
     "{"
-    _+ @function.inner
-    "}"))
+    .
+    (_) @function.inner))
 
 (return_statement
   (_)? @return.inner) @return.outer
@@ -54,8 +54,8 @@
   arguments: (argument_list
     .
     "("
-    _+ @call.inner
-    ")"))
+    .
+    (_) @call.inner))
 
 ; parameters
 (formal_parameters

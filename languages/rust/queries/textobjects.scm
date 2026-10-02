@@ -7,8 +7,8 @@
   body: (block
     .
     "{"
-    _+ @function.inner
-    "}"))
+    .
+    (_) @function.inner))
 
 ; quantifies as class(es)
 (struct_item) @class.outer
@@ -17,8 +17,8 @@
   body: (field_declaration_list
     .
     "{"
-    _+ @class.inner
-    "}"))
+    .
+    (_) @class.inner))
 
 (enum_item) @class.outer
 
@@ -26,8 +26,8 @@
   body: (enum_variant_list
     .
     "{"
-    _+ @class.inner
-    "}"))
+    .
+    (_) @class.inner))
 
 (union_item) @class.outer
 
@@ -35,8 +35,8 @@
   body: (field_declaration_list
     .
     "{"
-    _+ @class.inner
-    "}"))
+    .
+    (_) @class.inner))
 
 (trait_item) @class.outer
 
@@ -44,8 +44,8 @@
   body: (declaration_list
     .
     "{"
-    _+ @class.inner
-    "}"))
+    .
+    (_) @class.inner))
 
 (impl_item) @class.outer
 
@@ -53,8 +53,8 @@
   body: (declaration_list
     .
     "{"
-    _+ @class.inner
-    "}"))
+    .
+    (_) @class.inner))
 
 (mod_item) @class.outer
 
@@ -62,8 +62,8 @@
   body: (declaration_list
     .
     "{"
-    _+ @class.inner
-    "}"))
+    .
+    (_) @class.inner))
 
 ; conditionals
 (if_expression
@@ -90,22 +90,22 @@
   body: (block
     .
     "{"
-    _+ @loop.inner
-    "}")) @loop.outer
+    .
+    (_) @loop.inner)) @loop.outer
 
 (while_expression
   body: (block
     .
     "{"
-    _+ @loop.inner
-    "}")) @loop.outer
+    .
+    (_) @loop.inner)) @loop.outer
 
 (for_expression
   body: (block
     .
     "{"
-    _+ @loop.inner
-    "}")) @loop.outer
+    .
+    (_) @loop.inner)) @loop.outer
 
 ; blocks
 (block
@@ -121,8 +121,8 @@
   (token_tree
     .
     "("
-    _+ @call.inner
-    ")"))
+    .
+    (_) @call.inner))
 
 (call_expression) @call.outer
 
@@ -130,8 +130,8 @@
   arguments: (arguments
     .
     "("
-    _+ @call.inner
-    ")"))
+    .
+    (_) @call.inner))
 
 ; returns
 (return_expression

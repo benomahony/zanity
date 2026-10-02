@@ -3,24 +3,24 @@
   body: (block
     .
     "{"
-    _+ @function.inner
-    "}"))
+    .
+    (_) @function.inner))
 
 ; inner function literals
 (func_literal
   body: (block
     .
     "{"
-    _+ @function.inner
-    "}"))
+    .
+    (_) @function.inner))
 
 ; method as inner function textobject
 (method_declaration
   body: (block
     .
     "{"
-    _+ @function.inner
-    "}"))
+    .
+    (_) @function.inner))
 
 ; outer function textobject
 (function_declaration) @function.outer
@@ -87,8 +87,8 @@
   arguments: (argument_list
     .
     "("
-    _+ @call.inner
-    ")"))
+    .
+    (_) @call.inner))
 
 ; parameters
 (parameter_list

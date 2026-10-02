@@ -45,8 +45,8 @@
   arguments: (argument_list
     .
     "("
-    _+ @call.inner
-    ")"))
+    .
+    (_) @call.inner))
 
 (return_statement
   (_)? @return.inner) @return.outer

@@ -11,22 +11,22 @@
   body: (statement_block
     .
     "{"
-    _+ @function.inner
-    "}"))
+    .
+    (_) @function.inner))
 
 (generator_function_declaration
   body: (statement_block
     .
     "{"
-    _+ @function.inner
-    "}"))
+    .
+    (_) @function.inner))
 
 (function_expression
   body: (statement_block
     .
     "{"
-    _+ @function.inner
-    "}"))
+    .
+    (_) @function.inner))
 
 (export_statement
   (function_declaration)) @function.outer
@@ -38,8 +38,8 @@
   body: (statement_block
     .
     "{"
-    _+ @function.inner
-    "}"))
+    .
+    (_) @function.inner))
 
 (method_definition
   body: (statement_block)) @function.outer
@@ -48,8 +48,8 @@
   body: (statement_block
     .
     "{"
-    _+ @function.inner
-    "}"))
+    .
+    (_) @function.inner))
 
 (class_declaration
   body: (class_body)) @class.outer
@@ -58,8 +58,8 @@
   body: (class_body
     .
     "{"
-    _+ @class.inner
-    "}"))
+    .
+    (_) @class.inner))
 
 (export_statement
   (class_declaration)) @class.outer
@@ -68,29 +68,29 @@
   body: (statement_block
     .
     "{"
-    _+ @loop.inner
-    "}")) @loop.outer
+    .
+    (_) @loop.inner)) @loop.outer
 
 (for_statement
   body: (statement_block
     .
     "{"
-    _+ @loop.inner
-    "}")) @loop.outer
+    .
+    (_) @loop.inner)) @loop.outer
 
 (while_statement
   body: (statement_block
     .
     "{"
-    _+ @loop.inner
-    "}")) @loop.outer
+    .
+    (_) @loop.inner)) @loop.outer
 
 (do_statement
   body: (statement_block
     .
     "{"
-    _+ @loop.inner
-    "}")) @loop.outer
+    .
+    (_) @loop.inner)) @loop.outer
 
 (if_statement
   consequence: (statement_block
@@ -118,16 +118,16 @@
   arguments: (arguments
     .
     "("
-    _+ @call.inner
-    ")"))
+    .
+    (_) @call.inner))
 
 (new_expression
   constructor: (identifier) @call.outer
   arguments: (arguments
     .
     "("
-    _+ @call.inner
-    ")") @call.outer)
+    .
+    (_) @call.inner) @call.outer)
 
 ; blocks
 (statement_block
@@ -378,8 +378,8 @@
   body: (interface_body
     .
     "{"
-    _+ @class.inner
-    "}"))
+    .
+    (_) @class.inner))
 
 (type_alias_declaration) @class.outer
 
@@ -387,8 +387,8 @@
   value: (object_type
     .
     "{"
-    _+ @class.inner
-    "}"))
+    .
+    (_) @class.inner))
 
 (enum_declaration) @class.outer
 
@@ -396,8 +396,8 @@
   body: (enum_body
     .
     "{"
-    _+ @class.inner
-    "}"))
+    .
+    (_) @class.inner))
 
 ; type, interface items as @parameter
 ; 1. parameter.inner

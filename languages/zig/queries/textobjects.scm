@@ -6,8 +6,8 @@
   (struct_declaration
     "struct"
     "{"
-    _+ @class.inner
-    "}"))
+    .
+    (_) @class.inner))
 
 ; functions
 (function_declaration) @function.outer
@@ -16,8 +16,8 @@
   body: (block
     .
     "{"
-    _+ @function.inner
-    "}"))
+    .
+    (_) @function.inner))
 
 ; loops
 (for_statement) @loop.outer
@@ -106,5 +106,5 @@
 (call_expression
   arguments: (arguments
     "("
-    _+ @call.inner
-    ")"))
+    .
+    (_) @call.inner))
