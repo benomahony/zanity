@@ -184,3 +184,40 @@ pub fn weak(self: *File, function: *Context, finding: Note) !void {
     for (self.s.weak.items()) |w| if (w.owner == function.serial and w.line == line) return;
     try self.s.weak.add(.{ .owner = function.serial, .line = line });
 }
+
+/// Points at what is worth asserting in this function, its inputs and its
+/// result, rather than asking for any assertion that makes up the count.
+pub fn assertionFix(self: *File, ctx: Context, name: []const u8) ![]const u8 {
+    if (ctx.family != .function) assert.panic("{s}: advising assertions for {f}, which is a {t}, not a function; call assertionFix() only from closeFunction()", .{ self.work.facts.path, ctx.node.where(), ctx.family });
+    const params = self.s.signature.items()[ctx.parameter_start..][0..ctx.parameter_count];
+    const start = self.work.text.used;
+    if (params.len == 0) {
+        _ = try self.work.text.format("Assert what state '{s}' relies on when it starts and what it guarantees before it returns", .{name});
+    } else {
+        _ = try self.work.text.format("Assert what '{s}' needs from ", .{name});
+        const shown = @min(params.len, 3);
+        for (params[0..shown], 0..) |p, i| {
+            const separator = if (i == 0) "" else if (i + 1 == shown and shown == params.len) " and " else ", ";
+            _ = try self.work.text.format("{s}'{s}'", .{ separator, p.name.text(self.source) });
+        }
+        if (shown < params.len) _ = try self.work.text.copy(" and the rest");
+        _ = try self.work.text.copy(" (a range, a length, how they relate) and what it guarantees before it returns");
+    }
+    const discounted = weakLines(self, ctx);
+    if (discounted > 0) {
+        _ = try self.work.text.format("; {d} of its assertions can't fail, so they don't count", .{discounted});
+    }
+    _ = try self.work.text.copy(". An assertion that can't fail catches nothing.");
+    const fix = self.work.text.buffer[start..self.work.text.used];
+    if (fix.len <= name.len) assert.panic("{s}: the assertion advice for '{s}' came out as '{s}', shorter than the name; assertionFix() must write the advice around the name, so check its format calls", .{ self.work.facts.path, name, fix });
+    if (!std.mem.endsWith(u8, fix, ".")) assert.panic("{s}: the assertion advice for '{s}' does not end with a full stop: '{s}'; end the advice in assertionFix() with a full stop", .{ self.work.facts.path, name, fix });
+    return fix;
+}
+
+pub fn weakLines(self: *File, ctx: Context) u32 {
+    var lines: u32 = 0;
+    for (self.s.weak.items()) |w| lines += @intFromBool(w.owner == ctx.serial);
+    if (lines > self.s.weak.len) assert.panic("{s}: counted {d} weak assertion lines in {f} but only {d} are recorded; weakLines() must count only entries of s.weak, so check its loop", .{ self.work.facts.path, lines, ctx.node.where(), self.s.weak.len });
+    if (ctx.family != .function) assert.panic("{s}: counting weak assertions of {f}, which is a {t}, not a function; call weakLines() only for a function context", .{ self.work.facts.path, ctx.node.where(), ctx.family });
+    return lines;
+}

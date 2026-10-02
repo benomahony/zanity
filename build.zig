@@ -78,7 +78,8 @@ fn addRelease(b: *std.Build, build_info: *std.Build.Step.Options) void {
     const release = b.step("release", "Build every released platform into zig-out/release");
     for (release_targets) |platform| {
         const target = b.resolveTargetQuery(platform.query);
-        const os = @tagName(target.result.os.tag);
+        const resolved = target.result;
+        const os = @tagName(resolved.os.tag);
         if (!std.mem.startsWith(u8, platform.name, os)) std.debug.panic("the release platform '{s}' builds for {s}, so its download would be misnamed; start its name in release_targets with '{s}-'", .{ platform.name, os, os });
         const exe = b.addExecutable(.{ .name = "zanity", .root_module = module(b, "src/main.zig", target, .ReleaseSafe) });
         exe.root_module.strip = true;
@@ -90,7 +91,8 @@ fn addRelease(b: *std.Build, build_info: *std.Build.Step.Options) void {
         });
         release.dependOn(&install.step);
     }
-    if (release.dependencies.items.len != release_targets.len) std.debug.panic("the release step builds {d} binaries for {d} platforms; add each platform's install step once", .{ release.dependencies.items.len, release_targets.len });
+    const installs = release.dependencies.items;
+    if (installs.len != release_targets.len) std.debug.panic("the release step builds {d} binaries for {d} platforms; add each platform's install step once", .{ installs.len, release_targets.len });
 }
 
 /// Vendored C (tree-sitter and the grammars) is built optimised and without UBSan in every mode:
