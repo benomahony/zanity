@@ -35557,6 +35557,7 @@ entries:
   detection_review: unreviewed
   implementation_status: partial
   rule_ids:
+  - duplicated-expression
   - passthrough-wrapper
   tags: []
 - id: CWE-1042

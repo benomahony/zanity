@@ -19,6 +19,7 @@ const isolation = @import("isolation.zig");
 const unread = @import("unread.zig");
 const parameters = @import("parameters.zig");
 const chains = @import("chains.zig");
+const repeats = @import("repeats.zig");
 
 pub const Diagnostic = struct {
     line: u32,
@@ -63,6 +64,8 @@ pub const Context = struct {
     span: ts.Node,
     serial: u32,
     body: bool = false,
+    /// Where this function's expressions start in the file's list, for duplicated-expression.
+    repeat_mark: usize = 0,
     /// Where the body starts, from its @inner capture; parameters are declared before it.
     body_start: u32 = std.math.maxInt(u32),
     name: ?ts.Node = null,
@@ -120,6 +123,8 @@ pub const FileScratch = struct {
     bare_calls: memory.Bounded(Owned),
     async_names: memory.Bounded([]const u8),
     statement_calls: memory.Bounded(ts.Node),
+    repeats: memory.Bounded(repeats.Repeat),
+    writes: memory.Bounded(repeats.Write),
     /// The nodes the walk is inside, outermost first, so their parents need no search.
     path: memory.Bounded(ts.Node),
     /// The chain from the root to a node, from ancestorsOf().
@@ -133,7 +138,7 @@ pub const FileScratch = struct {
         if (limits.file_bytes == 0) assert.panic("memory.Limits.file_bytes is 0, so no file could be checked; set it above 0", .{});
         return .{
             .contexts = try .initBounded(gpa, limits.depth, "nested constructs in one file"),
-            .opened = try .initBounded(gpa, limits.depth, "nested syntax nodes in one file"),
+            .opened = try .initBounded(gpa, limits.depth, "constructs opened per syntax node in one file"),
             .diagnostics = try .initBounded(gpa, limits.per_file, "findings in one file"),
             .suppressions = try .initBounded(gpa, limits.per_file, "suppression comments in one file"),
             .codes = try .initBounded(gpa, limits.per_file, "suppressed rule names in one file"),
@@ -145,8 +150,10 @@ pub const FileScratch = struct {
             .bare_calls = try .initBounded(gpa, limits.per_file, "unqualified calls in one file"),
             .async_names = try .initBounded(gpa, limits.per_file, "async functions in one file"),
             .statement_calls = try .initBounded(gpa, limits.per_file, "calls made as statements in one file"),
-            .path = try .initBounded(gpa, limits.depth, "nested syntax nodes in one file"),
-            .ancestors = try .initBounded(gpa, limits.depth, "nested syntax nodes in one file"),
+            .repeats = try .initBounded(gpa, limits.per_file, "repeatable expressions in one function"),
+            .writes = try .initBounded(gpa, limits.per_file, "assignments in one file"),
+            .path = try .initBounded(gpa, limits.depth, "syntax nodes on the walk's path in one file"),
+            .ancestors = try .initBounded(gpa, limits.depth, "ancestors of one syntax node"),
             .in_comment = try memory.reserve(gpa, bool, limits.file_bytes),
             .code_lines = try memory.reserve(gpa, bool, limits.file_bytes + 1),
             .captures = try .initCaptureScratch(gpa, limits),
@@ -154,7 +161,7 @@ pub const FileScratch = struct {
     }
 
     pub fn clearFile(self: *FileScratch) void {
-        inline for (.{ "contexts", "opened", "diagnostics", "suppressions", "codes", "trail", "calls", "signature", "weak", "locals", "bare_calls", "async_names", "statement_calls", "path", "ancestors" }) |field| {
+        inline for (.{ "contexts", "opened", "diagnostics", "suppressions", "codes", "trail", "calls", "signature", "weak", "locals", "bare_calls", "async_names", "statement_calls", "repeats", "writes", "path", "ancestors" }) |field| {
             @field(self, field).clear();
         }
         if (self.contexts.len != 0) assert.panic("clearing the per-file scratch left {d} open constructs; clearFile() must clear contexts, so add it to the field list there", .{self.contexts.len});
@@ -198,6 +205,8 @@ const Vocabulary = struct {
     test_check: ?captures.Id,
     test_shared_state: ?captures.Id,
     chain_link: ?captures.Id,
+    expression_repeatable: ?captures.Id,
+    write_target: ?captures.Id,
 
     fn lookup(c: captures.Compiled) Vocabulary {
         if (c.names.len == 0) assert.panic("the query has no captures, so no rule could run; check the language's query files", .{});
@@ -232,6 +241,8 @@ const Vocabulary = struct {
             .test_check = c.id("test.check"),
             .test_shared_state = c.id("test.shared_state"),
             .chain_link = c.id("chain.link"),
+            .expression_repeatable = c.id("expression.repeatable"),
+            .write_target = c.id("write.target"),
         };
     }
 };
@@ -365,6 +376,10 @@ pub const File = struct {
             try isolation.checkSharedStatement(self, node);
         } else if (v.chain_link == id) {
             try chains.checkChain(self, node);
+        } else if (v.expression_repeatable == id) {
+            try repeats.noteRepeatable(self, node);
+        } else if (v.write_target == id) {
+            try repeats.noteWrite(self, node, node.text(self.source));
         } else if (v.test_check == id) {
             if (test_quality.enclosingTest(self)) |unit| unit.checks += 1;
         } else if (v.async_name == id) {
@@ -570,6 +585,7 @@ pub const File = struct {
             .parameter_start = self.s.signature.len,
             .owned_start = @min(self.s.locals.len, self.s.bare_calls.len),
             .trail_mark = self.s.trail.len,
+            .repeat_mark = self.s.repeats.len,
         };
         switch (family) {
             .assertion => {
@@ -594,7 +610,8 @@ pub const File = struct {
         var i = trail.len;
         while (i > 0) {
             i -= 1;
-            if (trail[i].parent.id == parent.id and trail[i].parent.start == parent.start) return trail[i].summary;
+            const entry = trail[i];
+            if (entry.parent.id == parent.id and entry.parent.start == parent.start) return entry.summary;
         }
         if (i != 0) assert.panic("{s}: the search for the previous statement stopped at {d} without returning; the loop in trailFor() must return from inside, so check its exits", .{ self.work.facts.path, i });
         return .none;
@@ -636,10 +653,11 @@ pub const File = struct {
         var i = items.len;
         while (i > 0) {
             i -= 1;
-            switch (items[i].family) {
+            const ctx = &items[i];
+            switch (ctx.family) {
                 .class => return null,
-                .@"test" => return &items[i],
-                .function => if (items[i].name != null) return &items[i],
+                .@"test" => return ctx,
+                .function => if (ctx.name != null) return ctx,
                 else => {},
             }
         }
@@ -667,8 +685,9 @@ pub const File = struct {
         var i = items.len;
         while (i > 0) {
             i -= 1;
-            if (items[i].family == .function and items[i].node.eql(node)) return items[i].name;
-            if (ts.ts_node_start_byte(items[i].node) < ts.ts_node_start_byte(node)) return null;
+            const ctx = items[i];
+            if (ctx.family == .function and ctx.node.eql(node)) return ctx.name;
+            if (ts.ts_node_start_byte(ctx.node) < ts.ts_node_start_byte(node)) return null;
         }
         if (i != 0) assert.panic("{s}: the search for the function on {f} stopped at depth {d}; the loop in functionNameOf() must return from inside, so check its exits", .{ self.work.facts.path, node.where(), i });
         return null;
@@ -679,12 +698,13 @@ pub const File = struct {
         var i = items.len;
         while (i > 0) {
             i -= 1;
-            switch (items[i].family) {
+            const ctx = &items[i];
+            switch (ctx.family) {
                 .class => return null,
-                .function => if (items[i].name) |name| {
-                    if (ts.ts_node_start_byte(name) < ts.ts_node_start_byte(items[i].node)) assert.panic("{s}: @function.name captured {f}, before its function {f}; capture the name inside @function.outer", .{ self.work.facts.path, name.where(), items[i].node.where() });
-                    if (ts.ts_node_end_byte(name) > ts.ts_node_end_byte(items[i].node)) assert.panic("{s}: @function.name captured {f}, after its function {f} ends; capture the name inside @function.outer", .{ self.work.facts.path, name.where(), items[i].node.where() });
-                    return &items[i];
+                .function => if (ctx.name) |name| {
+                    if (ts.ts_node_start_byte(name) < ts.ts_node_start_byte(ctx.node)) assert.panic("{s}: @function.name captured {f}, before its function {f}; capture the name inside @function.outer", .{ self.work.facts.path, name.where(), ctx.node.where() });
+                    if (ts.ts_node_end_byte(name) > ts.ts_node_end_byte(ctx.node)) assert.panic("{s}: @function.name captured {f}, after its function {f} ends; capture the name inside @function.outer", .{ self.work.facts.path, name.where(), ctx.node.where() });
+                    return ctx;
                 },
                 else => {},
             }
@@ -745,6 +765,7 @@ pub const File = struct {
         }
         const allocating = self.calleeIn(ctx, name, self.tables.allocating_calls) orelse (if (contains(self.tables.allocating_calls, name)) name else null);
         if (allocating) |matched| try self.checkAllocation(ctx, matched);
+        try repeats.noteCallWrites(self, ctx, name);
         if (contains(self.tables.mutating_calls, name) and self.inAssertionCondition(ctx.node)) {
             _ = try self.report(ctx.node, "assertion-side-effect", try self.say("This assertion calls '{s}', which changes state, so the program behaves differently when assertions are disabled.", .{name}));
         }
@@ -927,6 +948,7 @@ pub const File = struct {
             _ = try self.report(name_node, "long-parameter-list", try self.say("'{s}' takes {d} parameters; functions should take at most {d}.", .{ name, ctx.formal_parameters, rules.max_parameters }));
         }
         try parameters.checkUnusedParameters(self, ctx, name);
+        try repeats.checkRepeats(self, ctx, name);
         if (self.index.marks(ctx.span, self.v.function_passthrough) or self.index.marks(ctx.node, self.v.function_passthrough)) {
             _ = try self.report(name_node, "passthrough-wrapper", try self.say("'{s}' only forwards to another call, so it adds a name without adding behaviour.", .{name}));
         }

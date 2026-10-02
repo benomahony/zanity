@@ -1,0 +1,3 @@
+rules: duplicated-expression
+exit: 0
+repeats_go.go:6:10: warning [duplicated-expression]

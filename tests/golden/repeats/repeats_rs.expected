@@ -1,0 +1,3 @@
+rules: duplicated-expression
+exit: 0
+repeats_rs.rs:2:20: warning [duplicated-expression]

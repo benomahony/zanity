@@ -508,3 +508,35 @@
 
 ; A member access, so chains of them can be measured.
 (member_expression) @chain.link
+
+; Expressions whose copies within a function are duplication: calls, member accesses, indexing
+; and arithmetic.
+[
+  (call_expression)
+  (member_expression)
+  (subscript_expression)
+  (binary_expression)
+] @expression.repeatable
+
+; What an assignment or increment writes to, so an expression that reads it is known to change.
+[
+  (assignment_expression
+    left: (_) @write.target)
+  (augmented_assignment_expression
+    left: (_) @write.target)
+  (update_expression
+    argument: (_) @write.target)
+]
+
+; A call made for its effect, its value discarded: copies of it each do something.
+[
+  (expression_statement
+    (call_expression) @call.discarded)
+  (expression_statement
+    (await_expression
+      (call_expression) @call.discarded))
+]
+
+; A returned value: each early return computes it once, on its own way out.
+(return_statement
+  (_) @expression.returned)

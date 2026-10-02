@@ -34502,6 +34502,7 @@
       "detection_review": "unreviewed",
       "implementation_status": "partial",
       "rule_ids": [
+        "duplicated-expression",
         "passthrough-wrapper"
       ],
       "tags": []

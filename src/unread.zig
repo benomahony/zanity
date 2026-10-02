@@ -17,6 +17,7 @@ pub const looked_up = [_][]const u8{
     "arith.difference",
     "async.name",
     "catch.swallowed",
+    "call.discarded",
     "chain.link",
     "comment.outer",
     "compare.equal",
@@ -34,6 +35,8 @@ pub const looked_up = [_][]const u8{
     "error.message",
     "expression.conditional",
     "expression.path",
+    "expression.repeatable",
+    "expression.returned",
     "literal.collection",
     "literal.constant",
     "literal.falsy",
@@ -44,6 +47,7 @@ pub const looked_up = [_][]const u8{
     "local.scope",
     "string.built",
     "string.format",
+    "write.target",
 };
 
 /// Whether any check reads captures named `name`. Captures starting with `_` only feed predicates.
