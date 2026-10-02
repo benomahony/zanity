@@ -169,35 +169,31 @@
 
 ; CWE-561: the statement right after one that always leaves the block.
 ; Labeled statements can be reached by goto, so they are not listed.
+; One pattern per way of leaving, and a kind check on the next statement: an alternation on
+; each side made the query engine track one state per kind through every nested block.
 (statement_list
-  [
-    (return_statement)
-    (break_statement)
-    (continue_statement)
-    (goto_statement)
-  ]
+  (return_statement)
   .
-  [
-    (expression_statement)
-    (assignment_statement)
-    (short_var_declaration)
-    (inc_statement)
-    (dec_statement)
-    (send_statement)
-    (var_declaration)
-    (const_declaration)
-    (if_statement)
-    (for_statement)
-    (expression_switch_statement)
-    (type_switch_statement)
-    (select_statement)
-    (go_statement)
-    (defer_statement)
-    (return_statement)
-    (break_statement)
-    (continue_statement)
-    (block)
-  ] @finding.unreachable-code)
+  (_) @finding.unreachable-code
+  (#kind-eq? @finding.unreachable-code "expression_statement" "assignment_statement" "short_var_declaration" "inc_statement" "dec_statement" "send_statement" "var_declaration" "const_declaration" "if_statement" "for_statement" "expression_switch_statement" "type_switch_statement" "select_statement" "go_statement" "defer_statement" "return_statement" "break_statement" "continue_statement" "block"))
+
+(statement_list
+  (break_statement)
+  .
+  (_) @finding.unreachable-code
+  (#kind-eq? @finding.unreachable-code "expression_statement" "assignment_statement" "short_var_declaration" "inc_statement" "dec_statement" "send_statement" "var_declaration" "const_declaration" "if_statement" "for_statement" "expression_switch_statement" "type_switch_statement" "select_statement" "go_statement" "defer_statement" "return_statement" "break_statement" "continue_statement" "block"))
+
+(statement_list
+  (continue_statement)
+  .
+  (_) @finding.unreachable-code
+  (#kind-eq? @finding.unreachable-code "expression_statement" "assignment_statement" "short_var_declaration" "inc_statement" "dec_statement" "send_statement" "var_declaration" "const_declaration" "if_statement" "for_statement" "expression_switch_statement" "type_switch_statement" "select_statement" "go_statement" "defer_statement" "return_statement" "break_statement" "continue_statement" "block"))
+
+(statement_list
+  (goto_statement)
+  .
+  (_) @finding.unreachable-code
+  (#kind-eq? @finding.unreachable-code "expression_statement" "assignment_statement" "short_var_declaration" "inc_statement" "dec_statement" "send_statement" "var_declaration" "const_declaration" "if_statement" "for_statement" "expression_switch_statement" "type_switch_statement" "select_statement" "go_statement" "defer_statement" "return_statement" "break_statement" "continue_statement" "block"))
 
 ; CWE-478: a switch without a default case.
 [
