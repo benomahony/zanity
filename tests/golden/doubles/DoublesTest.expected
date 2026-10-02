@@ -1,0 +1,4 @@
+rules: test-double
+exit: 0
+DoublesTest.java:4:43: warning [test-double]
+DoublesTest.java:8:25: warning [test-double]

@@ -1,0 +1,6 @@
+rules: test-double
+exit: 0
+doubles.test.ts:1:17: warning [test-double]
+doubles.test.ts:5:17: warning [test-double]
+doubles.test.ts:6:5: warning [test-double]
+doubles.test.ts:6:32: warning [test-double]

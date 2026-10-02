@@ -727,7 +727,11 @@ pub const File = struct {
             if (ctx.arguments[0]) |message| try messages.checkMessage(self, message, null);
         }
         try hazards.checkRiskyCall(self, ctx, name);
-        if (self.inTest()) try test_quality.checkTestCall(self, ctx, name);
+        if (self.inTest()) {
+            try test_quality.checkTestCall(self, ctx, name);
+        } else if (self.inTestFile()) {
+            try test_quality.checkTestDouble(self, ctx, name);
+        }
         const allocating = self.calleeIn(ctx, name, self.tables.allocating_calls) orelse (if (contains(self.tables.allocating_calls, name)) name else null);
         if (allocating) |matched| try self.checkAllocation(ctx, matched);
         if (contains(self.tables.mutating_calls, name) and self.inAssertionCondition(ctx.node)) {

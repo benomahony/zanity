@@ -1,0 +1,9 @@
+rules: test-double
+exit: 0
+test_doubles.py:10:12: warning [test-double]
+test_doubles.py:13:2: warning [test-double]
+test_doubles.py:18:2: warning [test-double]
+test_doubles.py:24:11: warning [test-double]
+test_doubles.py:25:5: warning [test-double]
+test_doubles.py:26:5: warning [test-double]
+test_doubles.py:28:10: warning [test-double]

@@ -257,7 +257,7 @@ Rules marked *off* run only with `--rules all`, `rules = ["all"]`, or when named
 | `sleep-in-test` | warning | a test that waits on the clock |
 | `polling-loop` | warning | a loop in a test that polls with a sleep |
 | `nondeterministic-test` | warning | randomness or the current time in a test |
-| `test-double` | warning | a mock or stub that replaces real behaviour |
+| `test-double` | warning | a mock, stub, spy or patch that replaces real behaviour, in a test or anywhere in a test file, such as a fixture or a `@patch` decorator |
 | `shared-state-in-test` | warning | a test that changes process-wide state: an environment variable, the working directory, the import path, a global default or a `global` |
 | `filesystem-in-test` | warning | a test that reads or changes real files outside its own temporary directory |
 | `network-in-test` | warning | a test that makes a real network request or connection |

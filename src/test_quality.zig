@@ -69,11 +69,19 @@ pub fn checkTestCall(self: *File, ctx: Context, name: []const u8) !void {
     if (self.calleeIn(ctx, name, self.tables.nondeterministic)) |callee| {
         _ = try self.report(ctx.node, "nondeterministic-test", try self.say("'{s}' returns a different value on every run, so this test can pass or fail by chance.", .{callee}));
     }
-    const double = self.calleeIn(ctx, name, self.tables.test_doubles) orelse (if (contains(self.tables.test_doubles, name)) name else null);
+    try checkTestDouble(self, ctx, name);
+    try isolation.checkIsolation(self, ctx, name);
+}
+
+/// A mock, stub, spy or patch, in a test or anywhere in a test file, such as a fixture or a
+/// `@patch` decorator, which runs before the test it replaces behaviour for.
+pub fn checkTestDouble(self: *File, ctx: Context, name: []const u8) !void {
+    if (ctx.family != .call) assert.panic("{s}: checking {f} for a test double, but it is a {t}; call checkTestDouble() only from closeCall(), with a call context", .{ self.work.facts.path, ctx.node.where(), ctx.family });
+    if (name.len == 0) assert.panic("{s}: the call {f} has an empty name; capture the callee as @call.name in the language's zanity.scm", .{ self.work.facts.path, ctx.node.where() });
+    const double = self.calleeIn(ctx, name, self.tables.test_doubles) orelse (if (ctx.receiver == null and contains(self.tables.test_doubles, name)) name else null);
     if (double) |callee| {
         _ = try self.report(ctx.node, "test-double", try self.say("'{s}' replaces real behaviour with a stand-in, so the test can pass while the real code is broken.", .{callee}));
     }
-    try isolation.checkIsolation(self, ctx, name);
 }
 
 /// A test whose name doesn't say what behaviour it expects, such as `test_1`, `it("works")`, or,
