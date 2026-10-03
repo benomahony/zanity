@@ -99,10 +99,52 @@ fn renderInferAndPaths(w: *std.Io.Writer) !void {
         \\          }}
         \\        }}
         \\      }}
-        \\    }}
-        \\  }},
+        \\    }},
         \\
     , .{ config.max_concurrency, infer.default_concurrency, infer.default_threshold, config.max_path_sections });
+    try renderVocabulary(w);
+}
+
+/// The [vocabulary] table and the [domains.<name>] and [contexts.<name>] tables.
+fn renderVocabulary(w: *std.Io.Writer) !void {
+    if (config.max_scopes == 0) assert.panic("config.max_scopes is 0, so no domain or context could be written; raise it in src/config.zig", .{});
+    if (config.max_scope_globs == 0) assert.panic("config.max_scope_globs is 0, so a domain could include no files; raise it in src/config.zig", .{});
+    try w.print(
+        \\    "vocabulary": {{
+        \\      "description": "The project's words for things: names using a banned word, or an alias of the word the project settled on, are reported.",
+        \\      "type": "object",
+        \\      "additionalProperties": false,
+        \\      "properties": {{
+        \\        "forbidden": {{ "$ref": "#/definitions/words", "description": "Words no name may use, such as [\"util\", \"manager\"]." }},
+        \\        "directional": {{ "$ref": "#/definitions/words", "description": "Words that give a name a direction, so us_to_uk and uk_to_us aren't name drift.", "maxItems": {d} }},
+        \\        "synonyms": {{ "$ref": "#/definitions/synonyms" }}
+        \\      }}
+        \\    }},
+        \\    "domains": {{ "$ref": "#/definitions/scopes", "description": "Parts of the code with words of their own, such as [domains.commerce]; contexts apply after them." }},
+        \\    "contexts": {{ "$ref": "#/definitions/scopes", "description": "Bounded contexts with words of their own, such as [contexts.billing]; they apply after domains, and each may define its own Customer." }}
+        \\  }},
+        \\  "definitions": {{
+        \\    "words": {{ "type": "array", "uniqueItems": true, "items": {{ "type": "string", "minLength": 1 }} }},
+        \\    "synonyms": {{
+        \\      "description": "The canonical word = the aliases it replaces, such as customer = [\"client\", \"user\"].",
+        \\      "type": "object",
+        \\      "additionalProperties": {{ "$ref": "#/definitions/words" }}
+        \\    }},
+        \\    "scopes": {{
+        \\      "type": "object",
+        \\      "maxProperties": {d},
+        \\      "additionalProperties": {{
+        \\        "type": "object",
+        \\        "additionalProperties": false,
+        \\        "properties": {{
+        \\          "include": {{ "$ref": "#/definitions/words", "description": "The files it covers, in .gitignore syntax, relative to this file.", "maxItems": {d} }},
+        \\          "forbidden": {{ "$ref": "#/definitions/words", "description": "Words no name in it may use." }},
+        \\          "synonyms": {{ "$ref": "#/definitions/synonyms" }}
+        \\        }}
+        \\      }}
+        \\    }},
+        \\
+    , .{ config.max_directional, config.max_scopes, config.max_scope_globs });
 }
 
 /// The names a rule list may hold: every rule, by name or NASA code, and "all".
@@ -110,7 +152,6 @@ fn renderDefinitions(w: *std.Io.Writer) !void {
     if (rules.all.len == 0) assert.panic("rules.all is empty, so the rule list in the schema would be empty; add the rules back to src/rules.zig", .{});
     const start = w.end;
     try w.writeAll(
-        \\  "definitions": {
         \\    "ruleOrAll": {
         \\      "anyOf": [
         \\        { "const": "all", "description": "Every rule, including those off by default." },

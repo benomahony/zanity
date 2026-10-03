@@ -63,9 +63,40 @@
           }
         }
       }
-    }
+    },
+    "vocabulary": {
+      "description": "The project's words for things: names using a banned word, or an alias of the word the project settled on, are reported.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "forbidden": { "$ref": "#/definitions/words", "description": "Words no name may use, such as [\"util\", \"manager\"]." },
+        "directional": { "$ref": "#/definitions/words", "description": "Words that give a name a direction, so us_to_uk and uk_to_us aren't name drift.", "maxItems": 32 },
+        "synonyms": { "$ref": "#/definitions/synonyms" }
+      }
+    },
+    "domains": { "$ref": "#/definitions/scopes", "description": "Parts of the code with words of their own, such as [domains.commerce]; contexts apply after them." },
+    "contexts": { "$ref": "#/definitions/scopes", "description": "Bounded contexts with words of their own, such as [contexts.billing]; they apply after domains, and each may define its own Customer." }
   },
   "definitions": {
+    "words": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+    "synonyms": {
+      "description": "The canonical word = the aliases it replaces, such as customer = [\"client\", \"user\"].",
+      "type": "object",
+      "additionalProperties": { "$ref": "#/definitions/words" }
+    },
+    "scopes": {
+      "type": "object",
+      "maxProperties": 32,
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "include": { "$ref": "#/definitions/words", "description": "The files it covers, in .gitignore syntax, relative to this file.", "maxItems": 16 },
+          "forbidden": { "$ref": "#/definitions/words", "description": "Words no name in it may use." },
+          "synonyms": { "$ref": "#/definitions/synonyms" }
+        }
+      }
+    },
     "ruleOrAll": {
       "anyOf": [
         { "const": "all", "description": "Every rule, including those off by default." },
