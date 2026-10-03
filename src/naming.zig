@@ -120,13 +120,7 @@ fn conceptKey(s: *ConceptScratch, language: []const u8, name: []const u8) error{
 
 fn drift(s: *ConceptScratch, text: *memory.Text, definitions: []const Definition, findings: *memory.Bounded(Finding)) error{LimitExceeded}!void {
     const before = findings.len;
-    s.words.used = 0;
-    s.keyed.clear();
-    for (definitions, 0..) |d, i| {
-        if (!exempt(d.name)) try s.keyed.add(.{ .key = try conceptKey(s, d.language, d.name), .index = @intCast(i) });
-    }
-    const keyed = s.keyed.items();
-    std.mem.sort(Keyed, keyed, {}, Keyed.order);
+    const keyed = try keyedBy(s, definitions, .concept);
     var start: usize = 0;
     for (0..keyed.len) |_| {
         if (start == keyed.len) break;
@@ -153,6 +147,28 @@ fn drift(s: *ConceptScratch, text: *memory.Text, definitions: []const Definition
     }
     if (start != keyed.len) assert.panic("name-drift stopped at definition {d} of {d}; runEnd must reach the end", .{ start, keyed.len });
     if (findings.len < before) assert.panic("name-drift removed findings: {d} before, {d} after; drift() must only add findings", .{ before, findings.len });
+}
+
+const KeyBy = enum { concept, name };
+
+/// The definitions that aren't exempt, keyed by their concept or by their exact name in their
+/// language, and sorted so the ones that share a key sit together.
+fn keyedBy(s: *ConceptScratch, definitions: []const Definition, by: KeyBy) error{LimitExceeded}![]Keyed {
+    s.words.used = 0;
+    s.keyed.clear();
+    for (definitions, 0..) |d, i| {
+        if (exempt(d.name)) continue;
+        const key = switch (by) {
+            .concept => try conceptKey(s, d.language, d.name),
+            .name => try s.words.format("{s} {s}", .{ d.language, d.name }),
+        };
+        try s.keyed.add(.{ .key = key, .index = @intCast(i) });
+    }
+    const keyed = s.keyed.items();
+    std.mem.sort(Keyed, keyed, {}, Keyed.order);
+    if (keyed.len > definitions.len) assert.panic("keyed {d} names from {d} definitions; keyedBy() adds at most one key per definition", .{ keyed.len, definitions.len });
+    if (keyed.len > 1 and Keyed.order({}, keyed[keyed.len - 1], keyed[0])) assert.panic("the {d} keyed names came out unsorted; keyedBy() must sort them by key", .{keyed.len});
+    return keyed;
 }
 
 fn runEnd(keyed: []const Keyed, start: usize) usize {
@@ -216,13 +232,7 @@ fn directionalNames(s: *ConceptScratch, names: []const []const u8) error{LimitEx
 
 fn duplicates(s: *ConceptScratch, text: *memory.Text, definitions: []const Definition, findings: *memory.Bounded(Finding)) error{LimitExceeded}!void {
     const before = findings.len;
-    s.words.used = 0;
-    s.keyed.clear();
-    for (definitions, 0..) |d, i| {
-        if (!exempt(d.name)) try s.keyed.add(.{ .key = try s.words.format("{s} {s}", .{ d.language, d.name }), .index = @intCast(i) });
-    }
-    const keyed = s.keyed.items();
-    std.mem.sort(Keyed, keyed, {}, Keyed.order);
+    const keyed = try keyedBy(s, definitions, .name);
     var start: usize = 0;
     for (0..keyed.len) |_| {
         if (start == keyed.len) break;

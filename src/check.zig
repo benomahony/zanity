@@ -1059,31 +1059,5 @@ pub const File = struct {
 
 pub const contains = strings.contains;
 
-pub fn sameText(a: []const u8, b: []const u8) bool {
-    var i: usize = 0;
-    var j: usize = 0;
-    for (0..a.len + b.len + 1) |_| {
-        while (i < a.len and std.ascii.isWhitespace(a[i])) i += 1;
-        while (j < b.len and std.ascii.isWhitespace(b[j])) j += 1;
-        if (i == a.len or j == b.len) return i == a.len and j == b.len;
-        if (a[i] != b[j]) return false;
-        i += 1;
-        j += 1;
-        if (i > a.len) assert.panic("comparing '{s}' with '{s}' ran past the first at byte {d}; the loop in sameText() must stop at the end of both strings", .{ a, b, i });
-        if (j > b.len) assert.panic("comparing '{s}' with '{s}' ran past the second at byte {d}; the loop in sameText() must stop at the end of both strings", .{ a, b, j });
-    }
-    unreachable;
-}
-
-pub fn header(text: []const u8) []const u8 {
-    if (text.len == 0) assert.panic("asked for the first line of an empty node; the capture matched no text", .{});
-    const line_end = std.mem.indexOfScalar(u8, text, '\n') orelse text.len;
-    var line = std.mem.trim(u8, text[0..line_end], " \t\r");
-    if (std.mem.indexOf(u8, line, " {")) |brace| {
-        const before = line[0..brace];
-        if (before.len > 0 and (before[before.len - 1] == ')' or std.ascii.isAlphanumeric(before[before.len - 1]))) line = before;
-    }
-    const result = std.mem.trimEnd(u8, line, " \t:{}");
-    if (result.len > line_end) assert.panic("the first line of '{s}' came out longer than the line itself ({d} > {d}); header() must only trim the line, so check its slicing", .{ text[0..line_end], result.len, line_end });
-    return result;
-}
+pub const sameText = strings.sameText;
+pub const header = strings.header;
