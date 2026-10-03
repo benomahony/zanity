@@ -1,0 +1,15 @@
+[vocabulary]
+forbidden = ["order"]
+
+[vocabulary.synonyms]
+order = ["purchase"]
+customer = ["client"]
+
+[contexts.billing]
+include = ["billing/**"]
+
+[contexts.billing.synonyms]
+account = ["client"]
+
+[contexts.biling]
+include = ["old/**"]

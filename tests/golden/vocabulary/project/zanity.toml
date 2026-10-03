@@ -1,0 +1,18 @@
+[vocabulary]
+forbidden = ["util", "manager"]
+
+[vocabulary.synonyms]
+customer = ["client", "user"]
+
+[domains.commerce]
+include = ["src/**"]
+
+[contexts.billing]
+include = ["src/billing/**"]
+forbidden = ["discount"]
+
+[contexts.billing.synonyms]
+invoice = ["bill"]
+
+[contexts.shipping]
+include = ["src/shipping/**"]

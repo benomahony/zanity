@@ -14,6 +14,7 @@ const report = @import("report.zig");
 const naming = @import("naming.zig");
 const graph = @import("graph.zig");
 const structure = @import("structure.zig");
+const vocabulary = @import("vocabulary.zig");
 const memory = @import("memory.zig");
 const Ignore = @import("ignore.zig").Ignore;
 const infer = @import("infer.zig");
@@ -335,7 +336,13 @@ fn checkFiles(ctx: *zcli.Context, ws: *Workspace, selected: rules.Set) !void {
         ws.checked = run.checked;
     }
     if (ws.live) |live| live.restart();
+    const anchor = try anchorOf(ws);
+    if (anchor) |a| {
+        vocabulary.assignScopes(a, &ws.facts);
+        if (a.config.directional_len > 0) ws.naming.directional = a.config.directional[0..a.config.directional_len];
+    }
     try naming.crossCheck(&ws.naming, &ws.facts, selected, &ws.findings);
+    if (anchor) |a| try vocabulary.checkVocabulary(a, &ws.facts, selected, &ws.findings);
     if (selected.enabled("recursion")) try graph.recursion(&ws.graph, &ws.facts, &ws.findings);
     try structure.checkStructure(&ws.facts, selected, &ws.findings);
     if (ws.checked > ws.files.len) assert.panic("checked {d} files out of {d} collected; count a file as checked only once per file collected", .{ ws.checked, ws.files.len });
@@ -419,27 +426,29 @@ fn fixFiles(ctx: *zcli.Context, ws: *Workspace) !void {
     }
 }
 
+/// Where the working directory sits under the zanity.toml in use; null when there is none.
+fn anchorOf(ws: *Workspace) !?config.Anchor {
+    const settings = ws.settings orelse return null;
+    if (settings.dir.len == 0) return null;
+    if (!std.fs.path.isAbsolute(settings.dir)) assert.panic("zanity.toml's folder '{s}' is relative; initConfig() records the real path", .{settings.dir});
+    const cwd = try Io.Dir.cwd().realPathFileAlloc(ws.io, ".", std.heap.page_allocator);
+    defer std.heap.page_allocator.free(cwd);
+    if (!std.mem.startsWith(u8, cwd, settings.dir)) assert.panic("zanity.toml was found in {s}, which is not at or above the working directory {s}; initConfig() must search only the working directory and the folders above it", .{ settings.dir, cwd });
+    return .{ .config = settings, .below = try ws.text.copy(std.mem.trimStart(u8, cwd[settings.dir.len..], "/")) };
+}
+
 /// Drops the findings of rules that a [paths] section of zanity.toml turns off for their file,
 /// before they are reported or fixed.
 fn dropDisabled(ws: *Workspace) !void {
     const settings = ws.settings orelse return;
     if (settings.pathRules().len == 0) return;
-    const cwd = try Io.Dir.cwd().realPathFileAlloc(ws.io, ".", std.heap.page_allocator);
-    defer std.heap.page_allocator.free(cwd);
-    if (!std.mem.startsWith(u8, cwd, settings.dir)) assert.panic("zanity.toml was found in {s}, which is not at or above the working directory {s}; initConfig() must search only the working directory and the folders above it", .{ settings.dir, cwd });
-    const below = std.mem.trimStart(u8, cwd[settings.dir.len..], "/");
+    const anchor = (try anchorOf(ws)) orelse return;
+    if (anchor.config != settings) assert.panic("the anchor holds the config from {s}, not the one in use from {s}; anchorOf() must anchor ws.settings", .{ anchor.config.dir, settings.dir });
     const findings = ws.findings.items();
     var kept: usize = 0;
     var buffer: [std.fs.max_path_bytes]u8 = undefined;
     for (findings) |f| {
-        var path = f.path;
-        while (std.mem.startsWith(u8, path, "./")) path = path[2..];
-        const relative = if (std.fs.path.isAbsolute(path))
-            (if (std.mem.startsWith(u8, path, settings.dir) and path.len > settings.dir.len and path[settings.dir.len] == '/') path[settings.dir.len + 1 ..] else "")
-        else if (below.len == 0)
-            path
-        else
-            std.fmt.bufPrint(&buffer, "{s}/{s}", .{ below, path }) catch "";
+        const relative = anchor.relative(f.path, &buffer);
         if (relative.len > 0 and settings.disabledAt(relative, f.rule)) continue;
         findings[kept] = f;
         kept += 1;

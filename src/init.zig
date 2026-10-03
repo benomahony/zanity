@@ -119,5 +119,21 @@ fn renderInferNotes(w: *std.Io.Writer) !void {
         \\# [paths."tests/e2e/"]
         \\# disable = ["process-in-test", "filesystem-in-test", "network-in-test"]
         \\
+        \\# The project's words for things. Names that use a banned word, or an alias of a word the
+        \\# project settled on, are reported. Domains and contexts carry their own words; a context
+        \\# applies after a domain, and a definition can share its name with one in another context.
+        \\# [vocabulary]
+        \\# forbidden = ["util", "manager"]
+        \\#
+        \\# [vocabulary.synonyms]
+        \\# customer = ["client", "user"]
+        \\#
+        \\# [contexts.billing]
+        \\# include = ["src/billing/**"]
+        \\# forbidden = ["discount"]
+        \\#
+        \\# [contexts.billing.synonyms]
+        \\# invoice = ["bill", "statement"]
+        \\
     , .{ config.max_concurrency, infer.default_concurrency, infer.default_threshold });
 }

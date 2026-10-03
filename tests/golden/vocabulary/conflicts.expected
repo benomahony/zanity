@@ -1,0 +1,5 @@
+rules: vocabulary-conflict
+exit: 1
+zanity.toml:5:1: error [vocabulary-conflict]
+zanity.toml:12:1: error [vocabulary-conflict]
+zanity.toml:14:1: error [vocabulary-conflict]

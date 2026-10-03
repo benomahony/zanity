@@ -97,14 +97,9 @@ pub fn checkTestName(self: *File, at: ts.Node, name: []const u8) !void {
     const shown = std.mem.trim(u8, name, "\"'`");
     if (shown.len == 0) return;
     var words: u32 = 0;
-    var start: usize = 0;
-    for (0..shown.len + 1) |i| {
-        const at_end = i == shown.len;
-        const separator = !at_end and !std.ascii.isAlphanumeric(shown[i]);
-        const boundary = !at_end and !separator and i > start and naming.caseBoundary(shown, i);
-        if (!at_end and !separator and !boundary) continue;
-        if (i > start and !fillerWord(shown[start..i])) words += 1;
-        start = if (separator) i + 1 else i;
+    var it: naming.Words = .{ .text = shown };
+    while (it.next()) |word| {
+        if (!fillerWord(word)) words += 1;
     }
     if (words > shown.len) assert.panic("{s}: counted {d} words in the {d}-byte test name '{s}'; a word needs at least one byte, so check the loop in checkTestName()", .{ self.work.facts.path, words, shown.len, shown });
     if (words >= self.tables.test_name_words) return;

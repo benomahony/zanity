@@ -67,6 +67,10 @@ pub const all = [_]Rule{
     .{ .name = "broad-expected-error", .pattern = "'$code' accepts any error, so the test passes when the code fails for a reason nobody expected.", .advice = "Expect the specific error type, and match its message where the type is shared, such as pytest.raises(ValueError, match=...) or #[should_panic(expected = \"...\")].", .severity = .warning, .default = true, .needs = &.{"finding.broad-expected-error"} },
     .{ .name = "skipped-test", .pattern = "'$code' turns a test off, so it can't catch the failure it was written for, and nothing says when it comes back.", .advice = "Fix the test and turn it back on, or delete it; to skip only where it can't run, put the skip under a condition (skipif, an if around t.Skip), or use xfail(strict=True).", .severity = .warning, .default = true, .needs = &.{"finding.skipped-test"} },
     .{ .name = "vague-test-name", .advice = "Name the behaviour it expects, such as test_rejects_expired_token or it(\"returns 404 for an unknown id\").", .severity = .warning, .default = true, .needs = &.{ "function.outer", "function.name" } },
+    .{ .name = "forbidden-term", .advice = "Rename it to say what it is or does, without the banned word.", .severity = .warning, .default = true, .needs = &.{"name"} },
+    .{ .name = "non-canonical-term", .advice = "Rename it with the project's word, as zanity.toml's synonyms give it.", .severity = .warning, .default = true, .needs = &.{"name"} },
+    .{ .name = "misplaced-test", .advice = "Move the test next to the code it tests, or move the code to the domain the test is in.", .severity = .warning, .default = true, .needs = &.{"name"} },
+    .{ .name = "vocabulary-conflict", .advice = "Make the vocabulary in zanity.toml agree with itself: one word per meaning, and none both banned and canonical.", .severity = .@"error", .default = true },
     .{ .name = "name-drift", .advice = "Pick one spelling and use it everywhere.", .severity = .warning, .default = true, .needs = &.{"name"} },
     .{ .name = "duplicate-name", .advice = "Give each a name that says how it differs.", .severity = .warning, .default = true, .needs = &.{"name"} },
     .{ .name = "restated-type", .alias = "NASA05-M1", .advice = "Assert something about its value instead.", .severity = .warning, .default = false, .needs = &.{ "assertion.condition", "call.argument", "parameter.name", "parameter.type" }, .catalogue = &.{"EXT-VERIFY-002"} },
@@ -183,6 +187,8 @@ pub const max_test_lines = 50;
 pub const max_test_checks = 10;
 pub const min_asserts_per_function = 2;
 pub const max_parameters = 4;
+/// How alike two domain or context names can be before one looks like a misspelling of the other.
+pub const min_scope_similarity = 0.85;
 /// Member accesses in a row, as in `order.customer.address.city`, from which code reaches through
 /// objects it shouldn't know about.
 pub const min_chain_links = 3;

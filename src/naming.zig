@@ -8,7 +8,8 @@ const Definition = @import("facts.zig").Definition;
 const Facts = @import("facts.zig").Facts;
 const Finding = @import("facts.zig").Finding;
 
-const directional = [_][]const u8{ "to", "from", "before", "after", "src", "dst" };
+/// Words that give a name its direction, unless zanity.toml lists its own.
+const default_directional = [_][]const u8{ "to", "from", "before", "after", "src", "dst" };
 
 const max_tokens = 64;
 
@@ -31,6 +32,7 @@ pub const ConceptScratch = struct {
     shapes: memory.Bounded([]const u8),
     tokens: memory.Bounded([]const u8),
     words: memory.Text,
+    directional: []const []const u8 = &default_directional,
 
     pub fn initNamingScratch(gpa: Allocator, limits: memory.Limits) Allocator.Error!ConceptScratch {
         if (limits.definitions == 0) assert.panic("memory.Limits.definitions is 0, so naming checks have no room for any name", .{});
@@ -89,6 +91,24 @@ pub fn tokenise(s: *ConceptScratch, name: []const u8) error{LimitExceeded}![]con
     if (s.tokens.len > name.len) assert.panic("'{s}' ({d} bytes) split into {d} words; a word needs at least one byte", .{ name, name.len, s.tokens.len });
     return s.tokens.items();
 }
+
+/// The words of a name, split on anything not a letter or digit and where its case changes, as
+/// slices of the name: `parseHTTPRequest` gives parse, HTTP, Request.
+pub const Words = struct {
+    text: []const u8,
+    at: usize = 0,
+
+    pub fn next(self: *Words) ?[]const u8 {
+        if (self.at > self.text.len) assert.panic("reading words of '{s}' from byte {d}, past its end; next() must stop at the end", .{ self.text, self.at });
+        while (self.at < self.text.len and !std.ascii.isAlphanumeric(self.text[self.at])) self.at += 1;
+        if (self.at == self.text.len) return null;
+        const start = self.at;
+        self.at += 1;
+        while (self.at < self.text.len and std.ascii.isAlphanumeric(self.text[self.at]) and !caseBoundary(self.text, self.at)) self.at += 1;
+        if (self.at <= start) assert.panic("a word of '{s}' at byte {d} is empty; next() must take at least one byte", .{ self.text, start });
+        return self.text[start..self.at];
+    }
+};
 
 pub fn caseBoundary(name: []const u8, i: usize) bool {
     if (i == 0 or i >= name.len) assert.panic("checked for a word boundary at byte {d} of '{s}' ({d} bytes); only bytes 1..{d} can start a word", .{ i, name, name.len, name.len -| 1 });
@@ -160,7 +180,7 @@ fn keyedBy(s: *ConceptScratch, definitions: []const Definition, by: KeyBy) error
         if (exempt(d.name)) continue;
         const key = switch (by) {
             .concept => try conceptKey(s, d.language, d.name),
-            .name => try s.words.format("{s} {s}", .{ d.language, d.name }),
+            .name => try s.words.format("{s} {s} {s}", .{ d.language, d.scope, d.name }),
         };
         try s.keyed.add(.{ .key = key, .index = @intCast(i) });
     }
@@ -214,7 +234,7 @@ fn directionalNames(s: *ConceptScratch, names: []const []const u8) error{LimitEx
         const start = s.words.used;
         var sides: usize = 1;
         for (try tokenise(s, name)) |token| {
-            if (strings.contains(&directional, token)) {
+            if (strings.contains(s.directional, token)) {
                 sides += 1;
                 _ = try s.words.copy("|");
             } else {

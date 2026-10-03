@@ -190,6 +190,26 @@ threshold = 0.9
 # file; add a section per pattern.
 [paths."tests/e2e/"]
 disable = ["process-in-test", "network-in-test"]
+
+# The project's words for things: names using a banned word, or an alias of the word the
+# project settled on, are reported, with the name respelled.
+[vocabulary]
+forbidden = ["util", "manager"]
+# Words that give a name a direction, so us_to_uk and uk_to_us aren't name drift.
+directional = ["to", "from"]
+
+[vocabulary.synonyms]
+customer = ["client", "user"]
+
+# Parts of the code with words of their own: [domains.<name>] and [contexts.<name>] take
+# include (.gitignore patterns), forbidden and a synonyms table. A context applies after a
+# domain, and the same name may be defined once in each context.
+[contexts.billing]
+include = ["src/billing/**"]
+forbidden = ["discount"]
+
+[contexts.billing.synonyms]
+invoice = ["bill", "statement"]
 ```
 
 `--rules` on the command line overrides `rules` and `disable`. A mistake in the file stops the run with exit code 2 and names the line and what to write instead, for example `zanity.toml:1: 'recursions' isn't a rule; ...`.
@@ -282,7 +302,11 @@ Rules marked *off* run only with `--rules all`, `rules = ["all"]`, or when named
 | Rule | Severity | Flags |
 |---|---|---|
 | `name-drift` | warning | one concept spelled several ways, such as `order_total` and `total_order` |
-| `duplicate-name` | warning | the same name defined more than once in one language |
+| `duplicate-name` | warning | the same name defined more than once in one language and one domain or context |
+| `forbidden-term` | warning | a name using a word `[vocabulary]` or its domain or context bans |
+| `non-canonical-term` | warning | a name using an alias where the project has settled on another word, with the name respelled |
+| `misplaced-test` | warning | a test in one domain or context whose subject lives in exactly one other |
+| `vocabulary-conflict` | error | a vocabulary that contradicts itself: a word both banned and canonical, an alias mapped two ways, or two domains or contexts with nearly the same name |
 
 **Error messages**
 

@@ -13,6 +13,8 @@ pub const Definition = struct {
     column: u32,
     /// Whether code outside the module can use it: exported, `pub`, `public`, or capitalised in Go.
     public: bool = false,
+    /// The domain or context of zanity.toml it belongs to; empty for none.
+    scope: []const u8 = "",
 
     pub fn sourceOrder(_: void, a: Definition, b: Definition) bool {
         if (a.name.len == 0) assert.panic("a definition at {s}:{d} has no name; the @name capture matched an empty node", .{ a.path, a.line + 1 });
