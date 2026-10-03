@@ -1,0 +1,9 @@
+rules: relaxed-check
+exit: 0
+.github/workflows/ci.yml:7:7: warning [relaxed-check]
+.github/workflows/ci.yml:8:7: warning [relaxed-check]
+.github/workflows/ci.yml:9:9: warning [relaxed-check]
+pyproject.toml:2:1: warning [relaxed-check]
+pyproject.toml:3:1: warning [relaxed-check]
+tsconfig.json:3:5: warning [relaxed-check]
+tsconfig.json:4:5: warning [relaxed-check]

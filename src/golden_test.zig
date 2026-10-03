@@ -309,6 +309,7 @@ test "--infer asks each unit only its own questions, skips what checks settled, 
     defer tmp.cleanup();
     const work = try std.fs.path.join(arena, &.{ ".zig-cache", "tmp", &tmp.sub_path });
     try tmp.dir.writeFile(io, .{ .sub_path = "service.py", .data = try Io.Dir.cwd().readFileAlloc(io, "tests/infer/project/service.py", arena, .unlimited) });
+    try tmp.dir.writeFile(io, .{ .sub_path = "pyproject.toml", .data = "[tool.ruff]\nline-length = 200  # judge: weakened-check\n# judge: unscheduled-analysis\n" });
     const log = try Io.Dir.cwd().realPathFileAlloc(io, work, arena);
     var env = std.process.Environ.Map.init(arena);
     var mock = try startMock(arena, io, try std.fs.path.join(arena, &.{ log, "requests.log" }), &env);
@@ -327,12 +328,12 @@ test "--infer asks each unit only its own questions, skips what checks settled, 
     if (std.mem.indexOf(u8, timings[1], ", 0 asked of TypeSafe") == null) std.debug.print("\nthe second run was not served from the store:\n{s}", .{timings[1]});
     try std.testing.expect(std.mem.indexOf(u8, timings[1], ", 0 asked of TypeSafe") != null);
     try std.testing.expect(std.mem.indexOf(u8, timings[0], ", 0 asked of TypeSafe") == null);
-    for ([_][]const u8{ "rule=\"misleading-error\"", "rule=\"unconstructive-error\"", "'invalid input' doesn't say", "rule=\"hollow-test\"" }) |expected| {
+    for ([_][]const u8{ "rule=\"misleading-error\"", "rule=\"unconstructive-error\"", "'invalid input' doesn't say", "rule=\"hollow-test\"", "rule=\"weakened-check\"", "rule=\"unscheduled-analysis\"" }) |expected| {
         if (std.mem.indexOf(u8, outputs[0], expected) == null) std.debug.print("\nmissing {s} in:\n{s}", .{ expected, outputs[0] });
         try std.testing.expect(std.mem.indexOf(u8, outputs[0], expected) != null);
     }
     const requests = try tmp.dir.readFileAlloc(io, "requests.log", arena, .unlimited);
-    try std.testing.expectEqual(@as(usize, 6), std.mem.count(u8, requests, "\n"));
+    try std.testing.expectEqual(@as(usize, 9), std.mem.count(u8, requests, "\n"));
     var lines = std.mem.tokenizeScalar(u8, requests, '\n');
     while (lines.next()) |line| {
         const fine = std.mem.indexOf(u8, line, "def fine") != null;
@@ -342,6 +343,8 @@ test "--infer asks each unit only its own questions, skips what checks settled, 
         if (is_test) try std.testing.expect(std.mem.indexOf(u8, line, "name-behaviour-mismatch") == null);
         if (!is_test) try std.testing.expect(std.mem.indexOf(u8, line, "hollow-test") == null);
         if (std.mem.indexOf(u8, line, "def test_waits") != null) try std.testing.expect(std.mem.indexOf(u8, line, "flaky-test") == null);
+        const config_line = std.mem.indexOf(u8, line, "weakened-check") != null or std.mem.indexOf(u8, line, "unscheduled-analysis") != null;
+        if (config_line) try std.testing.expect(std.mem.indexOf(u8, line, "name-behaviour-mismatch") == null);
     }
 }
 

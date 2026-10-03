@@ -1,0 +1,7 @@
+{
+  "compilerOptions": {
+    "strict": false,
+    "skipLibCheck": true,
+    "target": "es2022"
+  }
+}

@@ -327,3 +327,9 @@
   (break_expression)
   (continue_expression)
 ] @flow.exit
+
+; A method of a trait's implementation is called through the trait.
+(impl_item
+  trait: (_)
+  body: (declaration_list
+    (function_item) @visibility.public))

@@ -86,7 +86,7 @@ pub fn nameHash(name: []const u8) u64 {
 pub const Edge = struct { caller: u32, callee: []const u8, reach: Reach };
 
 /// What a unit of code is, which decides the questions `check --infer` asks about it.
-pub const UnitKind = enum { function, @"test" };
+pub const UnitKind = enum { function, @"test", setting, project };
 
 /// A function or a test, kept whole so `check --infer` can ask about it.
 pub const Unit = struct {

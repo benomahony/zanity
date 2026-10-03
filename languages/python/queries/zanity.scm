@@ -602,3 +602,13 @@
   (break_statement)
   (continue_statement)
 ] @flow.exit
+
+; A method of a class with a base can override one the base calls, as http.server's handlers do.
+(class_definition
+  superclasses: (argument_list)
+  body: (block
+    [
+      (function_definition) @visibility.public
+      (decorated_definition
+        definition: (function_definition) @visibility.public)
+    ]))

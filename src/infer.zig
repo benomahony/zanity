@@ -212,7 +212,12 @@ pub const Inference = struct {
         const start = self.json.used;
         var writer: Io.Writer = .fixed(self.json.buffer[start..]);
         var json: std.json.Stringify = .{ .writer = &writer };
-        json.write(.{ .language = unit.language, .function = unit.source }) catch {
+        const written = switch (unit.kind) {
+            .function, .@"test" => json.write(.{ .language = unit.language, .function = unit.source }),
+            .setting => json.write(.{ .file = unit.path, .line = unit.source }),
+            .project => json.write(.{ .files = unit.source }),
+        };
+        written catch {
             memory.exceeded = "bytes of --infer requests; raise memory.Limits.judgement_bytes";
             return error.LimitExceeded;
         };
@@ -240,6 +245,8 @@ fn asked(asks: rules.Asks, unit: *const Unit) bool {
         .errors => unit.kind == .function and unit.reports_error,
         .function => unit.kind == .function,
         .@"test" => unit.kind == .@"test",
+        .setting => unit.kind == .setting,
+        .project => unit.kind == .project,
     };
     if (applies and asks == .errors and !unit.reports_error) assert.panic("{s}: asking the error questions about '{s}', which reports no error", .{ unit.path, unit.name });
     return applies;

@@ -618,3 +618,9 @@
   (break_statement)
   (continue_statement)
 ] @flow.exit
+
+; A method of a class that extends another can override one the base calls.
+(class_declaration
+  (class_heritage)
+  body: (class_body
+    (method_definition) @visibility.public))

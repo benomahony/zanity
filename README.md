@@ -341,6 +341,14 @@ Rules marked *off* run only with `--rules all`, `rules = ["all"]`, or when named
 | `misplaced-test` | warning | a test in one domain or context whose subject lives in exactly one other |
 | `vocabulary-conflict` | error | a vocabulary that contradicts itself: a word both banned and canonical, an alias mapped two ways, or two domains or contexts with nearly the same name |
 
+**Project files** (build, lint, type-check, test and CI configuration: `pyproject.toml`, `tsconfig.json`, `Cargo.toml`, `.github/workflows/*.yml` and others, checked as text)
+
+| Rule | Severity | Flags |
+|---|---|---|
+| `relaxed-check` | warning | a setting that lets a check pass when it should fail: `continue-on-error: true`, `\|\| true`, `--exit-zero`, `allow_failure: true`, `strict = false`, `ignore_missing_imports = true`, `"skipLibCheck": true` and the like |
+| `weakened-check` | warning | any other setting line that weakens a check; needs `--infer` |
+| `unscheduled-analysis` | warning | project files that run no strict static analyser on every change, or daily, with zero warnings allowed; needs `--infer` |
+
 **Error messages**
 
 | Rule | Severity | Flags |

@@ -15,6 +15,7 @@ const naming = @import("naming.zig");
 const graph = @import("graph.zig");
 const structure = @import("structure.zig");
 const vocabulary = @import("vocabulary.zig");
+const project = @import("project.zig");
 const memory = @import("memory.zig");
 const Ignore = @import("ignore.zig").Ignore;
 const infer = @import("infer.zig");
@@ -100,6 +101,8 @@ const Workspace = struct {
     graph: graph.CycleScratch,
     findings: memory.Bounded(Finding),
     files: memory.Bounded([]const u8),
+    /// Build, lint, type-check and CI configuration, checked as text.
+    project_files: memory.Bounded([]const u8),
     /// The order checkFiles() hands files to its workers in.
     order: []batch.Sized,
     rows: memory.Bounded(Row),
@@ -125,6 +128,7 @@ const Workspace = struct {
             .graph = try .initGraphScratch(gpa, limits),
             .findings = try .initBounded(gpa, limits.findings, "findings across all files"),
             .files = try .initBounded(gpa, limits.files, "files"),
+            .project_files = try .initBounded(gpa, 1024, "project files"),
             .order = try memory.reserve(gpa, batch.Sized, limits.files),
             .rows = try .initBounded(gpa, limits.findings, "findings across all files"),
             .table = try .initTableScratch(gpa, limits.files),
@@ -208,7 +212,7 @@ fn renderHuman(ctx: *zcli.Context, rows: []const Row) !void {
     const findings = ws.findings.items();
     if (rows.len != findings.len) assert.panic("rendering {d} rows for {d} findings; rows are built one per finding", .{ rows.len, findings.len });
     try report.render(.{ .console = console(ctx, ctx.runtime.out), .scratch = &ws.table, .text = &ws.text }, findings);
-    try report.summarise(console(ctx, ctx.runtime.err), report.count(findings, ws.checked));
+    try report.summarise(console(ctx, ctx.runtime.err), report.count(findings, ws.checked + ws.project_files.len));
     if (ws.checked > ws.files.len) assert.panic("checked {d} files out of {d} collected; count a file as checked only once, in checkFiles()", .{ ws.checked, ws.files.len });
 }
 
@@ -290,6 +294,8 @@ fn checkPaths(ctx: *zcli.Context, ws: *Workspace, options: CheckOptions, selecte
     std.mem.sort([]const u8, ws.files.items(), {}, strings.lessThan);
     try ws.initCheckers(std.heap.page_allocator, selected);
     try checkFiles(ctx, ws, selected);
+    std.mem.sort([]const u8, ws.project_files.items(), {}, strings.lessThan);
+    try project.checkProjectFiles(.{ .io = ws.io, .buffer = ws.source, .facts = &ws.facts, .enabled = selected, .findings = &ws.findings }, ws.project_files.items());
     if (ws.inference) |*inference| if (ws.live) |live| {
         inference.reporter = .{ .state = live, .report = reportInference };
     };
@@ -309,7 +315,7 @@ fn checkPaths(ctx: *zcli.Context, ws: *Workspace, options: CheckOptions, selecte
         const rule = rules.find(f.rule) orelse unreachable;
         try ws.rows.add(.{ .path = f.path, .line = f.line + 1, .column = f.column + 1, .severity = @tagName(rule.severity), .rule = rule.name, .message = f.message, .fix = f.advice() });
     }
-    return report.count(findings, ws.checked);
+    return report.count(findings, ws.checked + ws.project_files.len);
 }
 
 fn checkFiles(ctx: *zcli.Context, ws: *Workspace, selected: rules.Set) !void {
@@ -555,13 +561,7 @@ fn collect(ctx: *zcli.Context, ws: *Workspace, path: []const u8) !void {
                 try ws.ignore.loadFile(ws.io, absolute, ".gitignore");
                 try walker.enter(ws.io, entry);
             },
-            .file => if (language.forPath(entry.basename) != null and !ws.ignore.ignored(absolute, .file)) {
-                const joined = if (std.mem.eql(u8, path, "."))
-                    try ws.text.copy(entry.path)
-                else
-                    try ws.text.format("{s}{s}{s}", .{ path, if (std.mem.endsWith(u8, path, "/")) "" else "/", entry.path });
-                try ws.files.add(joined);
-            },
+            .file => if (!ws.ignore.ignored(absolute, .file)) try addFile(ws, path, entry),
             else => {},
         }
     } else {
@@ -572,10 +572,23 @@ fn collect(ctx: *zcli.Context, ws: *Workspace, path: []const u8) !void {
 }
 
 
+/// Adds a file the walk found under `path` to the source files or the project files, or neither.
+fn addFile(ws: *Workspace, path: []const u8, entry: Io.Dir.Walker.Entry) !void {
+    if (entry.path.len == 0) assert.panic("the walk under {s} found a file with no path; Walker gives each entry its path", .{path});
+    const source = language.forPath(entry.basename) != null;
+    if (!source and !project.isProjectFile(entry.path)) return;
+    const joined = if (std.mem.eql(u8, path, "."))
+        try ws.text.copy(entry.path)
+    else
+        try ws.text.format("{s}{s}{s}", .{ path, if (std.mem.endsWith(u8, path, "/")) "" else "/", entry.path });
+    if (joined.len < entry.path.len) assert.panic("joined '{s}' under '{s}' into the shorter '{s}'; addFile() must keep the whole path", .{ entry.path, path, joined });
+    if (source) try ws.files.add(joined) else try ws.project_files.add(joined);
+}
+
 fn skipped(name: []const u8) bool {
     if (name.len == 0) assert.panic("asked whether a directory with an empty name is skipped; skip empty names before calling skipped()", .{});
     if (std.mem.indexOfScalar(u8, name, '/') != null) assert.panic("'{s}' is a path, but skipped() takes one directory name; pass the directory's base name", .{name});
-    if (name[0] == '.') return true;
+    if (name[0] == '.') return !strings.contains(&project.hidden_dirs, name);
     for (skipped_dirs) |s| if (std.mem.eql(u8, s, name)) return true;
     return false;
 }

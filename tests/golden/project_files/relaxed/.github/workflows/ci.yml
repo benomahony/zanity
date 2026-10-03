@@ -1,0 +1,10 @@
+name: ci
+on: [pull_request]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - run: ruff check . --exit-zero
+      - run: mypy src || true
+        continue-on-error: true
+      - run: pytest
