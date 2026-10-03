@@ -320,3 +320,10 @@
     (scoped_type_identifier
       name: (type_identifier) @implementation.base)
   ])
+
+; Statements that leave the block they are in, so code holding one can't move into a function.
+[
+  (return_expression)
+  (break_expression)
+  (continue_expression)
+] @flow.exit

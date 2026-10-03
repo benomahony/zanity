@@ -436,3 +436,10 @@
 
 ; Names the code refers to, for dead-symbol: every name other than where it is defined.
 (identifier) @reference.name
+
+; Statements that leave the block they are in, so code holding one can't move into a function.
+[
+  (return_expression)
+  (break_expression)
+  (continue_expression)
+] @flow.exit

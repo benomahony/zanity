@@ -1,0 +1,3 @@
+rules: extractable-block
+exit: 0
+extract_go.go:6:2: information [extractable-block]

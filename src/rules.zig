@@ -50,6 +50,7 @@ pub const all = [_]Rule{
     .{ .name = "structural-twins", .advice = "Keep one, and make the other call it with what differs passed in.", .severity = .warning, .default = true, .catalogue = &.{"CWE-1041"}, .needs = &.{ "function.outer", "function.name" } },
     .{ .name = "dead-symbol", .advice = "Delete it; if something reaches it by name at runtime, such as a framework or a config file, say so in a comment where it is defined and suppress this finding there.", .severity = .warning, .default = true, .catalogue = &.{"CWE-561"}, .needs = &.{ "name", "reference.name" } },
     .{ .name = "single-impl-abstraction", .advice = "Use the one implementation directly until a second one is needed.", .severity = .information, .default = true, .needs = &.{ "abstraction.name", "implementation.base" } },
+    .{ .name = "extractable-block", .advice = "Move them into a function named for what they do, taking the inputs and returning the output.", .severity = .information, .default = true, .needs = &.{ "function.outer", "function.name", "local.reference", "write.target", "flow.exit" } },
     .{ .name = "swallowed-error", .advice = "Handle the error, log it with context, or let it propagate.", .severity = .warning, .default = true, .needs = &.{"catch.swallowed"}, .catalogue = &.{ "CWE-390", "CWE-1069" } },
     .{ .name = "sleep-in-test", .advice = "Wait for the event itself, or use a fake clock.", .severity = .warning, .default = true, .needs = &.{ "call.outer", "call.name", "function.name" } },
     .{ .name = "polling-loop", .advice = "Wait on an event or callback, or inject a clock.", .severity = .warning, .default = true, .needs = &.{ "call.outer", "call.name", "loop.outer", "function.name" } },
@@ -193,6 +194,10 @@ pub const min_repeated_expression = 8;
 /// share a shape by chance, such as getters, so structural-twins leaves them out.
 pub const min_twin_lines = 6;
 pub const min_twin_nodes = 40;
+/// Functions long-function reports are the ones worth splitting, so extractable-block looks inside them.
+pub const min_extract_lines = max_function_lines;
+/// Top-level statements a block needs before moving it out is worth a function of its own.
+pub const min_extract_statements = 5;
 /// Deeper than this many nested branches and loops in one function is hard to follow.
 pub const max_nesting = 4;
 /// McCabe complexity: one plus the decisions a function makes.

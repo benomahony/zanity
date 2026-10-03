@@ -1,0 +1,3 @@
+rules: extractable-block
+exit: 0
+extract.py:2:5: information [extractable-block]

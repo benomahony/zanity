@@ -248,6 +248,7 @@ Rules marked *off* run only with `--rules all`, `rules = ["all"]`, or when named
 | `structural-twins` | warning | functions whose bodies have the same structure, differing only in names and values, across files; tests and functions under six lines are left out |
 | `dead-symbol` | warning | a function, method, class or type nothing anywhere refers to; not exported or `pub` API, decorated or annotated code a framework reaches, tests, or entry points such as `main` |
 | `single-impl-abstraction` | information | an interface, trait, protocol or abstract class with exactly one implementation (not Go, whose interfaces are implicit) |
+| `extractable-block` | information | in a long function, the longest run of statements that reads at most four names from before it, sets at most one read after it, and doesn't return or break out, so it can become a function of its own; with long-function on, it becomes that finding's fix |
 | `swallowed-error` | warning | an error handler that does nothing |
 | `empty-block` | warning | an empty block where code was expected |
 | `deep-nesting` | warning | code nested too deep to follow |

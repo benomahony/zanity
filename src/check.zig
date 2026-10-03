@@ -22,6 +22,7 @@ const parameters = @import("parameters.zig");
 const repeats = @import("repeats.zig");
 const shapes = @import("shapes.zig");
 const notes = @import("notes.zig");
+const extract = @import("extract.zig");
 
 pub const Diagnostic = struct {
     line: u32,
@@ -70,6 +71,8 @@ pub const Context = struct {
     repeat_mark: usize = 0,
     /// Where the body starts, from its @inner capture; parameters are declared before it.
     body_start: u32 = std.math.maxInt(u32),
+    /// The first node of the body, from its @inner capture.
+    inner: ?ts.Node = null,
     name: ?ts.Node = null,
     callee: ?ts.Node = null,
     receiver: ?ts.Node = null,
@@ -546,7 +549,10 @@ pub const File = struct {
             }
         }
         if (std.mem.eql(u8, part, "inner")) {
-            if (!ctx.body) ctx.body_start = ts.ts_node_start_byte(node);
+            if (!ctx.body) {
+                ctx.body_start = ts.ts_node_start_byte(node);
+                ctx.inner = node;
+            }
             ctx.body = true;
         } else if (std.mem.eql(u8, part, "argument")) {
             if (ctx.argument_count < ctx.arguments.len) ctx.arguments[ctx.argument_count] = node;
@@ -962,6 +968,7 @@ pub const File = struct {
         try parameters.checkUnusedParameters(self, ctx, name);
         try repeats.checkRepeats(self, ctx, name);
         try shapes.recordShape(self, ctx);
+        try extract.checkExtractable(self, ctx, name);
         if (self.index.marks(ctx.span, self.v.function_passthrough) or self.index.marks(ctx.node, self.v.function_passthrough)) {
             _ = try self.report(name_node, "passthrough-wrapper", try self.say("'{s}' only forwards to another call, so it adds a name without adding behaviour.", .{name}));
         }

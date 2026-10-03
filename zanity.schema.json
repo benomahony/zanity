@@ -99,6 +99,7 @@
         { "const": "structural-twins", "description": "warning, on by default. Keep one, and make the other call it with what differs passed in." },
         { "const": "dead-symbol", "description": "warning, on by default. Delete it; if something reaches it by name at runtime, such as a framework or a config file, say so in a comment where it is defined and suppress this finding there." },
         { "const": "single-impl-abstraction", "description": "information, on by default. Use the one implementation directly until a second one is needed." },
+        { "const": "extractable-block", "description": "information, on by default. Move them into a function named for what they do, taking the inputs and returning the output." },
         { "const": "swallowed-error", "description": "warning, on by default. Handle the error, log it with context, or let it propagate." },
         { "const": "sleep-in-test", "description": "warning, on by default. Wait for the event itself, or use a fake clock." },
         { "const": "polling-loop", "description": "warning, on by default. Wait on an event or callback, or inject a clock." },

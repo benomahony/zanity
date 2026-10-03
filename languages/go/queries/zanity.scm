@@ -337,3 +337,11 @@
   (field_identifier)
   (type_identifier)
 ] @reference.name
+
+; Statements that leave the block they are in, so code holding one can't move into a function.
+[
+  (return_statement)
+  (break_statement)
+  (continue_statement)
+  (goto_statement)
+] @flow.exit

@@ -38,6 +38,7 @@ pub const looked_up = [_][]const u8{
     "expression.path",
     "expression.repeatable",
     "expression.returned",
+    "flow.exit",
     "implementation.base",
     "literal.collection",
     "literal.constant",
