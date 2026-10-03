@@ -1,2 +1,3 @@
 textobjects.scm: https://github.com/nvim-treesitter/nvim-treesitter-textobjects 5c7b026 (Apache-2.0)
 locals.scm: https://github.com/nvim-treesitter/nvim-treesitter 25a9b06 (Apache-2.0)
+javascript: tags.scm from tree-sitter-javascript 58404d8; locals.scm is nvim-treesitter 25a9b06 ecma + javascript flattened; textobjects.scm and zanity.scm start from typescript's, without its type-only patterns

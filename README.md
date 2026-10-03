@@ -232,6 +232,7 @@ value = eval(text)  # zanity: ignore[forbidden-call]
 | Zig | `.zig` |
 | Go | `.go` |
 | TypeScript | `.ts` `.mts` `.cts` |
+| JavaScript | `.js` `.mjs` `.cjs` `.jsx` |
 | Rust | `.rs` |
 | Java | `.java` |
 

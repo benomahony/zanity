@@ -128,7 +128,7 @@
         .test_doubles = .{ "jest.fn", "jest.spyOn", "jest.mock", "jest.doMock", "vi.fn", "vi.spyOn", "vi.mock", "vi.doMock", "vi.stubGlobal", "sinon.stub", "sinon.spy", "sinon.mock", "sinon.fake", "sinon.replace", "td.function", "td.object", "td.replace" },
         .verification_methods = .{ "toHaveBeenCalled", "toHaveBeenCalledTimes", "toHaveBeenCalledWith", "toHaveBeenLastCalledWith", "toHaveBeenNthCalledWith", "toHaveBeenCalledOnce", "toHaveBeenCalledOnceWith", "toBeCalled", "toBeCalledTimes", "toBeCalledWith", "lastCalledWith", "nthCalledWith", "calledWith", "calledOnceWith", "calledWithExactly", "calledOnce", "calledTwice", "calledThrice", "notCalled", "callCount" },
         .verification_calls = .{"td.verify"},
-        .test_file_suffixes = .{ ".test.ts", ".spec.ts", ".test.tsx", ".spec.tsx", ".test.mts", ".spec.mts", ".test.cts", ".spec.cts" },
+        .test_file_suffixes = .{ ".test.ts", ".spec.ts", ".test.tsx", ".spec.tsx", ".test.mts", ".spec.mts", ".test.cts", ".spec.cts", ".test.js", ".spec.js", ".test.jsx", ".spec.jsx", ".test.mjs", ".spec.mjs", ".test.cjs", ".spec.cjs" },
         .mutating_calls = .{ "push", "pop", "shift", "unshift", "splice", "set", "delete", "add", "clear", "next", "sort", "reverse" },
         .null_types = .{"null"},
     },

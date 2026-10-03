@@ -1,0 +1,3 @@
+rules: parse-error,long-parameter-list
+exit: 0
+component_jsx.jsx:5:10: warning [long-parameter-list]

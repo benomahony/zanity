@@ -32,6 +32,14 @@
         .queries = .{ "tags", "locals", "textobjects", "zanity" },
     },
     .{
+        .name = "javascript",
+        .not_applicable = .{ "single-impl-abstraction", "dynamic-allocation", "restated-type", "redundant-null-check", "conversion-assertion", "guaranteed-length", "float-equality", "generic-catch", "identity-comparison", "generic-throw", "weak-hash" },
+        .extensions = .{ "js", "mjs", "cjs", "jsx" },
+        .ecosystem = "node",
+        .scanner = true,
+        .queries = .{ "tags", "locals", "textobjects", "zanity" },
+    },
+    .{
         .name = "rust",
         .not_applicable = .{ "assertion-side-effect", "restated-type", "constant-assertion", "redundant-null-check", "conversion-assertion", "guaranteed-length", "generic-catch", "return-in-finally", "identity-comparison", "precedence-trap", "generic-throw", "switch-fallthrough", "missing-default", "unsafe-deserialization", "shell-command", "sql-built-from-strings", "secret-in-log", "unawaited-call" },
         .extensions = .{"rs"},
