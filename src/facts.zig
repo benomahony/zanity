@@ -85,8 +85,14 @@ pub fn nameHash(name: []const u8) u64 {
 
 pub const Edge = struct { caller: u32, callee: []const u8, reach: Reach };
 
-/// A function that reports an error, kept whole so `check --infer` can ask about its messages.
+/// What a unit of code is, which decides the questions `check --infer` asks about it.
+pub const UnitKind = enum { function, @"test" };
+
+/// A function or a test, kept whole so `check --infer` can ask about it.
 pub const Unit = struct {
+    kind: UnitKind = .function,
+    /// Whether it raises, logs or asserts with a message, so the error-message questions apply.
+    reports_error: bool = false,
     path: []const u8,
     language: []const u8,
     name: []const u8,
@@ -164,7 +170,12 @@ pub const Facts = struct {
     }
 
     /// Keeps a function that reports an error; `at` is its name's line and column, `end_line` its last line.
-    pub fn unit(self: *Facts, name: []const u8, at: [3]u32, source: []const u8) error{LimitExceeded}!void {
+    /// What a unit is besides its name and source: its kind, whether it reports errors, and where
+    /// it is, as its name's line and column and its last line.
+    pub const UnitSort = struct { kind: UnitKind, reports_error: bool, at: [3]u32 };
+
+    pub fn unit(self: *Facts, name: []const u8, source: []const u8, sort: UnitSort) error{LimitExceeded}!void {
+        const at = sort.at;
         if (self.path.len == 0 or self.language.len == 0) assert.panic("keeping function '{s}' before the file is known (path '{s}', language '{s}'); set facts.path and facts.language first", .{ name, self.path, self.language });
         if (at[2] < at[0]) assert.panic("{s}: function '{s}' ends on line {d}, before its name on line {d}; pass the function's name position and its last line from the same node", .{ self.path, name, at[2] + 1, at[0] + 1 });
         try self.units.add(.{
@@ -175,6 +186,8 @@ pub const Facts = struct {
             .column = at[1],
             .end_line = at[2],
             .source = try self.text.copy(source),
+            .kind = sort.kind,
+            .reports_error = sort.reports_error,
         });
     }
 

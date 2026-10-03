@@ -18,3 +18,13 @@ def fail():
 
 def fine(x):
     return x + 1
+
+
+def test_loads_the_file():
+    # judge: hollow-test
+    load("data.json")
+
+
+def test_waits_for_the_cache():
+    time.sleep(1)
+    assert parse("a b") == ["a", "b"], "splits on spaces"

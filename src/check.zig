@@ -983,9 +983,9 @@ pub const File = struct {
         if (ctx.decisions + 1 > rules.max_complexity) {
             _ = try self.report(name_node, "complex-function", try self.say("'{s}' makes {d} decisions (cyclomatic complexity {d}), past the {d} a reader can follow and a test suite can cover.", .{ name, ctx.decisions, ctx.decisions + 1, rules.max_complexity }));
         }
-        if (ctx.has_message and self.work.facts.collect_units) {
+        if (self.work.facts.collect_units and !self.index.marks(ctx.node, self.v.test_outer)) {
             const at = ts.ts_node_start_point(name_node);
-            try self.work.facts.unit(name, .{ at.row, at.column, last }, ctx.span.text(self.source));
+            try self.work.facts.unit(name, ctx.span.text(self.source), .{ .kind = if (ctx.is_test) .@"test" else .function, .reports_error = ctx.has_message, .at = .{ at.row, at.column, last } });
         }
     }
 

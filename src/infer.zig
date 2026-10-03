@@ -1,6 +1,6 @@
-//! The inference tier. For each function that reports an error, `check --infer` asks TypeSafe
-//! the questions of the rules that no deterministic check can settle, skipping any a
-//! deterministic check already answered there. Answers are kept in a store by model, function
+//! The inference tier. For each function and test, `check --infer` asks TypeSafe the questions
+//! of the rules that no deterministic check can settle, skipping any a deterministic check
+//! already answered there. Answers are kept in a store by model, function
 //! and question, so unchanged code is never asked about twice.
 const std = @import("std");
 const assert = @import("assert.zig");
@@ -13,12 +13,13 @@ const facts_module = @import("facts.zig");
 const Unit = facts_module.Unit;
 const Finding = facts_module.Finding;
 const store = @import("store.zig");
+const strings = @import("strings.zig");
 
 /// How sure the model must be before a judgement becomes a finding.
 pub const default_threshold = 0.8;
 /// Requests to TypeSafe at once when zanity.toml doesn't say.
 pub const default_concurrency = 8;
-const max_questions = 8;
+const max_questions = 16;
 
 const Job = struct {
     unit: *const Unit,
@@ -91,7 +92,7 @@ pub const Inference = struct {
         if (unit.source.len == 0) assert.panic("{s}: function '{s}' has no source to ask about; facts.unit() must store the function's source when it records the unit", .{ unit.path, unit.name });
         var job: Job = .{ .unit = unit, .unit_hash = self.unitHash(unit) };
         for (&rules.all) |*rule| {
-            if (rule.question.len == 0 or !enabled.enabled(rule.name) or decided(settled, unit, rule.name)) continue;
+            if (rule.question.len == 0 or !enabled.enabled(rule.name) or !asked(rule.asks, unit) or decided(settled, unit, rule)) continue;
             if (job.count == max_questions) break;
             job.rules[job.count] = rule;
             job.answers[job.count] = try self.store.cached(self.client.model, store.digest(&.{rule.question}), job.unit_hash);
@@ -231,12 +232,27 @@ pub const Inference = struct {
     }
 };
 
-/// Whether a deterministic check already reported `rule` inside the unit, so asking is wasted.
-fn decided(settled: []const Finding, unit: *const Unit, rule: []const u8) bool {
+/// Whether a question about `asks` applies to the unit: the error-message questions to functions
+/// that report errors, the function questions to every function, and the test questions to tests.
+fn asked(asks: rules.Asks, unit: *const Unit) bool {
+    if (unit.name.len == 0) assert.panic("{s}: a unit has no name; facts.unit() records the function's or test's name", .{unit.path});
+    const applies = switch (asks) {
+        .errors => unit.kind == .function and unit.reports_error,
+        .function => unit.kind == .function,
+        .@"test" => unit.kind == .@"test",
+    };
+    if (applies and asks == .errors and !unit.reports_error) assert.panic("{s}: asking the error questions about '{s}', which reports no error", .{ unit.path, unit.name });
+    return applies;
+}
+
+/// Whether a deterministic check already reported `rule`, or a rule that settles its question,
+/// inside the unit, so asking is wasted.
+fn decided(settled: []const Finding, unit: *const Unit, rule: *const rules.Rule) bool {
     if (unit.end_line < unit.line) assert.panic("{s}: '{s}' ends on line {d}, before it starts on {d}; facts.unit() must record the function's first line before its last", .{ unit.path, unit.name, unit.end_line + 1, unit.line + 1 });
     const found = for (settled) |f| {
-        if (std.mem.eql(u8, f.rule, rule) and std.mem.eql(u8, f.path, unit.path) and f.line >= unit.line and f.line <= unit.end_line) break true;
+        if (!std.mem.eql(u8, f.path, unit.path) or f.line < unit.line or f.line > unit.end_line) continue;
+        if (std.mem.eql(u8, f.rule, rule.name) or strings.contains(rule.settled_by, f.rule)) break true;
     } else false;
-    if (found and settled.len == 0) assert.panic("found a {s} finding among no findings; decided() must search only the findings added for this unit", .{rule});
+    if (found and settled.len == 0) assert.panic("found a {s} finding among no findings; decided() must search only the findings added for this unit", .{rule.name});
     return found;
 }

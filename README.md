@@ -137,7 +137,7 @@ zanity help check                             # every option
 
 `check` exits 0 when nothing fired, 1 when an error-level rule fired (or any rule, with `--strict`), and 2 on a usage error such as a mistake in `zanity.toml`. Findings go to stdout and the one-line summary to stderr, so output can be piped cleanly. On a terminal the report is grouped by file and ends with two tables: the files with the most errors, and the rules that fired most. A progress line shows how far a long run has got; `-q` hides it, and it never appears in piped output. `--no-color` or `NO_COLOR` turns colour off.
 
-### Judging error messages with `--infer`
+### Judging what structure can't settle with `--infer`
 
 Whether an error message is vague, cryptic or unhelpful can often be decided from the code: a message that shows none of the values its condition reads is vague. zanity checks that deterministically on every run. What code structure can't settle, such as whether a message describes a different failure from the one that happened, `--infer` asks of a language model through the [TypeSafe API](https://docs.typesafe.ai/api), after every deterministic check has run.
 
@@ -153,9 +153,41 @@ zanity check . --infer
 | `unconstructive-error` | has an error message that says what failed but not what to do about it |
 | `misleading-error` | has an error message that describes a different failure from the one that happened (*off* by default; `rules = ["all"]` includes it) |
 
+Every function is also asked:
+
+| Rule | Asks whether a function |
+|---|---|
+| `name-behaviour-mismatch` | is named for something different from what its body does |
+| `comment-drift` | has a docstring or comment describing behaviour the code doesn't have |
+| `query-with-side-effect` | is named like a query (get, is, has, find) but also changes state |
+| `partial-failure` | makes several writes where a failure partway leaves data half updated |
+| `check-then-act` | checks shared state and then acts on it, though it can change in between |
+| `non-idempotent-retry` | retries an operation that isn't safe to repeat |
+| `unit-mismatch` | combines quantities in different units without converting |
+| `boundary-error` | has a range limit or comparison that looks wrong for its intent |
+| `missing-authorisation` | acts for a caller without checking the caller may |
+| `mixed-abstraction` | mixes high-level steps with low-level detail such as parsing or raw SQL |
+
+And every test case:
+
+| Rule | Asks whether a test | Not asked where this already reported |
+|---|---|---|
+| `order-dependent-test` | depends on which tests ran before it | `shared-state-in-test`, `filesystem-in-test`, `database-in-test`, `unmanaged-temp-in-test` |
+| `combinatorial-test` | varies several independent things at once | |
+| `flaky-test` | can pass or fail with no code change | `nondeterministic-test`, `sleep-in-test`, `network-in-test`, `polling-loop` |
+| `slow-test` | is likely to be slow | `sleep-in-test`, `polling-loop`, `network-in-test`, `database-in-test`, `process-in-test` |
+| `heavy-setup-test` | needs a lot of setup for what it checks | |
+| `unreadable-test` | doesn't let a reader tell what it checks or why | `vague-test-name` |
+| `hollow-test` | would still pass if the behaviour it names were broken | |
+| `implementation-coupled-test` | would fail after a refactor that keeps behaviour | `call-verification` |
+| `manual-test` | needs a person to run or judge it | `stdin-in-test`, `debug-leftover` |
+| `unfocused-test` | wouldn't say why it failed | `eager-test` |
+| `self-mocking-test` | mocks the behaviour it claims to check | |
+| `trivial-test` | checks something trivial or only the easy path | |
+
 A finding is reported when the model is at least 80% sure, and says how sure it was. `threshold` under `[infer]` in `zanity.toml` changes that: `threshold = 0.9` reports only what it is at least 90% sure of, and a lower value reports more.
 
-**What is sent:** the source of each function that raises, returns or logs an error, and only the questions no deterministic check already answered. Nothing else leaves your machine, and without `--infer` nothing does at all.
+**What is sent:** the source of each function and test, and only the questions that apply to it and that no deterministic check already answered there: the error-message questions only about functions that raise, return or log an error. Nothing else leaves your machine, and without `--infer` nothing does at all.
 
 **Cost and speed:** answers are cached in a SQLite file, `~/.cache/zanity/zanity.db` (or wherever `ZANITY_STORE` points), keyed by the function's source, so unchanged code is never asked about twice and a second run is instant. A progress line shows how many functions are answered and how long the rest will take. `[infer] concurrency` in `zanity.toml` sets how many requests run at once (default 8, up to 64); `TYPESAFE_BASE_URL` points at a different TypeSafe endpoint.
 

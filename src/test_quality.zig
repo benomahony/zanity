@@ -56,6 +56,11 @@ pub fn closeTest(self: *File, ctx: Context) !void {
         _ = try self.report(at, "complex-function", try self.say("'{s}' makes {d} decisions (cyclomatic complexity {d}), past the {d} a reader can follow and a test suite can cover.", .{ shown, ctx.decisions, ctx.decisions + 1, rules.max_complexity }));
     }
     if (shown.len == 0) assert.panic("{s}: the test {f} has no first line to name it by; capture a test node with text as @test.outer in the language's zanity.scm", .{ self.work.facts.path, ctx.node.where() });
+    const facts = self.work.facts;
+    if (facts.collect_units) {
+        const start = ts.ts_node_start_point(at);
+        try facts.unit(shown, ctx.span.text(self.source), .{ .kind = .@"test", .reports_error = false, .at = .{ start.row, start.column, ts.ts_node_end_point(ctx.span).row } });
+    }
 }
 
 pub fn checkTestCall(self: *File, ctx: Context, name: []const u8) !void {

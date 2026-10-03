@@ -299,7 +299,7 @@ fn startMock(arena: std.mem.Allocator, io: Io, log: []const u8, env: *std.proces
     return .{ .child = child, .port = try arena.dupe(u8, port) };
 }
 
-test "--infer asks only about functions that report errors, and caches every answer" {
+test "--infer asks each unit only its own questions, skips what checks settled, and caches every answer" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
     const arena = arena_state.allocator();
@@ -327,13 +327,22 @@ test "--infer asks only about functions that report errors, and caches every ans
     if (std.mem.indexOf(u8, timings[1], ", 0 asked of TypeSafe") == null) std.debug.print("\nthe second run was not served from the store:\n{s}", .{timings[1]});
     try std.testing.expect(std.mem.indexOf(u8, timings[1], ", 0 asked of TypeSafe") != null);
     try std.testing.expect(std.mem.indexOf(u8, timings[0], ", 0 asked of TypeSafe") == null);
-    for ([_][]const u8{ "rule=\"misleading-error\"", "rule=\"unconstructive-error\"", "'invalid input' doesn't say" }) |expected| {
+    for ([_][]const u8{ "rule=\"misleading-error\"", "rule=\"unconstructive-error\"", "'invalid input' doesn't say", "rule=\"hollow-test\"" }) |expected| {
         if (std.mem.indexOf(u8, outputs[0], expected) == null) std.debug.print("\nmissing {s} in:\n{s}", .{ expected, outputs[0] });
         try std.testing.expect(std.mem.indexOf(u8, outputs[0], expected) != null);
     }
     const requests = try tmp.dir.readFileAlloc(io, "requests.log", arena, .unlimited);
-    try std.testing.expectEqual(@as(usize, 3), std.mem.count(u8, requests, "\n"));
-    try std.testing.expect(std.mem.indexOf(u8, requests, "def fine") == null);
+    try std.testing.expectEqual(@as(usize, 6), std.mem.count(u8, requests, "\n"));
+    var lines = std.mem.tokenizeScalar(u8, requests, '\n');
+    while (lines.next()) |line| {
+        const fine = std.mem.indexOf(u8, line, "def fine") != null;
+        const is_test = std.mem.indexOf(u8, line, "def test_") != null;
+        const errors = std.mem.indexOf(u8, line, "vague-error") != null;
+        if (fine or is_test) try std.testing.expect(!errors);
+        if (is_test) try std.testing.expect(std.mem.indexOf(u8, line, "name-behaviour-mismatch") == null);
+        if (!is_test) try std.testing.expect(std.mem.indexOf(u8, line, "hollow-test") == null);
+        if (std.mem.indexOf(u8, line, "def test_waits") != null) try std.testing.expect(std.mem.indexOf(u8, line, "flaky-test") == null);
+    }
 }
 
 test "zanity.toml disables rules and excludes paths" {
