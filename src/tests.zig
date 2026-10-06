@@ -14,4 +14,5 @@ test {
     _ = @import("scope.zig");
     _ = @import("schema.zig");
     _ = @import("assert.zig");
+    _ = @import("main.zig");
 }

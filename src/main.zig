@@ -222,8 +222,6 @@ fn runInit(ctx: *zcli.Context, options: InitOptions) ![]const InitRow {
     const dir = options.paths[0];
     const target = if (std.mem.eql(u8, dir, ".")) config.file_name else try ws.text.format("{s}/{s}", .{ std.mem.trimEnd(u8, dir, "/"), config.file_name });
     const cwd = Io.Dir.cwd();
-    const exists = if (cwd.access(ws.io, target, .{})) true else |_| false;
-    if (exists and !options.force) return ctx.fail(.usage, try ws.text.format("{s} already exists.", .{target}), "Edit it, or pass --force to replace it with a fresh one.");
     try collect(ctx, ws, dir);
     var counts: [language.count]starter.Project.Count = undefined;
     for (adapters.all, &counts) |*adapter, *count| count.* = .{ .name = adapter.name, .files = 0 };
@@ -241,8 +239,9 @@ fn runInit(ctx: *zcli.Context, options: InitOptions) ![]const InitRow {
     var buffer: [64 * 1024]u8 = undefined;
     var w: std.Io.Writer = .fixed(&buffer);
     try starter.renderConfig(&w, .{ .languages = &counts, .present = present[0..found] });
-    cwd.writeFile(ws.io, .{ .sub_path = target, .data = w.buffered() }) catch |e| {
-        return ctx.fail(.io, try ws.text.format("Could not write {s}: {t}.", .{ target, e }), "Check that the directory exists and is writable.");
+    cwd.writeFile(ws.io, .{ .sub_path = target, .data = w.buffered(), .flags = .{ .exclusive = !options.force } }) catch |e| switch (e) {
+        error.PathAlreadyExists => return ctx.fail(.usage, try ws.text.format("{s} already exists.", .{target}), "Edit it, or pass --force to replace it with a fresh one."),
+        else => return ctx.fail(.io, try ws.text.format("Could not write {s}: {t}.", .{ target, e }), "Check that the directory exists and is writable."),
     };
     if (w.buffered().len == 0) assert.panic("zanity init wrote an empty {s}; renderConfig() in src/init.zig must write the whole file", .{target});
     if (found > starter.usual_excludes.len) assert.panic("found {d} of the {d} usual excludes; the loop in runInit() must add each at most once", .{ found, starter.usual_excludes.len });
@@ -496,13 +495,20 @@ fn fixFile(ctx: *zcli.Context, ws: *Workspace, findings: []Finding) !usize {
     }
     @memcpy(ws.fixed[out..][0..rest.len], rest);
     out += rest.len;
-    try replaceFile(ctx, ws, path, ws.fixed[0..out]);
+    try replaceFile(ctx, ws, .{ .path = path, .read = source, .fixed = ws.fixed[0..out] });
     shiftLines(source, findings);
     if (applied == 0) assert.panic("expected at least one edit to apply to {s}, got none; fixFiles() must call fixFile() only for a file with an edit", .{path});
     return applied;
 }
 
-fn replaceFile(ctx: *zcli.Context, ws: *Workspace, path: []const u8, bytes: []const u8) !void {
+/// A file to fix: its path, the bytes the fixes were made against, and the fixed bytes.
+const Replacement = struct { path: []const u8, read: []const u8, fixed: []const u8 };
+
+/// Writes the fixed file in place of the original, unless someone changed the original since it
+/// was read: their change would be lost, so it is left for the next run instead.
+fn replaceFile(ctx: *zcli.Context, ws: *Workspace, r: Replacement) !void {
+    const path = r.path;
+    const bytes = r.fixed;
     if (!(path.len > 0 and bytes.len <= ws.fixed.len)) assert.panic("expected a path and at most {d} bytes, got '{s}' and {d} bytes; fixFile() must write at most the fixed buffer's size", .{ ws.fixed.len, path, bytes.len });
     const cwd = Io.Dir.cwd();
     const permissions = (cwd.statFile(ws.io, path, .{}) catch |e| {
@@ -513,8 +519,28 @@ fn replaceFile(ctx: *zcli.Context, ws: *Workspace, path: []const u8, bytes: []co
     };
     defer atomic.deinit(ws.io);
     try atomic.file.writeStreamingAll(ws.io, bytes);
+    if (!try unchanged(ws.io, path, r.read)) {
+        return ctx.fail(.io, try ws.text.format("{s} changed while zanity was fixing it, so it was left as it is.", .{path}), "Run zanity check --fix again once nothing else is editing it.");
+    }
     try atomic.replace(ws.io);
     if (bytes.len == 0) assert.panic("expected a fixed file with content, got an empty {s}; fixFile() must write the kept source and each edit", .{path});
+}
+
+/// Whether the file at `path` still holds exactly `expected`.
+fn unchanged(io: Io, path: []const u8, expected: []const u8) !bool {
+    if (path.len == 0) assert.panic("asked whether a file with no path is unchanged; pass the path fixFile() read", .{});
+    const file = Io.Dir.cwd().openFile(io, path, .{}) catch return false;
+    defer file.close(io);
+    var chunk: [16 * 1024]u8 = undefined;
+    var offset: usize = 0;
+    for (0..expected.len / chunk.len + 2) |_| {
+        const n = try file.readPositionalAll(io, &chunk, offset);
+        if (n > expected.len - offset or !std.mem.eql(u8, chunk[0..n], expected[offset..][0..n])) return false;
+        offset += n;
+        if (offset > expected.len) assert.panic("compared {d} bytes of {s} against {d}; stop as soon as the file is longer than expected", .{ offset, path, expected.len });
+        if (n < chunk.len) return offset == expected.len;
+    }
+    assert.panic("read {d} bytes of {s} in chunks without reaching its end; the loop must allow one chunk past {d} bytes", .{ offset, path, expected.len });
 }
 
 /// Moves the findings that stay in a fixed file past the lines its edits added or removed.
@@ -591,4 +617,22 @@ fn skipped(name: []const u8) bool {
     if (name[0] == '.') return !strings.contains(&project.hidden_dirs, name);
     for (skipped_dirs) |s| if (std.mem.eql(u8, s, name)) return true;
     return false;
+}
+
+test "a fix is written only over the bytes it was made against" {
+    const io = std.testing.io;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    const path = try std.fs.path.join(arena, &.{ ".zig-cache", "tmp", &tmp.sub_path, "a.py" });
+    const line = "x = 1\n";
+    const long = try arena.alloc(u8, line.len * 5000);
+    for (0..5000) |i| @memcpy(long[i * line.len ..][0..line.len], line);
+    try tmp.dir.writeFile(io, .{ .sub_path = "a.py", .data = long });
+    try std.testing.expect(try unchanged(io, path, long));
+    try std.testing.expect(!try unchanged(io, path, long[1..]));
+    try std.testing.expect(!try unchanged(io, path, try std.mem.concat(arena, u8, &.{ long, "y = 2\n" })));
+    try std.testing.expect(!try unchanged(io, path, try std.mem.concat(arena, u8, &.{ "x = 2\n", long[line.len..] })));
 }
