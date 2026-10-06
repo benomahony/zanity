@@ -133,25 +133,31 @@ fn renderFile(console: zrich.Console, tally: FileTally, findings: []const Findin
     var counts: [64]u8 = undefined;
     try console.styled(try std.fmt.bufPrint(&counts, "  {d} {s}, {d} {s}", .{ tally.errors, plural(tally.errors, "error"), tally.warnings, plural(tally.warnings, "warning") }), quiet);
     try out.writeByte('\n');
-    for (findings) |f| {
-        const rule = rules.find(f.rule) orelse unreachable;
-        var location: [24]u8 = undefined;
-        try out.splatByteAll(' ', 2 + width - locationWidth(f));
-        try console.styled(try std.fmt.bufPrint(&location, "{d}:{d}", .{ f.line + 1, f.column + 1 }), quiet);
-        try out.writeAll("  ");
-        try console.styled(label(rule.severity), severityStyle(rule.severity));
-        try out.splatByteAll(' ', 2 + "warning".len - label(rule.severity).len);
-        try console.write(f.message);
-        try out.writeAll("  ");
-        try console.styled(rule.name, quiet);
-        try out.writeByte('\n');
-        try out.splatByteAll(' ', 2 + width + 2 + "warning".len + 2);
-        try console.styled("fix: ", quiet);
-        try console.styled(f.advice(), fix_style);
-        try out.writeByte('\n');
-    }
+    for (findings) |f| try renderFinding(console, f, width);
     if (findings.len != tally.end - tally.start) assert.panic("{s}: rendering {d} findings for a tally of {d} ({d}..{d}); render the tally's own range of findings", .{ tally.path, findings.len, tally.end - tally.start, tally.start, tally.end });
     if (width < 3) assert.panic("{s}: the widest location is {d} characters; a location is at least '1:1', so locationWidth() must measure line and column counted from 1", .{ tally.path, width });
+}
+
+/// A finding's location, severity, message and rule on one line, aligned to `width`, and how to fix it on the next.
+fn renderFinding(console: zrich.Console, f: Finding, width: usize) !void {
+    const out = console.writer;
+    const rule = rules.find(f.rule) orelse unreachable;
+    if (locationWidth(f) > width) assert.panic("{s}: the location of {d}:{d} is wider than the {d} columns kept for locations; measure every finding before rendering any", .{ f.path, f.line + 1, f.column + 1, width });
+    var location: [24]u8 = undefined;
+    try out.splatByteAll(' ', 2 + width - locationWidth(f));
+    try console.styled(try std.fmt.bufPrint(&location, "{d}:{d}", .{ f.line + 1, f.column + 1 }), quiet);
+    try out.writeAll("  ");
+    try console.styled(label(rule.severity), severityStyle(rule.severity));
+    try out.splatByteAll(' ', 2 + "warning".len - label(rule.severity).len);
+    try console.write(f.message);
+    try out.writeAll("  ");
+    try console.styled(rule.name, quiet);
+    try out.writeByte('\n');
+    try out.splatByteAll(' ', 2 + width + 2 + "warning".len + 2);
+    try console.styled("fix: ", quiet);
+    try console.styled(f.advice(), fix_style);
+    try out.writeByte('\n');
+    if (f.message.len == 0) assert.panic("{s}:{d}: a {s} finding has no message; report() must pass one", .{ f.path, f.line + 1, f.rule });
 }
 
 fn plural(n: u32, word: []const u8) []const u8 {

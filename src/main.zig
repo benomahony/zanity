@@ -473,32 +473,42 @@ fn fixFile(ctx: *zcli.Context, ws: *Workspace, findings: []Finding) !usize {
     const source = Io.Dir.cwd().readFile(ws.io, path, ws.source) catch |e| {
         return ctx.fail(.io, try ws.text.format("Could not read {s} to fix it: {t}.", .{ path, e }), "Check the file is still there and readable.");
     };
-    var out: usize = 0;
+    const spliced = try applyEdits(source, findings, ws.fixed);
+    try replaceFile(ctx, ws, .{ .path = path, .read = source, .fixed = spliced.bytes });
+    shiftLines(source, findings);
+    const applied = spliced.applied;
+    if (applied == 0) assert.panic("expected at least one edit to apply to {s}, got none; fixFiles() must call fixFile() only for a file with an edit", .{path});
+    return applied;
+}
+
+/// Writes `source` into `out` with each edit that doesn't overlap an earlier one applied, marking
+/// those findings fixed.
+fn applyEdits(source: []const u8, findings: []Finding, out: []u8) error{LimitExceeded}!struct { bytes: []const u8, applied: usize } {
+    var used: usize = 0;
     var cursor: usize = 0;
     var applied: usize = 0;
     for (findings) |*f| {
         const edit = f.edit orelse continue;
         if (edit.start < cursor or edit.end > source.len) continue;
         const kept = source[cursor..edit.start];
-        if (out + kept.len + edit.replacement.len > ws.fixed.len) break;
-        @memcpy(ws.fixed[out..][0..kept.len], kept);
-        @memcpy(ws.fixed[out + kept.len ..][0..edit.replacement.len], edit.replacement);
-        out += kept.len + edit.replacement.len;
+        if (used + kept.len + edit.replacement.len > out.len) break;
+        @memcpy(out[used..][0..kept.len], kept);
+        @memcpy(out[used + kept.len ..][0..edit.replacement.len], edit.replacement);
+        used += kept.len + edit.replacement.len;
         cursor = edit.end;
         f.fixed = true;
         applied += 1;
     }
     const rest = source[cursor..];
-    if (out + rest.len > ws.fixed.len) {
+    if (used + rest.len > out.len) {
         memory.exceeded = "bytes in one fixed file";
         return error.LimitExceeded;
     }
-    @memcpy(ws.fixed[out..][0..rest.len], rest);
-    out += rest.len;
-    try replaceFile(ctx, ws, .{ .path = path, .read = source, .fixed = ws.fixed[0..out] });
-    shiftLines(source, findings);
-    if (applied == 0) assert.panic("expected at least one edit to apply to {s}, got none; fixFiles() must call fixFile() only for a file with an edit", .{path});
-    return applied;
+    @memcpy(out[used..][0..rest.len], rest);
+    used += rest.len;
+    if (cursor > source.len) assert.panic("applied edits up to byte {d} of a {d}-byte file; skip an edit that ends past the file", .{ cursor, source.len });
+    if (applied > findings.len) assert.panic("applied {d} edits from {d} findings; each finding has at most one edit", .{ applied, findings.len });
+    return .{ .bytes = out[0..used], .applied = applied };
 }
 
 /// A file to fix: its path, the bytes the fixes were made against, and the fixed bytes.

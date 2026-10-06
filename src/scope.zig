@@ -127,7 +127,21 @@ fn checkGroup(self: *File, ids: Ids, group: *const Group) !void {
 fn moveEdit(self: *File, ids: Ids, group: *const Group, target: ts.Node) !?Edit {
     const line = lineAlone(self, group.statement) orelse return null;
     if (!pureInitializer(self, ids, group, target)) return null;
-    const open = ts.ts_node_start_byte(target);
+    const top = blockTop(self, target) orelse return null;
+    const insert = top.insert;
+    if (insert <= line.end) assert.panic("{s}: the block {f} opens before the declaration {f} ends; innermostBlock() must return a block that starts after the declaration", .{ self.work.facts.path, target.where(), group.statement.where() });
+    const replacement = try self.work.text.format("{s}{s}{s}\n", .{ self.source[line.end + 1 .. insert], top.indent, group.statement.text(self.source) });
+    if (!std.mem.endsWith(u8, replacement, "\n")) assert.panic("{s}: the moved declaration '{s}' does not end its line; moveEdit() must end the replacement with a newline", .{ self.work.facts.path, replacement });
+    return .{ .start = line.start, .end = insert, .replacement = replacement };
+}
+
+/// Where a statement goes to be first in a block, and the indentation of the block's first line.
+const BlockTop = struct { insert: u32, indent: []const u8 };
+
+/// The start of the line after a `{` that ends its line, when that line holds a statement.
+fn blockTop(self: *File, block: ts.Node) ?BlockTop {
+    const open = ts.ts_node_start_byte(block);
+    if (open >= self.source.len) assert.panic("{s}: the block {f} starts at byte {d} of a {d}-byte file; the parser only returns nodes inside the source", .{ self.work.facts.path, block.where(), open, self.source.len });
     if (self.source[open] != '{') return null;
     const open_end = std.mem.indexOfScalarPos(u8, self.source, open, '\n') orelse return null;
     if (std.mem.trim(u8, self.source[open + 1 .. open_end], " \t\r").len != 0) return null;
@@ -136,10 +150,8 @@ fn moveEdit(self: *File, ids: Ids, group: *const Group, target: ts.Node) !?Edit 
     const next = self.source[insert..next_end];
     const code = std.mem.trimStart(u8, next, " \t");
     if (code.len == 0 or code[0] == '}') return null;
-    if (insert <= line.end) assert.panic("{s}: the block {f} opens before the declaration {f} ends; innermostBlock() must return a block that starts after the declaration", .{ self.work.facts.path, target.where(), group.statement.where() });
-    const replacement = try self.work.text.format("{s}{s}{s}\n", .{ self.source[line.end + 1 .. insert], next[0 .. next.len - code.len], group.statement.text(self.source) });
-    if (!std.mem.endsWith(u8, replacement, "\n")) assert.panic("{s}: the moved declaration '{s}' does not end its line; moveEdit() must end the replacement with a newline", .{ self.work.facts.path, replacement });
-    return .{ .start = line.start, .end = insert, .replacement = replacement };
+    if (insert <= open) assert.panic("{s}: the block {f}'s first line starts at byte {d}, not after its brace at {d}; search for the newline from the brace", .{ self.work.facts.path, block.where(), insert, open });
+    return .{ .insert = insert, .indent = next[0 .. next.len - code.len] };
 }
 
 const Line = struct { start: u32, end: u32 };

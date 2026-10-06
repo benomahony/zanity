@@ -13,6 +13,7 @@ const contains = check.contains;
 const header = check.header;
 const messages = @import("messages.zig");
 const hazards = @import("hazards.zig");
+const Edit = @import("facts.zig").Edit;
 
 /// The values an assertion condition reads, outermost first, without callees: at most `out.len`.
 pub fn conditionValues(self: *File, condition: ts.Node, out: *[4][]const u8) []const []const u8 {
@@ -136,8 +137,17 @@ pub fn explainAssertion(self: *File, node: ts.Node, condition: ts.Node) !void {
     const code = try assertionRewrite(self, condition);
     if (code.len == 0) return;
     diagnostic.fix = try self.say("Write it as `{s}`, so a failure says what broke and with which values.", .{code});
+    if (self.tables.line_comment.len == 0) return;
+    const edit = try explainingEdit(self, node, code);
+    if (std.mem.indexOf(u8, edit.replacement, code) == null) assert.panic("the explaining edit '{s}' leaves out the rewritten assertion '{s}'; explainingEdit() must write it after the TODO", .{ edit.replacement, code });
+    diagnostic.edit = edit;
+}
+
+/// The edit that replaces the assertion with `code`, under a TODO comment at its indentation.
+/// It takes the assertion's trailing punctuation too when `code` ends with the same.
+fn explainingEdit(self: *File, node: ts.Node, code: []const u8) !Edit {
     const comment = self.tables.line_comment;
-    if (comment.len == 0) return;
+    if (comment.len == 0 or code.len == 0) assert.panic("writing an explained assertion with comment '{s}' and code '{s}'; explainAssertion() must check both first", .{ comment, code });
     const start = ts.ts_node_start_byte(node);
     var end = ts.ts_node_end_byte(node);
     if (end < self.source.len and self.source[end] == code[code.len - 1] and std.ascii.isPunctuation(self.source[end])) end += 1;
@@ -145,8 +155,8 @@ pub fn explainAssertion(self: *File, node: ts.Node, condition: ts.Node) !void {
     const before = self.source[line_start..start];
     const indent = before[0 .. before.len - std.mem.trimStart(u8, before, " \t").len];
     const replacement = try self.work.text.format("{s}{s} TODO: say why this must hold and what to look at when it fails.\n{s}{s}", .{ indent, comment, before, code });
-    diagnostic.edit = .{ .start = @intCast(line_start), .end = end, .replacement = replacement };
     if (!(line_start <= start and start < end)) assert.panic("expected the edit to cover the assertion, got {d}..{d} around {d}; the edit must start at the assertion's line and end after it", .{ line_start, end, start });
+    return .{ .start = @intCast(line_start), .end = end, .replacement = replacement };
 }
 
 pub fn writePlaceholder(self: *File, placeholder: []const u8, condition: []const u8, values: []const []const u8) !void {
