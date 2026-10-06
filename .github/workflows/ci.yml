@@ -40,9 +40,11 @@ jobs:
       - name: Zig cache size
         if: always()
         run: |
-          used=$(du -sm "$ZIG_GLOBAL_CACHE_DIR" | cut -f1)
+          [ -n "$ZIG_GLOBAL_CACHE_DIR" ] || exit 0
+          bytes=$(python3 -c 'import os, sys; print(sum(os.path.getsize(os.path.join(d, f)) for d, _, fs in os.walk(sys.argv[1]) for f in fs if os.path.isfile(os.path.join(d, f))))' "$ZIG_GLOBAL_CACHE_DIR")
+          used=$((bytes / 1048576))
           echo "Zig cache: ${used} MB of ${ZIG_CACHE_LIMIT_MB} MB" >> "$GITHUB_STEP_SUMMARY"
-          if [ "$used" -gt "$ZIG_CACHE_LIMIT_MB" ]; then
+          if [ "$bytes" -gt $((ZIG_CACHE_LIMIT_MB * 1048576)) ]; then
             echo "::warning::The Zig cache is ${used} MB, past its ${ZIG_CACHE_LIMIT_MB} MB limit, so it is emptied and the next run builds from scratch. If this shows on every run, one build needs more: raise ZIG_CACHE_LIMIT_MB in .github/workflows/ci.yml."
           fi
 
