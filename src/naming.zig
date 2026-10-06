@@ -136,7 +136,6 @@ fn conceptKey(s: *ConceptScratch, language: []const u8, name: []const u8) error{
     return key;
 }
 
-
 fn drift(s: *ConceptScratch, text: *memory.Text, definitions: []const Definition, findings: *memory.Bounded(Finding)) error{LimitExceeded}!void {
     const before = findings.len;
     const keyed = try keyedBy(s, definitions, .concept);
@@ -258,7 +257,6 @@ fn directionalNames(s: *ConceptScratch, names: []const []const u8) error{LimitEx
     if (s.shapes.len > names.len) assert.panic("{d} names produced {d} shapes; addUnique keeps at most one per name", .{ names.len, s.shapes.len });
     return s.shapes.len == names.len;
 }
-
 
 fn duplicates(s: *ConceptScratch, text: *memory.Text, definitions: []const Definition, findings: *memory.Bounded(Finding)) error{LimitExceeded}!void {
     const before = findings.len;

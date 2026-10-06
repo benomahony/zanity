@@ -247,7 +247,6 @@ fn initPredicate(arena: Allocator, query: *const ts.Query, args: []const ts.Pred
     return error.InvalidQuery;
 }
 
-
 fn hasAncestor(node: ts.Node, kinds: []const []const u8) bool {
     if (kinds.len == 0) assert.panic("#has-ancestor? names no node kinds; list at least one after the capture", .{});
     var current = node.parent();

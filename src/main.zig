@@ -571,7 +571,6 @@ fn collect(ctx: *zcli.Context, ws: *Workspace, path: []const u8) !void {
     if (ws.files.len < before) assert.panic("collecting {s} dropped files: {d} before, {d} after; collect() must only add files", .{ path, before, ws.files.len });
 }
 
-
 /// Adds a file the walk found under `path` to the source files or the project files, or neither.
 fn addFile(ws: *Workspace, path: []const u8, entry: Io.Dir.Walker.Entry) !void {
     if (entry.path.len == 0) assert.panic("the walk under {s} found a file with no path; Walker gives each entry its path", .{path});
