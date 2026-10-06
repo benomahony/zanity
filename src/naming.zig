@@ -29,6 +29,7 @@ pub const ConceptScratch = struct {
     keyed: memory.Bounded(Keyed),
     spellings: memory.Bounded([]const u8),
     kinds: memory.Bounded([]const u8),
+    unmarked: memory.Bounded([]const u8),
     shapes: memory.Bounded([]const u8),
     tokens: memory.Bounded([]const u8),
     words: memory.Text,
@@ -41,6 +42,7 @@ pub const ConceptScratch = struct {
             .keyed = try .initBounded(gpa, limits.definitions, "definitions across all files"),
             .spellings = try .initBounded(gpa, limits.definitions, "spellings of one concept"),
             .kinds = try .initBounded(gpa, limits.definitions, "kinds of one concept"),
+            .unmarked = try .initBounded(gpa, limits.definitions, "unmarked spellings of one concept"),
             .shapes = try .initBounded(gpa, limits.definitions, "spellings of one concept"),
             .tokens = try .initBounded(gpa, max_tokens, "words in one name"),
             .words = try .initText(gpa, limits.text_bytes),
@@ -58,14 +60,11 @@ pub fn crossCheck(s: *ConceptScratch, facts: *Facts, enabled: rules.Set, finding
     if (findings.len - before > definitions.len * 2) assert.panic("naming checks reported {d} findings for {d} definitions; each definition can be in at most one drift and one duplicate", .{ findings.len - before, definitions.len });
 }
 
-/// Dunder names, which a language defines rather than the author, and names with no words, like
-/// Go's blank identifier `_`, which say nothing a reader could confuse.
-fn exempt(name: []const u8) bool {
+/// Names with no words, like Go's blank identifier `_`, which say nothing a reader could confuse.
+pub fn exempt(name: []const u8) bool {
     if (name.len == 0) assert.panic("asked whether an empty name is exempt from naming checks; the @name capture matched an empty node", .{});
-    const dunder = name.len > 4 and std.mem.startsWith(u8, name, "__") and std.mem.endsWith(u8, name, "__");
-    if (dunder and name.len <= 4) assert.panic("'{s}' was taken for a dunder name, but those need at least 5 bytes, like __x__; exempt() must check the length before treating a name as a dunder name", .{name});
-    const wordless = std.mem.indexOfNone(u8, name, separators) == null;
-    return dunder or wordless;
+    if (std.mem.indexOfScalar(u8, name, 0) != null) assert.panic("'{s}' holds a NUL byte, which no identifier can; the @name capture matched past the name", .{name});
+    return std.mem.indexOfNone(u8, name, separators) == null;
 }
 
 /// The bytes tokenise() splits words on: underscores, hyphens and whitespace.
@@ -148,12 +147,14 @@ fn drift(s: *ConceptScratch, text: *memory.Text, definitions: []const Definition
         defer start = end;
         s.spellings.clear();
         s.kinds.clear();
+        s.unmarked.clear();
         for (keyed[start..end]) |k| {
             try addUnique(&s.spellings, definitions[k.index].name);
             try addUnique(&s.kinds, definitions[k.index].kind);
+            try addUnique(&s.unmarked, definitions[k.index].unmarked);
         }
         const names = s.spellings.items();
-        if (names.len < 2 or caseOnlyAcrossKinds(names, s.kinds.len)) continue;
+        if (names.len < 2 or conventionOnly(definitions, keyed[start..end], s.unmarked.items(), s.kinds.len)) continue;
         if (try directionalNames(s, names)) continue;
         const first = definitions[keyed[start].index];
         const spellings = try joined(text, names);
@@ -178,6 +179,7 @@ fn keyedBy(s: *ConceptScratch, definitions: []const Definition, by: KeyBy) error
     s.keyed.clear();
     for (definitions, 0..) |d, i| {
         if (exempt(d.name)) continue;
+        if (by == .name and std.mem.eql(u8, d.kind, "method")) continue;
         const key = switch (by) {
             .concept => try conceptKey(s, d.language, d.name),
             .name => try s.words.format("{s} {s} {s}", .{ d.language, d.scope, d.name }),
@@ -217,11 +219,19 @@ fn addUnique(list: *memory.Bounded([]const u8), value: []const u8) error{LimitEx
     if (list.len == 0) assert.panic("recorded '{s}' but the list is still empty; addUnique() must add the name before returning", .{value});
 }
 
-fn caseOnlyAcrossKinds(names: []const []const u8, kinds: usize) bool {
-    if (names.len < 2) assert.panic("comparing the case of {d} names; drift needs at least 2 spellings", .{names.len});
-    if (kinds == 0) assert.panic("{d} names ('{s}' first) have no kinds recorded; every definition has a kind", .{ names.len, names[0] });
+fn conventionOnly(definitions: []const Definition, run: []const Keyed, unmarked: []const []const u8, kinds: usize) bool {
+    if (unmarked.len == 0 or unmarked.len > run.len) assert.panic("a run of {d} names has {d} unmarked spellings; closeDefinition() records one for every definition", .{ run.len, unmarked.len });
+    if (kinds == 0) assert.panic("{d} unmarked spellings ('{s}' first) have no kinds recorded; every definition has a kind", .{ unmarked.len, unmarked[0] });
+    if (unmarked.len == 1) return true;
     if (kinds < 2) return false;
-    for (names[1..]) |n| if (!std.ascii.eqlIgnoreCase(n, names[0])) return false;
+    for (unmarked[1..]) |u| if (!std.ascii.eqlIgnoreCase(u, unmarked[0])) return false;
+    for (run, 0..) |a, i| {
+        const first = definitions[a.index];
+        for (run[i + 1 ..]) |b| {
+            const second = definitions[b.index];
+            if (std.mem.eql(u8, first.kind, second.kind) and !std.mem.eql(u8, first.unmarked, second.unmarked)) return false;
+        }
+    }
     return true;
 }
 

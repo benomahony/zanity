@@ -23,6 +23,7 @@ const repeats = @import("repeats.zig");
 const shapes = @import("shapes.zig");
 const notes = @import("notes.zig");
 const extract = @import("extract.zig");
+const naming = @import("naming.zig");
 
 pub const Diagnostic = struct {
     line: u32,
@@ -802,10 +803,11 @@ pub const File = struct {
         const name = name_node.text(self.source);
         if (self.checker.enabled.enabled("dead-symbol")) try self.s.names.tally(facts_module.nameHash(name), -1);
         if (std.mem.eql(u8, ctx.kind, "constant") and !std.ascii.isUpper(name[0])) return;
-        if (contains(self.tables.protocol_names, name)) return;
+        if (self.isProtocolName(name)) return;
         const at = ts.ts_node_start_point(name_node);
         const public = self.index.marks(ctx.node, self.v.visibility_public) or (self.tables.exported_by_case and std.ascii.isUpper(name[0]));
-        try self.work.facts.define(name, ctx.kind, .{ .at = .{ at.row, at.column }, .public = public });
+        const method = std.mem.eql(u8, ctx.kind, "function") and self.innermost(.function) != null and self.definedInClass();
+        try self.work.facts.define(name, if (method) "method" else ctx.kind, .{ .at = .{ at.row, at.column }, .public = public, .unmarked = try self.unmarkedName(name) });
     }
 
     pub fn inAssertionCondition(self: *File, node: ts.Node) bool {
@@ -814,6 +816,24 @@ pub const File = struct {
         if (ts.ts_node_start_byte(condition) < ts.ts_node_start_byte(assertion.node)) assert.panic("{s}: @assertion.condition captured {f}, before its assertion {f}; capture it inside @assertion.outer", .{ self.work.facts.path, condition.where(), assertion.node.where() });
         if (ts.ts_node_end_byte(condition) > ts.ts_node_end_byte(assertion.node)) assert.panic("{s}: @assertion.condition captured {f}, after its assertion {f} ends; capture it inside @assertion.outer", .{ self.work.facts.path, condition.where(), assertion.node.where() });
         return ts.ts_node_start_byte(node) >= ts.ts_node_start_byte(condition) and ts.ts_node_end_byte(node) <= ts.ts_node_end_byte(condition);
+    }
+
+    pub fn isProtocolName(self: *File, name: []const u8) bool {
+        if (name.len == 0) assert.panic("{s}: asked whether an empty name is a protocol name; the @name capture matched an empty node", .{self.work.facts.path});
+        const affix = self.tables.protocol_affix;
+        const wrapped = affix.len > 0 and name.len > affix.len * 2 and std.mem.startsWith(u8, name, affix) and std.mem.endsWith(u8, name, affix);
+        if (wrapped and name.len <= affix.len * 2) assert.panic("{s}: '{s}' was taken as wrapped in '{s}', but it has no name inside the affixes; isProtocolName() must check the length first", .{ self.work.facts.path, name, affix });
+        return wrapped or contains(self.tables.protocol_names, name);
+    }
+
+    pub fn unmarkedName(self: *File, name: []const u8) ![]const u8 {
+        if (name.len == 0) assert.panic("{s}: asked for the unmarked spelling of an empty name; the @name capture matched an empty node", .{self.work.facts.path});
+        const facts = self.work.facts;
+        const bare = std.mem.trimStart(u8, name, self.tables.private_prefixes);
+        const unmarked = try facts.text.copy(if (bare.len == 0) name else bare);
+        if (self.tables.exported_by_case) @constCast(unmarked)[0] = std.ascii.toUpper(unmarked[0]);
+        if (unmarked.len > name.len) assert.panic("{s}: the unmarked spelling '{s}' is longer than '{s}'; unmarkedName() may only drop privacy marks", .{ facts.path, unmarked, name });
+        return unmarked;
     }
 
     pub fn isTestName(self: *File, name: []const u8) bool {
@@ -969,7 +989,7 @@ pub const File = struct {
         try repeats.checkRepeats(self, ctx, name);
         try shapes.recordShape(self, ctx);
         try extract.checkExtractable(self, ctx, name);
-        if (self.index.marks(ctx.span, self.v.function_passthrough) or self.index.marks(ctx.node, self.v.function_passthrough)) {
+        if ((self.index.marks(ctx.span, self.v.function_passthrough) or self.index.marks(ctx.node, self.v.function_passthrough)) and !naming.exempt(name) and !self.isProtocolName(name)) {
             _ = try self.report(name_node, "passthrough-wrapper", try self.say("'{s}' only forwards to another call, so it adds a name without adding behaviour.", .{name}));
         }
         const meaningful = ctx.asserts -| weak.weakLines(self, ctx);

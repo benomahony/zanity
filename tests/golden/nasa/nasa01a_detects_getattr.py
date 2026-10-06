@@ -2,4 +2,4 @@
 def foo():
     assert True
     assert False
-    getattr(obj, "x")
+    getattr(obj, name)
