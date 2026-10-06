@@ -61,6 +61,9 @@ pub fn build(b: *std.Build) void {
     const integration = b.addRunArtifact(b.addTest(.{ .root_module = integration_module }));
     integration.setCwd(b.path("."));
     integration.has_side_effects = true;
+    // Under a coding agent, check would speak to it; the tests expect the output anyone else gets.
+    integration.removeEnvironmentVariable("CLAUDECODE");
+    integration.removeEnvironmentVariable("ZANITY_AGENT");
     b.step("test-integration", "Run the built zanity end to end, on the golden fixtures and on its own source").dependOn(&integration.step);
 }
 

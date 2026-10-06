@@ -131,11 +131,14 @@ zanity check . --strict                       # exit 1 on warnings too
 zanity check . --fix                          # apply the fixes zanity can make, then report the rest
 zanity check . --json                         # a JSON array, one object per finding
 zanity check . --plain                        # stable key=value lines for scripts
+zanity check . --agent                        # findings laid out for a coding agent to act on
 zanity check . --infer                        # also have a language model judge error messages
 zanity help check                             # every option
 ```
 
 `check` exits 0 when nothing fired, 1 when an error-level rule fired (or any rule, with `--strict`), and 2 on a usage error such as a mistake in `zanity.toml`. Findings go to stdout and the one-line summary to stderr, so output can be piped cleanly. On a terminal the report is grouped by file and ends with two tables: the files with the most errors, and the rules that fired most. A progress line shows how far a long run has got; `-q` hides it, and it never appears in piped output. `--no-color` or `NO_COLOR` turns colour off.
+
+`--agent` writes for a coding agent: the totals and the command to run next come first, so they survive a truncated read, then each file's findings as `line:column severity rule: message` with how to fix each one, and `[--fix]` on those zanity can fix itself. The output fits the agent's context better than the per-key records of `--plain`. It is on by default under Claude Code (when `CLAUDECODE` is set) unless `--json` or `--plain` is given; `ZANITY_AGENT=1` turns it on for any other agent.
 
 ### Judging what structure can't settle with `--infer`
 
@@ -406,10 +409,12 @@ No Zig code changes. Add:
 ### Testing
 
 ```sh
-zig build test              # unit, architecture and catalogue tests: the fast loop, no binary to build
+zig build test              # formatting, then unit, architecture and catalogue tests: the fast loop
 zig build test-integration  # the built zanity on the golden fixtures, --fix, the CLI, and its own source
 zig build test --fuzz=100K  # fuzz the checker with arbitrary bytes in every language
 ```
+
+`.githooks/pre-commit` runs the same format check before each commit; `git config core.hooksPath .githooks` turns it on.
 
 Golden cases in `tests/golden/` run through the real binary and compare where each finding lands, its rule, its severity and the exit code, not the wording. The self-check runs zanity over its own source with every rule and fails on any finding.
 

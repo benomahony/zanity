@@ -246,6 +246,43 @@ test "zanity.schema.json matches the rules and settings in the code" {
     };
 }
 
+/// Runs zanity check on a one-file project with `environ` and `flags`.
+fn checkForAgent(arena: std.mem.Allocator, io: Io, environ: *const std.process.Environ.Map, flags: []const []const u8) !std.process.RunResult {
+    if (flags.len > 2) assert.panic("checkForAgent() takes at most 2 flags, got {d}; add room in argv", .{flags.len});
+    const zanity = try Io.Dir.cwd().realPathFileAlloc(io, paths.zanity, arena);
+    var argv: [5][]const u8 = .{ zanity, "check", "a.py", "", "" };
+    for (flags, 3..) |flag, i| argv[i] = flag;
+    const run = try std.process.run(arena, io, .{ .argv = argv[0 .. 3 + flags.len], .cwd = .{ .path = "tests/agent" }, .environ_map = environ });
+    if (run.stdout.len == 0 and run.stderr.len == 0) assert.panic("zanity check printed nothing with {d} flags; it always reports a summary, so check how it exited", .{flags.len});
+    return run;
+}
+
+test "--agent puts the totals and the next command first and marks what --fix can fix" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    var plain = std.process.Environ.Map.init(arena);
+    const run = try checkForAgent(arena, std.testing.io, &plain, &.{"--agent"});
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 1 }, run.term);
+    try std.testing.expect(std.mem.startsWith(u8, run.stdout, "zanity: 1 error and 2 warnings in 1 of 1 file; 1 marked [--fix] can be fixed automatically.\nNext: run `zanity check a.py --fix`"));
+    try std.testing.expect(std.mem.indexOf(u8, run.stdout, "\n\na.py\n  1:5 error assertion-density: ") != null);
+    try std.testing.expect(std.mem.indexOf(u8, run.stdout, "\n  3:9 warning assertion-message [--fix]: ") != null);
+}
+
+test "under Claude Code, check speaks to the agent unless --json or --plain asks otherwise" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    var claude = std.process.Environ.Map.init(arena);
+    try claude.put("CLAUDECODE", "1");
+    const auto = try checkForAgent(arena, std.testing.io, &claude, &.{});
+    try std.testing.expect(std.mem.startsWith(u8, auto.stdout, "zanity: 1 error"));
+    const plain = try checkForAgent(arena, std.testing.io, &claude, &.{"--plain"});
+    try std.testing.expect(std.mem.startsWith(u8, plain.stdout, "path=\"a.py\""));
+    const both = try checkForAgent(arena, std.testing.io, &claude, &.{ "--agent", "--json" });
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 2 }, both.term);
+}
+
 test "zanity init writes a zanity.toml that check reads, and won't overwrite it unasked" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();

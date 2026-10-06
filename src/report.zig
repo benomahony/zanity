@@ -302,6 +302,45 @@ fn digits(value: usize) usize {
     return result;
 }
 
+/// Findings for a coding agent: the totals and what to run next first, so a truncated read still
+/// has them, then each file's findings as `line:column severity rule: message` with how to fix
+/// it, `[--fix]` marking those zanity can fix itself. `scope` is the paths the run checked.
+pub fn renderAgent(out: *std.Io.Writer, findings: []const Finding, counts: Counts, paths: []const []const u8) !void {
+    const scope: CheckedPaths = .{ .paths = paths };
+    if (paths.len == 0) assert.panic("rendering agent output with no paths to name in the next command; pass the paths the run checked", .{});
+    if (counts.errors + counts.warnings != findings.len) assert.panic("rendering {d} findings for {d} errors and {d} warnings; count() the findings being rendered", .{ findings.len, counts.errors, counts.warnings });
+    const files = if (counts.files == 1) "file" else "files";
+    if (findings.len == 0) return out.print("zanity: checked {d} {s}, no issues found.\n", .{ counts.files, files });
+    var fixable: usize = 0;
+    for (findings) |f| fixable += @intFromBool(f.edit != null);
+    try out.print("zanity: {d} {s} and {d} {s} in {d} of {d} {s}", .{ counts.errors, if (counts.errors == 1) "error" else "errors", counts.warnings, if (counts.warnings == 1) "warning" else "warnings", counts.flagged, counts.files, files });
+    if (fixable > 0) {
+        try out.print("; {d} marked [--fix] can be fixed automatically.\nNext: run `zanity check {f} --fix`, fix the rest by hand", .{ fixable, scope });
+    } else try out.writeAll(".\nNext: fix each finding by hand");
+    try out.print(", then rerun `zanity check {f} --strict` until it passes. Change the code rather than disabling rules, and suppress a finding only where its fix says to.\n", .{scope});
+    var previous: []const u8 = "";
+    for (findings) |f| {
+        if (!std.mem.eql(u8, previous, f.path)) try out.print("\n{s}\n", .{f.path});
+        previous = f.path;
+        const rule = rules.find(f.rule) orelse unreachable;
+        try out.print("  {d}:{d} {s} {s}{s}: {s}\n    fix: {s}\n", .{ f.line + 1, f.column + 1, label(rule.severity), rule.name, if (f.edit != null) " [--fix]" else "", f.message, f.advice() });
+    }
+}
+
+/// The paths a run checked, written as they would be typed after `zanity check`.
+const CheckedPaths = struct {
+    paths: []const []const u8,
+
+    pub fn format(self: CheckedPaths, w: *std.Io.Writer) std.Io.Writer.Error!void {
+        if (self.paths.len == 0) assert.panic("writing a command with no paths; renderAgent() refuses an empty list", .{});
+        for (self.paths, 0..) |path, i| {
+            if (path.len == 0) assert.panic("path {d} of {d} is empty; zcli passes each path as typed, and none can be empty", .{ i + 1, self.paths.len });
+            if (i > 0) try w.writeByte(' ');
+            try w.writeAll(path);
+        }
+    }
+};
+
 pub fn summarise(console: zrich.Console, counts: Counts) !void {
     if (counts.flagged > counts.files) assert.panic("{d} files flagged out of {d} checked; summarise() must count a file at most once", .{ counts.flagged, counts.files });
     const files = if (counts.files == 1) "file" else "files";

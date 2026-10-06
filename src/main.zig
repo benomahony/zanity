@@ -34,6 +34,7 @@ const CheckOptions = struct {
     fix: bool = false,
     infer: bool = false,
     strict: bool = false,
+    agent: bool = false,
 };
 
 const InitOptions = struct {
@@ -73,6 +74,7 @@ const app: zcli.App = .{
             .{ .name = "rules", .metavar = "RULES", .help = "Comma-separated rules to run instead of the defaults.", .example = "unbounded-loop,long-function" },
             .{ .name = "fix", .help = "Apply the fixes zanity can make, then report what is left." },
             .{ .name = "strict", .help = "Exit 1 on any finding, warnings included, as a pre-commit hook or CI should." },
+            .{ .name = "agent", .help = "Print findings for a coding agent: totals and the next command first, then each finding with its fix. On by default when CLAUDECODE is set and neither --json nor --plain is given.", .env = "ZANITY_AGENT" },
             .{ .name = "infer", .help = "Also ask TypeSafe what no deterministic check can decide, such as whether an error message misleads. Needs TYPESAFE_API_KEY." },
         },
     }, .{ .run = runCheck, .human = renderHuman }), zcli.command(InitOptions, InitRow, .{
@@ -111,6 +113,8 @@ const Workspace = struct {
     fixed: []u8,
     ignore: Ignore,
     environ: ?*const std.process.Environ.Map = null,
+    /// Whether the command line chose --json or --plain, which turns off agent output.
+    chose_format: bool = false,
     inference: ?infer.Inference = null,
     checkers: [language.count]?check.Checker = @splat(null),
     checked: usize = 0,
@@ -163,6 +167,7 @@ pub fn main(init: std.process.Init) !u8 {
     const ws = try Workspace.initWorkspace(std.heap.page_allocator, .{});
     ws.io = init.io;
     ws.environ = init.environ_map;
+    for (args[1..]) |arg| ws.chose_format = ws.chose_format or std.mem.eql(u8, arg, "--json") or std.mem.eql(u8, arg, "--plain");
     var runtime = zcli.native.runtime(init, &out_writer.interface, &err_writer.interface);
     runtime.user_data = ws;
     const code = app.run(init.gpa, args[1..], runtime);
@@ -180,6 +185,7 @@ fn workspaceOf(ctx: *zcli.Context) *Workspace {
 fn runCheck(ctx: *zcli.Context, options: CheckOptions) ![]const Row {
     if (options.paths.len == 0) assert.panic("check ran with no paths; zcli supplies '.' when none are given", .{});
     const ws = workspaceOf(ctx);
+    const agent = try speaksToAgent(ctx, ws, options.agent);
     const settings = config.initConfig(std.heap.page_allocator, ws.io) catch |e| switch (e) {
         error.InvalidConfig => return ctx.fail(.usage, config.problem[0..config.problem_len], "Fix that line of zanity.toml, or remove the setting to use zanity's default."),
         else => return e,
@@ -201,9 +207,39 @@ fn runCheck(ctx: *zcli.Context, options: CheckOptions) ![]const Row {
         else => return e,
     };
     if (counts.errors > 0 or (options.strict and counts.warnings > 0)) ctx.status = .failure;
-    if (ctx.format != .human) try report.summarise(console(ctx, ctx.runtime.err), counts);
     if (ws.rows.len != counts.errors + counts.warnings) assert.panic("{d} output rows for {d} errors and {d} warnings; runCheck() must add one row per error or warning", .{ ws.rows.len, counts.errors, counts.warnings });
+    if (agent) return reportToAgent(ctx, ws, options.paths, counts);
+    if (ctx.format != .human) try report.summarise(console(ctx, ctx.runtime.err), counts);
     return ws.rows.items();
+}
+
+/// Whether to write for a coding agent: when --agent asks, or when one is running zanity and the
+/// command line chose no other format.
+fn speaksToAgent(ctx: *zcli.Context, ws: *const Workspace, asked: bool) !bool {
+    if (asked and ws.chose_format) return ctx.fail(.usage, "--agent cannot be combined with --json or --plain.", "Choose one: --agent for a coding agent to read, --json or --plain for a program to parse.");
+    const agent = asked or (!ws.chose_format and agentRunning(ws));
+    if (agent and ws.chose_format) assert.panic("writing for an agent although the command line chose --json or --plain; speaksToAgent() must refuse that", .{});
+    if (asked and !agent) assert.panic("--agent was given but agent output is off; speaksToAgent() must honour --agent", .{});
+    return agent;
+}
+
+/// Writes the findings for the agent in place of zcli's rows, which it then has none of to print.
+fn reportToAgent(ctx: *zcli.Context, ws: *Workspace, paths: []const []const u8, counts: report.Counts) ![]const Row {
+    if (paths.len == 0) assert.panic("reporting to an agent with no checked paths to name; zcli supplies '.' when none are given", .{});
+    if (ws.findings.len != counts.errors + counts.warnings) assert.panic("{d} findings for {d} errors and {d} warnings; count the findings being reported", .{ ws.findings.len, counts.errors, counts.warnings });
+    const out = ctx.runtime.out;
+    try report.renderAgent(out.writer, ws.findings.items(), counts, paths);
+    ctx.format = .plain;
+    return &.{};
+}
+
+/// Whether a coding agent is running zanity, by the variable it sets in its commands' environment.
+fn agentRunning(ws: *const Workspace) bool {
+    if (ws.chose_format) assert.panic("asked whether an agent runs zanity after the command line chose a format; speaksToAgent() checks chose_format first", .{});
+    const environ = ws.environ orelse return false;
+    const value = environ.get("CLAUDECODE") orelse return false;
+    if (value.len > 64) assert.panic("CLAUDECODE is {d} bytes long; Claude Code sets it to 1, so check what set it", .{value.len});
+    return value.len > 0 and !std.mem.eql(u8, value, "0");
 }
 
 /// The file-oriented terminal layout; `--plain` and `--json` stay zcli's record formats.
