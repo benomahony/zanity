@@ -287,16 +287,35 @@ test "--strict fails a run with only warnings, which a plain run passes" {
     try std.testing.expectEqual(std.process.Child.Term{ .exited = 1 }, strict.term);
 }
 
-/// Starts tests/infer/mock_typesafe.py and returns it with the port it listens on.
-fn startMock(arena: std.mem.Allocator, io: Io, log: []const u8, env: *std.process.Environ.Map) !struct { child: std.process.Child, port: []const u8 } {
-    if (log.len == 0) assert.panic("the mock TypeSafe server needs a log path to record requests in; pass a scratch path for the mock's log", .{});
-    try env.put("MOCK_TYPESAFE_LOG", log);
-    var child = try std.process.spawn(io, .{ .argv = &.{ "python3", "tests/infer/mock_typesafe.py" }, .stdout = .pipe, .environ_map = env });
+/// tests/infer/mock_typesafe.py, running, and the environment that points zanity at it and at a
+/// store of its own.
+const MockTypeSafe = struct { child: std.process.Child, env: std.process.Environ.Map };
+
+/// Starts the mock, logging requests to requests.log and keeping the store in `dir`.
+fn startMock(arena: std.mem.Allocator, io: Io, dir: []const u8) !MockTypeSafe {
+    if (!std.fs.path.isAbsolute(dir)) assert.panic("the mock's directory '{s}' is relative; pass an absolute path, since zanity runs in another directory", .{dir});
+    var env = std.process.Environ.Map.init(arena);
+    try env.put("MOCK_TYPESAFE_LOG", try std.fs.path.join(arena, &.{ dir, "requests.log" }));
+    var child = try std.process.spawn(io, .{ .argv = &.{ "python3", "tests/infer/mock_typesafe.py" }, .stdout = .pipe, .environ_map = &env });
     var buffer: [64]u8 = undefined;
     var reader = child.stdout.?.reader(io, &buffer);
     const port = try reader.interface.takeDelimiterExclusive('\n');
     if (port.len == 0 or port.len > 5) assert.panic("the mock TypeSafe server printed '{s}' instead of a port; the mock must print its port first, so check tests/infer/mock_typesafe.py", .{port});
-    return .{ .child = child, .port = try arena.dupe(u8, port) };
+    try env.put("TYPESAFE_API_KEY", "test");
+    try env.put("ZANITY_STORE", try std.fs.path.join(arena, &.{ dir, "store.db" }));
+    try env.put("TYPESAFE_BASE_URL", try std.fmt.allocPrint(arena, "http://127.0.0.1:{s}", .{port}));
+    return .{ .child = child, .env = env };
+}
+
+/// The project the --infer test checks: Python functions and tests, a Zig file that only gathers
+/// tests, and a pyproject.toml with a weakened check.
+fn writeInferProject(arena: std.mem.Allocator, io: Io, dir: Io.Dir) !void {
+    const service = try Io.Dir.cwd().readFileAlloc(io, "tests/infer/project/service.py", arena, .unlimited);
+    if (service.len == 0) assert.panic("tests/infer/project/service.py is empty; restore it from git", .{});
+    if (std.mem.indexOf(u8, service, "# judge: ") == null) assert.panic("tests/infer/project/service.py marks no rule with '# judge: <rule>', so the mock would answer no to everything; restore the markers", .{});
+    try dir.writeFile(io, .{ .sub_path = "service.py", .data = service });
+    try dir.writeFile(io, .{ .sub_path = "all_test.zig", .data = "test {\n    _ = @import(\"service_test.zig\");\n}\n" });
+    try dir.writeFile(io, .{ .sub_path = "pyproject.toml", .data = "[tool.ruff]\nline-length = 200  # judge: weakened-check\n# judge: unscheduled-analysis\n" });
 }
 
 test "--infer asks each unit only its own questions, skips what checks settled, and caches every answer" {
@@ -308,20 +327,13 @@ test "--infer asks each unit only its own questions, skips what checks settled, 
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
     const work = try std.fs.path.join(arena, &.{ ".zig-cache", "tmp", &tmp.sub_path });
-    try tmp.dir.writeFile(io, .{ .sub_path = "service.py", .data = try Io.Dir.cwd().readFileAlloc(io, "tests/infer/project/service.py", arena, .unlimited) });
-    try tmp.dir.writeFile(io, .{ .sub_path = "all_test.zig", .data = "test {\n    _ = @import(\"service_test.zig\");\n}\n" });
-    try tmp.dir.writeFile(io, .{ .sub_path = "pyproject.toml", .data = "[tool.ruff]\nline-length = 200  # judge: weakened-check\n# judge: unscheduled-analysis\n" });
-    const log = try Io.Dir.cwd().realPathFileAlloc(io, work, arena);
-    var env = std.process.Environ.Map.init(arena);
-    var mock = try startMock(arena, io, try std.fs.path.join(arena, &.{ log, "requests.log" }), &env);
+    try writeInferProject(arena, io, tmp.dir);
+    var mock = try startMock(arena, io, try Io.Dir.cwd().realPathFileAlloc(io, work, arena));
     defer mock.child.kill(io);
-    try env.put("TYPESAFE_API_KEY", "test");
-    try env.put("ZANITY_STORE", try std.fs.path.join(arena, &.{ log, "store.db" }));
-    try env.put("TYPESAFE_BASE_URL", try std.fmt.allocPrint(arena, "http://127.0.0.1:{s}", .{mock.port}));
     var outputs: [2][]const u8 = undefined;
     var timings: [2][]const u8 = undefined;
     for (&outputs, &timings) |*out, *timing| {
-        const run = try std.process.run(arena, io, .{ .argv = &.{ zanity, "check", ".", "--infer", "--plain" }, .cwd = .{ .path = work }, .environ_map = &env });
+        const run = try std.process.run(arena, io, .{ .argv = &.{ zanity, "check", ".", "--infer", "--plain" }, .cwd = .{ .path = work }, .environ_map = &mock.env });
         out.* = run.stdout;
         timing.* = run.stderr;
     }
