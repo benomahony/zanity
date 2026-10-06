@@ -46,7 +46,11 @@ pub fn build(b: *std.Build) void {
     const unit = b.addRunArtifact(b.addTest(.{ .root_module = module(b, "src/tests.zig", target, optimize) }));
     unit.setCwd(b.path("."));
     unit.has_side_effects = true;
-    b.step("test", "Run the unit tests").dependOn(&unit.step);
+    // The same check CI runs first, so an unformatted file fails here before it is pushed.
+    const fmt = b.addFmt(.{ .paths = &.{ b.path("build.zig"), b.path("build.zig.zon"), b.path("src"), b.path("languages") }, .check = true });
+    const test_step = b.step("test", "Check formatting and run the unit tests");
+    test_step.dependOn(&fmt.step);
+    test_step.dependOn(&unit.step);
 
     // `zig build test-integration` runs the built zanity: the golden fixtures, the CLI, and
     // zanity checking its own source, which must pass every rule.
