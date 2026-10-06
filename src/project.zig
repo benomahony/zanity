@@ -14,12 +14,12 @@ const Finding = facts_module.Finding;
 
 /// The files that configure how a project is built and checked, in .gitignore syntax.
 pub const patterns = [_][]const u8{
-    "pyproject.toml",     "setup.cfg",          "tox.ini",                 "ruff.toml",      ".ruff.toml",        "mypy.ini",
-    ".mypy.ini",          "pyrightconfig.json", "package.json",            "tsconfig.json",  "tsconfig.*.json",   "eslint.config.*",
-    ".eslintrc*",         "biome.json",         "biome.jsonc",             "Cargo.toml",     "clippy.toml",       ".clippy.toml",
-    ".cargo/config.toml", "go.mod",             ".golangci.y*ml",          ".golangci.toml", "staticcheck.conf",  "build.zig",
-    "build.zig.zon",      "CMakeLists.txt",     "Makefile",                "meson.build",    ".clang-tidy",       "build.gradle",
-    "build.gradle.kts",   "pom.xml",            ".pre-commit-config.yaml", "Justfile",       "justfile",          "Taskfile.y*ml",
+    "pyproject.toml",     "setup.cfg",          "tox.ini",                 "ruff.toml",                ".ruff.toml",       "mypy.ini",
+    ".mypy.ini",          "pyrightconfig.json", "package.json",            "tsconfig.json",            "tsconfig.*.json",  "eslint.config.*",
+    ".eslintrc*",         "biome.json",         "biome.jsonc",             "Cargo.toml",               "clippy.toml",      ".clippy.toml",
+    ".cargo/config.toml", "go.mod",             ".golangci.y*ml",          ".golangci.toml",           "staticcheck.conf", "build.zig",
+    "build.zig.zon",      "CMakeLists.txt",     "Makefile",                "meson.build",              ".clang-tidy",      "build.gradle",
+    "build.gradle.kts",   "pom.xml",            ".pre-commit-config.yaml", "Justfile",                 "justfile",         "Taskfile.y*ml",
     "noxfile.py",         ".gitlab-ci.yml",     ".circleci/config.yml",    ".github/workflows/*.y*ml",
 };
 
