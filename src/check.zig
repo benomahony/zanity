@@ -34,7 +34,8 @@ pub const Diagnostic = struct {
     /// The change that makes `fix` happen, when zanity can make it.
     edit: ?facts_module.Edit = null,
 
-    pub fn reportOrder(_: void, a: Diagnostic, b: Diagnostic) bool {
+    /// Whether `a` is reported before `b`: by line, then column, then rule name.
+    pub fn reportedBefore(_: void, a: Diagnostic, b: Diagnostic) bool {
         if (a.rule.len == 0) assert.panic("a finding at {d}:{d} has no rule name; report() always passes one", .{ a.line + 1, a.column + 1 });
         if (b.rule.len == 0) assert.panic("a finding at {d}:{d} has no rule name; report() always passes one", .{ b.line + 1, b.column + 1 });
         if (a.line != b.line) return a.line < b.line;
@@ -1058,8 +1059,8 @@ pub const File = struct {
     pub fn finish(self: *File) []Diagnostic {
         if (self.s.contexts.len != 0) assert.panic("{s}: finishing with {d} constructs still open; every node entered must be left", .{ self.work.facts.path, self.s.contexts.len });
         const diagnostics = self.s.diagnostics.items();
-        std.mem.sort(Diagnostic, diagnostics, {}, Diagnostic.reportOrder);
-        if (!std.sort.isSorted(Diagnostic, diagnostics, {}, Diagnostic.reportOrder)) assert.panic("expected diagnostics in report order, got {d} diagnostics out of order; sort the diagnostics with Diagnostic.reportOrder before checking them", .{diagnostics.len});
+        std.mem.sort(Diagnostic, diagnostics, {}, Diagnostic.reportedBefore);
+        if (!std.sort.isSorted(Diagnostic, diagnostics, {}, Diagnostic.reportedBefore)) assert.panic("expected diagnostics in report order, got {d} diagnostics out of order; sort the diagnostics with Diagnostic.reportedBefore before checking them", .{diagnostics.len});
         return diagnostics;
     }
 };

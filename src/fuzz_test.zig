@@ -48,7 +48,7 @@ fn checkAnything(_: void, smith: *std.testing.Smith) anyerror!void {
         error.LimitExceeded => return,
         else => return e,
     };
-    if (!std.sort.isSorted(check.Diagnostic, result.diagnostics, {}, check.Diagnostic.reportOrder)) assert.panic("expected diagnostics in report order, got {d} diagnostics out of order; File.finish() must sort diagnostics with Diagnostic.reportOrder", .{result.diagnostics.len});
+    if (!std.sort.isSorted(check.Diagnostic, result.diagnostics, {}, check.Diagnostic.reportedBefore)) assert.panic("expected diagnostics in report order, got {d} diagnostics out of order; File.finish() must sort diagnostics with Diagnostic.reportedBefore", .{result.diagnostics.len});
     for (result.diagnostics) |d| if (rules.find(d.rule) == null or d.message.len == 0) assert.panic("fuzzing reported rule '{s}' with message '{s}'; every finding needs a known rule and a message, so find the report() call for it and give it a rule from rules.all and a message", .{ d.rule, d.message });
 }
 
