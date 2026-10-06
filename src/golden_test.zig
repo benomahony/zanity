@@ -38,7 +38,6 @@ fn behaviourOfJson(arena: std.mem.Allocator, output: []const u8) ![]const u8 {
     return behaviour(arena, text.items);
 }
 
-
 const Runner = struct { arena: std.mem.Allocator, io: Io, zanity: []const u8 };
 const Suite = struct { path: []const u8, dir: Io.Dir };
 const Case = struct { name: []const u8, project: bool };
