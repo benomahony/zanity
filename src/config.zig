@@ -56,8 +56,8 @@ pub const Scope = struct {
     include_len: usize = 0,
 
     pub fn globs(self: *const Scope) []const []const u8 {
-        if (self.include_len > max_scope_globs) assert.panic("[{s}] has {d} include patterns in room for {d}; the reader refuses more", .{ self.name, self.include_len, max_scope_globs });
-        if (self.name.len == 0) assert.panic("a scope has no name; the reader rejects empty table names", .{});
+        if (self.include_len > max_scope_globs) assert.panic("[{s}] has {d} include patterns in room for {d}; TomlReader must refuse the pattern past max_scope_globs, so check where it adds include patterns", .{ self.name, self.include_len, max_scope_globs });
+        if (self.name.len == 0) assert.panic("a domain or context has no name; TomlReader must reject an empty table name such as [domains.\"\"], so check where it reads table headers", .{});
         return self.include[0..self.include_len];
     }
 };
@@ -89,13 +89,13 @@ pub const Config = struct {
     directional_len: usize = 0,
 
     pub fn vocabulary(self: *const Config) []const Term {
-        if (self.terms_len > max_terms) assert.panic("{d} vocabulary terms in room for {d}; the reader refuses more", .{ self.terms_len, max_terms });
-        if (self.scopes_len > max_scopes) assert.panic("{d} domains and contexts in room for {d}; the reader refuses more", .{ self.scopes_len, max_scopes });
+        if (self.terms_len > max_terms) assert.panic("{d} vocabulary terms in room for {d}; TomlReader must refuse the term past max_terms, so check where it adds terms", .{ self.terms_len, max_terms });
+        if (self.scopes_len > max_scopes) assert.panic("{d} domains and contexts in room for {d}; TomlReader must refuse the table past max_scopes, so check where it adds domains and contexts", .{ self.scopes_len, max_scopes });
         return self.terms[0..self.terms_len];
     }
 
     pub fn domainsAndContexts(self: *const Config) []const Scope {
-        if (self.scopes_len > max_scopes) assert.panic("{d} domains and contexts in room for {d}; the reader refuses more", .{ self.scopes_len, max_scopes });
+        if (self.scopes_len > max_scopes) assert.panic("{d} domains and contexts in room for {d}; TomlReader must refuse the table past max_scopes, so check where it adds domains and contexts", .{ self.scopes_len, max_scopes });
         if (self.scopes_len > 0 and self.dir.len == 0) assert.panic("{d} domains and contexts with no directory to anchor their patterns; initConfig() must set dir", .{self.scopes_len});
         return self.scopes[0..self.scopes_len];
     }
@@ -195,7 +195,7 @@ pub const Anchor = struct {
 };
 
 fn pathMatches(glob: []const u8, relative: []const u8) bool {
-    if (glob.len == 0) assert.panic("matching '{s}' against an empty [paths] pattern; the reader rejects those", .{relative});
+    if (glob.len == 0) assert.panic("matching '{s}' against an empty [paths] pattern; TomlReader must reject [paths.\"\"], so check where it reads table headers", .{relative});
     var buffer: [std.fs.max_path_bytes]u8 = undefined;
     const trimmed = std.mem.trimStart(u8, glob, "/");
     const whole = if (std.mem.endsWith(u8, trimmed, "/"))
@@ -275,9 +275,9 @@ const TomlReader = struct {
     scope: u8 = 0,
 
     fn line(self: *const TomlReader) u32 {
-        if (self.at > self.bytes.len) assert.panic("counting the line of byte {d} in a {d}-byte file; the reader stays inside the file", .{ self.at, self.bytes.len });
+        if (self.at > self.bytes.len) assert.panic("counting the line of byte {d} in a {d}-byte file; nothing may move self.at past the end, so check the last place that advanced it", .{ self.at, self.bytes.len });
         const counted = std.mem.count(u8, self.bytes[0..self.at], "\n") + 1;
-        if (counted > self.bytes.len + 1) assert.panic("counted {d} lines in {d} bytes; a line needs at least a byte", .{ counted, self.bytes.len });
+        if (counted > self.bytes.len + 1) assert.panic("counted {d} lines in {d} bytes, more lines than bytes plus one; count only the newlines before self.at", .{ counted, self.bytes.len });
         return @intCast(counted);
     }
 

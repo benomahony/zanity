@@ -221,6 +221,6 @@ pub fn namesSecret(name: []const u8) bool {
 pub fn startsBefore(start: u32, t: captures.Triple) std.math.Order {
     if (t.key.id == 0) assert.panic("a recorded capture at byte {d} has no node id; index() must skip null nodes when it records captures", .{t.key.start});
     const order = std.math.order(start, t.key.start);
-    if (order == .eq and start != t.key.start) assert.panic("byte {d} compared equal to byte {d}; startsBefore() must compare the two start bytes, so check the arguments to std.math.order", .{ start, t.key.start });
+    if ((order == .lt) != (start < t.key.start)) assert.panic("ordered byte {d} {t} the capture at byte {d}; compare `start` with the capture's start byte, in that order", .{ start, order, t.key.start });
     return order;
 }

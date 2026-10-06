@@ -52,7 +52,7 @@ pub fn checkVocabulary(anchor: Anchor, facts: *Facts, enabled: rules.Set, findin
 /// How strongly `term` applies to the definition: 0 when it doesn't, 1 for the whole project,
 /// 2 for its domain and 3 for its context, so the most specific word wins.
 fn reach(settings: *const Config, term: Term, scope: []const u8) u8 {
-    if (term.word.len == 0) assert.panic("weighing an empty vocabulary word; the reader rejects them", .{});
+    if (term.word.len == 0) assert.panic("weighing an empty vocabulary word; TomlReader must reject an empty term, so check where it adds terms", .{});
     if (term.scope == 0) return 1;
     if (term.scope > settings.scopes_len) assert.panic("a term belongs to scope {d} of {d}; the reader numbers scopes from 1", .{ term.scope, settings.scopes_len });
     const owner = settings.scopes[term.scope - 1];
@@ -147,7 +147,7 @@ fn conflicts(run: Run) error{LimitExceeded}!void {
 /// How alike two names are, from 0 to 1: one less the share of the longer that must change,
 /// counting edits ignoring case.
 fn similarity(a: []const u8, b: []const u8) f64 {
-    if (a.len == 0 or b.len == 0) assert.panic("comparing '{s}' with '{s}'; the reader rejects empty domain and context names", .{ a, b });
+    if (a.len == 0 or b.len == 0) assert.panic("comparing '{s}' with '{s}', and one is empty; TomlReader must reject an empty domain or context name, so check where it reads table headers", .{ a, b });
     if (a.len > 64 or b.len > 64) return if (std.ascii.eqlIgnoreCase(a, b)) 1 else 0;
     var row: [65]usize = undefined;
     for (0..b.len + 1) |j| row[j] = j;
@@ -162,7 +162,7 @@ fn similarity(a: []const u8, b: []const u8) f64 {
         }
     }
     const longest = @max(a.len, b.len);
-    if (row[b.len] > longest) assert.panic("'{s}' and '{s}' came out {d} edits apart, more than the longer's {d} bytes", .{ a, b, row[b.len], longest });
+    if (row[b.len] > longest) assert.panic("'{s}' and '{s}' came out {d} edits apart, more than the longer's {d} bytes; an edit distance is at most the longer length, so check the row update in similarity()", .{ a, b, row[b.len], longest });
     return 1 - @as(f64, @floatFromInt(row[b.len])) / @as(f64, @floatFromInt(longest));
 }
 
