@@ -1,0 +1,4 @@
+#!/bin/sh
+# Runs the check CI runs first, so an unformatted file fails the commit instead of the build.
+# Turn it on once per clone with: git config core.hooksPath .githooks
+exec zig fmt --check build.zig build.zig.zon src languages/*.zig languages/*.zon
