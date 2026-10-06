@@ -57,7 +57,10 @@ pub fn closeTest(self: *File, ctx: Context) !void {
     }
     if (shown.len == 0) assert.panic("{s}: the test {f} has no first line to name it by; capture a test node with text as @test.outer in the language's zanity.scm", .{ self.work.facts.path, ctx.node.where() });
     const facts = self.work.facts;
-    if (facts.collect_units) {
+    // A test with no name and no checks, like Zig's `test { _ = @import("x.zig"); }`, only pulls
+    // other tests in; it checks no behaviour for --infer to judge.
+    const gathers_only = name_node == null and ctx.name == null and ctx.checks == 0;
+    if (facts.collect_units and !gathers_only) {
         const start = ts.ts_node_start_point(at);
         try facts.unit(shown, ctx.span.text(self.source), .{ .kind = .@"test", .reports_error = false, .at = .{ start.row, start.column, ts.ts_node_end_point(ctx.span).row } });
     }

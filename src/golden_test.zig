@@ -309,6 +309,7 @@ test "--infer asks each unit only its own questions, skips what checks settled, 
     defer tmp.cleanup();
     const work = try std.fs.path.join(arena, &.{ ".zig-cache", "tmp", &tmp.sub_path });
     try tmp.dir.writeFile(io, .{ .sub_path = "service.py", .data = try Io.Dir.cwd().readFileAlloc(io, "tests/infer/project/service.py", arena, .unlimited) });
+    try tmp.dir.writeFile(io, .{ .sub_path = "all_test.zig", .data = "test {\n    _ = @import(\"service_test.zig\");\n}\n" });
     try tmp.dir.writeFile(io, .{ .sub_path = "pyproject.toml", .data = "[tool.ruff]\nline-length = 200  # judge: weakened-check\n# judge: unscheduled-analysis\n" });
     const log = try Io.Dir.cwd().realPathFileAlloc(io, work, arena);
     var env = std.process.Environ.Map.init(arena);
