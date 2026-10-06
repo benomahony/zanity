@@ -160,6 +160,7 @@ pub const Batch = struct {
         for (recorded.definitions.items()) |d| {
             var kept = d;
             kept.name = try worker.retain(self.text, d.name);
+            kept.unmarked = try worker.retain(self.text, d.unmarked);
             try facts.definitions.add(kept);
         }
         for (recorded.functions.items()) |f| {

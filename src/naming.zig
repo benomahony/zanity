@@ -148,9 +148,10 @@ fn drift(s: *ConceptScratch, text: *memory.Text, definitions: []const Definition
         s.kinds.clear();
         s.unmarked.clear();
         for (keyed[start..end]) |k| {
-            try addUnique(&s.spellings, definitions[k.index].name);
-            try addUnique(&s.kinds, definitions[k.index].kind);
-            try addUnique(&s.unmarked, definitions[k.index].unmarked);
+            const d = definitions[k.index];
+            try addUnique(&s.spellings, d.name);
+            try addUnique(&s.kinds, d.kind);
+            try addUnique(&s.unmarked, d.unmarked);
         }
         const names = s.spellings.items();
         if (names.len < 2 or conventionOnly(definitions, keyed[start..end], s.unmarked.items(), s.kinds.len)) continue;
