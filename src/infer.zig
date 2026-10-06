@@ -30,6 +30,8 @@ const Job = struct {
     count: usize = 0,
     state: []const u8 = "",
     failed: ?anyerror = null,
+    input_tokens: u64 = 0,
+    output_tokens: u64 = 0,
     diagnostics: tai.Client.Diagnostics = .{},
 };
 
@@ -84,6 +86,7 @@ pub const Inference = struct {
         try self.askAll();
         self.stats.seconds = started.durationTo(Io.Timestamp.now(self.io, .awake)).toSeconds();
         for (self.jobs.items()) |*job| try self.record(job, findings);
+        try self.recordRun();
         if (findings.len < before) assert.panic("--infer removed findings: {d} before, {d} after; judge() must only add findings", .{ before, findings.len });
     }
 
@@ -173,6 +176,9 @@ pub const Inference = struct {
         defer semaphore.post(self.io);
         var response = try self.client.systemOne(.{ .state = .{ .raw = job.state }, .questions = questions[0..count] }, .{ .diagnostics = &job.diagnostics });
         defer response.deinit();
+        const usage = response.value.usage;
+        job.input_tokens = usage.input_tokens;
+        job.output_tokens = usage.output_tokens;
         for (response.value.answers) |named| {
             const p = switch (named.answer) {
                 .noul => |n| n.noul,
@@ -191,12 +197,32 @@ pub const Inference = struct {
         if (job.failed) |err| assert.panic("{s}: recording answers about '{s}' after the request failed with {t}; askOne() must skip record() when the job failed", .{ unit.path, unit.name, err });
         for (job.rules[0..job.count], job.answers[0..job.count], job.known[0..job.count]) |rule, answer, known| {
             const p = answer orelse continue;
-            if (!known) try self.store.keepAnswer(.{ .model = self.client.model, .question = store.digest(&.{rule.question}), .unit = job.unit_hash, .language = unit.language, .source = unit.source, .probability = p });
-            if (p < self.threshold) continue;
+            const question = store.digest(&.{rule.question});
+            if (!known) try self.store.keepAnswer(.{ .model = self.client.model, .question = question, .unit = job.unit_hash, .language = unit.language, .source = unit.source, .probability = p });
+            const fired = p >= self.threshold;
+            try self.store.observe(.{ .path = unit.path, .rule = rule.name, .unit = job.unit_hash, .unit_name = unit.name, .line = unit.line + 1, .language = unit.language, .model = self.client.model, .question = question, .probability = p, .threshold = self.threshold, .fired = fired });
+            if (!fired) continue;
             const message = try self.json.format("'{s}' {s} (TypeSafe is {d:.0}% sure).", .{ unit.name, rule.judgement, p * 100 });
             try findings.add(.{ .path = unit.path, .line = unit.line, .column = unit.column, .rule = rule.name, .message = message });
         }
         if (job.count > max_questions) assert.panic("{s}: recorded {d} answers about '{s}', more than {d}; record() must keep at most one answer per queued question", .{ unit.path, job.count, unit.name, max_questions });
+    }
+
+    /// Keeps a row for this run in the store, with the directory it ran in and the tokens it used.
+    fn recordRun(self: *Inference) !void {
+        var input: u64 = 0;
+        var output: u64 = 0;
+        for (self.jobs.items()) |job| {
+            input += job.input_tokens;
+            output += job.output_tokens;
+        }
+        var buffer: [std.fs.max_path_bytes]u8 = undefined;
+        const length = try Io.Dir.cwd().realPathFile(self.io, ".", &buffer);
+        if (length == 0) assert.panic("the directory zanity runs in resolved to an empty path; realPath() must return at least '/'", .{});
+        const s = self.stats;
+        if (s.asked > s.functions) assert.panic("--infer asked about {d} of {d} functions; askAll() must count only queued functions as asked", .{ s.asked, s.functions });
+        if (s.asked == 0 and input + output > 0) assert.panic("{d} tokens used with no function asked about; ask() must record usage only for a request it made", .{input + output});
+        try self.store.keepRun(.{ .path = buffer[0..length], .units = s.functions, .asked = s.asked, .cached = s.functions - s.asked, .input_tokens = input, .output_tokens = output });
     }
 
     /// The language and source identify a function; the model is kept alongside.

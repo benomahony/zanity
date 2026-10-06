@@ -18,6 +18,7 @@ extern fn sqlite3_prepare_v2(db: *sqlite3, sql: [*]const u8, n: c_int, stmt: *?*
 extern fn sqlite3_reset(stmt: *sqlite3_stmt) c_int;
 extern fn sqlite3_step(stmt: *sqlite3_stmt) c_int;
 extern fn sqlite3_bind_text(stmt: *sqlite3_stmt, i: c_int, text: [*]const u8, n: c_int, destructor: isize) c_int;
+extern fn sqlite3_bind_int64(stmt: *sqlite3_stmt, i: c_int, value: i64) c_int;
 extern fn sqlite3_bind_double(stmt: *sqlite3_stmt, i: c_int, value: f64) c_int;
 extern fn sqlite3_column_double(stmt: *sqlite3_stmt, i: c_int) f64;
 
@@ -81,6 +82,9 @@ const find_answer = "SELECT probability FROM answers WHERE model = ?1 AND questi
 const save_unit = "INSERT OR IGNORE INTO units (unit_hash, language, source) VALUES (?1, ?2, ?3)";
 const save_answer = "INSERT OR REPLACE INTO answers (model, question_hash, unit_hash, probability, asked_at) VALUES (?1, ?2, ?3, ?4, strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now'))";
 
+const save_observation = "INSERT OR REPLACE INTO observations (path, rule, unit_hash, unit_name, line, language, model, question_hash, probability, threshold, fired, seen_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now'))";
+const save_run = "INSERT INTO runs (at, path, units, asked, cached, input_tokens, output_tokens) VALUES (strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now'), ?1, ?2, ?3, ?4, ?5, ?6)";
+
 /// A digest: the first 32 hex characters of the SHA-256 of the parts joined with NUL.
 pub const Digest = [32]u8;
 
@@ -106,6 +110,34 @@ pub const Answer = struct {
     probability: f64,
 };
 
+/// What the model said about one question of one unit in this run, kept whether or not it was
+/// sure enough to report, so precision can be measured against `labels`.
+pub const Observation = struct {
+    path: []const u8,
+    rule: []const u8,
+    unit: Digest,
+    unit_name: []const u8,
+    /// The line a finding would be reported on, counting from 1.
+    line: u32,
+    language: []const u8,
+    model: []const u8,
+    question: Digest,
+    probability: f64,
+    threshold: f64,
+    fired: bool,
+};
+
+/// One --infer run: where it ran, how many units it had questions about, how many of those it
+/// asked TypeSafe about and how many the store answered, and the tokens the requests used.
+pub const RunTotals = struct {
+    path: []const u8,
+    units: usize,
+    asked: usize,
+    cached: usize,
+    input_tokens: u64,
+    output_tokens: u64,
+};
+
 /// Why the last store operation failed, as SQLite put it.
 pub var failure: [512]u8 = undefined;
 pub var failure_len: usize = 0;
@@ -117,9 +149,12 @@ pub const Store = struct {
     find: *sqlite3_stmt,
     unit: *sqlite3_stmt,
     answer: *sqlite3_stmt,
+    observation: *sqlite3_stmt,
+    run: *sqlite3_stmt,
 
     /// Gives SQLite one fixed heap, then opens the store and prepares every statement, so
-    /// nothing allocates after start-up. `ZANITY_STORE` overrides where the store lives.
+    /// nothing allocates after start-up. SQLite keeps the first heap for the life of the process,
+    /// so `gpa` must never free it. `ZANITY_STORE` overrides where the store lives.
     pub fn initStore(gpa: Allocator, io: Io, environ: *const std.process.Environ.Map, heap_bytes: usize) !Store {
         if (heap_bytes < 1 << 20) assert.panic("SQLite was given a {d}-byte heap; it needs at least 1 MiB", .{heap_bytes});
         if (!configured) {
@@ -136,7 +171,7 @@ pub const Store = struct {
         const db = handle orelse return error.StoreUnavailable;
         _ = sqlite3_busy_timeout(db, 5000);
         if (sqlite3_exec(db, schema, null, null, null) != ok) return failed(db);
-        const opened: Store = .{ .db = db, .find = try prepare(db, find_answer), .unit = try prepare(db, save_unit), .answer = try prepare(db, save_answer) };
+        const opened: Store = .{ .db = db, .find = try prepare(db, find_answer), .unit = try prepare(db, save_unit), .answer = try prepare(db, save_answer), .observation = try prepare(db, save_observation), .run = try prepare(db, save_run) };
         if (!configured) assert.panic("opened {s} before SQLite was given its heap; install the heap with sqlite3_config before opening the store", .{path});
         return opened;
     }
@@ -171,6 +206,39 @@ pub const Store = struct {
         try bind(self.answer, 3, &a.unit);
         if (sqlite3_bind_double(self.answer, 4, a.probability) != ok) return failed(self.db);
         if (sqlite3_step(self.answer) != done) return failed(self.db);
+    }
+
+    /// Keeps what the model said about a unit, replacing what an earlier run said there.
+    pub fn observe(self: *const Store, o: Observation) !void {
+        if (o.line == 0) assert.panic("{s}: observing '{s}' on line 0; lines count from 1, so pass the unit's line plus 1", .{ o.path, o.unit_name });
+        if (o.fired != (o.probability >= o.threshold)) assert.panic("{s}: '{s}' {s} at {d} against a threshold of {d}; fired must be whether the probability reaches the threshold", .{ o.path, o.rule, if (o.fired) "fired" else "did not fire", o.probability, o.threshold });
+        defer _ = sqlite3_reset(self.observation);
+        try bind(self.observation, 1, o.path);
+        try bind(self.observation, 2, o.rule);
+        try bind(self.observation, 3, &o.unit);
+        try bind(self.observation, 4, o.unit_name);
+        try bindInt(self.observation, 5, o.line);
+        try bind(self.observation, 6, o.language);
+        try bind(self.observation, 7, o.model);
+        try bind(self.observation, 8, &o.question);
+        if (sqlite3_bind_double(self.observation, 9, o.probability) != ok) return failed(self.db);
+        if (sqlite3_bind_double(self.observation, 10, o.threshold) != ok) return failed(self.db);
+        try bindInt(self.observation, 11, @intFromBool(o.fired));
+        if (sqlite3_step(self.observation) != done) return failed(self.db);
+    }
+
+    /// Keeps a row for this run.
+    pub fn keepRun(self: *const Store, r: RunTotals) !void {
+        if (r.asked + r.cached != r.units) assert.panic("a run with {d} units, {d} asked and {d} answered from the store; each unit is either asked or fully cached", .{ r.units, r.asked, r.cached });
+        if (r.path.len == 0) assert.panic("recording a run with no path; pass the directory zanity ran in", .{});
+        defer _ = sqlite3_reset(self.run);
+        try bind(self.run, 1, r.path);
+        try bindInt(self.run, 2, r.units);
+        try bindInt(self.run, 3, r.asked);
+        try bindInt(self.run, 4, r.cached);
+        try bindInt(self.run, 5, r.input_tokens);
+        try bindInt(self.run, 6, r.output_tokens);
+        if (sqlite3_step(self.run) != done) return failed(self.db);
     }
 };
 
@@ -207,6 +275,12 @@ fn bind(stmt: *sqlite3_stmt, index: c_int, text: []const u8) !void {
     if (sqlite3_bind_text(stmt, index, text.ptr, @intCast(text.len), transient) != ok) return error.StoreUnavailable;
 }
 
+fn bindInt(stmt: *sqlite3_stmt, index: c_int, value: u64) !void {
+    if (index < 1) assert.panic("binding parameter {d}; SQLite numbers parameters from 1", .{index});
+    if (value > std.math.maxInt(i64)) assert.panic("binding {d}, past the largest integer SQLite stores; count something smaller", .{value});
+    if (sqlite3_bind_int64(stmt, index, @intCast(value)) != ok) return error.StoreUnavailable;
+}
+
 /// Records SQLite's reason for the last failure, for the error message, and reports it.
 fn failed(db: *sqlite3) error{StoreUnavailable} {
     const message = std.mem.span(sqlite3_errmsg(db));
@@ -233,11 +307,45 @@ test "an answer kept in the store is found again" {
     const dir = try tmp.dir.realPathFileAlloc(std.testing.io, ".", arena);
     var environ: std.process.Environ.Map = .init(arena);
     try environ.put("ZANITY_STORE", try std.fs.path.join(arena, &.{ dir, "store.db" }));
-    const store = try Store.initStore(arena, std.testing.io, &environ, 8 << 20);
+    const store = try Store.initStore(std.heap.page_allocator, std.testing.io, &environ, 8 << 20);
     const unit = digest(&.{ "lang-a", "fn f() void {}" });
     const question = digest(&.{"Is it fine?"});
     try std.testing.expectEqual(@as(?f64, null), try store.cached("jev-1", question, unit));
     try store.keepAnswer(.{ .model = "jev-1", .question = question, .unit = unit, .language = "lang-a", .source = "fn f() void {}", .probability = 0.25 });
     try std.testing.expectEqual(@as(?f64, 0.25), try store.cached("jev-1", question, unit));
     try std.testing.expectEqual(@as(?f64, null), try store.cached("jev-2", question, unit));
+}
+
+/// The first column of the first row `sql` returns, for reading back what a test kept.
+fn scalar(db: *sqlite3, sql: []const u8) !f64 {
+    if (!std.mem.startsWith(u8, sql, "SELECT ")) assert.panic("'{s}' is not a query; scalar() only reads back what a test kept", .{sql});
+    const stmt = try prepare(db, sql);
+    defer _ = sqlite3_reset(stmt);
+    if (sqlite3_step(stmt) != row) return failed(db);
+    const value = sqlite3_column_double(stmt, 0);
+    if (std.math.isNan(value)) assert.panic("'{s}' read back NaN; SQLite reads NULL as 0, so check the column holds numbers", .{sql});
+    return value;
+}
+
+test "every observation is kept, the latest per place, and each run adds a row" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const dir = try tmp.dir.realPathFileAlloc(std.testing.io, ".", arena);
+    var environ: std.process.Environ.Map = .init(arena);
+    try environ.put("ZANITY_STORE", try std.fs.path.join(arena, &.{ dir, "store.db" }));
+    const store = try Store.initStore(std.heap.page_allocator, std.testing.io, &environ, 8 << 20);
+    const seen: Observation = .{ .path = "a.py", .rule = "hollow-test", .unit = digest(&.{"u"}), .unit_name = "test_a", .line = 3, .language = "lang-a", .model = "jev-1", .question = digest(&.{"q"}), .probability = 0.4, .threshold = 0.8, .fired = false };
+    try store.observe(seen);
+    var again = seen;
+    again.probability = 0.9;
+    again.fired = true;
+    try store.observe(again);
+    try store.keepRun(.{ .path = dir, .units = 2, .asked = 1, .cached = 1, .input_tokens = 300, .output_tokens = 30 });
+    try store.keepRun(.{ .path = dir, .units = 2, .asked = 0, .cached = 2, .input_tokens = 0, .output_tokens = 0 });
+    try std.testing.expectEqual(@as(f64, 1), try scalar(store.db, "SELECT count(*) FROM observations"));
+    try std.testing.expectEqual(@as(f64, 0.9), try scalar(store.db, "SELECT probability FROM observations WHERE fired = 1"));
+    try std.testing.expectEqual(@as(f64, 300), try scalar(store.db, "SELECT sum(input_tokens) FROM runs"));
 }
