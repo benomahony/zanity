@@ -36,6 +36,7 @@ fn revisionOfAnalyzer() [8]u8 {
         @embedFile("hazards.zig"),
         @embedFile("isolation.zig"),
         @embedFile("loops.zig"),
+        @embedFile("naming.zig"),
         @embedFile("notes.zig"),
         @embedFile("parameters.zig"),
         @embedFile("passthrough.zig"),
@@ -181,6 +182,7 @@ fn validateDefinitions(snapshot: Snapshot, run: Replay) ReplayError!void {
     if (run.language.len == 0) assert.panic("validating definitions without their language; facts always belong to an adapter", .{});
     for (snapshot.definitions) |definition| {
         if (!std.mem.eql(u8, definition.path, run.path) or !std.mem.eql(u8, definition.language, run.language)) return error.InvalidCache;
+        if (definition.name.len == 0 or definition.unmarked.len == 0) return error.InvalidCache;
     }
     for (snapshot.abstractions) |abstraction| {
         if (!std.mem.eql(u8, abstraction.path, run.path) or !std.mem.eql(u8, abstraction.language, run.language)) return error.InvalidCache;
@@ -228,6 +230,7 @@ fn commitFacts(snapshot: Snapshot, run: Replay) error{LimitExceeded}!void {
         .scope = try run.text.copy(definition.scope),
         .member = definition.member,
         .importable = definition.importable,
+        .unmarked = try run.text.copy(definition.unmarked),
     });
     for (snapshot.functions) |function| try facts.functions.add(.{ .path = run.path, .name = try run.text.copy(function.name), .method = function.method, .line = function.line, .column = function.column });
     for (snapshot.calls) |call| try facts.calls.add(.{ .caller = @intCast(first + call.caller), .callee = try run.text.copy(call.callee), .reach = call.reach });
@@ -247,6 +250,7 @@ fn commitFacts(snapshot: Snapshot, run: Replay) error{LimitExceeded}!void {
         .scope = try run.text.copy(abstraction.scope),
         .member = abstraction.member,
         .importable = abstraction.importable,
+        .unmarked = try run.text.copy(abstraction.unmarked),
     });
     for (snapshot.implemented) |hash| try facts.implemented.add(hash);
     std.mem.sort(u64, snapshot.references, {}, std.sort.asc(u64));
@@ -280,7 +284,7 @@ test "a cached analysis replays local findings and cross-file facts" {
     const loaded = try language.loadedOnce(language.forPath("a.py").?);
     source_facts.path = "src/a.py";
     source_facts.language = loaded.adapter.name;
-    try source_facts.define("answer", "function", .{ .at = .{ 2, 4 }, .public = true });
+    try source_facts.define("answer", "function", .{ .at = .{ 2, 4 }, .public = true, .unmarked = "answer" });
     const function = try source_facts.function("answer", .{ 2, 4 }, false);
     try source_facts.call(function, "helper", .functions);
     try source_facts.references.add(7);
@@ -300,6 +304,7 @@ test "a cached analysis replays local findings and cross-file facts" {
     try std.testing.expectEqual(@as(usize, 1), target_facts.functions.len);
     try std.testing.expectEqual(@as(usize, 1), target_facts.calls.len);
     try std.testing.expectEqual(@as(usize, 1), target_facts.references.len);
+    try std.testing.expectEqualStrings("answer", target_facts.definitions.items()[0].unmarked);
     try std.testing.expectEqualStrings("answer", target_facts.functions.items()[0].name);
     try std.testing.expectEqualStrings("too long", findings.items()[0].message);
 }

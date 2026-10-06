@@ -5,6 +5,7 @@ const std = @import("std");
 const assert = @import("assert.zig");
 const ts = @import("ts.zig");
 const check = @import("check.zig");
+const naming = @import("naming.zig");
 const strings = @import("strings.zig");
 const File = check.File;
 const Context = check.Context;
@@ -27,7 +28,7 @@ pub fn checkPassthrough(self: *File, ctx: Context, name_node: ts.Node, name: []c
 fn forwardedTo(self: *File, ctx: Context, name: []const u8) ?[]const u8 {
     if (ctx.body_start == std.math.maxInt(u32)) return null;
     const fact = ctx.fact orelse return null;
-    if (check.contains(self.tables.protocol_names, name) or strings.dunder(name)) return null;
+    if (naming.protocolName(self.tables, name)) return null;
     if (strings.decoratedAt(self.source, ts.ts_node_start_byte(ctx.node))) return null;
     const call = soleCall(self.source[ctx.body_start..ts.ts_node_end_byte(ctx.span)]) orelse return null;
     const facts = self.work.facts;

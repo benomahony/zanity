@@ -1,0 +1,2 @@
+rules: name-drift,duplicate-name
+exit: 0

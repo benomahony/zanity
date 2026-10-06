@@ -85,8 +85,6 @@ pub const Tables = struct {
     methods_need_receiver: bool = false,
     /// Whether a name's case says it is exported, as Go's capitalised names are.
     exported_by_case: bool = false,
-    /// The prefix that keeps a name private to its module by convention, as `_` does in Python.
-    private_prefix: []const u8 = "",
     /// Whether a call to a capitalised name makes a new object, as `Event()` does in Python.
     constructors_capitalised: bool = false,
     /// Forbidden calls that take an attribute's name second, as `getattr(obj, "name")` does: with a
@@ -110,6 +108,10 @@ pub const Tables = struct {
     assertion_braces_doubled: bool = false,
     /// What starts a comment that runs to the end of the line; fixes leave TODOs with it.
     line_comment: []const u8 = "",
+    /// An affix that marks names the language's protocol defines, such as Python's `__name__`.
+    protocol_affix: []const u8 = "",
+    /// Prefix bytes that mark a name private by convention, such as `_` in Python.
+    private_prefixes: []const u8 = "",
 };
 
 pub const entries: []const Entry = @import("manifest.zon");

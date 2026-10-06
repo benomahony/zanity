@@ -256,3 +256,5 @@ pub const filler_test_words = [_][]const u8{ "test", "tests", "testing", "it", "
 pub const entry_points = [_][]const u8{ "main", "app", "cli", "setup", "teardown", "setUp", "tearDown", "setUpClass", "tearDownClass", "setUpModule", "tearDownModule", "conftest", "init", "deinit", "panic" };
 /// Name endings that mark a variable as holding a secret, lowercased without separators.
 pub const secret_names = [_][]const u8{ "password", "passwd", "secret", "token", "apikey", "privatekey", "accesskey", "credentials" };
+pub const secret_placeholders = [_][]const u8{ "not-set", "not_set", "dummy", "placeholder", "changeme", "change-me", "xxx" };
+pub const secret_masks = "*xX#.";

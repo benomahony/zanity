@@ -24,6 +24,7 @@ const shapes = @import("shapes.zig");
 const notes = @import("notes.zig");
 const extract = @import("extract.zig");
 const loops = @import("loops.zig");
+const naming = @import("naming.zig");
 const passthrough = @import("passthrough.zig");
 
 pub const Diagnostic = struct {
@@ -752,7 +753,7 @@ pub const File = struct {
             .statement => try self.remember(ctx),
             .@"test" => try test_quality.closeTest(self, ctx),
             .class, .control => {},
-            .definition => try self.closeDefinition(ctx),
+            .definition => try naming.closeDefinition(self, ctx),
         }
     }
 
@@ -796,39 +797,6 @@ pub const File = struct {
             return;
         }
         try self.s.bare_calls.add(.{ .owner = function.serial, .text = name });
-    }
-
-    pub fn closeDefinition(self: *File, ctx: Context) !void {
-        if (ctx.family != .definition) assert.panic("{s}: closing {f} as a definition, but it is a {t}; close() must dispatch each construct by its family, so check its switch", .{ self.work.facts.path, ctx.node.where(), ctx.family });
-        if (ctx.kind.len == 0) assert.panic("{s}: the definition {f} has no kind; capture it as @definition.function, @definition.class and so on", .{ self.work.facts.path, ctx.node.where() });
-        const name_node = ctx.name orelse return;
-        const name = name_node.text(self.source);
-        if (self.checker.enabled.enabled("dead-symbol")) try self.s.names.tally(facts_module.nameHash(name), -1);
-        if (std.mem.eql(u8, ctx.kind, "constant") and !std.ascii.isUpper(name[0])) return;
-        if (contains(self.tables.protocol_names, name)) return;
-        const at = ts.ts_node_start_point(name_node);
-        const public = self.index.marks(ctx.node, self.v.visibility_public) or (self.tables.exported_by_case and std.ascii.isUpper(name[0]));
-        const member = std.mem.eql(u8, ctx.kind, "method") or self.heldByFunctionOrClass(ctx.node);
-        const prefix = self.tables.private_prefix;
-        const importable = if (prefix.len > 0) !std.mem.startsWith(u8, name, prefix) else public;
-        try self.work.facts.define(name, ctx.kind, .{ .at = .{ at.row, at.column }, .public = public, .member = member, .importable = importable });
-    }
-
-    /// Whether a function or class other than `node` itself holds it, so code reaches it only
-    /// through that function or class.
-    fn heldByFunctionOrClass(self: *File, node: ts.Node) bool {
-        const start = ts.ts_node_start_byte(node);
-        const end = ts.ts_node_end_byte(node);
-        if (end <= start) assert.panic("{s}: the definition {f} covers no text; put @definition.<kind> on the whole declaration", .{ self.work.facts.path, node.where() });
-        for (self.s.contexts.items()) |held| {
-            if (held.family != .function and held.family != .class) continue;
-            const from = ts.ts_node_start_byte(held.node);
-            const to = ts.ts_node_end_byte(held.node);
-            if (from == start and to == end) continue;
-            if (from <= start and end <= to) return true;
-        }
-        if (self.s.contexts.len > self.s.contexts.capacity()) assert.panic("{s}: {d} open constructs in room for {d}; leave() must pop what enter() opened", .{ self.work.facts.path, self.s.contexts.len, self.s.contexts.capacity() });
-        return false;
     }
 
     pub fn inAssertionCondition(self: *File, node: ts.Node) bool {

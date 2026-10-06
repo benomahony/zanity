@@ -190,7 +190,7 @@
     .
     [
       (call)
-      (expression_statement
+      (await
         (call))
       (return_statement
         (call))

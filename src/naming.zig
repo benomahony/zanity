@@ -1,12 +1,18 @@
 const std = @import("std");
 const assert = @import("assert.zig");
 const strings = @import("strings.zig");
+const ts = @import("ts.zig");
 const Allocator = std.mem.Allocator;
 const rules = @import("rules.zig");
 const memory = @import("memory.zig");
-const Definition = @import("facts.zig").Definition;
-const Facts = @import("facts.zig").Facts;
-const Finding = @import("facts.zig").Finding;
+const facts_module = @import("facts.zig");
+const Definition = facts_module.Definition;
+const Facts = facts_module.Facts;
+const Finding = facts_module.Finding;
+const Tables = @import("language.zig").Tables;
+const check = @import("check.zig");
+const Context = check.Context;
+const File = check.File;
 
 /// Words that give a name its direction, unless zanity.toml lists its own.
 const default_directional = [_][]const u8{ "to", "from", "before", "after", "src", "dst" };
@@ -29,6 +35,7 @@ pub const ConceptScratch = struct {
     keyed: memory.Bounded(Keyed),
     spellings: memory.Bounded([]const u8),
     kinds: memory.Bounded([]const u8),
+    unmarked: memory.Bounded([]const u8),
     shapes: memory.Bounded([]const u8),
     tokens: memory.Bounded([]const u8),
     words: memory.Text,
@@ -41,6 +48,7 @@ pub const ConceptScratch = struct {
             .keyed = try .initBounded(gpa, limits.definitions, "definitions across all files"),
             .spellings = try .initBounded(gpa, limits.definitions, "spellings of one concept"),
             .kinds = try .initBounded(gpa, limits.definitions, "kinds of one concept"),
+            .unmarked = try .initBounded(gpa, limits.definitions, "unmarked spellings of one concept"),
             .shapes = try .initBounded(gpa, limits.definitions, "spellings of one concept"),
             .tokens = try .initBounded(gpa, max_tokens, "words in one name"),
             .words = try .initText(gpa, limits.text_bytes),
@@ -58,14 +66,62 @@ pub fn crossCheck(s: *ConceptScratch, facts: *Facts, enabled: rules.Set, finding
     if (findings.len - before > definitions.len * 2) assert.panic("naming checks reported {d} findings for {d} definitions; each definition can be in at most one drift and one duplicate", .{ findings.len - before, definitions.len });
 }
 
-/// Dunder names, which a language defines rather than the author, and names with no words, like
-/// Go's blank identifier `_`, which say nothing a reader could confuse.
-fn exempt(name: []const u8) bool {
+/// Names with no words, like Go's blank identifier `_`, which say nothing a reader could confuse.
+pub fn exempt(name: []const u8) bool {
     if (name.len == 0) assert.panic("asked whether an empty name is exempt from naming checks; the @name capture matched an empty node", .{});
-    const dunder = strings.dunder(name);
+    if (std.mem.indexOfScalar(u8, name, 0) != null) assert.panic("'{s}' holds a NUL byte, which no identifier can; the @name capture matched past the name", .{name});
     const wordless = std.mem.indexOfNone(u8, name, separators) == null;
     if (wordless and std.mem.indexOfNone(u8, name, "_-") != null and std.mem.trim(u8, name, " \t\r\n").len > 0) assert.panic("'{s}' was taken as having no words though it holds more than separators; check separators", .{name});
-    return dunder or wordless;
+    return wordless;
+}
+
+pub fn protocolName(tables: *const Tables, name: []const u8) bool {
+    if (name.len == 0) assert.panic("asked whether an empty name is a protocol name; the @name capture matched an empty node", .{});
+    if (tables.ecosystem.len == 0) assert.panic("checking protocol name '{s}' against an unnamed ecosystem; every language table names its ecosystem", .{name});
+    const affix = tables.protocol_affix;
+    const wrapped = affix.len > 0 and name.len > affix.len * 2 and std.mem.startsWith(u8, name, affix) and std.mem.endsWith(u8, name, affix);
+    return wrapped or strings.contains(tables.protocol_names, name);
+}
+
+pub fn unmarkedName(text: *memory.Text, path: []const u8, tables: *const Tables, name: []const u8) error{LimitExceeded}![]const u8 {
+    if (name.len == 0) assert.panic("{s}: asked for the unmarked spelling of an empty name; the @name capture matched an empty node", .{path});
+    const bare = std.mem.trimStart(u8, name, tables.private_prefixes);
+    const unmarked = try text.copy(if (bare.len == 0) name else bare);
+    if (tables.exported_by_case) @constCast(unmarked)[0] = std.ascii.toUpper(unmarked[0]);
+    if (unmarked.len > name.len) assert.panic("{s}: the unmarked spelling '{s}' is longer than '{s}'; unmarkedName() may only drop privacy marks", .{ path, unmarked, name });
+    return unmarked;
+}
+
+pub fn closeDefinition(self: *File, ctx: Context) !void {
+    if (ctx.family != .definition) assert.panic("{s}: closing {f} as a definition, but it is a {t}; close() must dispatch each construct by its family", .{ self.work.facts.path, ctx.node.where(), ctx.family });
+    if (ctx.kind.len == 0) assert.panic("{s}: the definition {f} has no kind; capture it as @definition.function, @definition.class and so on", .{ self.work.facts.path, ctx.node.where() });
+    const name_node = ctx.name orelse return;
+    const name = name_node.text(self.source);
+    if (self.checker.enabled.enabled("dead-symbol")) try self.s.names.tally(facts_module.nameHash(name), -1);
+    if (std.mem.eql(u8, ctx.kind, "constant") and !std.ascii.isUpper(name[0])) return;
+    if (protocolName(self.tables, name)) return;
+    const at = ts.ts_node_start_point(name_node);
+    const public = self.index.marks(ctx.node, self.v.visibility_public) or (self.tables.exported_by_case and std.ascii.isUpper(name[0]));
+    const method = std.mem.eql(u8, ctx.kind, "function") and self.innermost(.function) != null and self.definedInClass();
+    const member = method or std.mem.eql(u8, ctx.kind, "method") or heldByFunctionOrClass(self, ctx.node);
+    const prefixes = self.tables.private_prefixes;
+    const importable = if (prefixes.len > 0) std.mem.indexOfScalar(u8, prefixes, name[0]) == null else public;
+    try self.work.facts.define(name, if (method) "method" else ctx.kind, .{ .at = .{ at.row, at.column }, .public = public, .member = member, .importable = importable, .unmarked = try unmarkedName(self.work.facts.text, self.work.facts.path, self.tables, name) });
+}
+
+fn heldByFunctionOrClass(self: *File, node: ts.Node) bool {
+    const start = ts.ts_node_start_byte(node);
+    const end = ts.ts_node_end_byte(node);
+    if (end <= start) assert.panic("{s}: the definition {f} covers no text; put @definition.<kind> on the whole declaration", .{ self.work.facts.path, node.where() });
+    for (self.s.contexts.items()) |held| {
+        if (held.family != .function and held.family != .class) continue;
+        const from = ts.ts_node_start_byte(held.node);
+        const to = ts.ts_node_end_byte(held.node);
+        if (from == start and to == end) continue;
+        if (from <= start and end <= to) return true;
+    }
+    if (self.s.contexts.len > self.s.contexts.capacity()) assert.panic("{s}: {d} open constructs in room for {d}; leave() must pop what enter() opened", .{ self.work.facts.path, self.s.contexts.len, self.s.contexts.capacity() });
+    return false;
 }
 
 /// The bytes tokenise() splits words on: underscores, hyphens and whitespace.
@@ -145,19 +201,22 @@ fn drift(s: *ConceptScratch, text: *memory.Text, definitions: []const Definition
         if (start == keyed.len) break;
         const end = runEnd(keyed, start);
         defer start = end;
+        const group = keyed[start..end];
         s.spellings.clear();
         s.kinds.clear();
-        for (keyed[start..end]) |k| {
-            try addUnique(&s.spellings, definitions[k.index].name);
-            try addUnique(&s.kinds, definitions[k.index].kind);
+        s.unmarked.clear();
+        for (group) |k| {
+            const d = definitions[k.index];
+            try addUnique(&s.spellings, d.name);
+            try addUnique(&s.kinds, d.kind);
+            try addUnique(&s.unmarked, d.unmarked);
         }
         const names = s.spellings.items();
-        if (names.len < 2 or caseOnlyAcrossKinds(names, s.kinds.len)) continue;
-        if (conventionOnly(names, s.kinds.len)) continue;
+        if (names.len < 2 or conventionOnly(definitions, group, s.unmarked.items(), s.kinds.len)) continue;
         if (try directionalNames(s, names)) continue;
         const first = definitions[keyed[start].index];
         const spellings = try joined(text, names);
-        const common = mostUsed(definitions, keyed[start..end], names);
+        const common = mostUsed(definitions, group, names);
         try findings.add(.{
             .path = first.path,
             .line = first.line,
@@ -180,6 +239,7 @@ fn keyedBy(s: *ConceptScratch, definitions: []const Definition, by: KeyBy) error
     s.keyed.clear();
     for (definitions, 0..) |d, i| {
         if (exempt(d.name)) continue;
+        if (by == .name and std.mem.eql(u8, d.kind, "method")) continue;
         const key = switch (by) {
             .concept => try conceptKey(s, d.language, d.name),
             .name => try s.words.format("{s} {s} {s}", .{ d.language, d.scope, d.name }),
@@ -219,40 +279,35 @@ fn addUnique(list: *memory.Bounded([]const u8), value: []const u8) error{LimitEx
     if (list.len == 0) assert.panic("recorded '{s}' but the list is still empty; addUnique() must add the name before returning", .{value});
 }
 
-fn caseOnlyAcrossKinds(names: []const []const u8, kinds: usize) bool {
-    if (names.len < 2) assert.panic("comparing the case of {d} names; drift needs at least 2 spellings", .{names.len});
-    if (kinds == 0) assert.panic("{d} names ('{s}' first) have no kinds recorded; every definition has a kind", .{ names.len, names[0] });
+fn conventionOnly(definitions: []const Definition, run: []const Keyed, unmarked: []const []const u8, kinds: usize) bool {
+    if (unmarked.len == 0 or unmarked.len > run.len) assert.panic("a run of {d} names has {d} unmarked spellings; closeDefinition() records one for every definition", .{ run.len, unmarked.len });
+    if (kinds == 0) assert.panic("{d} unmarked spellings ('{s}' first) have no kinds recorded; every definition has a kind", .{ unmarked.len, unmarked[0] });
+    if (unmarked.len == 1) return true;
     if (kinds < 2) return false;
-    for (names[1..]) |n| if (!std.ascii.eqlIgnoreCase(n, names[0])) return false;
-    return true;
-}
-
-/// Whether the names have the same words in the same order and differ only by convention: in case
-/// style across kinds, as a class `FallbackModel` and its instance `fallback_model` do, or by the
-/// leading `_` that marks a name private, as `_now` and `now` do.
-fn conventionOnly(names: []const []const u8, kinds: usize) bool {
-    if (names.len < 2) assert.panic("comparing the words of {d} names; drift needs at least 2 spellings", .{names.len});
-    for (names[1..]) |n| if (!sameWords(n, names[0])) return false;
-    if (kinds >= 2) return true;
-    const bare = std.mem.trimStart(u8, names[0], "_");
-    for (names[1..]) |n| if (!std.mem.eql(u8, std.mem.trimStart(u8, n, "_"), bare)) return false;
-    if (bare.len == 0) assert.panic("'{s}' is only underscores; exempt() leaves out names with no words", .{names[0]});
+    for (unmarked[1..]) |u| if (!sameWords(u, unmarked[0])) return false;
+    for (run, 0..) |a, i| {
+        const first = definitions[a.index];
+        for (run[i + 1 ..]) |b| {
+            const second = definitions[b.index];
+            if (std.mem.eql(u8, first.kind, second.kind) and !std.mem.eql(u8, first.unmarked, second.unmarked)) return false;
+        }
+    }
     return true;
 }
 
 /// Whether two names hold the same words in the same order, ignoring case and separators.
 fn sameWords(a: []const u8, b: []const u8) bool {
-    if (a.len == 0 or b.len == 0) assert.panic("comparing the words of '{s}' and '{s}', and one is empty; exempt() leaves out names with no words, so check that drift() keys only the names keyedBy() kept", .{ a, b });
+    if (a.len == 0 or b.len == 0) assert.panic("comparing the words of '{s}' and '{s}', and one is empty; every definition records a non-empty unmarked name", .{ a, b });
+    if (std.mem.indexOfScalar(u8, a, 0) != null or std.mem.indexOfScalar(u8, b, 0) != null) assert.panic("comparing names containing a NUL byte: '{s}' and '{s}'; identifiers cannot contain NUL", .{ a, b });
     var left: Words = .{ .text = a };
     var right: Words = .{ .text = b };
     for (0..a.len + 1) |_| {
         const x = left.next();
         const y = right.next();
         if (x == null or y == null) return x == null and y == null;
-        if (x.?.len == 0 or y.?.len == 0) assert.panic("an empty word in '{s}' or '{s}'; Words never returns one", .{ a, b });
         if (!std.ascii.eqlIgnoreCase(x.?, y.?)) return false;
     }
-    assert.panic("compared more words of '{s}' than it has bytes; Words.next() must move past at least a byte each time, so check its loop", .{a});
+    assert.panic("compared more words of '{s}' than it has bytes; Words.next() must move past at least a byte each time", .{a});
 }
 
 /// The spelling most of the definitions of one concept use, and how many use it.
