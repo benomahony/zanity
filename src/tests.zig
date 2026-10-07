@@ -15,4 +15,5 @@ test {
     _ = @import("schema.zig");
     _ = @import("assert.zig");
     _ = @import("main.zig");
+    _ = @import("twins.zig");
 }

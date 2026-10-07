@@ -71,7 +71,8 @@ pub const Reach = enum { any, functions, methods };
 
 /// A function's body reduced to the kinds of its syntax nodes, so bodies that differ only in their
 /// names and values hash the same.
-pub const Shape = struct { function: u32, hash: u64, size: u32 };
+/// A function body's structure, and the bytes of its file it spans, so twins can be compared.
+pub const Shape = struct { function: u32, hash: u64, size: u32, start: u32 = 0, end: u32 = 0 };
 
 /// The hash of a name in one language, so a Python and a Java `Logger` count apart.
 pub fn typeHash(language: []const u8, name: []const u8) u64 {

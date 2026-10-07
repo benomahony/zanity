@@ -171,7 +171,9 @@ pub const Batch = struct {
             try facts.calls.add(.{ .caller = @intCast(first + c.caller), .callee = try worker.retain(self.text, c.callee), .reach = c.reach });
         }
         for (recorded.shapes.items()) |shape| {
-            try facts.shapes.add(.{ .function = @intCast(first + shape.function), .hash = shape.hash, .size = shape.size });
+            var kept = shape;
+            kept.function = @intCast(first + shape.function);
+            try facts.shapes.add(kept);
         }
         for (recorded.abstractions.items()) |a| {
             var kept = a;

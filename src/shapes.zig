@@ -20,7 +20,7 @@ pub fn recordShape(self: *File, ctx: Context) !void {
     const shape = bodyShape(self, ctx.span, ctx.body_start);
     if (shape.size < rules.min_twin_nodes) return;
     const facts = self.work.facts;
-    try facts.shapes.add(.{ .function = function, .hash = shape.hash, .size = shape.size });
+    try facts.shapes.add(.{ .function = function, .hash = shape.hash, .size = shape.size, .start = ctx.body_start, .end = ts.ts_node_end_byte(ctx.span) });
 }
 
 const BodyShape = struct { hash: u64, size: u32 };

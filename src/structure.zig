@@ -12,11 +12,17 @@ const Finding = facts_module.Finding;
 const Shape = facts_module.Shape;
 const Definition = facts_module.Definition;
 const nameHash = facts_module.nameHash;
+const twins_module = @import("twins.zig");
+const Io = std.Io;
 
-pub fn checkStructure(facts: *Facts, enabled: rules.Set, findings: *memory.Bounded(Finding)) error{LimitExceeded}!void {
+/// What structural-twins re-reads two files with, to say how twins differ: the run's Io and two
+/// buffers of the largest file size. Null leaves twins with only the rule's advice.
+pub const Sources = struct { io: Io, mine: []u8, theirs: []u8 };
+
+pub fn checkStructure(facts: *Facts, enabled: rules.Set, findings: *memory.Bounded(Finding), sources: ?Sources) error{LimitExceeded}!void {
     if (enabled.len == 0) assert.panic("cross-file structure checks ran with no rules enabled; runCheck always enables at least one", .{});
     const before = findings.len;
-    if (enabled.enabled("structural-twins")) try twins(facts, findings);
+    if (enabled.enabled("structural-twins")) try twins(facts, findings, sources);
     if (enabled.enabled("dead-symbol")) try deadSymbols(facts, findings);
     if (enabled.enabled("single-impl-abstraction")) try singleImplementations(facts, findings);
     if (findings.len < before) assert.panic("cross-file structure checks dropped findings from {d} to {d}; they may only add", .{ before, findings.len });
@@ -30,7 +36,7 @@ fn byShape(_: void, a: Shape, b: Shape) bool {
 }
 
 /// Reports each function whose body has the same shape as another's, naming one of the others.
-fn twins(facts: *Facts, findings: *memory.Bounded(Finding)) error{LimitExceeded}!void {
+fn twins(facts: *Facts, findings: *memory.Bounded(Finding), sources: ?Sources) error{LimitExceeded}!void {
     const shapes = facts.shapes.items();
     const functions = facts.functions.items();
     std.mem.sort(Shape, shapes, {}, byShape);
@@ -44,17 +50,41 @@ fn twins(facts: *Facts, findings: *memory.Bounded(Finding)) error{LimitExceeded}
         for (group, 0..) |shape, i| {
             if (shape.function >= functions.len) assert.panic("a shape belongs to function {d}, but only {d} are recorded; commit() must offset each file's function numbers", .{ shape.function, functions.len });
             const f = functions[shape.function];
-            const other = functions[group[if (i == 0) 1 else 0].function];
+            const twin = group[if (i == 0) 1 else 0];
+            const other = functions[twin.function];
+            const fix: []const u8 = if (sources) |s| try differences(facts, s, shape, twin) orelse continue else "";
             try findings.add(.{
                 .path = f.path,
                 .line = f.line,
                 .column = f.column,
                 .rule = "structural-twins",
                 .message = try facts.text.format("'{s}' has the same structure as '{s}' at {s}:{d}{s}, so a fix to one is probably needed in the other.", .{ f.name, other.name, other.path, other.line + 1, if (group.len > 2) try facts.text.format(" and {d} more", .{group.len - 2}) else "" }),
+                .fix = fix,
             });
         }
     }
     if (start != shapes.len) assert.panic("structural-twins stopped at shape {d} of {d}; the grouping loop must reach the end", .{ start, shapes.len });
+}
+
+/// What `shape`'s body differs from `twin`'s in, read back from their files; empty when either
+/// file can't be read again or has changed, and null when they only share a shape.
+fn differences(facts: *Facts, sources: Sources, shape: Shape, twin: Shape) error{LimitExceeded}!?[]const u8 {
+    const functions = facts.functions.items();
+    if (shape.function == twin.function) assert.panic("comparing '{s}' with itself; twins() names a different function of the group as the twin", .{functions[shape.function].name});
+    const mine = bodyOf(sources.io, functions[shape.function].path, shape, sources.mine) orelse return "";
+    const theirs = bodyOf(sources.io, functions[twin.function].path, twin, sources.theirs) orelse return "";
+    if (shape.hash != twin.hash) assert.panic("comparing '{s}' with '{s}', whose shapes differ; twins() compares only functions of one shape", .{ functions[shape.function].name, functions[twin.function].name });
+    return twins_module.differenceFix(facts.text, mine, theirs, functions[twin.function].name);
+}
+
+/// The bytes of a recorded body, re-read from its file into `buffer`.
+fn bodyOf(io: Io, path: []const u8, shape: Shape, buffer: []u8) ?twins_module.Body {
+    if (shape.end <= shape.start) assert.panic("{s}: a shape spans bytes {d}..{d}; recordShape() records a body's start before its end", .{ path, shape.start, shape.end });
+    if (buffer.len == 0) assert.panic("{s}: re-reading it into an empty buffer; Sources holds two buffers of the largest file size", .{path});
+    const bytes = Io.Dir.cwd().readFile(io, path, buffer) catch return null;
+    if (shape.end > bytes.len) return null;
+    const adapter = language.forPath(path) orelse assert.panic("{s} has a recorded shape but no language; recordShape() runs only on files a language checks", .{path});
+    return .{ .bytes = bytes[shape.start..shape.end], .line_comment = adapter.tables.line_comment };
 }
 
 /// Reports each function, method, class or type that nothing anywhere refers to by name, unless

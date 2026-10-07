@@ -388,7 +388,7 @@ fn checkFiles(ctx: *zcli.Context, ws: *Workspace, selected: rules.Set) !void {
     try naming.crossCheck(&ws.naming, &ws.facts, selected, &ws.findings);
     if (anchor) |a| try vocabulary.checkVocabulary(a, &ws.facts, selected, &ws.findings);
     if (selected.enabled("recursion")) try graph.recursion(&ws.graph, &ws.facts, &ws.findings);
-    try structure.checkStructure(&ws.facts, selected, &ws.findings);
+    try structure.checkStructure(&ws.facts, selected, &ws.findings, .{ .io = ws.io, .mine = ws.source, .theirs = ws.fixed });
     if (ws.checked > ws.files.len) assert.panic("checked {d} files out of {d} collected; count a file as checked only once per file collected", .{ ws.checked, ws.files.len });
 }
 
