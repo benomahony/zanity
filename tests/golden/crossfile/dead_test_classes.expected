@@ -1,0 +1,3 @@
+rules: dead-symbol
+exit: 0
+test_parse.py:10:7: warning [dead-symbol]

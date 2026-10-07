@@ -6,6 +6,7 @@ const memory = @import("memory.zig");
 const rules = @import("rules.zig");
 const language = @import("language.zig");
 const check = @import("check.zig");
+const naming = @import("naming.zig");
 const facts_module = @import("facts.zig");
 const Facts = facts_module.Facts;
 const Finding = facts_module.Finding;
@@ -218,6 +219,7 @@ fn candidate(d: Definition) bool {
     const t = adapter.tables;
     if (t.test_prefixes.len > 16) assert.panic("{s} lists {d} test prefixes; more than 16 means the table is wrong", .{ t.ecosystem, t.test_prefixes.len });
     for (t.test_prefixes) |prefix| if (std.mem.startsWith(u8, d.name, prefix)) return false;
+    if (naming.testNamed(d.name)) return false;
     return !check.contains(t.protocol_names, d.name) and !check.contains(t.fixed_signatures, d.name);
 }
 
