@@ -284,6 +284,23 @@ test "under Claude Code, check speaks to the agent unless --json or --plain asks
     try std.testing.expectEqual(std.process.Child.Term{ .exited = 2 }, both.term);
 }
 
+test "precedence-trap's fix shows how the code runs and the grouping it reads as" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    const io = std.testing.io;
+    const zanity = try Io.Dir.cwd().realPathFileAlloc(io, paths.zanity, arena);
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(io, .{ .sub_path = "traps.ts", .data = "export function f(a: number, b: number, c: number, y: boolean): void {\n  if (!y == true) {}\n  if (a & b == c) {}\n  if (a == b & c) {}\n}\n" });
+    const work = try std.fs.path.join(arena, &.{ ".zig-cache", "tmp", &tmp.sub_path });
+    const run = try std.process.run(arena, io, .{ .argv = &.{ zanity, "check", "--rules", "precedence-trap", "--plain", "traps.ts" }, .cwd = .{ .path = work } });
+    for ([_][]const u8{ "It runs as `(!y) == true`; if you meant `!(y == true)`", "It runs as `a & (b == c)`; if you meant `(a & b) == c`", "It runs as `(a == b) & c`; if you meant `a == (b & c)`" }) |expected| {
+        if (std.mem.indexOf(u8, run.stdout, expected) == null) std.debug.print("\nmissing {s} in:\n{s}", .{ expected, run.stdout });
+        try std.testing.expect(std.mem.indexOf(u8, run.stdout, expected) != null);
+    }
+}
+
 test "zanity init writes a zanity.toml that check reads, and won't overwrite it unasked" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();

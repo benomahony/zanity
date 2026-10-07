@@ -13,6 +13,7 @@ const contains = check.contains;
 const header = check.header;
 const messages = @import("messages.zig");
 const rewrite = @import("rewrite.zig");
+const strings = @import("strings.zig");
 
 /// A string literal assigned to a name that ends in a secret's name, such as `db_password` or `apiKey`.
 /// Test code and values shaped like an environment variable's name are left alone.
@@ -179,7 +180,68 @@ pub fn patternFinding(self: *File, node: ts.Node, rule_name: []const u8) !void {
     }
     const message = text.buffer[start..text.used];
     if (message.len < rule.pattern.len - "$code".len) assert.panic("expected the message to hold the pattern, got '{s}' for '{s}'; patternFinding() must copy every part of the pattern, so check its loop", .{ message, rule.pattern });
-    _ = try self.report(node, rule.name, message);
+    const reported = try self.report(node, rule.name, message);
+    if (reported and std.mem.eql(u8, rule.name, "precedence-trap")) self.s.diagnostics.last().?.fix = try groupingFix(self, node);
+}
+
+const comparisons = [_][]const u8{ "==", "===", "!=", "!==", "<", ">", "<=", ">=" };
+const bitwise = [_][]const u8{ "&", "|", "^" };
+
+/// An operand of a binary or unary expression, and the operator text before it.
+const Operand = struct { node: ts.Node, operator: []const u8 };
+
+/// The operator and operands of `node` when it is a binary operation, read from the text between
+/// its two named children.
+fn binaryParts(self: *File, node: ts.Node) ?struct { left: ts.Node, operator: []const u8, right: ts.Node } {
+    if (ts.ts_node_named_child_count(node) != 2) return null;
+    const left = ts.ts_node_named_child(node, 0);
+    const right = ts.ts_node_named_child(node, 1);
+    if (ts.ts_node_end_byte(left) > ts.ts_node_start_byte(right)) assert.panic("{s}: the operands of {f} overlap, ending at {d} and starting at {d}; named children come in source order", .{ self.work.facts.path, node.where(), ts.ts_node_end_byte(left), ts.ts_node_start_byte(right) });
+    const operator = std.mem.trim(u8, self.source[ts.ts_node_end_byte(left)..ts.ts_node_start_byte(right)], " \t\r\n");
+    if (operator.len == 0 or operator.len > 3) return null;
+    if (std.mem.indexOfAny(u8, operator, " \t\r\n") != null) assert.panic("{s}: read the operator of {f} as '{s}', with whitespace inside; trim only its ends", .{ self.work.facts.path, node.where(), operator });
+    return .{ .left = left, .operator = operator, .right = right };
+}
+
+/// The operand of `node` when it is a prefix operation such as `!a`.
+fn prefixPart(self: *File, node: ts.Node) ?Operand {
+    if (ts.ts_node_named_child_count(node) != 1) return null;
+    const operand = ts.ts_node_named_child(node, 0);
+    if (ts.ts_node_start_byte(operand) < ts.ts_node_start_byte(node)) assert.panic("{s}: the operand of {f} starts before it; a child lies inside its parent", .{ self.work.facts.path, node.where() });
+    const operator = std.mem.trim(u8, self.source[ts.ts_node_start_byte(node)..ts.ts_node_start_byte(operand)], " \t");
+    if (operator.len == 0) return null;
+    if (operator.len > 3) assert.panic("{s}: read a {d}-byte prefix operator '{s}' before the operand of {f}; a prefix operator is at most 3 bytes, so the operand must start right after it", .{ self.work.facts.path, operator.len, operator, node.where() });
+    if (ts.ts_node_end_byte(operand) != ts.ts_node_end_byte(node)) return null;
+    return .{ .node = operand, .operator = operator };
+}
+
+/// How a precedence trap actually groups, with parentheses, and the grouping it reads as, so the
+/// reader can write whichever they meant: `!a == b` runs as `(!a) == b` and reads as `!(a == b)`;
+/// `a & b == c` runs as `a & (b == c)` and reads as `(a & b) == c`.
+fn groupingFix(self: *File, node: ts.Node) ![]const u8 {
+    const parts = binaryParts(self, node) orelse return "";
+    if (ts.ts_node_start_byte(parts.left) != ts.ts_node_start_byte(node)) assert.panic("{s}: the precedence trap {f} does not start with its left operand; the query captures the whole binary expression", .{ self.work.facts.path, node.where() });
+    const left = parts.left.text(self.source);
+    const right = parts.right.text(self.source);
+    const op = parts.operator;
+    if (strings.contains(&comparisons, op)) {
+        const negated = prefixPart(self, parts.left) orelse return "";
+        return self.say("It runs as `({s}) {s} {s}`; if you meant `{s}({s} {s} {s})`, write that, and otherwise write the parentheses it runs with.", .{ left, op, right, negated.operator, negated.node.text(self.source), op, right });
+    }
+    if (!strings.contains(&bitwise, op)) assert.panic("{s}: a precedence trap at {f} has the operator '{s}', which is neither a comparison nor a bitwise operator; the language's zanity.scm captures only those, so check binaryParts()", .{ self.work.facts.path, node.where(), op });
+    const inner_right = binaryParts(self, parts.right);
+    const inner_left = binaryParts(self, parts.left);
+    const right_compares = if (inner_right) |r| strings.contains(&comparisons, r.operator) else false;
+    const left_compares = if (inner_left) |l| strings.contains(&comparisons, l.operator) else false;
+    if (right_compares and !left_compares) {
+        const r = inner_right.?;
+        return self.say("It runs as `{s} {s} ({s})`; if you meant `({s} {s} {s}) {s} {s}`, write that, and otherwise write the parentheses it runs with.", .{ left, op, right, left, op, r.left.text(self.source), r.operator, r.right.text(self.source) });
+    }
+    if (left_compares and !right_compares) {
+        const l = inner_left.?;
+        return self.say("It runs as `({s}) {s} {s}`; if you meant `{s} {s} ({s} {s} {s})`, write that, and otherwise write the parentheses it runs with.", .{ left, op, right, l.left.text(self.source), l.operator, l.right.text(self.source), op, right });
+    }
+    return self.say("It runs as `({s}) {s} ({s})`; write the parentheses it runs with, or the grouping you meant.", .{ left, op, right });
 }
 
 /// The node inside `node` that spans all of it, such as the one value in a one-item list.
