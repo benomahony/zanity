@@ -807,7 +807,27 @@ pub const File = struct {
         if (contains(self.tables.protocol_names, name)) return;
         const at = ts.ts_node_start_point(name_node);
         const public = self.index.marks(ctx.node, self.v.visibility_public) or (self.tables.exported_by_case and std.ascii.isUpper(name[0]));
-        try self.work.facts.define(name, ctx.kind, .{ .at = .{ at.row, at.column }, .public = public });
+        const member = std.mem.eql(u8, ctx.kind, "method") or self.heldByFunctionOrClass(ctx.node);
+        const prefix = self.tables.private_prefix;
+        const importable = if (prefix.len > 0) !std.mem.startsWith(u8, name, prefix) else public;
+        try self.work.facts.define(name, ctx.kind, .{ .at = .{ at.row, at.column }, .public = public, .member = member, .importable = importable });
+    }
+
+    /// Whether a function or class other than `node` itself holds it, so code reaches it only
+    /// through that function or class.
+    fn heldByFunctionOrClass(self: *File, node: ts.Node) bool {
+        const start = ts.ts_node_start_byte(node);
+        const end = ts.ts_node_end_byte(node);
+        if (end <= start) assert.panic("{s}: the definition {f} covers no text; put @definition.<kind> on the whole declaration", .{ self.work.facts.path, node.where() });
+        for (self.s.contexts.items()) |held| {
+            if (held.family != .function and held.family != .class) continue;
+            const from = ts.ts_node_start_byte(held.node);
+            const to = ts.ts_node_end_byte(held.node);
+            if (from == start and to == end) continue;
+            if (from <= start and end <= to) return true;
+        }
+        if (self.s.contexts.len > self.s.contexts.capacity()) assert.panic("{s}: {d} open constructs in room for {d}; leave() must pop what enter() opened", .{ self.work.facts.path, self.s.contexts.len, self.s.contexts.capacity() });
+        return false;
     }
 
     pub fn inAssertionCondition(self: *File, node: ts.Node) bool {

@@ -1,6 +1,6 @@
 rules: name-drift,duplicate-name
 exit: 0
-a.zig:1:7: warning [duplicate-name]
-a.zig:13:7: warning [duplicate-name]
-b.zig:1:7: warning [duplicate-name]
-b.zig:7:7: warning [duplicate-name]
+a.zig:1:11: warning [duplicate-name]
+a.zig:13:11: warning [duplicate-name]
+b.zig:1:11: warning [duplicate-name]
+b.zig:7:11: warning [duplicate-name]

@@ -1,6 +1,8 @@
 .{
     .{
         .ecosystem = "python",
+        .private_prefix = "_",
+        .protocol_names = .{"main"},
         .fixed_signatures = .{ "__exit__", "__aexit__", "__eq__", "__ne__", "__lt__", "__le__", "__gt__", "__ge__", "__get__", "__set__", "__delete__", "__set_name__", "__format__", "__getattr__", "__getattribute__", "__setattr__", "__delattr__", "__missing__", "__class_getitem__", "__init_subclass__", "__reduce_ex__", "__deepcopy__", "__array__" },
         .stdin_reads = .{ "input", "raw_input", "getpass.getpass", "getpass", "sys.stdin.read", "sys.stdin.readline", "sys.stdin.readlines", "click.prompt", "click.confirm", "typer.prompt", "typer.confirm" },
         .weak_hashes = .{ "hashlib.md5", "hashlib.sha1", "md5.new", "sha.new" },
@@ -111,7 +113,7 @@
         .wall_clocks = .{"Date.now"},
         .error_calls = .{ "console.error", "logger.error", "log.error" },
         .format_markers = .{ "%s", "%d", "%o", "%j" },
-        .protocol_names = .{ "constructor", "toString", "toJSON", "valueOf", "then", "next" },
+        .protocol_names = .{ "constructor", "toString", "toJSON", "valueOf", "then", "next", "main" },
         .forbidden_calls = .{"eval"},
         .forbidden_methods = .{"eval"},
         .self_receivers = .{"this"},

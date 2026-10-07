@@ -1,4 +1,0 @@
-rules: name-drift,duplicate-name
-exit: 0
-shapes.py:2:9: warning [duplicate-name]
-shapes.py:7:9: warning [duplicate-name]

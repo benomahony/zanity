@@ -1,4 +1,4 @@
-const Mode = enum { fast, safe };
+pub const Mode = enum { fast, safe };
 
 pub fn first(flag: bool) u8 {
     const state: enum { idle, busy } = if (flag) .busy else .idle;
@@ -10,5 +10,5 @@ pub fn second(flag: bool) u8 {
     return @intFromEnum(state) + @intFromEnum(Mode.fast);
 }
 
-const Limit = // the most a reading can be
+pub const Limit = // the most a reading can be
     8;

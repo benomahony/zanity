@@ -15,6 +15,12 @@ pub const Definition = struct {
     public: bool = false,
     /// The domain or context of zanity.toml it belongs to; empty for none.
     scope: []const u8 = "",
+    /// Whether it is a method, or lives inside a function or class, so code reaches it only
+    /// through what holds it.
+    member: bool = false,
+    /// Whether another file can name it: `pub`, exported or `public`, capitalised in Go, or without
+    /// Python's leading `_`.
+    importable: bool = false,
 
     pub fn sourceOrder(_: void, a: Definition, b: Definition) bool {
         if (a.name.len == 0) assert.panic("a definition at {s}:{d} has no name; the @name capture matched an empty node", .{ a.path, a.line + 1 });
@@ -137,7 +143,7 @@ pub const Facts = struct {
     }
 
     /// Where a definition is and whether code outside its module can use it.
-    pub const Place = struct { at: [2]u32, public: bool };
+    pub const Place = struct { at: [2]u32, public: bool, member: bool = false, importable: bool = false };
 
     pub fn define(self: *Facts, name: []const u8, kind: []const u8, place: Place) error{LimitExceeded}!void {
         const at = place.at;
@@ -151,6 +157,8 @@ pub const Facts = struct {
             .line = at[0],
             .column = at[1],
             .public = place.public,
+            .member = place.member,
+            .importable = place.importable,
         });
     }
 

@@ -85,6 +85,8 @@ pub const Tables = struct {
     methods_need_receiver: bool = false,
     /// Whether a name's case says it is exported, as Go's capitalised names are.
     exported_by_case: bool = false,
+    /// The prefix that keeps a name private to its module by convention, as `_` does in Python.
+    private_prefix: []const u8 = "",
     allocating_calls: []const []const u8 = &.{},
     initializer_prefixes: []const []const u8 = &.{},
     test_file_prefixes: []const []const u8 = &.{},

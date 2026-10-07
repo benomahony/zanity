@@ -346,7 +346,7 @@ Rules marked *off* run only with `--rules all`, `rules = ["all"]`, or when named
 | Rule | Severity | Flags |
 |---|---|---|
 | `name-drift` | warning | one concept spelled several ways, such as `order_total` and `total_order` |
-| `duplicate-name` | warning | the same name defined more than once in one language and one domain or context |
+| `duplicate-name` | warning | the same name defined more than once in one language and one domain or context, where another file could use either: not methods, nested functions, tests, or names private to their module |
 | `forbidden-term` | warning | a name using a word `[vocabulary]` or its domain or context bans |
 | `non-canonical-term` | warning | a name using an alias where the project has settled on another word, with the name respelled |
 | `misplaced-test` | warning | a test in one domain or context whose subject lives in exactly one other |

@@ -172,12 +172,12 @@ fn misplacedTests(facts: *Facts, findings: *memory.Bounded(Finding)) error{Limit
     const definitions = facts.definitions.items();
     var buffer: [max_words][]const u8 = undefined;
     for (definitions, 0..) |d, i| {
-        if (d.scope.len == 0 or !testNamed(d.name)) continue;
+        if (d.scope.len == 0 or !naming.testNamed(d.name)) continue;
         const key = subjectKey(d.name, &buffer) orelse continue;
         var owner: ?[]const u8 = null;
         var owners: usize = 0;
         for (definitions) |other| {
-            if (other.scope.len == 0 or testNamed(other.name)) continue;
+            if (other.scope.len == 0 or naming.testNamed(other.name)) continue;
             if ((subjectKey(other.name, &buffer) orelse continue) != key) continue;
             if (owner) |o| if (std.mem.eql(u8, o, other.scope)) continue;
             owner = other.scope;
@@ -189,16 +189,6 @@ fn misplacedTests(facts: *Facts, findings: *memory.Bounded(Finding)) error{Limit
         if (i >= definitions.len) assert.panic("definition {d} of {d}; the loop stays inside the list", .{ i, definitions.len });
     }
     if (findings.len - before > definitions.len) assert.panic("{d} misplaced tests among {d} definitions; each is reported at most once", .{ findings.len - before, definitions.len });
-}
-
-fn testNamed(name: []const u8) bool {
-    if (name.len == 0) assert.panic("asked whether an empty name is a test's; definitions always have names", .{});
-    var words: naming.Words = .{ .text = name };
-    const first = words.next() orelse return false;
-    var last = first;
-    while (words.next()) |w| last = w;
-    if (last.len == 0) assert.panic("the last word of '{s}' is empty; Words never returns one", .{name});
-    return std.ascii.eqlIgnoreCase(first, "test") or std.ascii.eqlIgnoreCase(first, "tests") or std.ascii.eqlIgnoreCase(last, "test") or std.ascii.eqlIgnoreCase(last, "tests");
 }
 
 /// The words of a name, less any test word, lowercased and in order, as one hash: what a test is

@@ -248,6 +248,47 @@ fn directionalNames(s: *ConceptScratch, names: []const []const u8) error{LimitEx
     return s.shapes.len == names.len;
 }
 
+pub fn testNamed(name: []const u8) bool {
+    if (name.len == 0) assert.panic("asked whether an empty name is a test's; definitions always have names", .{});
+    var words: Words = .{ .text = name };
+    const first = words.next() orelse return false;
+    var last = first;
+    while (words.next()) |w| last = w;
+    if (last.len == 0) assert.panic("the last word of '{s}' is empty; Words never returns one", .{name});
+    return std.ascii.eqlIgnoreCase(first, "test") or std.ascii.eqlIgnoreCase(first, "tests") or std.ascii.eqlIgnoreCase(last, "test") or std.ascii.eqlIgnoreCase(last, "tests");
+}
+
+/// Whether a use in another file could mean this definition: it isn't reached through a class or
+/// function that holds it, another file can name it, and it isn't a test, which only a runner
+/// calls.
+fn sharable(d: Definition) bool {
+    if (d.name.len == 0) assert.panic("{s}:{d}: a definition has no name; the @name capture matched an empty node", .{ d.path, d.line + 1 });
+    if (d.member and d.importable and d.public and d.kind.len == 0) assert.panic("{s}:{d}: '{s}' has no kind; define() records the capture's kind", .{ d.path, d.line + 1, d.name });
+    return !d.member and d.importable and !testNamed(d.name);
+}
+
+/// Where the other definitions sharing a name are, up to three, and what to do with them.
+fn othersFix(text: *memory.Text, definitions: []const Definition, sharers: []const Keyed, self_index: usize) error{LimitExceeded}![]const u8 {
+    const start = text.used;
+    var listed: usize = 0;
+    var rest: usize = 0;
+    for (sharers) |k| {
+        if (k.index == self_index or !sharable(definitions[k.index])) continue;
+        if (listed == 3) {
+            rest += 1;
+            continue;
+        }
+        const d = definitions[k.index];
+        _ = try text.format("{s}{s}:{d}", .{ if (listed == 0) "The others are at " else ", ", d.path, d.line + 1 });
+        listed += 1;
+    }
+    if (listed == 0) assert.panic("listing the other definitions of '{s}' found none; duplicates() reports a name only when two definitions can share it", .{definitions[self_index].name});
+    if (rest > 0) _ = try text.format(" and {d} more", .{rest});
+    if (listed + rest + 1 > sharers.len) assert.panic("listed {d} and counted {d} more other definitions of '{s}' among {d}; count each sharer once, leaving out this one", .{ listed, rest, definitions[self_index].name, sharers.len });
+    _ = try text.copy(". If they do the same thing, keep one and import it everywhere; if not, name each for what sets it apart.");
+    return text.buffer[start..text.used];
+}
+
 fn duplicates(s: *ConceptScratch, text: *memory.Text, definitions: []const Definition, findings: *memory.Bounded(Finding)) error{LimitExceeded}!void {
     const before = findings.len;
     const keyed = try keyedBy(s, definitions, .name);
@@ -257,16 +298,25 @@ fn duplicates(s: *ConceptScratch, text: *memory.Text, definitions: []const Defin
         const end = runEnd(keyed, start);
         defer start = end;
         const sharers = keyed[start..end];
-        if (sharers.len < 2) continue;
-        for (sharers, 0..) |k, i| {
+        var top_level: usize = 0;
+        var first: ?usize = null;
+        var second: ?usize = null;
+        for (sharers) |k| if (sharable(definitions[k.index])) {
+            top_level += 1;
+            if (first == null) first = k.index else if (second == null) second = k.index;
+        };
+        if (top_level < 2) continue;
+        for (sharers) |k| {
             const d = definitions[k.index];
-            const other = definitions[sharers[if (i == 0) 1 else 0].index];
+            if (!sharable(d)) continue;
+            const other = definitions[if (k.index == first.?) second.? else first.?];
             try findings.add(.{
                 .path = d.path,
                 .line = d.line,
                 .column = d.column,
                 .rule = "duplicate-name",
-                .message = try text.format("'{s}' is defined {d} times, for example at {s}:{d}, so readers can't tell which one a use means.", .{ d.name, sharers.len, other.path, other.line + 1 }),
+                .message = try text.format("'{s}' is defined {d} times, for example at {s}:{d}, so readers can't tell which one a use means.", .{ d.name, top_level, other.path, other.line + 1 }),
+                .fix = try othersFix(text, definitions, sharers, k.index),
             });
         }
     }
