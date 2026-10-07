@@ -355,34 +355,70 @@ fn writeInferProject(arena: std.mem.Allocator, io: Io, dir: Io.Dir) !void {
     try dir.writeFile(io, .{ .sub_path = "pyproject.toml", .data = "[tool.ruff]\nline-length = 200  # judge: weakened-check\n# judge: unscheduled-analysis\n" });
 }
 
-test "--infer asks each unit only its own questions, skips what checks settled, and caches every answer" {
+/// writeInferProject's project in a temporary directory, and the mock TypeSafe it asks.
+const InferRun = struct {
+    tmp: std.testing.TmpDir,
+    mock: MockTypeSafe,
+    work: []const u8,
+    zanity: []const u8,
+
+    fn initInferRun(arena: std.mem.Allocator, io: Io) !InferRun {
+        var tmp = std.testing.tmpDir(.{});
+        const work = try std.fs.path.join(arena, &.{ ".zig-cache", "tmp", &tmp.sub_path });
+        try writeInferProject(arena, io, tmp.dir);
+        const mock = try startMock(arena, io, try Io.Dir.cwd().realPathFileAlloc(io, work, arena));
+        if (work.len == 0) assert.panic("the --infer project has no directory; tmpDir() names one under .zig-cache/tmp", .{});
+        const zanity = try Io.Dir.cwd().realPathFileAlloc(io, paths.zanity, arena);
+        if (!std.fs.path.isAbsolute(zanity)) assert.panic("zanity resolved to the relative path '{s}'; the project runs it from another directory, so it needs an absolute one", .{zanity});
+        return .{ .tmp = tmp, .mock = mock, .work = work, .zanity = zanity };
+    }
+
+    /// Runs zanity check --infer --plain on the project.
+    fn checkInferring(self: *InferRun, arena: std.mem.Allocator, io: Io) !std.process.RunResult {
+        const run = try std.process.run(arena, io, .{ .argv = &.{ self.zanity, "check", ".", "--infer", "--plain" }, .cwd = .{ .path = self.work }, .environ_map = &self.mock.env });
+        if (run.stderr.len == 0) assert.panic("zanity check --infer printed no summary; it always says how many functions it asked about", .{});
+        if (run.term != .exited) assert.panic("zanity check --infer ended with {any} instead of exiting; run it by hand on tests/infer/project to see why", .{run.term});
+        return run;
+    }
+};
+
+test "--infer keeps every answer, so a second run asks TypeSafe nothing and reports the same" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
     const arena = arena_state.allocator();
-    const io = std.testing.io;
-    const zanity = try Io.Dir.cwd().realPathFileAlloc(io, paths.zanity, arena);
-    var tmp = std.testing.tmpDir(.{});
-    defer tmp.cleanup();
-    const work = try std.fs.path.join(arena, &.{ ".zig-cache", "tmp", &tmp.sub_path });
-    try writeInferProject(arena, io, tmp.dir);
-    var mock = try startMock(arena, io, try Io.Dir.cwd().realPathFileAlloc(io, work, arena));
-    defer mock.child.kill(io);
-    var outputs: [2][]const u8 = undefined;
-    var timings: [2][]const u8 = undefined;
-    for (&outputs, &timings) |*out, *timing| {
-        const run = try std.process.run(arena, io, .{ .argv = &.{ zanity, "check", ".", "--infer", "--plain" }, .cwd = .{ .path = work }, .environ_map = &mock.env });
-        out.* = run.stdout;
-        timing.* = run.stderr;
-    }
-    try std.testing.expectEqualStrings(outputs[0], outputs[1]);
-    if (std.mem.indexOf(u8, timings[1], ", 0 asked of TypeSafe") == null) std.debug.print("\nthe second run was not served from the store:\n{s}", .{timings[1]});
-    try std.testing.expect(std.mem.indexOf(u8, timings[1], ", 0 asked of TypeSafe") != null);
-    try std.testing.expect(std.mem.indexOf(u8, timings[0], ", 0 asked of TypeSafe") == null);
+    var project = try InferRun.initInferRun(arena, std.testing.io);
+    defer project.tmp.cleanup();
+    defer project.mock.child.kill(std.testing.io);
+    const first = try project.checkInferring(arena, std.testing.io);
+    const second = try project.checkInferring(arena, std.testing.io);
+    try std.testing.expectEqualStrings(first.stdout, second.stdout);
+    try std.testing.expect(std.mem.indexOf(u8, first.stderr, ", 0 asked of TypeSafe") == null);
+    try std.testing.expect(std.mem.indexOf(u8, second.stderr, ", 0 asked of TypeSafe") != null);
+}
+
+test "--infer reports what TypeSafe is sure of, for functions, tests and project files" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    var project = try InferRun.initInferRun(arena, std.testing.io);
+    defer project.tmp.cleanup();
+    defer project.mock.child.kill(std.testing.io);
+    const run = try project.checkInferring(arena, std.testing.io);
     for ([_][]const u8{ "rule=\"misleading-error\"", "rule=\"unconstructive-error\"", "'invalid input' doesn't say", "rule=\"hollow-test\"", "rule=\"weakened-check\"", "rule=\"unscheduled-analysis\"" }) |expected| {
-        if (std.mem.indexOf(u8, outputs[0], expected) == null) std.debug.print("\nmissing {s} in:\n{s}", .{ expected, outputs[0] });
-        try std.testing.expect(std.mem.indexOf(u8, outputs[0], expected) != null);
+        if (std.mem.indexOf(u8, run.stdout, expected) == null) std.debug.print("\nmissing {s} in:\n{s}", .{ expected, run.stdout });
+        try std.testing.expect(std.mem.indexOf(u8, run.stdout, expected) != null);
     }
-    const requests = try tmp.dir.readFileAlloc(io, "requests.log", arena, .unlimited);
+}
+
+test "--infer asks each unit only its own questions and skips what checks settled" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    var project = try InferRun.initInferRun(arena, std.testing.io);
+    defer project.tmp.cleanup();
+    defer project.mock.child.kill(std.testing.io);
+    _ = try project.checkInferring(arena, std.testing.io);
+    const requests = try project.tmp.dir.readFileAlloc(std.testing.io, "requests.log", arena, .unlimited);
     try std.testing.expectEqual(@as(usize, 9), std.mem.count(u8, requests, "\n"));
     var lines = std.mem.tokenizeScalar(u8, requests, '\n');
     while (lines.next()) |line| {

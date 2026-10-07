@@ -143,12 +143,7 @@ fn renderFinding(console: zrich.Console, f: Finding, width: usize) !void {
     const out = console.writer;
     const rule = rules.find(f.rule) orelse unreachable;
     if (locationWidth(f) > width) assert.panic("{s}: the location of {d}:{d} is wider than the {d} columns kept for locations; measure every finding before rendering any", .{ f.path, f.line + 1, f.column + 1, width });
-    var location: [24]u8 = undefined;
-    try out.splatByteAll(' ', 2 + width - locationWidth(f));
-    try console.styled(try std.fmt.bufPrint(&location, "{d}:{d}", .{ f.line + 1, f.column + 1 }), quiet);
-    try out.writeAll("  ");
-    try console.styled(label(rule.severity), severityStyle(rule.severity));
-    try out.splatByteAll(' ', 2 + "warning".len - label(rule.severity).len);
+    try renderColumns(console, f, width);
     try console.write(f.message);
     try out.writeAll("  ");
     try console.styled(rule.name, quiet);
@@ -160,6 +155,22 @@ fn renderFinding(console: zrich.Console, f: Finding, width: usize) !void {
         try out.writeByte('\n');
     }
     if (f.message.len == 0) assert.panic("{s}:{d}: a {s} finding has no message; report() must pass one", .{ f.path, f.line + 1, f.rule });
+}
+
+/// The location right-aligned to `width` and the severity padded to the widest label, so every
+/// finding's message starts in the same column.
+fn renderColumns(console: zrich.Console, f: Finding, width: usize) !void {
+    const out = console.writer;
+    const severity = (rules.find(f.rule) orelse unreachable).severity;
+    const shown = label(severity);
+    if (shown.len > "warning".len) assert.panic("the {t} label '{s}' is wider than 'warning'; widen the severity column to the longest label", .{ severity, shown });
+    var location: [24]u8 = undefined;
+    try out.splatByteAll(' ', 2 + width - locationWidth(f));
+    try console.styled(try std.fmt.bufPrint(&location, "{d}:{d}", .{ f.line + 1, f.column + 1 }), quiet);
+    try out.writeAll("  ");
+    try console.styled(shown, severityStyle(severity));
+    try out.splatByteAll(' ', 2 + "warning".len - shown.len);
+    if (width < 3) assert.panic("{s}: the location column is {d} wide, narrower than '1:1'; measure locations counting from 1", .{ f.path, width });
 }
 
 fn plural(n: u32, word: []const u8) []const u8 {
