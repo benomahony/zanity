@@ -1,5 +1,5 @@
 
-def foo():
+def foo(obj, name):
     assert True
     assert False
-    getattr(obj, "x")
+    getattr(obj, name)

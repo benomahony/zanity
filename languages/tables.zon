@@ -3,6 +3,7 @@
         .ecosystem = "python",
         .private_prefix = "_",
         .constructors_capitalised = true,
+        .attribute_calls = .{ "getattr", "setattr", "hasattr", "delattr" },
         .generic_types = .{ "dict", "list", "tuple", "set", "frozenset", "type", "Optional", "Union", "Callable", "Literal", "Annotated", "Mapping", "Sequence", "Iterable", "Iterator", "Awaitable", "Coroutine" },
         .protocol_names = .{"main"},
         .fixed_signatures = .{ "__exit__", "__aexit__", "__eq__", "__ne__", "__lt__", "__le__", "__gt__", "__ge__", "__get__", "__set__", "__delete__", "__set_name__", "__format__", "__getattr__", "__getattribute__", "__setattr__", "__delattr__", "__missing__", "__class_getitem__", "__init_subclass__", "__reduce_ex__", "__deepcopy__", "__array__" },

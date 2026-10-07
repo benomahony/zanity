@@ -87,7 +87,28 @@ pub fn checkForbiddenCall(self: *File, ctx: Context, name: []const u8) !void {
     if (name.len == 0) assert.panic("{s}: the call {f} has an empty name; capture the callee as @call.name in the language's zanity.scm", .{ self.work.facts.path, ctx.node.where() });
     const forbidden = if (ctx.receiver == null) self.tables.forbidden_calls else self.tables.forbidden_methods;
     if (!contains(forbidden, name)) return;
-    _ = try self.report(ctx.callee orelse ctx.name.?, "forbidden-call", try self.say("Calling '{s}' runs code that can't be reviewed or checked before it runs.", .{name}));
+    const attribute = ctx.receiver == null and contains(self.tables.attribute_calls, name);
+    if (attribute and literalName(self, ctx.arguments[1])) return;
+    if (!try self.report(ctx.callee orelse ctx.name.?, "forbidden-call", try self.say("Calling '{s}' runs code that can't be reviewed or checked before it runs.", .{name}))) return;
+    self.s.diagnostics.last().?.fix = if (attribute)
+        try self.say("The attribute's name here comes from a value; look it up in a dict of the attributes you allow, or call '{s}' with the name written out.", .{name})
+    else if (std.mem.eql(u8, name, "globals") or std.mem.eql(u8, name, "locals"))
+        try self.say("Pass the values the code needs explicitly instead of reading '{s}()'.", .{name})
+    else
+        try self.say("Parse the input as data, such as JSON, or map each allowed name to the code it runs, instead of running it with '{s}'.", .{name});
+}
+
+/// Whether `argument` is a string literal holding a plain name, such as `"headers"`.
+fn literalName(self: *File, argument: ?ts.Node) bool {
+    const node = argument orelse return false;
+    const text = node.text(self.source);
+    if (ts.ts_node_start_byte(node) > ts.ts_node_end_byte(node)) assert.panic("{s}: the argument {f} runs backwards; pass a node from a live tree", .{ self.work.facts.path, node.where() });
+    if (text.len < 3) return false;
+    const quote = text[0];
+    if ((quote != '"' and quote != '\'') or text[text.len - 1] != quote) return false;
+    for (text[1 .. text.len - 1]) |c| if (!(std.ascii.isAlphanumeric(c) or c == '_')) return false;
+    if (ts.ts_node_end_byte(node) > self.source.len) assert.panic("{s}: the argument {f} ends past the file; pass a node from this file", .{ self.work.facts.path, node.where() });
+    return true;
 }
 
 /// A shell command line or SQL text built from values at runtime.

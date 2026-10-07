@@ -89,6 +89,9 @@ pub const Tables = struct {
     private_prefix: []const u8 = "",
     /// Whether a call to a capitalised name makes a new object, as `Event()` does in Python.
     constructors_capitalised: bool = false,
+    /// Forbidden calls that take an attribute's name second, as `getattr(obj, "name")` does: with a
+    /// literal name they are an ordinary, reviewable attribute access.
+    attribute_calls: []const []const u8 = &.{},
     /// Generic types written as values, as `dict[str, Any]` is in a `cast()`: a type, not a computation.
     generic_types: []const []const u8 = &.{},
     allocating_calls: []const []const u8 = &.{},
