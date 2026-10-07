@@ -53,6 +53,8 @@ zig build
 ```
 
 `zig build` installs a ReleaseSafe zanity, as fast as a release; the tests build Debug, which compiles quickest. `-Doptimize=` sets both.
+To run it through the build, put arguments after `--`, for example
+`zig build -Doptimize=fast run -- check src`.
 
 ## Getting started in a project
 
