@@ -19,6 +19,8 @@ pub const Limits = struct {
     ignore_patterns: u32 = 1 << 14,
     ignore_bytes: u32 = 1 << 20,
     store_bytes: usize = 1 << 25,
+    /// One cached JSON result plus the fixed-buffer arena used to parse it.
+    analysis_bytes: u32 = 1 << 25,
     judgement_bytes: u32 = 1 << 26,
 };
 

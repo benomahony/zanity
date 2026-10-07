@@ -113,11 +113,14 @@ const Workspace = struct {
     table: report.TableScratch,
     source: []u8,
     fixed: []u8,
+    analysis: []u8,
     ignore: Ignore,
     environ: ?*const std.process.Environ.Map = null,
     /// Whether the command line chose --json or --plain, which turns off agent output.
     chose_format: bool = false,
     inference: ?infer.Inference = null,
+    source_cache: ?store.Store = null,
+    cache_hits: usize = 0,
     checkers: [language.count]?check.Checker = @splat(null),
     checked: usize = 0,
     io: Io = undefined,
@@ -140,6 +143,7 @@ const Workspace = struct {
             .table = try .initTableScratch(gpa, limits.files),
             .source = try memory.reserve(gpa, u8, limits.file_bytes + 1),
             .fixed = try memory.reserve(gpa, u8, 2 * limits.file_bytes),
+            .analysis = try memory.reserve(gpa, u8, limits.analysis_bytes),
             .ignore = try .initIgnore(gpa, limits),
         };
         ws.facts = try .initFacts(gpa, limits, &ws.text);
@@ -192,6 +196,7 @@ fn runCheck(ctx: *zcli.Context, options: CheckOptions) ![]const Row {
         error.InvalidConfig => return ctx.fail(.usage, config.problem[0..config.problem_len], "Fix that line of zanity.toml, or remove the setting to use zanity's default."),
         else => return e,
     };
+    if (ws.environ) |environ| ws.source_cache = store.Store.initStore(std.heap.page_allocator, ws.io, environ, ws.limits.store_bytes) catch null;
     for (settings.excludes()) |glob| try ws.ignore.exclude(settings.dir, glob);
     ws.settings = &settings;
     defer ws.settings = null;
@@ -232,6 +237,10 @@ fn reportToAgent(ctx: *zcli.Context, ws: *Workspace, options: CheckOptions, coun
     if (ws.findings.len != counts.errors + counts.warnings) assert.panic("{d} findings for {d} errors and {d} warnings; count the findings being reported", .{ ws.findings.len, counts.errors, counts.warnings });
     const out = ctx.runtime.out;
     try report.renderAgent(out.writer, .{ .findings = ws.findings.items(), .counts = counts, .paths = paths, .limit = options.limit });
+    if (ws.cache_hits > 0) {
+        const err = ctx.runtime.err;
+        try err.writer.print("zanity: reused cached deterministic analysis for {d} of {d} source files; query {s}'s source_analyses table for the cached facts and findings.\n", .{ ws.cache_hits, ws.checked, ws.source_cache.?.path });
+    }
     ctx.format = .plain;
     return &.{};
 }
@@ -369,6 +378,8 @@ fn checkFiles(ctx: *zcli.Context, ws: *Workspace, selected: rules.Set) !void {
             .text = &ws.text,
             .facts = &ws.facts,
             .findings = &ws.findings,
+            .cache = if (ws.source_cache) |*source_cache| source_cache else null,
+            .cache_buffer = ws.analysis,
             .live = ws.live,
         };
         if (try run.run(try batch.initWorkers(std.heap.page_allocator, ws.limits, ws.files.len))) |failure| {
@@ -378,6 +389,7 @@ fn checkFiles(ctx: *zcli.Context, ws: *Workspace, selected: rules.Set) !void {
             return failure.err;
         }
         ws.checked = run.checked;
+        ws.cache_hits = run.cached;
     }
     if (ws.live) |live| live.restart();
     const anchor = try anchorOf(ws);

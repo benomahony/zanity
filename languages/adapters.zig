@@ -12,6 +12,8 @@ pub const QueryFile = struct {
 
 pub const Adapter = struct {
     name: []const u8,
+    /// Grammar and name-table source that changes how this language is analysed.
+    revision: []const u8,
     extensions: []const []const u8,
     ecosystem: []const u8,
     grammar: *const Grammar,
@@ -56,6 +58,7 @@ pub const all: []const Adapter = blk: {
     for (manifest.entries, 0..) |entry, i| {
         out[i] = .{
             .name = entry.name,
+            .revision = @embedFile(entry.name ++ "/grammar/REVISION") ++ @embedFile("tables.zon"),
             .extensions = entry.extensions,
             .ecosystem = entry.ecosystem,
             .grammar = @extern(*const Grammar, .{ .name = "tree_sitter_" ++ entry.name }),

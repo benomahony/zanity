@@ -151,6 +151,22 @@ zanity help check                             # every option
 
 `--agent` writes for a coding agent, in about 1% of the bytes of the terminal report once a run has more than a handful of findings: the totals and the command to run next, then the first findings in rule order, errors first, each as `line:column` and its own fix (or its message, without the explanation every finding of its rule shares), with `[--fix]` on those zanity can fix itself. `--limit N` sets how many findings it shows in all (10 by default, 0 for every one); the rules past them are listed by name and count, to look at with `--rules <name>`. It is on by default under Claude Code (when `CLAUDECODE` is set) unless `--json` or `--plain` is given; `ZANITY_AGENT=1` turns it on for any other agent.
 
+### Deterministic cache
+
+Every language rule caches each source file's local findings and the facts needed by project-wide rules in `~/.cache/zanity/zanity.db`, or the file named by `ZANITY_STORE`. An unchanged file is not parsed again; recursion, naming, vocabulary, dead-symbol and the other cross-file rules are still recomputed from the cached facts together with facts from changed files. The key includes the source, path, language queries, selected rules and whether `--infer` needs function bodies, so changing any of them runs the checker again. An unavailable cache never stops a check.
+
+The `source_analyses` table keeps one row per path and analysis context, replacing it when that source changes. Its `result` column is JSON rather than an opaque blob, so agents and people can inspect the exact findings and facts zanity reused. Agent output says when rows were reused and names the database. For example:
+
+```sh
+sqlite3 ~/.cache/zanity/zanity.db "
+  SELECT path, language, hits,
+         json_array_length(result, '$.findings') AS findings,
+         json_array_length(result, '$.functions') AS functions
+  FROM source_analyses
+  ORDER BY used_at DESC, path
+  LIMIT 20;"
+```
+
 ### Judging what structure can't settle with `--infer`
 
 Whether an error message is vague, cryptic or unhelpful can often be decided from the code: a message that shows none of the values its condition reads is vague. zanity checks that deterministically on every run. What code structure can't settle, such as whether a message describes a different failure from the one that happened, `--infer` asks of a language model through the [TypeSafe API](https://docs.typesafe.ai/api), after every deterministic check has run.

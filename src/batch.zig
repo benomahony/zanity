@@ -15,6 +15,8 @@ const facts_module = @import("facts.zig");
 const Facts = facts_module.Facts;
 const Finding = facts_module.Finding;
 const Live = @import("live.zig").Live;
+const cache_module = @import("cache.zig");
+const Store = @import("store.zig").Store;
 
 /// More workers than this would each wait on the lock more than they check.
 pub const max_workers = 64;
@@ -84,6 +86,13 @@ pub const Failure = struct {
     unreadable: bool,
 };
 
+const CachedFile = struct {
+    key: @import("store.zig").Digest,
+    source: @import("store.zig").Digest,
+    path: []const u8,
+    language: []const u8,
+};
+
 pub const Batch = struct {
     io: Io,
     files: []const []const u8,
@@ -95,9 +104,12 @@ pub const Batch = struct {
     text: *memory.Text,
     facts: *Facts,
     findings: *memory.Bounded(Finding),
+    cache: ?*Store = null,
+    cache_buffer: []u8 = &.{},
     live: ?*Live,
     mutex: Io.Mutex = .init,
     checked: usize = 0,
+    cached: usize = 0,
     failure: ?Failure = null,
     next: std.atomic.Value(usize) = .init(0),
 
@@ -143,12 +155,50 @@ pub const Batch = struct {
             memory.exceeded = "bytes in one file";
             return error.LimitExceeded;
         }
+        const cache_context: cache_module.AnalysisContext = .{ .language = adapter.name, .query = adapter.query, .revision = adapter.revision, .enabled = checker.enabled, .collect_units = self.facts.collect_units };
+        const cached_file: CachedFile = .{ .key = cache_module.key(cache_context, path), .source = @import("store.zig").digest(&.{source}), .path = path, .language = adapter.name };
+        if (try self.replayCached(cached_file)) return;
         worker.startFile(path, adapter.name, self.facts.collect_units);
         const result = try checker.check(.{ .scratch = &worker.scratch, .text = &worker.text, .facts = &worker.facts }, source);
         self.mutex.lockUncancelable(self.io);
         defer self.mutex.unlock(self.io);
+        if (self.cache) |source_cache| {
+            const room = self.cache_buffer[0 .. self.cache_buffer.len / 2];
+            if (cache_module.encode(room, cache_context, &worker.facts, result.diagnostics)) |payload| {
+                source_cache.keepAnalysis(.{ .key = cached_file.key, .source = cached_file.source, .path = path, .language = adapter.name, .result = payload }) catch {
+                    self.cache = null;
+                };
+            } else |_| self.cache = null;
+        }
         try self.commit(worker, path, result.diagnostics);
         if (self.checked > self.files.len) assert.panic("committed {d} of {d} files; each file is committed once", .{ self.checked, self.files.len });
+    }
+
+    /// Replays one valid cache row while holding the lock that protects both SQLite's prepared
+    /// statements and the run's shared facts. A missing, unavailable or malformed row is a miss.
+    fn replayCached(self: *Batch, file: CachedFile) !bool {
+        self.mutex.lockUncancelable(self.io);
+        defer self.mutex.unlock(self.io);
+        const source_cache = self.cache orelse return false;
+        if (self.cache_buffer.len < 2) assert.panic("replaying cached files with {d} bytes; reserve memory.Limits.analysis_bytes at startup", .{self.cache_buffer.len});
+        if (file.path.len == 0 or file.language.len == 0) assert.panic("replaying a cached file without its path or language; checkFile supplies both", .{});
+        const middle = self.cache_buffer.len / 2;
+        const payload = source_cache.cachedAnalysis(self.cache_buffer[0..middle], file.key, file.source) catch {
+            self.cache = null;
+            return false;
+        };
+        const json = payload orelse return false;
+        cache_module.replay(.{ .payload = json, .scratch = self.cache_buffer[middle..], .path = file.path, .language = file.language, .text = self.text, .facts = self.facts, .findings = self.findings }) catch |err| switch (err) {
+            error.InvalidCache, error.OutOfMemory => {
+                self.cache = null;
+                return false;
+            },
+            error.LimitExceeded => return error.LimitExceeded,
+        };
+        self.checked += 1;
+        self.cached += 1;
+        if (self.live) |live| live.update("Checking files", self.checked, self.files.len);
+        return true;
     }
 
     /// Adds one file's facts and findings to the run's; the caller holds `mutex`.
