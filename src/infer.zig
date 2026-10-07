@@ -203,7 +203,7 @@ pub const Inference = struct {
             try self.store.observe(.{ .path = unit.path, .rule = rule.name, .unit = job.unit_hash, .unit_name = unit.name, .line = unit.line + 1, .language = unit.language, .model = self.client.model, .question = question, .probability = p, .threshold = self.threshold, .fired = fired });
             if (!fired) continue;
             const message = try self.json.format("'{s}' {s} (TypeSafe is {d:.0}% sure).", .{ unit.name, rule.judgement, p * 100 });
-            try findings.add(.{ .path = unit.path, .line = unit.line, .column = unit.column, .rule = rule.name, .message = message });
+            try findings.add(.{ .path = unit.path, .line = unit.line, .column = unit.column, .rule = rule.name, .message = message, .fix = unit.fix });
         }
         if (job.count > max_questions) assert.panic("{s}: recorded {d} answers about '{s}', more than {d}; record() must keep at most one answer per queued question", .{ unit.path, job.count, unit.name, max_questions });
     }
@@ -242,6 +242,7 @@ pub const Inference = struct {
             .function, .@"test" => json.write(.{ .language = unit.language, .function = unit.source }),
             .setting => json.write(.{ .file = unit.path, .line = unit.source }),
             .project => json.write(.{ .files = unit.source }),
+            .cluster => json.write(.{ .language = unit.language, .repeated = unit.source }),
         };
         written catch {
             memory.exceeded = "bytes of --infer requests; raise memory.Limits.judgement_bytes";
@@ -273,6 +274,7 @@ fn asked(asks: rules.Asks, unit: *const Unit) bool {
         .@"test" => unit.kind == .@"test",
         .setting => unit.kind == .setting,
         .project => unit.kind == .project,
+        .cluster => unit.kind == .cluster,
     };
     if (applies and asks == .errors and !unit.reports_error) assert.panic("{s}: asking the error questions about '{s}', which reports no error", .{ unit.path, unit.name });
     return applies;

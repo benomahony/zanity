@@ -9,18 +9,22 @@ const File = check.File;
 const Context = check.Context;
 
 /// Records the shape of the closing function's body: the kinds of its syntax nodes in order,
-/// without names or values. Tests are left out: they are parallel on purpose.
+/// without names or values. Tests are parallel on purpose, so they are recorded only under
+/// --infer, for the clusters it asks about, and twins leave them out.
 pub fn recordShape(self: *File, ctx: Context) !void {
     if (ctx.family != .function) assert.panic("{s}: recording the shape of {f}, which is a {t}, not a function; call recordShape() only from closeFunction()", .{ self.work.facts.path, ctx.node.where(), ctx.family });
-    if (!self.checker.enabled.enabled("structural-twins")) return;
+    const enabled = self.checker.enabled;
+    const clustering = self.work.facts.collect_units and enabled.enabled("repeated-mechanics");
+    if (!enabled.enabled("structural-twins") and !clustering) return;
     const function = ctx.fact orelse return;
-    if (!ctx.body or ctx.is_test or self.index.marks(ctx.node, self.v.test_outer)) return;
+    const is_test = ctx.is_test or self.index.marks(ctx.node, self.v.test_outer);
+    if (!ctx.body or (is_test and !self.work.facts.collect_units)) return;
     if (ctx.body_start == std.math.maxInt(u32)) assert.panic("{s}: {f} has a body but no recorded start; assign() must set body_start with the first @inner", .{ self.work.facts.path, ctx.node.where() });
     if (self.codeLinesIn(ctx.span) < rules.min_twin_lines) return;
     const shape = bodyShape(self, ctx.span, ctx.body_start);
     if (shape.size < rules.min_twin_nodes) return;
     const facts = self.work.facts;
-    try facts.shapes.add(.{ .function = function, .hash = shape.hash, .size = shape.size, .start = ctx.body_start, .end = ts.ts_node_end_byte(ctx.span) });
+    try facts.shapes.add(.{ .function = function, .hash = shape.hash, .size = shape.size, .start = ctx.body_start, .end = ts.ts_node_end_byte(ctx.span), .is_test = is_test });
 }
 
 const BodyShape = struct { hash: u64, size: u32 };

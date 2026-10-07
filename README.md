@@ -188,9 +188,17 @@ And every test case:
 | `self-mocking-test` | mocks the behaviour it claims to check | |
 | `trivial-test` | checks something trivial or only the easy path | |
 
+Each cluster of three or more functions, or three or more tests, with the same structure is asked once:
+
+| Rule | Asks whether the cluster |
+|---|---|
+| `repeated-mechanics` | repeats the same mechanics, where a small domain language (a builder, a helper named in the domain's words, a table of cases) would say them more readably |
+
+Its fix names the members and what varies between them, which is what that builder or table would take.
+
 A finding is reported when the model is at least 80% sure, and says how sure it was. `threshold` under `[infer]` in `zanity.toml` changes that: `threshold = 0.9` reports only what it is at least 90% sure of, and a lower value reports more.
 
-**What is sent:** the source of each function and test, and only the questions that apply to it and that no deterministic check already answered there: the error-message questions only about functions that raise, return or log an error. Nothing else leaves your machine, and without `--infer` nothing does at all.
+**What is sent:** the source of each function and test, the first three bodies of each cluster, and only the questions that apply to it and that no deterministic check already answered there: the error-message questions only about functions that raise, return or log an error. Nothing else leaves your machine, and without `--infer` nothing does at all.
 
 **Cost and speed:** answers are cached in a SQLite file, `~/.cache/zanity/zanity.db` (or wherever `ZANITY_STORE` points), keyed by the function's source, so unchanged code is never asked about twice and a second run is instant. A progress line shows how many functions are answered and how long the rest will take. `[infer] concurrency` in `zanity.toml` sets how many requests run at once (default 8, up to 64); `TYPESAFE_BASE_URL` points at a different TypeSafe endpoint.
 

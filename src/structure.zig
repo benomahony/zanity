@@ -31,8 +31,93 @@ pub fn checkStructure(facts: *Facts, enabled: rules.Set, findings: *memory.Bound
 fn byShape(_: void, a: Shape, b: Shape) bool {
     if (a.size == 0 or b.size == 0) assert.panic("sorting a function shape of no nodes; recordShape() keeps only shapes of min_twin_nodes or more", .{});
     if (a.function == b.function and a.hash != b.hash) assert.panic("function {d} has two shapes; recordShape() records one per function", .{a.function});
+    if (a.is_test != b.is_test) return !a.is_test;
     if (a.hash != b.hash) return a.hash < b.hash;
     return a.function < b.function;
+}
+
+/// Where the run of shapes alike to `shapes[start]` ends: the same hash, size and testness.
+fn groupEnd(shapes: []const Shape, start: usize) usize {
+    if (start >= shapes.len) assert.panic("grouping shapes from {d} of {d}; callers stop at the end", .{ start, shapes.len });
+    const head = shapes[start];
+    var end = start + 1;
+    while (end < shapes.len and alike(shapes[end], head)) end += 1;
+    if (end > shapes.len) assert.panic("a group of shapes ran to {d}, past the {d} recorded", .{ end, shapes.len });
+    return end;
+}
+
+fn alike(a: Shape, b: Shape) bool {
+    if (a.size < rules.min_twin_nodes or b.size < rules.min_twin_nodes) assert.panic("comparing shapes of {d} and {d} nodes; recordShape() keeps only shapes of {d} or more", .{ a.size, b.size, rules.min_twin_nodes });
+    if (a.function == b.function and a.hash != b.hash) assert.panic("function {d} has two shapes; recordShape() records one per function", .{a.function});
+    return a.hash == b.hash and a.size == b.size and a.is_test == b.is_test;
+}
+
+/// Same-shaped functions, or same-shaped tests, that make a cluster worth asking about.
+pub const min_cluster = 3;
+/// Members whose bodies go to TypeSafe; the rest are named by count.
+const max_cluster_bodies = 3;
+
+/// Adds a --infer unit for each cluster of `min_cluster` or more functions, or tests, of one
+/// shape: the first few members' bodies to judge, and a fix naming the members and what varies.
+pub fn clusterUnits(facts: *Facts, sources: Sources) error{LimitExceeded}!void {
+    if (!facts.collect_units) assert.panic("building --infer clusters when units aren't collected; call clusterUnits() only under --infer", .{});
+    const shapes = facts.shapes.items();
+    std.mem.sort(Shape, shapes, {}, byShape);
+    const before = facts.units.len;
+    var start: usize = 0;
+    while (start < shapes.len) {
+        const end = groupEnd(shapes, start);
+        defer start = end;
+        if (end - start >= min_cluster) try clusterUnit(facts, sources, shapes[start..end]);
+    }
+    if (facts.units.len - before > shapes.len / min_cluster) assert.panic("made {d} clusters from {d} shapes; each takes at least {d}", .{ facts.units.len - before, shapes.len, min_cluster });
+}
+
+fn clusterUnit(facts: *Facts, sources: Sources, group: []const Shape) error{LimitExceeded}!void {
+    if (group.len < min_cluster) assert.panic("a cluster of {d} shapes, under the {d} a cluster needs; clusterUnits() passes only groups that size or larger", .{ group.len, min_cluster });
+    const lead = group[0];
+    const functions = facts.functions.items();
+    const first = functions[lead.function];
+    const second = functions[group[1].function];
+    const adapter = language.forPath(first.path) orelse assert.panic("{s} has a recorded shape but no language; recordShape() runs only on files a language checks", .{first.path});
+    const text = facts.text;
+    const source_start = text.used;
+    for (group[0..@min(group.len, max_cluster_bodies)]) |shape| {
+        const f = functions[shape.function];
+        const body = bodyOf(sources.io, f.path, shape, sources.mine) orelse continue;
+        _ = try text.format("=== {s}:{d} {s} ===\n{s}\n", .{ f.path, f.line + 1, f.name, body.bytes });
+    }
+    const source = text.buffer[source_start..text.used];
+    if (source.len == 0) return;
+    const fix_start = text.used;
+    const more = group.len - 2;
+    const kind = if (lead.is_test) (if (more == 1) "test" else "tests") else if (more == 1) "function" else "functions";
+    _ = try text.format("'{s}' ({s}:{d}), '{s}' ({s}:{d})", .{ first.name, first.path, first.line + 1, second.name, second.path, second.line + 1 });
+    if (more > 0) _ = try text.format(" and {d} more {s}", .{ more, kind });
+    _ = try text.copy(" share one structure");
+    const mine = bodyOf(sources.io, first.path, lead, sources.mine);
+    const theirs = bodyOf(sources.io, second.path, group[1], sources.theirs);
+    if (mine != null and theirs != null) switch (twins_module.compare(mine.?, theirs.?)) {
+        .pairs => |pairs| if (pairs.len > 0) {
+            _ = try text.format("; between the first two, ", .{});
+            try pairs.write(text, " becomes ");
+            _ = try text.copy(". What varies is what a builder, helper or table of cases would take; write the shared steps once, named in the domain's words.");
+        },
+        else => {},
+    };
+    if (text.used == fix_start) assert.panic("wrote no fix for the cluster of '{s}'; clusterUnit() names its members first", .{first.name});
+    if (!std.mem.endsWith(u8, text.buffer[fix_start..text.used], ".")) _ = try text.copy(".");
+    try facts.units.add(.{
+        .kind = .cluster,
+        .path = first.path,
+        .language = adapter.name,
+        .name = first.name,
+        .line = first.line,
+        .column = first.column,
+        .end_line = first.line,
+        .source = source,
+        .fix = text.buffer[fix_start..text.used],
+    });
 }
 
 /// Reports each function whose body has the same shape as another's, naming one of the others.
@@ -42,11 +127,10 @@ fn twins(facts: *Facts, findings: *memory.Bounded(Finding), sources: ?Sources) e
     std.mem.sort(Shape, shapes, {}, byShape);
     var start: usize = 0;
     while (start < shapes.len) {
-        var end = start + 1;
-        while (end < shapes.len and shapes[end].hash == shapes[start].hash and shapes[end].size == shapes[start].size) end += 1;
+        const end = groupEnd(shapes, start);
         defer start = end;
         const group = shapes[start..end];
-        if (group.len < 2) continue;
+        if (group.len < 2 or group[0].is_test) continue;
         for (group, 0..) |shape, i| {
             if (shape.function >= functions.len) assert.panic("a shape belongs to function {d}, but only {d} are recorded; commit() must offset each file's function numbers", .{ shape.function, functions.len });
             const f = functions[shape.function];

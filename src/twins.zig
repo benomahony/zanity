@@ -14,39 +14,74 @@ const max_pairs = 64;
 /// structure leaves out, are left out here too.
 pub const Body = struct { bytes: []const u8, line_comment: []const u8 };
 
-/// The fix for a function that has `other_name`'s structure: what differs between their bodies
-/// and what to do about it, empty when the bodies don't line up token by token, or null when they
-/// differ in so many names and values that they only share a shape and aren't copies.
-pub fn differenceFix(text: *memory.Text, mine: Body, theirs: Body, other_name: []const u8) error{LimitExceeded}!?[]const u8 {
-    if (other_name.len == 0) assert.panic("comparing a body with an unnamed twin; structural-twins names every function it reports", .{});
-    var pairs: [max_pairs][2][]const u8 = undefined;
-    var distinct: usize = 0;
+/// The names and values two bodies of one structure differ in, in the order they first differ.
+pub const Pairs = struct {
+    items: [max_pairs][2][]const u8 = undefined,
+    len: usize = 0,
+
+    fn add(self: *Pairs, x: []const u8, y: []const u8) bool {
+        if (std.mem.eql(u8, x, y)) assert.panic("adding the pair '{s}'/'{s}', which don't differ; compare() skips equal tokens first", .{ x, y });
+        for (self.items[0..self.len]) |p| if (std.mem.eql(u8, p[0], x) and std.mem.eql(u8, p[1], y)) return true;
+        if (self.len == max_pairs) return false;
+        self.items[self.len] = .{ x, y };
+        self.len += 1;
+        if (self.len > max_pairs) assert.panic("kept {d} differing pairs in room for {d}; add() refuses more", .{ self.len, max_pairs });
+        return true;
+    }
+
+    /// Writes up to `max_shown` pairs as `mine` + `joiner` + `theirs`, and counts the rest.
+    pub fn write(self: *const Pairs, text: *memory.Text, joiner: []const u8) error{LimitExceeded}!void {
+        if (self.len == 0) assert.panic("writing no differing pairs; callers say the bodies are identical instead", .{});
+        if (joiner.len == 0) assert.panic("writing differing pairs with nothing between the two sides; pass words such as \" becomes \"", .{});
+        const shown = @min(self.len, max_shown);
+        for (self.items[0..shown], 0..) |pair, i| {
+            const separator = if (i == 0) "" else if (i + 1 == shown and self.len <= max_shown) " and " else ", ";
+            const shared = Shared.of(pair[0], pair[1]);
+            _ = try text.format("{s}{f}{s}{f}", .{ separator, shared.code(pair[0]), joiner, shared.code(pair[1]) });
+        }
+        if (self.len > max_shown) _ = try text.format(" and {d} more", .{self.len - max_shown});
+    }
+};
+
+/// How two bodies of one structure compare: token by token they don't line up, they differ in
+/// more than `max_pairs` names and values and so only share a shape, or they differ in `pairs`,
+/// which is empty when they are identical.
+pub const Comparison = union(enum) { misaligned, unlike, pairs: Pairs };
+
+pub fn compare(mine: Body, theirs: Body) Comparison {
+    if (mine.bytes.len == 0 or theirs.bytes.len == 0) assert.panic("comparing bodies of {d} and {d} bytes; a recorded shape always spans a body", .{ mine.bytes.len, theirs.bytes.len });
+    var pairs: Pairs = .{};
     var a: Tokens = .{ .bytes = mine.bytes, .line_comment = mine.line_comment };
     var b: Tokens = .{ .bytes = theirs.bytes, .line_comment = theirs.line_comment };
     for (0..mine.bytes.len + 1) |_| {
         const x = a.next();
         const y = b.next();
         if (x == null and y == null) break;
-        if (x == null or y == null) return "";
+        if (x == null or y == null) return .misaligned;
         if (std.mem.eql(u8, x.?, y.?)) continue;
-        if (seen(pairs[0..distinct], x.?, y.?)) continue;
-        if (distinct == max_pairs) return null;
-        pairs[distinct] = .{ x.?, y.? };
-        distinct += 1;
+        if (!pairs.add(x.?, y.?)) return .unlike;
     }
-    if (distinct == 0) return try text.format("Its body is identical to that of '{s}'; delete one and call the other.", .{other_name});
+    if (a.at != mine.bytes.len) assert.panic("compared {d} of {d} bytes of a body; compare() reads both bodies to their end", .{ a.at, mine.bytes.len });
+    return .{ .pairs = pairs };
+}
+
+/// The fix for a function that has `other_name`'s structure: what differs between their bodies
+/// and what to do about it, empty when the bodies don't line up token by token, or null when they
+/// differ in so many names and values that they only share a shape and aren't copies.
+pub fn differenceFix(text: *memory.Text, mine: Body, theirs: Body, other_name: []const u8) error{LimitExceeded}!?[]const u8 {
+    if (other_name.len == 0) assert.panic("comparing a body with an unnamed twin; structural-twins names every function it reports", .{});
+    const pairs = switch (compare(mine, theirs)) {
+        .misaligned => return "",
+        .unlike => return null,
+        .pairs => |p| p,
+    };
+    if (pairs.len == 0) return try text.format("Its body is identical to that of '{s}'; delete one and call the other.", .{other_name});
+    if (pairs.len > max_pairs) assert.panic("{d} differing pairs in room for {d}; compare() reports unlike past max_pairs", .{ pairs.len, max_pairs });
     const start = text.used;
     _ = try text.format("It differs from '{s}' only in ", .{other_name});
-    for (pairs[0..@min(distinct, max_shown)], 0..) |pair, i| {
-        const separator = if (i == 0) "" else if (i + 1 == @min(distinct, max_shown) and distinct <= max_shown) " and " else ", ";
-        const shared = Shared.of(pair[0], pair[1]);
-        _ = try text.format("{s}{f} where it has {f}", .{ separator, shared.code(pair[0]), shared.code(pair[1]) });
-    }
-    if (distinct > max_shown) _ = try text.format(" and {d} more", .{distinct - max_shown});
+    try pairs.write(text, " where it has ");
     _ = try text.copy("; keep one, and pass what differs in as parameters.");
-    const fix = text.buffer[start..text.used];
-    if (distinct > max_pairs) assert.panic("kept {d} differing pairs in room for {d}; differenceFix() must stop at max_pairs", .{ distinct, max_pairs });
-    return fix;
+    return text.buffer[start..text.used];
 }
 
 /// Tokens longer than this show only the part that differs, with `context` bytes around it.
@@ -95,13 +130,6 @@ const Code = struct {
         try w.print("{s}{s}{s}{s}{s}", .{ fence, if (self.cut_start) "..." else "", self.token, if (self.cut_end) "..." else "", if (fence.len > 1) " ``" else "`" });
     }
 };
-
-fn seen(pairs: []const [2][]const u8, x: []const u8, y: []const u8) bool {
-    if (pairs.len > max_pairs) assert.panic("searching {d} pairs in room for {d}; differenceFix() stops at max_pairs", .{ pairs.len, max_pairs });
-    if (std.mem.eql(u8, x, y)) assert.panic("looking up the pair '{s}'/'{s}', which don't differ; differenceFix() skips equal tokens first", .{ x, y });
-    for (pairs) |p| if (std.mem.eql(u8, p[0], x) and std.mem.eql(u8, p[1], y)) return true;
-    return false;
-}
 
 /// The tokens of a body: names and numbers, quoted strings, and single other characters, with
 /// whitespace and line comments left out.

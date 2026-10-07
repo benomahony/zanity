@@ -72,7 +72,8 @@ pub const Reach = enum { any, functions, methods };
 /// A function's body reduced to the kinds of its syntax nodes, so bodies that differ only in their
 /// names and values hash the same.
 /// A function body's structure, and the bytes of its file it spans, so twins can be compared.
-pub const Shape = struct { function: u32, hash: u64, size: u32, start: u32 = 0, end: u32 = 0 };
+/// Tests have shapes only under --infer, for the clusters it asks about; twins leave them out.
+pub const Shape = struct { function: u32, hash: u64, size: u32, start: u32 = 0, end: u32 = 0, is_test: bool = false };
 
 /// The hash of a name in one language, so a Python and a Java `Logger` count apart.
 pub fn typeHash(language: []const u8, name: []const u8) u64 {
@@ -93,7 +94,7 @@ pub fn nameHash(name: []const u8) u64 {
 pub const Edge = struct { caller: u32, callee: []const u8, reach: Reach };
 
 /// What a unit of code is, which decides the questions `check --infer` asks about it.
-pub const UnitKind = enum { function, @"test", setting, project };
+pub const UnitKind = enum { function, @"test", setting, project, cluster };
 
 /// A function or a test, kept whole so `check --infer` can ask about it.
 pub const Unit = struct {
@@ -107,6 +108,8 @@ pub const Unit = struct {
     column: u32,
     end_line: u32,
     source: []const u8,
+    /// How to fix what a judgement about the unit finds, when zanity knows more than the rule's advice.
+    fix: []const u8 = "",
 };
 
 pub const Facts = struct {

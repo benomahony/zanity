@@ -20,7 +20,7 @@ class Handler(BaseHTTPRequestHandler):
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         assert self.headers.get("Authorization", "").startswith("Bearer "), "zanity sent no API key"
         state = body["state"]
-        source = state.get("function") or state.get("line") or state.get("files")
+        source = state.get("function") or state.get("line") or state.get("files") or state.get("repeated")
         judged = set(re.findall(r"judge: ([a-z-]+)", source))
         answers = {name: {"type": "noul", "noul": 0.95 if name in judged else 0.05} for name in body["questions"]}
         log = os.environ.get("MOCK_TYPESAFE_LOG")

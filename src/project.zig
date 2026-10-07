@@ -106,10 +106,11 @@ fn checkProjectFile(run: ProjectRun, path: []const u8, source: []const u8) !void
             try run.findings.add(.{ .path = path, .line = row, .column = column, .rule = "relaxed-check", .message = try facts.text.format("'{s}' {s}, so a problem it should catch passes.", .{ strings.header(line), r[1] }) });
             break;
         }
-        if (!facts.collect_units) continue;
+        const name = strings.header(line);
+        if (!facts.collect_units or name.len == 0) continue;
         facts.path = path;
         facts.language = "config";
-        try facts.unit(strings.header(line), line, .{ .kind = .setting, .reports_error = false, .at = .{ row, column, row } });
+        try facts.unit(name, line, .{ .kind = .setting, .reports_error = false, .at = .{ row, column, row } });
     }
     if (row == 0 and source.len > 0) assert.panic("{s}: read {d} bytes as no lines; splitting on newlines always gives at least one", .{ path, source.len });
 }

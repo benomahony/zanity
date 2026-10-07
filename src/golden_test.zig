@@ -399,6 +399,7 @@ fn writeInferProject(arena: std.mem.Allocator, io: Io, dir: Io.Dir) !void {
     if (service.len == 0) assert.panic("tests/infer/project/service.py is empty; restore it from git", .{});
     if (std.mem.indexOf(u8, service, "# judge: ") == null) assert.panic("tests/infer/project/service.py marks no rule with '# judge: <rule>', so the mock would answer no to everything; restore the markers", .{});
     try dir.writeFile(io, .{ .sub_path = "service.py", .data = service });
+    try dir.writeFile(io, .{ .sub_path = "tsconfig.json", .data = "{\n  \"compilerOptions\": {\n    \"strict\": true\n  }\n}\n" });
     try dir.writeFile(io, .{ .sub_path = "all_test.zig", .data = "test {\n    _ = @import(\"service_test.zig\");\n}\n" });
     try dir.writeFile(io, .{ .sub_path = "pyproject.toml", .data = "[tool.ruff]\nline-length = 200  # judge: weakened-check\n# judge: unscheduled-analysis\n" });
 }
@@ -452,7 +453,7 @@ test "--infer reports what TypeSafe is sure of, for functions, tests and project
     defer project.tmp.cleanup();
     defer project.mock.child.kill(std.testing.io);
     const run = try project.checkInferring(arena, std.testing.io);
-    for ([_][]const u8{ "rule=\"misleading-error\"", "rule=\"unconstructive-error\"", "'invalid input' doesn't say", "rule=\"hollow-test\"", "rule=\"weakened-check\"", "rule=\"unscheduled-analysis\"" }) |expected| {
+    for ([_][]const u8{ "rule=\"misleading-error\"", "rule=\"unconstructive-error\"", "'invalid input' doesn't say", "rule=\"hollow-test\"", "rule=\"weakened-check\"", "rule=\"unscheduled-analysis\"", "rule=\"repeated-mechanics\"", "between the first two, `\\\"alpha beta\\\"` becomes `\\\"ada lovelace\\\"`" }) |expected| {
         if (std.mem.indexOf(u8, run.stdout, expected) == null) std.debug.print("\nmissing {s} in:\n{s}", .{ expected, run.stdout });
         try std.testing.expect(std.mem.indexOf(u8, run.stdout, expected) != null);
     }
@@ -467,7 +468,7 @@ test "--infer asks each unit only its own questions and skips what checks settle
     defer project.mock.child.kill(std.testing.io);
     _ = try project.checkInferring(arena, std.testing.io);
     const requests = try project.tmp.dir.readFileAlloc(std.testing.io, "requests.log", arena, .unlimited);
-    try std.testing.expectEqual(@as(usize, 9), std.mem.count(u8, requests, "\n"));
+    try std.testing.expectEqual(@as(usize, 15), std.mem.count(u8, requests, "\n"));
     var lines = std.mem.tokenizeScalar(u8, requests, '\n');
     while (lines.next()) |line| {
         const fine = std.mem.indexOf(u8, line, "def fine") != null;
@@ -477,6 +478,7 @@ test "--infer asks each unit only its own questions and skips what checks settle
         if (is_test) try std.testing.expect(std.mem.indexOf(u8, line, "name-behaviour-mismatch") == null);
         if (!is_test) try std.testing.expect(std.mem.indexOf(u8, line, "hollow-test") == null);
         if (std.mem.indexOf(u8, line, "def test_waits") != null) try std.testing.expect(std.mem.indexOf(u8, line, "flaky-test") == null);
+        if (std.mem.indexOf(u8, line, "\"=== ") != null) try std.testing.expect(std.mem.indexOf(u8, line, "\"questions\": [\"repeated-mechanics\"]") != null);
         const config_line = std.mem.indexOf(u8, line, "weakened-check") != null or std.mem.indexOf(u8, line, "unscheduled-analysis") != null;
         if (config_line) try std.testing.expect(std.mem.indexOf(u8, line, "name-behaviour-mismatch") == null);
     }

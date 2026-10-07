@@ -197,6 +197,7 @@
         { "const": "unfocused-test", "description": "warning, on by default. Split it up, or assert only on the parts that matter." },
         { "const": "self-mocking-test", "description": "warning, on by default. Exercise the real code, and mock only its external dependencies." },
         { "const": "trivial-test", "description": "warning, on by default. Test the risky behaviour and edge cases, and make the name match what is verified." },
+        { "const": "repeated-mechanics", "description": "information, on by default. Write the shared steps once as a builder, helper or table of cases named in the domain's words, so each one says only what differs." },
         { "const": "relaxed-check", "description": "warning, on by default. Remove it, or fix what the check reports and turn it back on at its strictest." },
         { "const": "weakened-check", "description": "warning, on by default. Remove it, or turn the check back on at its strictest and fix what it reports." },
         { "const": "unscheduled-analysis", "description": "warning, on by default. Run a strict type checker and a linter with every rule in CI on every change and on a daily schedule, and fail the build on any warning." },
