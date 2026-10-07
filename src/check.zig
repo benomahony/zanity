@@ -23,6 +23,7 @@ const repeats = @import("repeats.zig");
 const shapes = @import("shapes.zig");
 const notes = @import("notes.zig");
 const extract = @import("extract.zig");
+const loops = @import("loops.zig");
 
 pub const Diagnostic = struct {
     line: u32,
@@ -880,7 +881,9 @@ pub const File = struct {
         if (ctx.condition != null and ctx.iterable != null) assert.panic("{s}: the loop {f} has both @loop.condition and @loop.iterable; a loop is one or the other, so fix its query", .{ self.work.facts.path, ctx.node.where() });
         const unbounded = if (ctx.condition) |c| self.index.marks(c, self.v.literal_true) else ctx.iterable == null;
         if (!unbounded) return;
-        _ = try self.report(ctx.node, "unbounded-loop", try self.say("'{s}' has no bound, so it can run forever.", .{header(ctx.node.text(self.source))}));
+        if (try self.report(ctx.node, "unbounded-loop", try self.say("'{s}' has no bound, so it can run forever.", .{header(ctx.node.text(self.source))}))) {
+            self.s.diagnostics.last().?.fix = try loops.unboundedFix(self, ctx.node);
+        }
     }
 
     pub fn closeAssignment(self: *File, ctx: Context) !void {
