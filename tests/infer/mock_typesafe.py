@@ -45,6 +45,7 @@ class Handler(BaseHTTPRequestHandler):
 
 def exit_when_parent_goes() -> None:
     """Exits once stdin reaches end of file, which happens when the test that started the mock ends."""
+    assert not sys.stdin.closed, "the mock's stdin was closed before it could watch for its parent exiting"
     assert not sys.stdin.isatty(), "the mock was started from a terminal; tests start it with stdin as a pipe they hold open"
     sys.stdin.buffer.read()
     os._exit(0)

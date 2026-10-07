@@ -1,0 +1,32 @@
+#!/bin/sh
+set -eu
+
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+
+head=$(git rev-parse HEAD)
+while read -r local_ref local_sha remote_ref remote_sha; do
+    case "$local_ref" in
+        refs/heads/*)
+            if [ "$local_sha" != "$head" ]; then
+                echo "pre-push: $local_ref is not checked out; check out and validate it before pushing" >&2
+                exit 1
+            fi
+            ;;
+    esac
+done
+
+if ! git diff --quiet --ignore-submodules -- || ! git diff --cached --quiet --ignore-submodules --; then
+    echo "pre-push: tracked files differ from HEAD; commit or restore them so the hook tests exactly what will be pushed" >&2
+    exit 1
+fi
+
+echo "pre-push: running the full CI gate" >&2
+zig fmt --check build.zig build.zig.zon src languages/*.zig languages/*.zon
+zig build test test-integration --summary all
+zig build
+./zig-out/bin/zanity check . --strict
+zig build release
+uv run --with 'PyYAML>=6,<7' python catalogue/sync.py
+python3 catalogue/triage.py
+git diff --exit-code -- catalogue

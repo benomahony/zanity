@@ -38,7 +38,7 @@
         },
         .zcli = .{
             .url = "git+https://github.com/benomahony/zcli#ec8be7f4b8ce7738d504bdfc60171d0e5a3504ab",
-            .hash = "zcli-0.1.0-ahKCbBAkAgCxFff6UrbsReWg8euRyUI2U0fuaUmnCbSK",
+            .hash = "zcli-0.1.0-ahKCbKgHAgCjUcxbUK_Ln65g316CDIClUrjG_LF8OkXl",
         },
         .tai = .{
             .url = "git+https://github.com/benomahony/zig-typesafe-ai#2367fbdea8db0cdde20406e889d324f70d06880f",

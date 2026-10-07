@@ -449,7 +449,7 @@ zig build test-integration  # the built zanity on the golden fixtures, --fix, th
 zig build test --fuzz=100K  # fuzz the checker with arbitrary bytes in every language
 ```
 
-`.githooks/pre-commit` runs the same format check before each commit; `git config core.hooksPath .githooks` turns it on.
+`git config core.hooksPath .githooks` turns on the repository's hooks. `pre-commit` runs the same format check as CI. `pre-push` refuses to test a dirty or different checkout, then runs the complete CI gate: formatting, unit and integration tests, zanity's strict self-check, every release build, and the generated catalogue check.
 
 Golden cases in `tests/golden/` run through the real binary and compare where each finding lands, its rule, its severity and the exit code, not the wording. The self-check runs zanity over its own source with every rule and fails on any finding.
 
