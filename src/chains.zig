@@ -44,9 +44,7 @@ fn reportChain(self: *File, node: ts.Node, links: u32, first: []const u8) !void 
     if (links < rules.min_chain_links) assert.panic("{s}: reporting a chain of {d} links, under the {d} reported; checkChain() returns before short ones", .{ self.work.facts.path, links, rules.min_chain_links });
     const chain = header(node.text(self.source));
     if (!try self.report(node, "message-chain", try self.say("'{s}' reaches through {d} objects, so this code breaks when any of them changes shape.", .{ chain, links - 1 }))) return;
-    const end = ts.ts_node_end_byte(node);
-    const called = end < self.source.len and self.source[end] == '(';
-    self.s.diagnostics.last().?.fix = try askInstead(self, if (called) callTarget(chain) else chain, first);
+    self.s.diagnostics.last().?.fix = try askInstead(self, if (calledAt(self, node)) callTarget(chain) else chain, first);
     if (self.s.diagnostics.last().?.fix.len == 0) assert.panic("{s}: the message-chain fix for '{s}' came out empty; say() always writes text", .{ self.work.facts.path, chain });
 }
 
@@ -71,6 +69,14 @@ fn askInstead(self: *File, chain: []const u8, first: []const u8) ![]const u8 {
     const between = std.mem.trim(u8, chain[first.len..last_dot], ".");
     if (between.len == 0 or wanted.len == 0) return self.say("Ask '{s}' for what you need with a method of its own, or pass that value in.", .{first});
     return self.say("Ask '{s}' for '{s}' with a method of its own, or pass '{s}' in, so this code stops depending on '{s}'.", .{ first, wanted, wanted, between });
+}
+
+/// Whether the chain at `node` is called, as `a.b.c()` is: an opening parenthesis right after it.
+fn calledAt(self: *File, node: ts.Node) bool {
+    const end = ts.ts_node_end_byte(node);
+    if (end > self.source.len) assert.panic("{s}: the chain {f} ends past the {d}-byte file; pass a node from this file's tree", .{ self.work.facts.path, node.where(), self.source.len });
+    if (end <= ts.ts_node_start_byte(node)) assert.panic("{s}: the chain {f} covers no text; put @chain.link on the whole access in the language's zanity.scm", .{ self.work.facts.path, node.where() });
+    return end < self.source.len and self.source[end] == '(';
 }
 
 /// A called chain without the method it calls, which only works on the value the chain reached:
