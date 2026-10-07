@@ -3,7 +3,7 @@
 const std = @import("std");
 const assert = @import("assert.zig");
 const Io = std.Io;
-const zrich = @import("zrich");
+const zrich = @import("zcli").zrich;
 
 /// The fastest the line is redrawn; faster only flickers.
 const redraw_ns = 100 * std.time.ns_per_ms;

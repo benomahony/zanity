@@ -12,10 +12,13 @@ src/billing.py:12:5  error    assertion-density  'charge' has 0 assertions that 
 src/billing.py:31:5  error    assertion-density  'refund' has 1 assertion that can catch a bug; it needs at least 2
 src/billing.py:40:9  warning  unbounded-loop     'while True' has no bound
 
-File            Errors  Warnings  Most common
-src/billing.py       2         1  assertion-density
----------------------------------------------
-TOTAL                2         1  assertion-density
+╭────────────────┬────────┬──────────┬───────────────────╮
+│ File           │ Errors │ Warnings │ Most common       │
+├────────────────┼────────┼──────────┼───────────────────┤
+│ src/billing.py │      2 │        1 │ assertion-density │
+├────────────────┼────────┼──────────┼───────────────────┤
+│ TOTAL          │      2 │        1 │ assertion-density │
+╰────────────────┴────────┴──────────┴───────────────────╯
 zanity: 2 errors and 1 warning in 1 of 14 files
 ```
 

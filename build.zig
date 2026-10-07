@@ -113,6 +113,7 @@ fn addRelease(b: *std.Build, build_info: *std.Build.Step.Options) void {
 const no_coverage = "-fno-sanitize-coverage=trace-pc-guard,trace-cmp,inline-8bit-counters,pc-table,trace-div,trace-gep,trace-loads,trace-stores";
 
 fn module(b: *std.Build, root: []const u8, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) *std.Build.Module {
+    const cli = b.dependency("zcli", .{ .target = target, .optimize = optimize }).module("zcli");
     const adapters = b.createModule(.{
         .root_source_file = b.path("languages/adapters.zig"),
         .target = target,
@@ -125,8 +126,7 @@ fn module(b: *std.Build, root: []const u8, target: std.Build.ResolvedTarget, opt
         .link_libc = true,
         .imports = &.{
             .{ .name = "adapters", .module = adapters },
-            .{ .name = "zrich", .module = b.dependency("zrich", .{ .target = target, .optimize = optimize }).module("zrich") },
-            .{ .name = "zcli", .module = b.dependency("zcli", .{ .target = target, .optimize = optimize }).module("zcli") },
+            .{ .name = "zcli", .module = cli },
             .{ .name = "tai", .module = b.dependency("tai", .{ .target = target, .optimize = optimize }).module("tai") },
         },
     });

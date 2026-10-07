@@ -37,16 +37,12 @@
             .hash = "N-V-__8AAHCbqABM_X5RTjbDBDBWErxZE8tJzmtEnLOLRHGx",
         },
         .zcli = .{
-            .url = "git+https://github.com/benomahony/zcli#6b423d63f549eba9bb02f46412f0740b69efcf98",
-            .hash = "zcli-0.1.0-ahKCbEgIAgDCZ5bpzhm7demHBqIfWwjhDAnfWHn-noWr",
+            .url = "git+https://github.com/benomahony/zcli#9f52b7e6a737fe158b0bb928c1d79f731d221629",
+            .hash = "zcli-0.1.0-ahKCbBAkAgD49pPC_TzBFZ3Q2Xrz8cPzQbXqw0NdgCMJ",
         },
         .tai = .{
             .url = "git+https://github.com/benomahony/zig-typesafe-ai#2367fbdea8db0cdde20406e889d324f70d06880f",
             .hash = "tai-0.1.0-ibOfVZ08AQDAiIBPqc-boY6buEPbza7rrCMKWxsdlCFb",
-        },
-        .zrich = .{
-            .url = "https://github.com/benomahony/zrich/archive/3ff0f67047714f0445980c3fe03f8a8f35e27d9a.tar.gz",
-            .hash = "zrich-0.1.0-DVxxqNsJAQAjlhRl3Ck_ET9oMq3Di_ZePMH4QrJrEtQo",
         },
     },
     .paths = .{

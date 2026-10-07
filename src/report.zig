@@ -1,6 +1,6 @@
 const std = @import("std");
 const assert = @import("assert.zig");
-const zrich = @import("zrich");
+const zrich = @import("zcli").zrich;
 const rules = @import("rules.zig");
 const memory = @import("memory.zig");
 const Finding = @import("facts.zig").Finding;
@@ -175,7 +175,7 @@ fn renderTable(sink: Sink, findings: []const Finding) !void {
     if (tallies.len > findings.len) assert.panic("{d} files with findings among {d} findings; each tallied file has at least one", .{ tallies.len, findings.len });
     std.mem.sort(FileTally, tallies, {}, worstFirst);
     const listed = @min(tallies.len, table_files);
-    var rows: [table_files + 2]Row = undefined;
+    var rows: [table_files + 1]Row = undefined;
     for (tallies[0..listed], 0..) |t, i| rows[i] = .{ .name = t.path, .counts = .{ .errors = t.errors, .warnings = t.warnings }, .most = mostCommon(findings, tallies[i .. i + 1]) };
     var filled = listed;
     var total: Pair = .{};
@@ -187,9 +187,8 @@ fn renderTable(sink: Sink, findings: []const Finding) !void {
         rows[filled] = .{ .name = try sink.text.format("... {d} more {s}", .{ more, if (more == 1) "file" else "files" }), .counts = rest, .most = mostCommon(findings, tallies[listed..]) };
         filled += 1;
     }
-    rows[filled] = .{ .name = "TOTAL", .counts = total, .most = mostCommon(findings, tallies) };
-    try writeTable(sink.console, rows[0 .. filled + 1]);
-    if (filled + 1 > rows.len) assert.panic("filled {d} table rows in room for {d}; the table lists at most table_files files, the rest and the total", .{ filled + 1, rows.len });
+    try writeTable(sink, rows[0..filled], .{ .name = "TOTAL", .counts = total, .most = mostCommon(findings, tallies) });
+    if (filled > rows.len) assert.panic("filled {d} table rows in room for {d}; the table lists at most table_files files and the rest", .{ filled, rows.len });
 }
 
 const Pair = struct { errors: u32 = 0, warnings: u32 = 0 };
@@ -210,56 +209,40 @@ fn mostCommon(findings: []const Finding, tallies: []const FileTally) []const u8 
     return rules.all[most].name;
 }
 
-/// Writes `rows` as aligned columns under a header, the last row, the total, below a rule.
-fn writeTable(console: zrich.Console, rows: []const Row) !void {
-    if (rows.len < 2) assert.panic("writing a table of {d} rows; it always has a file and the total", .{rows.len});
-    const out = console.writer;
-    var most: usize = "Most common".len;
-    var name: usize = "File".len;
-    for (rows) |r| {
-        most = @max(most, r.most.len);
-        name = @max(name, r.name.len);
+/// Writes the file rows and a separated total through zrich, which owns fitting and borders.
+fn writeTable(sink: Sink, rows: []const Row, total: Row) !void {
+    if (rows.len == 0) assert.panic("writing a report table with no files; renderTable() returns when no file has findings", .{});
+    const console = sink.console;
+    var cells: [table_files + 1][4]zrich.Cell = undefined;
+    var body: [table_files + 1][]const zrich.Cell = undefined;
+    for (rows, 0..) |row, i| {
+        cells[i] = .{
+            .{ .text = row.name },
+            .{ .text = try sink.text.format("{d}", .{row.counts.errors}), .style = if (row.counts.errors > 0) severityStyle(.@"error") else quiet },
+            .{ .text = try sink.text.format("{d}", .{row.counts.warnings}), .style = if (row.counts.warnings > 0) severityStyle(.warning) else quiet },
+            .{ .text = row.most, .style = quiet },
+        };
+        body[i] = &cells[i];
     }
-    const counts = 2 + "Errors".len + 2 + "Warnings".len + 2;
-    const room = console.options.width -| (counts + most);
-    name = @max(@min(name, room), "TOTAL".len + 8);
-    if (name < "TOTAL".len) assert.panic("the name column came out {d} wide, too narrow for TOTAL", .{name});
-    try out.writeByte('\n');
-    try writePadded(console, "File", name, .{ .bold = true });
-    try console.styled("  Errors  Warnings  Most common\n", .{ .bold = true });
-    for (rows, 0..) |r, i| {
-        const last = i + 1 == rows.len;
-        if (last) {
-            try out.splatByteAll('-', name + counts + most);
-            try out.writeByte('\n');
-        }
-        try writePadded(console, r.name, name, if (last) .{ .bold = true } else .{});
-        try out.print("  {d:>6}  {d:>8}  ", .{ r.counts.errors, r.counts.warnings });
-        try console.styled(r.most, quiet);
-        try out.writeByte('\n');
-    }
-}
-
-/// The last `width - 3` bytes of `text`, which padded() writes after `...`.
-fn shortened(text: []const u8, width: usize) []const u8 {
-    if (width < 4) assert.panic("shortening '{s}' to {d} bytes; writeTable() keeps at least 13 for names", .{ text, width });
-    if (text.len <= width) return text;
-    const kept = text[text.len - (width - 3) ..];
-    if (kept.len + 3 != width) assert.panic("shortened '{s}' to {d} bytes, not {d}", .{ text, kept.len + 3, width });
-    return kept;
-}
-
-/// Writes `text` padded with spaces to `width`, after shortening it from the left with `...` when
-/// it is longer, so the end of a path, its file name, stays.
-fn writePadded(console: zrich.Console, text: []const u8, width: usize, style: zrich.Style) !void {
-    if (text.len == 0 or width < 4) assert.panic("padding '{s}' to {d} columns; table cells hold a name and are at least 4 wide", .{ text, width });
-    const fits = text.len <= width;
-    const shown = if (fits) text else shortened(text, width);
-    if (!fits) try console.styled("...", style);
-    try console.styled(shown, style);
-    const used = shown.len + @as(usize, if (fits) 0 else 3);
-    if (used > width) assert.panic("'{s}' took {d} columns of a {d}-column table cell; shortened() keeps width - 3 bytes", .{ text, used, width });
-    try console.writer.splatByteAll(' ', width - used);
+    var footer_cells: [4]zrich.Cell = .{
+        .{ .text = total.name },
+        .{ .text = try sink.text.format("{d}", .{total.counts.errors}), .style = if (total.counts.errors > 0) severityStyle(.@"error") else quiet },
+        .{ .text = try sink.text.format("{d}", .{total.counts.warnings}), .style = if (total.counts.warnings > 0) severityStyle(.warning) else quiet },
+        .{ .text = total.most, .style = quiet },
+    };
+    const footer = [_][]const zrich.Cell{&footer_cells};
+    try console.writer.writeByte('\n');
+    try console.table(.{
+        .columns = &.{
+            .{ .header = "File", .overflow = .ellipsis_start, .expand = true },
+            .{ .header = "Errors", .alignment = .right },
+            .{ .header = "Warnings", .alignment = .right },
+            .{ .header = "Most common", .overflow = .ellipsis_end },
+        },
+        .rows = body[0..rows.len],
+        .footer = &footer,
+    });
+    if (rows.len > body.len) assert.panic("rendering {d} table rows in room for {d}; renderTable() caps rows at table_files plus the rest", .{ rows.len, body.len });
 }
 
 /// How often each rule fired and in how many files, and the fired rules' indexes in rules.all,
