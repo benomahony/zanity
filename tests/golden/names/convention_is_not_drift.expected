@@ -1,0 +1,3 @@
+rules: name-drift
+exit: 0
+names.py:17:5: warning [name-drift]

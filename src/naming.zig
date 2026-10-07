@@ -153,15 +153,18 @@ fn drift(s: *ConceptScratch, text: *memory.Text, definitions: []const Definition
         }
         const names = s.spellings.items();
         if (names.len < 2 or caseOnlyAcrossKinds(names, s.kinds.len)) continue;
+        if (conventionOnly(names, s.kinds.len)) continue;
         if (try directionalNames(s, names)) continue;
         const first = definitions[keyed[start].index];
         const spellings = try joined(text, names);
+        const common = mostUsed(definitions, keyed[start..end], names);
         try findings.add(.{
             .path = first.path,
             .line = first.line,
             .column = first.column,
             .rule = "name-drift",
             .message = try text.format("One concept is spelled {d} ways: {s}.", .{ names.len, spellings }),
+            .fix = try text.format("Use '{s}', which {d} of the {d} definitions already use, and rename the others to it.", .{ common.name, common.uses, end - start }),
         });
     }
     if (start != keyed.len) assert.panic("name-drift stopped at definition {d} of {d}; runEnd must reach the end", .{ start, keyed.len });
@@ -222,6 +225,51 @@ fn caseOnlyAcrossKinds(names: []const []const u8, kinds: usize) bool {
     if (kinds < 2) return false;
     for (names[1..]) |n| if (!std.ascii.eqlIgnoreCase(n, names[0])) return false;
     return true;
+}
+
+/// Whether the names have the same words in the same order and differ only by convention: in case
+/// style across kinds, as a class `FallbackModel` and its instance `fallback_model` do, or by the
+/// leading `_` that marks a name private, as `_now` and `now` do.
+fn conventionOnly(names: []const []const u8, kinds: usize) bool {
+    if (names.len < 2) assert.panic("comparing the words of {d} names; drift needs at least 2 spellings", .{names.len});
+    for (names[1..]) |n| if (!sameWords(n, names[0])) return false;
+    if (kinds >= 2) return true;
+    const bare = std.mem.trimStart(u8, names[0], "_");
+    for (names[1..]) |n| if (!std.mem.eql(u8, std.mem.trimStart(u8, n, "_"), bare)) return false;
+    if (bare.len == 0) assert.panic("'{s}' is only underscores; exempt() leaves out names with no words", .{names[0]});
+    return true;
+}
+
+/// Whether two names hold the same words in the same order, ignoring case and separators.
+fn sameWords(a: []const u8, b: []const u8) bool {
+    if (a.len == 0 or b.len == 0) assert.panic("comparing the words of '{s}' and '{s}', and one is empty", .{ a, b });
+    var left: Words = .{ .text = a };
+    var right: Words = .{ .text = b };
+    for (0..a.len + 1) |_| {
+        const x = left.next();
+        const y = right.next();
+        if (x == null or y == null) return x == null and y == null;
+        if (x.?.len == 0 or y.?.len == 0) assert.panic("an empty word in '{s}' or '{s}'; Words never returns one", .{ a, b });
+        if (!std.ascii.eqlIgnoreCase(x.?, y.?)) return false;
+    }
+    assert.panic("compared more words of '{s}' than it has bytes", .{a});
+}
+
+/// The spelling most of the definitions of one concept use, and how many use it.
+fn mostUsed(definitions: []const Definition, run: []const Keyed, names: []const []const u8) struct { name: []const u8, uses: usize } {
+    if (names.len == 0 or run.len == 0) assert.panic("choosing a spelling from {d} names and {d} definitions; drift() passes at least two of each", .{ names.len, run.len });
+    var best = names[0];
+    var best_uses: usize = 0;
+    for (names) |candidate| {
+        var uses: usize = 0;
+        for (run) |k| uses += @intFromBool(std.mem.eql(u8, definitions[k.index].name, candidate));
+        if (uses > best_uses) {
+            best = candidate;
+            best_uses = uses;
+        }
+    }
+    if (best_uses == 0) assert.panic("no definition uses any of the {d} spellings, starting '{s}'; they come from these definitions", .{ names.len, names[0] });
+    return .{ .name = best, .uses = best_uses };
 }
 
 /// True when the names differ only in which side of a direction word each

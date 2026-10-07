@@ -353,7 +353,7 @@ Rules marked *off* run only with `--rules all`, `rules = ["all"]`, or when named
 
 | Rule | Severity | Flags |
 |---|---|---|
-| `name-drift` | warning | one concept spelled several ways, such as `order_total` and `total_order` |
+| `name-drift` | warning | one concept spelled several ways, such as `order_total` and `total_order`; not the same words written by convention, such as a class `FallbackModel` and its instance `fallback_model`, or a private `_now` beside `now`. Its fix names the spelling most definitions use |
 | `duplicate-name` | warning | the same name defined more than once in one language and one domain or context, where another file could use either: not methods, nested functions, tests, or names private to their module |
 | `forbidden-term` | warning | a name using a word `[vocabulary]` or its domain or context bans |
 | `non-canonical-term` | warning | a name using an alias where the project has settled on another word, with the name respelled |
