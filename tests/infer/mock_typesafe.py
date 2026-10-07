@@ -4,13 +4,16 @@ Answers each noul question from markers in the source of the function, setting l
 files it is about: a comment
 `judge: <rule>` makes that rule's question answer 0.95, anything else 0.05.
 Each request is appended to the file named by MOCK_TYPESAFE_LOG, so tests can
-see what was asked. Prints the port it listens on, then serves until killed.
+see what was asked. Prints the port it listens on, then serves until killed or until its
+stdin closes: the test holds stdin open, so a test that dies without killing the mock still
+takes it down, and the mock can't hold the build's output open forever.
 """
 
 import json
 import os
 import re
 import sys
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
@@ -40,7 +43,15 @@ class Handler(BaseHTTPRequestHandler):
         assert format.count("%") >= len(args), f"the log format {format!r} has fewer placeholders than its {len(args)} values; check how this Python's http.server calls log_message"
 
 
+def exit_when_parent_goes() -> None:
+    """Exits once stdin reaches end of file, which happens when the test that started the mock ends."""
+    assert not sys.stdin.isatty(), "the mock was started from a terminal; tests start it with stdin as a pipe they hold open"
+    sys.stdin.buffer.read()
+    os._exit(0)
+
+
 if __name__ == "__main__":
+    threading.Thread(target=exit_when_parent_goes, daemon=True).start()
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     print(server.server_address[1], flush=True)
     sys.exit(server.serve_forever())

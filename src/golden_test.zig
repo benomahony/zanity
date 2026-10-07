@@ -250,11 +250,10 @@ test "zanity.schema.json matches the rules and settings in the code" {
 fn checkForAgent(arena: std.mem.Allocator, io: Io, environ: *const std.process.Environ.Map, flags: []const []const u8) !std.process.RunResult {
     if (flags.len > 2) assert.panic("checkForAgent() takes at most 2 flags, got {d}; add room in argv", .{flags.len});
     const zanity = try Io.Dir.cwd().realPathFileAlloc(io, paths.zanity, arena);
+    if (!std.fs.path.isAbsolute(zanity)) assert.panic("zanity resolved to the relative path '{s}'; the check runs in tests/agent, so it needs an absolute one", .{zanity});
     var argv: [5][]const u8 = .{ zanity, "check", "a.py", "", "" };
     for (flags, 3..) |flag, i| argv[i] = flag;
-    const run = try std.process.run(arena, io, .{ .argv = argv[0 .. 3 + flags.len], .cwd = .{ .path = "tests/agent" }, .environ_map = environ });
-    if (run.stdout.len == 0 and run.stderr.len == 0) assert.panic("zanity check printed nothing with {d} flags; it always reports a summary, so check how it exited", .{flags.len});
-    return run;
+    return exited(try std.process.run(arena, io, .{ .argv = argv[0 .. 3 + flags.len], .cwd = .{ .path = "tests/agent" }, .environ_map = environ }), "zanity check for an agent");
 }
 
 test "--agent puts the totals and the next command first, then each rule's fix once and its findings up to --limit" {
@@ -372,6 +371,16 @@ test "--strict fails a run with only warnings, which a plain run passes" {
     try std.testing.expectEqual(std.process.Child.Term{ .exited = 1 }, strict.term);
 }
 
+/// `run`, when zanity exited and reported something; otherwise zanity's output, printed, and a test
+/// error, so the test's cleanup, such as stopping the mock TypeSafe, still runs.
+fn exited(run: std.process.RunResult, what: []const u8) !std.process.RunResult {
+    if (what.len == 0) assert.panic("checking how an unnamed command ended; name it for the failure message", .{});
+    if (std.mem.indexOfScalar(u8, what, '\n') != null) assert.panic("the command's name '{s}' spans lines; name it on one line, as the failure message prints it inline", .{what});
+    if (run.term == .exited and run.stdout.len + run.stderr.len > 0) return run;
+    std.debug.print("\n{s} ended with {any} instead of exiting with a report; its output:\n{s}\n{s}\n", .{ what, run.term, run.stdout, run.stderr });
+    return error.ZanityDidNotExit;
+}
+
 /// tests/infer/mock_typesafe.py, running, and the environment that points zanity at it and at a
 /// store of its own.
 const MockTypeSafe = struct { child: std.process.Child, env: std.process.Environ.Map };
@@ -381,7 +390,7 @@ fn startMock(arena: std.mem.Allocator, io: Io, dir: []const u8) !MockTypeSafe {
     if (!std.fs.path.isAbsolute(dir)) assert.panic("the mock's directory '{s}' is relative; pass an absolute path, since zanity runs in another directory", .{dir});
     var env = std.process.Environ.Map.init(arena);
     try env.put("MOCK_TYPESAFE_LOG", try std.fs.path.join(arena, &.{ dir, "requests.log" }));
-    var child = try std.process.spawn(io, .{ .argv = &.{ "python3", "tests/infer/mock_typesafe.py" }, .stdout = .pipe, .environ_map = &env });
+    var child = try std.process.spawn(io, .{ .argv = &.{ "python3", "tests/infer/mock_typesafe.py" }, .stdin = .pipe, .stdout = .pipe, .environ_map = &env });
     var buffer: [64]u8 = undefined;
     var reader = child.stdout.?.reader(io, &buffer);
     const port = try reader.interface.takeDelimiterExclusive('\n');
@@ -425,9 +434,9 @@ const InferRun = struct {
     /// Runs zanity check --infer --plain on the project.
     fn checkInferring(self: *InferRun, arena: std.mem.Allocator, io: Io) !std.process.RunResult {
         const run = try std.process.run(arena, io, .{ .argv = &.{ self.zanity, "check", ".", "--infer", "--plain" }, .cwd = .{ .path = self.work }, .environ_map = &self.mock.env });
-        if (run.stderr.len == 0) assert.panic("zanity check --infer printed no summary; it always says how many functions it asked about", .{});
-        if (run.term != .exited) assert.panic("zanity check --infer ended with {any} instead of exiting; run it by hand on tests/infer/project to see why", .{run.term});
-        return run;
+        if (self.work.len == 0) assert.panic("running --infer on a project with no directory; initInferRun() sets it", .{});
+        if (!std.fs.path.isAbsolute(self.zanity)) assert.panic("running zanity at the relative path '{s}' from {s}; initInferRun() resolves it", .{ self.zanity, self.work });
+        return exited(run, "zanity check --infer");
     }
 };
 
