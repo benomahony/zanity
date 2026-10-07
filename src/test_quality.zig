@@ -4,6 +4,8 @@ const std = @import("std");
 const assert = @import("assert.zig");
 const ts = @import("ts.zig");
 const rules = @import("rules.zig");
+const captures = @import("captures.zig");
+const extract = @import("extract.zig");
 const check = @import("check.zig");
 const isolation = @import("isolation.zig");
 const naming = @import("naming.zig");
@@ -37,7 +39,89 @@ pub fn checkEager(self: *File, ctx: Context, at: ts.Node, shown: []const u8) !vo
     if (ctx.family != .@"test" and !ctx.is_test) assert.panic("{s}: counting the checks of {f}, which is not a test; call checkEager() only for a test construct or a test-named function", .{ self.work.facts.path, ctx.node.where() });
     if (shown.len == 0) assert.panic("{s}: the test {f} has no name to show; pass the test's name or first line", .{ self.work.facts.path, ctx.node.where() });
     if (ctx.checks <= rules.max_test_checks) return;
-    _ = try self.report(at, "eager-test", try self.say("'{s}' makes {d} checks; past {d}, a failure no longer says which behaviour broke.", .{ shown, ctx.checks, rules.max_test_checks }));
+    if (!try self.report(at, "eager-test", try self.say("'{s}' makes {d} checks; past {d}, a failure no longer says which behaviour broke.", .{ shown, ctx.checks, rules.max_test_checks }))) return;
+    const runs = checkRuns(self, ctx);
+    if (runs.count >= 2) {
+        self.s.diagnostics.last().?.fix = try runsFix(self, runs);
+    } else if (runs.first_check) |row| {
+        self.s.diagnostics.last().?.fix = try self.say("Its checks all follow one step, from line {d}; keep those that check what its name promises, and move the rest into tests named for what they check.", .{row + 1});
+    }
+}
+
+/// Where a test's checks are: the line of the first, and the runs of checks separated by other
+/// steps, each a behaviour of its own, with the first line of up to three of them.
+const Runs = struct { first_check: ?u32 = null, first_step: u32 = 0, count: usize = 0, starts: [3]u32 = undefined };
+
+/// The test's top-level steps grouped into runs of checks, an assertion or a `std.testing.expect`
+/// style call, between steps that act.
+fn checkRuns(self: *File, ctx: Context) Runs {
+    var runs: Runs = .{};
+    if (ctx.family != .@"test" and !ctx.is_test) assert.panic("{s}: grouping the checks of {f}, which is not a test", .{ self.work.facts.path, ctx.node.where() });
+    if (ctx.inner == null) return runs;
+    var statements: [256]ts.Node = undefined;
+    const count = extract.topStatements(self, ctx, &statements);
+    if (count == 0) return runs;
+    runs.first_step = ts.ts_node_start_point(statements[0]).row;
+    const ids = [_]?captures.Id{ self.v.test_check, self.checker.compiled.id("assertion.outer") };
+    var in_run = false;
+    for (statements[0..count]) |statement| {
+        var checks: u32 = 0;
+        for (ids) |maybe| if (maybe) |id| {
+            checks += extract.capturesIn(self, statement, id);
+        };
+        const row = ts.ts_node_start_point(statement).row;
+        const checking = checks > 0;
+        if (checking and runs.first_check == null) runs.first_check = row;
+        if (checking and !in_run) {
+            if (runs.count < runs.starts.len) runs.starts[runs.count] = row;
+            runs.count += 1;
+        }
+        in_run = checking;
+    }
+    if (runs.first_check) |row| if (row < runs.first_step) assert.panic("{s}: the first check of {f} is on line {d}, before its first step on {d}", .{ self.work.facts.path, ctx.node.where(), row + 1, runs.first_step + 1 });
+    return runs;
+}
+
+/// A test at or past the length limit for tests, with where to split it or what setup to move out.
+pub fn checkTestLength(self: *File, ctx: Context, at: ts.Node, shown: []const u8) !void {
+    if (shown.len == 0) assert.panic("{s}: measuring an unnamed test {f}; pass its name or first line", .{ self.work.facts.path, ctx.node.where() });
+    if (ctx.family != .@"test" and !ctx.is_test) assert.panic("{s}: measuring {f} as a test, but it is neither a test construct nor test-named", .{ self.work.facts.path, ctx.node.where() });
+    const lines = self.codeLinesIn(ctx.span);
+    if (lines < rules.max_test_lines) return;
+    if (!try self.report(at, "long-test", try self.say("'{s}' has {d} lines of code; tests must have fewer than {d}.", .{ shown, lines, rules.max_test_lines }))) return;
+    const fix = try longTestFix(self, ctx);
+    if (fix.len > 0) self.s.diagnostics.last().?.fix = fix;
+}
+
+/// A long test's fix: move the setup out when most of it comes before the first check, or split it
+/// at its runs of checks; empty when neither applies.
+fn longTestFix(self: *File, ctx: Context) ![]const u8 {
+    const runs = checkRuns(self, ctx);
+    const first = runs.first_check orelse return "";
+    if (runs.count == 0) assert.panic("{s}: {f} has a first check on line {d} but no run of checks; checkRuns() starts a run at every first check", .{ self.work.facts.path, ctx.node.where(), first + 1 });
+    const last = ts.ts_node_end_point(ctx.span).row;
+    if (last < runs.first_step) assert.panic("{s}: {f} ends on line {d}, before its first step on {d}", .{ self.work.facts.path, ctx.node.where(), last + 1, runs.first_step + 1 });
+    if ((first - runs.first_step) * 2 >= last - runs.first_step) {
+        return self.say("Lines {d}-{d} set things up before its first check on line {d}; move that setup into a fixture or helper named for what it builds.", .{ runs.first_step + 1, first, first + 1 });
+    }
+    if (runs.count >= 2) return runsFix(self, runs);
+    return self.say("Lines {d}-{d} check the result of one step; keep the checks its name promises and move the rest into tests named for what they check.", .{ first + 1, last + 1 });
+}
+
+/// A test that checks after several separate steps: name where each run of checks starts.
+fn runsFix(self: *File, runs: Runs) ![]const u8 {
+    if (runs.count < 2) assert.panic("{s}: advising how to split a test with {d} run of checks; runsFix() needs two or more", .{ self.work.facts.path, runs.count });
+    const text = self.work.text;
+    const start = text.used;
+    _ = try text.format("It checks after {d} separate steps, from lines ", .{runs.count});
+    const shown = @min(runs.count, runs.starts.len);
+    for (runs.starts[0..shown], 0..) |row, i| {
+        _ = try text.format("{s}{d}", .{ if (i == 0) "" else if (i + 1 == shown and runs.count == shown) " and " else ", ", row + 1 });
+    }
+    if (runs.count > shown) _ = try text.format(" and {d} more", .{runs.count - shown});
+    _ = try text.copy("; give each step a test of its own, named for what it checks.");
+    if (text.used <= start) assert.panic("{s}: wrote no fix for a test with {d} runs of checks", .{ self.work.facts.path, runs.count });
+    return text.buffer[start..text.used];
 }
 
 /// A test's length against the tighter limit for tests, and its decisions against the usual one.
@@ -47,10 +131,7 @@ pub fn closeTest(self: *File, ctx: Context) !void {
     const at = name_node orelse ctx.node;
     const shown = if (name_node) |n| n.text(self.source) else header(ctx.node.text(self.source));
     if (name_node orelse ctx.name) |named| try checkTestName(self, named, named.text(self.source));
-    const lines = self.codeLinesIn(ctx.span);
-    if (lines >= rules.max_test_lines) {
-        _ = try self.report(at, "long-test", try self.say("'{s}' has {d} lines of code; tests must have fewer than {d}.", .{ shown, lines, rules.max_test_lines }));
-    }
+    try checkTestLength(self, ctx, at, shown);
     try checkEager(self, ctx, at, shown);
     if (ctx.decisions + 1 > rules.max_complexity) {
         _ = try self.report(at, "complex-function", try self.say("'{s}' makes {d} decisions (cyclomatic complexity {d}), past the {d} a reader can follow and a test suite can cover.", .{ shown, ctx.decisions, ctx.decisions + 1, rules.max_complexity }));

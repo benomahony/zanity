@@ -138,7 +138,7 @@ pub fn decisionsFix(self: *File, ctx: Context, name: []const u8) ![]const u8 {
 }
 
 /// How many captures with `id` lie inside `node`.
-fn capturesIn(self: *File, node: ts.Node, id: captures.Id) u32 {
+pub fn capturesIn(self: *File, node: ts.Node, id: captures.Id) u32 {
     const start = ts.ts_node_start_byte(node);
     const end = ts.ts_node_end_byte(node);
     if (end > self.source.len) assert.panic("{s}: {f} ends past the {d}-byte file; pass a node from this file", .{ self.work.facts.path, node.where(), self.source.len });
@@ -215,23 +215,32 @@ fn trackName(self: *File, body: *Body, t: captures.Triple, at: usize) void {
 /// The body's top-level statements: the children of the block its @inner starts, or of the one
 /// list a grammar wraps them in, as Go's statement_list does.
 fn listStatements(self: *File, ctx: Context, body: *Body) void {
-    var container = ctx.inner orelse assert.panic("{s}: listing the statements of {f}, which has no body; checkExtractable() must skip functions without one", .{ self.work.facts.path, ctx.node.where() });
+    if (body.count != 0) assert.panic("{s}: listing the statements of {f} into a body that already holds {d}; list them once", .{ self.work.facts.path, ctx.node.where(), body.count });
+    body.count = topStatements(self, ctx, &body.statements);
+    if (body.count > max_statements) assert.panic("{s}: listed {d} statements in room for {d}; topStatements() fills at most its buffer", .{ self.work.facts.path, body.count, max_statements });
+}
+
+/// The top-level statements of `ctx`'s body, in order, up to `out.len` of them.
+pub fn topStatements(self: *File, ctx: Context, out: []ts.Node) usize {
+    var container = ctx.inner orelse assert.panic("{s}: listing the statements of {f}, which has no body; skip constructs without one", .{ self.work.facts.path, ctx.node.where() });
     if (self.parentOf(container)) |parent| if (!parent.eql(ctx.node) and !parent.eql(ctx.span)) {
         container = parent;
     };
-    if (ts.ts_node_end_byte(container) > ts.ts_node_end_byte(ctx.span)) assert.panic("{s}: the body {f} ends after its function {f}; @inner must be inside @function.outer", .{ self.work.facts.path, container.where(), ctx.span.where() });
+    if (ts.ts_node_end_byte(container) > ts.ts_node_end_byte(ctx.span)) assert.panic("{s}: the body {f} ends after its construct {f}; @inner must be inside @outer", .{ self.work.facts.path, container.where(), ctx.span.where() });
     for (0..4) |_| {
         if (ts.ts_node_named_child_count(container) != 1) break;
         container = ts.ts_node_named_child(container, 0);
     }
+    var count: usize = 0;
     for (0..ts.ts_node_named_child_count(container)) |i| {
         const child = ts.ts_node_named_child(container, @intCast(i));
         if (ts.ts_node_is_extra(child)) continue;
-        if (body.count == max_statements) break;
-        body.statements[body.count] = child;
-        body.count += 1;
+        if (count == out.len) break;
+        out[count] = child;
+        count += 1;
     }
-    if (body.count > max_statements) assert.panic("{s}: listed {d} statements in room for {d}; the loop must stop at max_statements", .{ self.work.facts.path, body.count, max_statements });
+    if (count > out.len) assert.panic("{s}: listed {d} statements in room for {d}; the loop stops when full", .{ self.work.facts.path, count, out.len });
+    return count;
 }
 
 /// The name an assignment or read starts with: `self` for `self.total`.

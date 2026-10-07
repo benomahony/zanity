@@ -1022,9 +1022,9 @@ pub const File = struct {
             try test_quality.checkTestName(self, name_node, name);
         }
         const lines = self.codeLinesIn(ctx.span);
-        if (ctx.is_test and lines >= rules.max_test_lines) {
-            _ = try self.report(name_node, "long-test", try self.say("'{s}' has {d} lines of code; tests must have fewer than {d}.", .{ name, lines, rules.max_test_lines }));
-        } else if (!ctx.is_test and lines >= rules.max_function_lines) {
+        if (ctx.is_test) {
+            try test_quality.checkTestLength(self, ctx, name_node, name);
+        } else if (lines >= rules.max_function_lines) {
             _ = try self.report(name_node, "long-function", try self.say("'{s}' has {d} lines of code; functions must have fewer than {d}.", .{ name, lines, rules.max_function_lines }));
         }
     }
