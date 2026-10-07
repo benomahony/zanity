@@ -45,9 +45,11 @@ Building needs [Zig](https://ziglang.org/download/) at the version in `build.zig
 ```sh
 git clone https://github.com/benomahony/zanity
 cd zanity
-zig build -Doptimize=ReleaseSafe
+zig build
 ./zig-out/bin/zanity --version
 ```
+
+`zig build` installs a ReleaseSafe zanity, as fast as a release; the tests build Debug, which compiles quickest. `-Doptimize=` sets both.
 
 ## Getting started in a project
 

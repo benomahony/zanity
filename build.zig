@@ -5,7 +5,11 @@ pub fn build(b: *std.Build) void {
     if (manifest.entries.len == 0) std.debug.panic("languages/manifest.zon lists no languages; zanity needs at least one grammar", .{});
     if (manifest.tables.len == 0) std.debug.panic("languages/tables.zon has no name tables; every ecosystem in manifest.zon needs one", .{});
     const target = b.standardTargetOptions(.{});
-    const optimize = b.standardOptimizeOption(.{});
+    // Without -Doptimize, the installed zanity is ReleaseSafe, as fast as a release, so
+    // `./zig-out/bin/zanity` is never a slow Debug build; the tests build Debug, which compiles quickest.
+    const chosen = b.option(std.builtin.OptimizeMode, "optimize", "Optimisation mode; the installed zanity defaults to ReleaseSafe and the tests to Debug");
+    const optimize = chosen orelse .safe;
+    const test_optimize = chosen orelse .debug;
 
     const strip = b.option(bool, "strip", "Leave debug info out of the binary, as release builds do") orelse false;
     // The release workflow passes the version it is about to tag; any other build is a dev build.
@@ -43,7 +47,7 @@ pub fn build(b: *std.Build) void {
     b.step("bench", "Time zanity check against the fastest this machine could parse the corpus").dependOn(&bench.step);
 
     // `zig build test` is the fast loop: the code's own tests, with no zanity binary to build.
-    const unit = b.addRunArtifact(b.addTest(.{ .root_module = module(b, "src/tests.zig", target, optimize) }));
+    const unit = b.addRunArtifact(b.addTest(.{ .root_module = module(b, "src/tests.zig", target, test_optimize) }));
     unit.setCwd(b.path("."));
     unit.has_side_effects = true;
     // The same check CI runs first, so an unformatted file fails here before it is pushed.
@@ -54,9 +58,11 @@ pub fn build(b: *std.Build) void {
 
     // `zig build test-integration` runs the built zanity: the golden fixtures, the CLI, and
     // zanity checking its own source, which must pass every rule.
-    const integration_module = module(b, "src/golden_test.zig", target, optimize);
+    const integration_module = module(b, "src/golden_test.zig", target, test_optimize);
+    const checked = if (test_optimize == optimize) exe else b.addExecutable(.{ .name = "zanity", .root_module = module(b, "src/main.zig", target, test_optimize) });
+    if (checked != exe) checked.root_module.addOptions("build_info", build_info);
     const options = b.addOptions();
-    options.addOptionPath("zanity", exe.getEmittedBin());
+    options.addOptionPath("zanity", checked.getEmittedBin());
     integration_module.addOptions("paths", options);
     const integration = b.addRunArtifact(b.addTest(.{ .root_module = integration_module }));
     integration.setCwd(b.path("."));
