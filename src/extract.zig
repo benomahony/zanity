@@ -114,6 +114,44 @@ fn largestStepFix(self: *File, ctx: Context, name: []const u8, body: *Body) ![]c
     return self.say("Its longest step is lines {d}-{d}, starting `{s}`; move that, or the steps inside it, into a function of its own, passing in what it reads.", .{ first, first + largest_lines - 1, header(step.text(self.source)) });
 }
 
+/// The fix for a function with too many decisions: the top-level step that makes the most of
+/// them, which is where splitting it pays off most.
+pub fn decisionsFix(self: *File, ctx: Context, name: []const u8) ![]const u8 {
+    if (ctx.family != .function or ctx.inner == null) return self.say("Split '{s}' so each part makes fewer decisions, or replace a chain of branches with a table.", .{name});
+    var body: Body = .{};
+    listStatements(self, ctx, &body);
+    const decision = self.v.decision_point orelse return self.say("Split '{s}' so each part makes fewer decisions, or replace a chain of branches with a table.", .{name});
+    var busiest: ?ts.Node = null;
+    var most: u32 = 0;
+    for (body.statements[0..body.count]) |statement| {
+        const count = capturesIn(self, statement, decision);
+        if (count <= most) continue;
+        busiest = statement;
+        most = count;
+    }
+    const step = busiest orelse return self.say("Split '{s}' so each part makes fewer decisions, or replace a chain of branches with a table.", .{name});
+    const first = ts.ts_node_start_point(step).row + 1;
+    const last = ts.ts_node_end_point(step).row + 1;
+    if (last < first) assert.panic("{s}: a step of '{s}' ends on line {d}, before it starts on {d}", .{ self.work.facts.path, name, last, first });
+    if (name.len == 0) assert.panic("{s}: advising how to split an unnamed function; closeFunction() returns before unnamed ones", .{self.work.facts.path});
+    return self.say("Lines {d}-{d}, starting `{s}`, make {d} of its {d} decisions; move them into a function of their own, or replace a chain of branches there with a table.", .{ first, last, header(step.text(self.source)), @min(most, ctx.decisions), ctx.decisions });
+}
+
+/// How many captures with `id` lie inside `node`.
+fn capturesIn(self: *File, node: ts.Node, id: captures.Id) u32 {
+    const start = ts.ts_node_start_byte(node);
+    const end = ts.ts_node_end_byte(node);
+    if (end > self.source.len) assert.panic("{s}: {f} ends past the {d}-byte file; pass a node from this file", .{ self.work.facts.path, node.where(), self.source.len });
+    const first = std.sort.lowerBound(captures.Triple, self.index.triples, start, hazards.startsBefore);
+    var count: u32 = 0;
+    for (self.index.triples[first..]) |t| {
+        if (t.key.start >= end) break;
+        count += @intFromBool(t.id == id);
+    }
+    if (count > end - start) assert.panic("{s}: counted {d} captures in {d} bytes; each capture starts at its own byte or later", .{ self.work.facts.path, count, end - start });
+    return count;
+}
+
 /// The body's top-level statements, and for each name which of them set it and which read it.
 /// False when the body is too short to hold a block worth moving.
 fn readBody(self: *File, ctx: Context, body: *Body) bool {

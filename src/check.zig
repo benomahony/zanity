@@ -1002,7 +1002,7 @@ pub const File = struct {
             }
         }
         if (ctx.decisions + 1 > rules.max_complexity) {
-            _ = try self.report(name_node, "complex-function", try self.say("'{s}' makes {d} decisions (cyclomatic complexity {d}), past the {d} a reader can follow and a test suite can cover.", .{ name, ctx.decisions, ctx.decisions + 1, rules.max_complexity }));
+            if (try self.report(name_node, "complex-function", try self.say("'{s}' makes {d} decisions (cyclomatic complexity {d}), past the {d} a reader can follow and a test suite can cover.", .{ name, ctx.decisions, ctx.decisions + 1, rules.max_complexity }))) self.s.diagnostics.last().?.fix = try extract.decisionsFix(self, ctx, name);
         }
         if (self.work.facts.collect_units and !self.index.marks(ctx.node, self.v.test_outer)) {
             const at = ts.ts_node_start_point(name_node);
