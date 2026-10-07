@@ -153,10 +153,12 @@ fn renderFinding(console: zrich.Console, f: Finding, width: usize) !void {
     try out.writeAll("  ");
     try console.styled(rule.name, quiet);
     try out.writeByte('\n');
-    try out.splatByteAll(' ', 2 + width + 2 + "warning".len + 2);
-    try console.styled("fix: ", quiet);
-    try console.styled(f.advice(), fix_style);
-    try out.writeByte('\n');
+    if (f.fix.len > 0) {
+        try out.splatByteAll(' ', 2 + width + 2 + "warning".len + 2);
+        try console.styled("fix: ", quiet);
+        try console.styled(f.fix, fix_style);
+        try out.writeByte('\n');
+    }
     if (f.message.len == 0) assert.panic("{s}:{d}: a {s} finding has no message; report() must pass one", .{ f.path, f.line + 1, f.rule });
 }
 
@@ -198,28 +200,46 @@ fn renderTable(sink: Sink) !void {
 }
 
 /// One row per rule that fired: errors first, then the rules that fired most, so the table says where to start.
+/// How often each rule fired and in how many files, and the fired rules' indexes in rules.all,
+/// errors first and then the most frequent.
+const Fired = struct {
+    per_rule: [rules.all.len]u32 = @splat(0),
+    files: [rules.all.len]u32 = @splat(0),
+    order: [rules.all.len]usize = undefined,
+    count: usize = 0,
+
+    /// Counts `findings`, which are sorted by path, so a rule's findings in one file are adjacent
+    /// among that rule's.
+    fn initFired(findings: []const Finding) Fired {
+        var fired: Fired = .{};
+        var last_path: [rules.all.len][]const u8 = @splat("");
+        for (findings) |f| {
+            const index = ruleIndex(f.rule);
+            fired.per_rule[index] += 1;
+            if (std.mem.eql(u8, last_path[index], f.path)) continue;
+            fired.files[index] += 1;
+            last_path[index] = f.path;
+        }
+        var total: usize = 0;
+        for (fired.per_rule, 0..) |n, i| if (n > 0) {
+            total += n;
+            fired.order[fired.count] = i;
+            fired.count += 1;
+        };
+        if (total != findings.len) assert.panic("counted {d} findings under their rules but was given {d}; every finding needs a known rule", .{ total, findings.len });
+        std.mem.sort(usize, fired.order[0..fired.count], &fired.per_rule, ruleOrder);
+        if (findings.len > 0 and fired.count == 0) assert.panic("{d} findings but no rule fired; initFired() must count every finding under its rule", .{findings.len});
+        return fired;
+    }
+};
+
 fn renderRules(sink: Sink, findings: []const Finding) !void {
     if (findings.len == 0) return;
-    var per_rule: [rules.all.len]u32 = @splat(0);
-    var files: [rules.all.len]u32 = @splat(0);
-    var last_path: [rules.all.len][]const u8 = @splat("");
-    for (findings) |f| {
-        const index = ruleIndex(f.rule);
-        per_rule[index] += 1;
-        if (std.mem.eql(u8, last_path[index], f.path)) continue;
-        files[index] += 1;
-        last_path[index] = f.path;
-    }
-    var total: usize = 0;
-    for (per_rule) |n| total += n;
-    if (total != findings.len) assert.panic("the rule table counted {d} findings but was given {d}; every finding needs a known rule", .{ total, findings.len });
-    var order: [rules.all.len]usize = undefined;
-    var fired: usize = 0;
-    for (per_rule, 0..) |n, i| if (n > 0) {
-        order[fired] = i;
-        fired += 1;
-    };
-    std.mem.sort(usize, order[0..fired], &per_rule, ruleOrder);
+    const counted = Fired.initFired(findings);
+    const per_rule = counted.per_rule;
+    const files = counted.files;
+    const order = counted.order;
+    const fired = counted.count;
     var cells: [rules.all.len][4]zrich.Cell = undefined;
     var rows: [rules.all.len][]const zrich.Cell = undefined;
     for (order[0..fired], 0..) |i, row| {
@@ -246,6 +266,16 @@ fn renderRules(sink: Sink, findings: []const Finding) !void {
     const console = sink.console;
     try console.writer.writeByte('\n');
     try table.render(sink.console.context(), fixed.allocator());
+    try console.writer.writeAll("\nHow to fix what each rule found:\n");
+    for (order[0..fired]) |i| {
+        const rule = rules.all[i];
+        try console.writer.writeAll("  ");
+        try console.styled(rule.name, quiet);
+        try console.writer.writeAll("  ");
+        try console.styled(rule.advice, fix_style);
+        try console.writer.writeByte('\n');
+    }
+    if (per_rule[order[fired - 1]] == 0) assert.panic("listed {s}, which did not fire; the rule table lists only rules with findings", .{rules.all[order[fired - 1]].name});
     if (fired == 0) assert.panic("{d} findings but no rule fired; renderRules() must count every finding under its rule", .{findings.len});
 }
 
@@ -303,9 +333,13 @@ fn digits(value: usize) usize {
 }
 
 /// Findings for a coding agent: the totals and what to run next first, so a truncated read still
-/// has them, then each file's findings as `line:column severity rule: message` with how to fix
-/// it, `[--fix]` marking those zanity can fix itself. `scope` is the paths the run checked.
-pub fn renderAgent(out: *std.Io.Writer, findings: []const Finding, counts: Counts, paths: []const []const u8) !void {
+/// has them, then each rule that fired, errors first, with its fix once and up to `limit` of its
+/// findings by file as `line:column message`, `[--fix]` marking those zanity can fix itself. A
+/// finding's own fix follows it only when it has one beyond the rule's. `limit` 0 shows them all.
+pub fn renderAgent(out: *std.Io.Writer, report: AgentReport) !void {
+    const findings = report.findings;
+    const counts = report.counts;
+    const paths = report.paths;
     const scope: CheckedPaths = .{ .paths = paths };
     if (paths.len == 0) assert.panic("rendering agent output with no paths to name in the next command; pass the paths the run checked", .{});
     if (counts.errors + counts.warnings != findings.len) assert.panic("rendering {d} findings for {d} errors and {d} warnings; count() the findings being rendered", .{ findings.len, counts.errors, counts.warnings });
@@ -318,13 +352,39 @@ pub fn renderAgent(out: *std.Io.Writer, findings: []const Finding, counts: Count
         try out.print("; {d} marked [--fix] can be fixed automatically.\nNext: run `zanity check {f} --fix`, fix the rest by hand", .{ fixable, scope });
     } else try out.writeAll(".\nNext: fix each finding by hand");
     try out.print(", then rerun `zanity check {f} --strict` until it passes. Change the code rather than disabling rules, and suppress a finding only where its fix says to.\n", .{scope});
-    var previous: []const u8 = "";
+    const fired = Fired.initFired(findings);
+    for (fired.order[0..fired.count]) |index| try renderAgentRule(out, report, .{ .index = index, .total = fired.per_rule[index], .files = fired.files[index] });
+}
+
+/// What renderAgent() reports: the run's sorted findings and their counts, the paths it checked,
+/// and how many findings to show per rule, 0 for all.
+pub const AgentReport = struct { findings: []const Finding, counts: Counts, paths: []const []const u8, limit: u32 };
+
+/// A rule that fired: its index in rules.all, its findings, and the files they are in.
+const RuleTally = struct { index: usize, total: u32, files: u32 };
+
+/// One rule's heading with its fix, then up to `limit` of its findings and a count of the rest.
+fn renderAgentRule(out: *std.Io.Writer, report: AgentReport, tally: RuleTally) !void {
+    const findings = report.findings;
+    const limit = report.limit;
+    const scope: CheckedPaths = .{ .paths = report.paths };
+    const rule = rules.all[tally.index];
+    if (tally.total == 0 or tally.files > tally.total) assert.panic("{s} fired {d} times in {d} files; a rule renders only when it fired, in at most one file per finding", .{ rule.name, tally.total, tally.files });
+    try out.print("\n{s} ({s}, {d} in {d} {s}). Fix: {s}\n", .{ rule.name, label(rule.severity), tally.total, tally.files, if (tally.files == 1) "file" else "files", rule.advice });
+    var shown: u32 = 0;
+    var path: []const u8 = "";
     for (findings) |f| {
-        if (!std.mem.eql(u8, previous, f.path)) try out.print("\n{s}\n", .{f.path});
-        previous = f.path;
-        const rule = rules.find(f.rule) orelse unreachable;
-        try out.print("  {d}:{d} {s} {s}{s}: {s}\n    fix: {s}\n", .{ f.line + 1, f.column + 1, label(rule.severity), rule.name, if (f.edit != null) " [--fix]" else "", f.message, f.advice() });
+        if (!std.mem.eql(u8, f.rule, rule.name)) continue;
+        if (limit > 0 and shown == limit) break;
+        shown += 1;
+        if (!std.mem.eql(u8, path, f.path)) try out.print("  {s}\n", .{f.path});
+        path = f.path;
+        try out.print("    {d}:{d}{s} {s}", .{ f.line + 1, f.column + 1, if (f.edit != null) " [--fix]" else "", f.message });
+        if (f.fix.len > 0) try out.print(" Fix: {s}", .{f.fix});
+        try out.writeByte('\n');
     }
+    if (shown < tally.total) try out.print("  ...and {d} more; `zanity check {f} --rules {s} --limit 0` lists them all.\n", .{ tally.total - shown, scope, rule.name });
+    if (shown > tally.total) assert.panic("showed {d} {s} findings of {d}; show only the rule's own findings", .{ shown, rule.name, tally.total });
 }
 
 /// The paths a run checked, written as they would be typed after `zanity check`.

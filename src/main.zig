@@ -35,6 +35,7 @@ const CheckOptions = struct {
     infer: bool = false,
     strict: bool = false,
     agent: bool = false,
+    limit: u32 = 10,
 };
 
 const InitOptions = struct {
@@ -75,6 +76,7 @@ const app: zcli.App = .{
             .{ .name = "fix", .help = "Apply the fixes zanity can make, then report what is left." },
             .{ .name = "strict", .help = "Exit 1 on any finding, warnings included, as a pre-commit hook or CI should." },
             .{ .name = "agent", .help = "Print findings for a coding agent: totals and the next command first, then each finding with its fix. On by default when CLAUDECODE is set and neither --json nor --plain is given.", .env = "ZANITY_AGENT" },
+            .{ .name = "limit", .metavar = "N", .help = "With --agent, show at most N findings per rule and count the rest; 0 shows them all.", .example = "0" },
             .{ .name = "infer", .help = "Also ask TypeSafe what no deterministic check can decide, such as whether an error message misleads. Needs TYPESAFE_API_KEY." },
         },
     }, .{ .run = runCheck, .human = renderHuman }), zcli.command(InitOptions, InitRow, .{
@@ -208,7 +210,7 @@ fn runCheck(ctx: *zcli.Context, options: CheckOptions) ![]const Row {
     };
     if (counts.errors > 0 or (options.strict and counts.warnings > 0)) ctx.status = .failure;
     if (ws.rows.len != counts.errors + counts.warnings) assert.panic("{d} output rows for {d} errors and {d} warnings; runCheck() must add one row per error or warning", .{ ws.rows.len, counts.errors, counts.warnings });
-    if (agent) return reportToAgent(ctx, ws, options.paths, counts);
+    if (agent) return reportToAgent(ctx, ws, options, counts);
     if (ctx.format != .human) try report.summarise(console(ctx, ctx.runtime.err), counts);
     return ws.rows.items();
 }
@@ -224,11 +226,12 @@ fn speaksToAgent(ctx: *zcli.Context, ws: *const Workspace, asked: bool) !bool {
 }
 
 /// Writes the findings for the agent in place of zcli's rows, which it then has none of to print.
-fn reportToAgent(ctx: *zcli.Context, ws: *Workspace, paths: []const []const u8, counts: report.Counts) ![]const Row {
+fn reportToAgent(ctx: *zcli.Context, ws: *Workspace, options: CheckOptions, counts: report.Counts) ![]const Row {
+    const paths = options.paths;
     if (paths.len == 0) assert.panic("reporting to an agent with no checked paths to name; zcli supplies '.' when none are given", .{});
     if (ws.findings.len != counts.errors + counts.warnings) assert.panic("{d} findings for {d} errors and {d} warnings; count the findings being reported", .{ ws.findings.len, counts.errors, counts.warnings });
     const out = ctx.runtime.out;
-    try report.renderAgent(out.writer, ws.findings.items(), counts, paths);
+    try report.renderAgent(out.writer, .{ .findings = ws.findings.items(), .counts = counts, .paths = paths, .limit = options.limit });
     ctx.format = .plain;
     return &.{};
 }

@@ -3,4 +3,8 @@ def f(x):
         assert x
 
 
-f(1)
+def g(y):
+    return y
+
+
+f(g(1))

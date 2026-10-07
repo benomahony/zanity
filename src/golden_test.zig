@@ -257,16 +257,17 @@ fn checkForAgent(arena: std.mem.Allocator, io: Io, environ: *const std.process.E
     return run;
 }
 
-test "--agent puts the totals and the next command first and marks what --fix can fix" {
+test "--agent puts the totals and the next command first, then each rule's fix once and its findings up to --limit" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
     const arena = arena_state.allocator();
     var plain = std.process.Environ.Map.init(arena);
-    const run = try checkForAgent(arena, std.testing.io, &plain, &.{"--agent"});
+    const run = try checkForAgent(arena, std.testing.io, &plain, &.{ "--agent", "--limit=1" });
     try std.testing.expectEqual(std.process.Child.Term{ .exited = 1 }, run.term);
-    try std.testing.expect(std.mem.startsWith(u8, run.stdout, "zanity: 1 error and 2 warnings in 1 of 1 file; 1 marked [--fix] can be fixed automatically.\nNext: run `zanity check a.py --fix`"));
-    try std.testing.expect(std.mem.indexOf(u8, run.stdout, "\n\na.py\n  1:5 error assertion-density: ") != null);
-    try std.testing.expect(std.mem.indexOf(u8, run.stdout, "\n  3:9 warning assertion-message [--fix]: ") != null);
+    try std.testing.expect(std.mem.startsWith(u8, run.stdout, "zanity: 2 errors and 2 warnings in 1 of 1 file; 1 marked [--fix] can be fixed automatically.\nNext: run `zanity check a.py --fix`"));
+    try std.testing.expect(std.mem.indexOf(u8, run.stdout, "\n\nassertion-density (error, 2 in 1 file). Fix: ") != null);
+    try std.testing.expect(std.mem.indexOf(u8, run.stdout, "\n  ...and 1 more; `zanity check a.py --rules assertion-density --limit 0` lists them all.\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, run.stdout, "\n  a.py\n    3:9 [--fix] This assertion has no message") != null);
 }
 
 test "under Claude Code, check speaks to the agent unless --json or --plain asks otherwise" {
@@ -276,7 +277,7 @@ test "under Claude Code, check speaks to the agent unless --json or --plain asks
     var claude = std.process.Environ.Map.init(arena);
     try claude.put("CLAUDECODE", "1");
     const auto = try checkForAgent(arena, std.testing.io, &claude, &.{});
-    try std.testing.expect(std.mem.startsWith(u8, auto.stdout, "zanity: 1 error"));
+    try std.testing.expect(std.mem.startsWith(u8, auto.stdout, "zanity: 2 errors"));
     const plain = try checkForAgent(arena, std.testing.io, &claude, &.{"--plain"});
     try std.testing.expect(std.mem.startsWith(u8, plain.stdout, "path=\"a.py\""));
     const both = try checkForAgent(arena, std.testing.io, &claude, &.{ "--agent", "--json" });
