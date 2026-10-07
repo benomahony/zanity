@@ -28,7 +28,7 @@ fn forwardedTo(self: *File, ctx: Context, name: []const u8) ?[]const u8 {
     if (ctx.body_start == std.math.maxInt(u32)) return null;
     const fact = ctx.fact orelse return null;
     if (check.contains(self.tables.protocol_names, name) or strings.dunder(name)) return null;
-    if (decorated(self.source, ts.ts_node_start_byte(ctx.node))) return null;
+    if (strings.decoratedAt(self.source, ts.ts_node_start_byte(ctx.node))) return null;
     const call = soleCall(self.source[ctx.body_start..ts.ts_node_end_byte(ctx.span)]) orelse return null;
     const facts = self.work.facts;
     if (facts.functions.items()[fact].method and !ownMethod(self.tables.self_receivers, call.callee)) return null;
@@ -107,17 +107,6 @@ fn plainName(callee: []const u8) bool {
     return !std.ascii.isDigit(callee[0]);
 }
 
-/// Whether the line before `start` is a decorator, annotation or attribute, which registers or
-/// changes the function, so it does more than forward.
-fn decorated(source: []const u8, start: usize) bool {
-    if (start > source.len) assert.panic("looking above byte {d} of a {d}-byte file; pass a function from this file", .{ start, source.len });
-    const line_start = if (std.mem.lastIndexOfScalar(u8, source[0..start], '\n')) |n| n else return false;
-    const above_start = if (std.mem.lastIndexOfScalar(u8, source[0..line_start], '\n')) |n| n + 1 else 0;
-    if (above_start > line_start) assert.panic("the line above byte {d} starts at {d}, after it ends at {d}", .{ start, above_start, line_start });
-    const above = std.mem.trim(u8, source[above_start..line_start], " \t\r");
-    return std.mem.startsWith(u8, above, "@") or std.mem.startsWith(u8, above, "#[");
-}
-
 /// The parenthesis that opens the call ending at the last byte of `text`.
 fn matchingOpen(text: []const u8) ?usize {
     if (text.len == 0 or text[text.len - 1] != ')') assert.panic("matching the parenthesis of '{s}', which doesn't end with one; soleCall() checks first", .{text});
@@ -192,6 +181,6 @@ test "a call that passes the parameters on unchanged is read as forwarding" {
     try std.testing.expectEqualStrings("g", soleCall("  return try g(a, b);\n}").?.callee);
     try std.testing.expect(soleCall("x = g(a)\nreturn x") == null);
     try std.testing.expect(soleCall("yield object(a)") == null);
-    try std.testing.expect(decorated("x = 1\n@agent.system_prompt\ndef f():\n", 27));
-    try std.testing.expect(!decorated("x = 1\n\ndef f():\n", 7));
+    try std.testing.expect(strings.decoratedAt("x = 1\n@agent.system_prompt\ndef f():\n", 27));
+    try std.testing.expect(!strings.decoratedAt("x = 1\n\ndef f():\n", 7));
 }

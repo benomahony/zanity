@@ -49,6 +49,7 @@ pub const looked_up = [_][]const u8{
     "reference.name",
     "local.reference",
     "local.scope",
+    "method.override",
     "string.built",
     "string.format",
     "visibility.public",

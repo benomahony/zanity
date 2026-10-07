@@ -539,7 +539,7 @@
 (export_statement
   declaration: (class_declaration
     body: (class_body
-      (method_definition) @visibility.public)))
+      (method_definition) @visibility.public @method.override)))
 
 ; Decorated, so a framework can reach it, as Angular's @Component and NestJS's @Get do.
 (class_declaration

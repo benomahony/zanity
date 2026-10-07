@@ -37,6 +37,20 @@ pub fn sameText(a: []const u8, b: []const u8) bool {
 }
 
 /// The first line of a node's text, without a trailing `{` or `:`: what a message quotes.
+/// Whether what starts at `start`, or the line before it, is a decorator, annotation or attribute, such as `@app.route`,
+/// `@Override` or `#[test]`, which registers or changes what follows, so something else fixes its
+/// shape.
+pub fn decoratedAt(source: []const u8, start: usize) bool {
+    if (start > source.len) assert.panic("looking above byte {d} of a {d}-byte file; pass a function from this file", .{ start, source.len });
+    const own = std.mem.trimStart(u8, source[start..], " \t");
+    if (std.mem.startsWith(u8, own, "@") or std.mem.startsWith(u8, own, "#[")) return true;
+    const line_start = if (std.mem.lastIndexOfScalar(u8, source[0..start], '\n')) |n| n else return false;
+    const above_start = if (std.mem.lastIndexOfScalar(u8, source[0..line_start], '\n')) |n| n + 1 else 0;
+    if (above_start > line_start) assert.panic("the line above byte {d} starts at {d}, after it ends at {d}", .{ start, above_start, line_start });
+    const above = std.mem.trim(u8, source[above_start..line_start], " \t\r");
+    return std.mem.startsWith(u8, above, "@") or std.mem.startsWith(u8, above, "#[");
+}
+
 /// Whether `name` is a dunder name such as `__init__`, which the language calls rather than the author.
 pub fn dunder(name: []const u8) bool {
     if (name.len == 0) assert.panic("asked whether an empty name is a dunder name; skip empty names first", .{});

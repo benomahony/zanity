@@ -569,7 +569,7 @@
 (export_statement
   declaration: (class_declaration
     body: (class_body
-      (method_definition) @visibility.public)))
+      (method_definition) @visibility.public @method.override)))
 
 (export_statement
   declaration: (abstract_class_declaration

@@ -608,7 +608,7 @@
   superclasses: (argument_list)
   body: (block
     [
-      (function_definition) @visibility.public
+      (function_definition) @visibility.public @method.override
       (decorated_definition
-        definition: (function_definition) @visibility.public)
+        definition: (function_definition) @visibility.public @method.override)
     ]))

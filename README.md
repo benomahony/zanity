@@ -313,7 +313,7 @@ Rules marked *off* run only with `--rules all`, `rules = ["all"]`, or when named
 | Rule | Severity | Flags |
 |---|---|---|
 | `long-parameter-list` | warning | more than four parameters |
-| `dead-parameter` | warning | a parameter the function's body never uses; not stubs, tests, `_`-prefixed names, or methods an interface fixes such as `__exit__` (not Zig, whose compiler already rejects these) |
+| `dead-parameter` | warning | a parameter the function's body never uses; not stubs, tests, `_`-prefixed names, methods an interface fixes such as `__exit__`, overrides of a base class's method, decorated or annotated functions, or functions their file passes as a value, such as a callback (not Zig, whose compiler already rejects these) |
 | `passthrough-wrapper` | warning | a function whose whole body passes its own parameters, unchanged and in order, to another call; not one that fixes or transforms an argument, a decorated one, or a method delegating to another object |
 | `message-chain` | warning | code that reaches through objects, such as `order.customer.address.city`: three member accesses from a local or parameter, or two from a field of `self`; module paths such as `xml.etree.ElementTree` are fine |
 | `duplicated-expression` | warning | a computed expression (a call, an index or arithmetic) written three or more times in one function with nothing it reads changing in between; not plain field reads, calls made for their effect, or values returned on separate early exits |
