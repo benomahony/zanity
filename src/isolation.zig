@@ -117,10 +117,10 @@ fn assignedValue(body: []const u8, name: []const u8) ?[]const u8 {
         if (!plain and !std.mem.startsWith(u8, after, ":=")) continue;
         const line_end = std.mem.indexOfScalar(u8, after, '\n') orelse after.len;
         const value = std.mem.trimStart(u8, after[0..line_end], ":= \t");
-        if (std.mem.indexOfScalar(u8, value, '\n') != null) assert.panic("the value assigned to '{s}' spans lines; it is cut at the first newline", .{name});
+        if (std.mem.indexOfScalar(u8, value, '\n') != null) assert.panic("the value assigned to '{s}' spans lines; assignedValue() must cut it at the first newline, so check its line_end", .{name});
         return value;
     }
-    if (from > body.len) assert.panic("searched past the end of a {d}-byte body for '{s}'", .{ body.len, name });
+    if (from > body.len) assert.panic("searched past the end of a {d}-byte body for '{s}'; the loop in assignedValue() must stop when indexOfPos() finds nothing, so check its bounds", .{ body.len, name });
     return null;
 }
 

@@ -242,7 +242,7 @@ fn conventionOnly(names: []const []const u8, kinds: usize) bool {
 
 /// Whether two names hold the same words in the same order, ignoring case and separators.
 fn sameWords(a: []const u8, b: []const u8) bool {
-    if (a.len == 0 or b.len == 0) assert.panic("comparing the words of '{s}' and '{s}', and one is empty", .{ a, b });
+    if (a.len == 0 or b.len == 0) assert.panic("comparing the words of '{s}' and '{s}', and one is empty; exempt() leaves out names with no words, so check that drift() keys only the names keyedBy() kept", .{ a, b });
     var left: Words = .{ .text = a };
     var right: Words = .{ .text = b };
     for (0..a.len + 1) |_| {
@@ -252,7 +252,7 @@ fn sameWords(a: []const u8, b: []const u8) bool {
         if (x.?.len == 0 or y.?.len == 0) assert.panic("an empty word in '{s}' or '{s}'; Words never returns one", .{ a, b });
         if (!std.ascii.eqlIgnoreCase(x.?, y.?)) return false;
     }
-    assert.panic("compared more words of '{s}' than it has bytes", .{a});
+    assert.panic("compared more words of '{s}' than it has bytes; Words.next() must move past at least a byte each time, so check its loop", .{a});
 }
 
 /// The spelling most of the definitions of one concept use, and how many use it.

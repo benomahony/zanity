@@ -46,7 +46,7 @@ fn reportChain(self: *File, node: ts.Node, links: u32, first: []const u8) !void 
     if (!try self.report(node, "message-chain", try self.say("'{s}' reaches through {d} objects, so this code breaks when any of them changes shape.", .{ chain, links - 1 }))) return;
     const end = ts.ts_node_end_byte(node);
     const called = end < self.source.len and self.source[end] == '(';
-    self.s.diagnostics.last().?.fix = try chainFix(self, if (called) callTarget(chain) else chain, first);
+    self.s.diagnostics.last().?.fix = try askInstead(self, if (called) callTarget(chain) else chain, first);
     if (self.s.diagnostics.last().?.fix.len == 0) assert.panic("{s}: the message-chain fix for '{s}' came out empty; say() always writes text", .{ self.work.facts.path, chain });
 }
 
@@ -63,7 +63,7 @@ fn ownField(chain: []const u8, receiver: []const u8) []const u8 {
 
 /// What to do about a chain: ask the object it starts from for the last thing it reaches, or pass
 /// that thing in, so the code no longer knows the objects in between.
-fn chainFix(self: *File, chain: []const u8, first: []const u8) ![]const u8 {
+fn askInstead(self: *File, chain: []const u8, first: []const u8) ![]const u8 {
     if (first.len == 0 or first.len > chain.len) assert.panic("{s}: the chain '{s}' starts from '{s}'; checkChain() passes a prefix of the chain", .{ self.work.facts.path, chain, first });
     if (!std.mem.startsWith(u8, chain, first)) assert.panic("{s}: the chain '{s}' doesn't start with '{s}'; pass the chain's own start", .{ self.work.facts.path, chain, first });
     const last_dot = std.mem.lastIndexOfScalar(u8, chain, '.') orelse return self.say("Ask '{s}' for what you need with a method of its own, or pass that value in.", .{first});

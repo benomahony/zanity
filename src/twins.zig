@@ -49,7 +49,7 @@ pub const Pairs = struct {
 pub const Comparison = union(enum) { misaligned, unlike, pairs: Pairs };
 
 pub fn compare(mine: Body, theirs: Body) Comparison {
-    if (mine.bytes.len == 0 or theirs.bytes.len == 0) assert.panic("comparing bodies of {d} and {d} bytes; a recorded shape always spans a body", .{ mine.bytes.len, theirs.bytes.len });
+    if (mine.bytes.len == 0 or theirs.bytes.len == 0) assert.panic("comparing bodies of {d} and {d} bytes; recordShape() records a body's start before its end, so check the start and end bodyOf() slices with", .{ mine.bytes.len, theirs.bytes.len });
     var pairs: Pairs = .{};
     var a: Tokens = .{ .bytes = mine.bytes, .line_comment = mine.line_comment };
     var b: Tokens = .{ .bytes = theirs.bytes, .line_comment = theirs.line_comment };
@@ -61,7 +61,7 @@ pub fn compare(mine: Body, theirs: Body) Comparison {
         if (std.mem.eql(u8, x.?, y.?)) continue;
         if (!pairs.add(x.?, y.?)) return .unlike;
     }
-    if (a.at != mine.bytes.len) assert.panic("compared {d} of {d} bytes of a body; compare() reads both bodies to their end", .{ a.at, mine.bytes.len });
+    if (a.at != mine.bytes.len) assert.panic("compared {d} of {d} bytes of a body; compare() must read both bodies to their end, so check that its loop runs until both Tokens return null", .{ a.at, mine.bytes.len });
     return .{ .pairs = pairs };
 }
 
@@ -111,7 +111,7 @@ const Shared = struct {
         if (token.len <= max_token) return .{ .token = token };
         const from = self.prefix -| context;
         const to = @min(token.len - (self.suffix -| context), from + max_token);
-        if (to <= from) assert.panic("cut a {d}-byte token to bytes {d}..{d}; two differing tokens can't share all of the longer one", .{ token.len, from, to });
+        if (to <= from) assert.panic("cut a {d}-byte token to bytes {d}..{d}; two differing tokens can't share all of the longer one, so check how Shared.of() counts the prefix and suffix", .{ token.len, from, to });
         return .{ .token = token[from..to], .cut_start = from > 0, .cut_end = to < token.len };
     }
 };

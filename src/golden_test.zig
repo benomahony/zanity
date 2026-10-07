@@ -401,16 +401,17 @@ fn startMock(arena: std.mem.Allocator, io: Io, dir: []const u8) !MockTypeSafe {
     return .{ .child = child, .env = env };
 }
 
-/// The project the --infer test checks: Python functions and tests, a Zig file that only gathers
-/// tests, and a pyproject.toml with a weakened check.
-fn writeInferProject(arena: std.mem.Allocator, io: Io, dir: Io.Dir) !void {
+/// Writes the project the --infer test checks into `scratch`, the test's temporary directory, which
+/// the test deletes when it ends: Python functions and tests, a Zig file that only gathers tests,
+/// and a pyproject.toml with a weakened check.
+fn writeInferProject(arena: std.mem.Allocator, io: Io, scratch: Io.Dir) !void {
     const service = try Io.Dir.cwd().readFileAlloc(io, "tests/infer/project/service.py", arena, .unlimited);
     if (service.len == 0) assert.panic("tests/infer/project/service.py is empty; restore it from git", .{});
     if (std.mem.indexOf(u8, service, "# judge: ") == null) assert.panic("tests/infer/project/service.py marks no rule with '# judge: <rule>', so the mock would answer no to everything; restore the markers", .{});
-    try dir.writeFile(io, .{ .sub_path = "service.py", .data = service });
-    try dir.writeFile(io, .{ .sub_path = "tsconfig.json", .data = "{\n  \"compilerOptions\": {\n    \"strict\": true\n  }\n}\n" });
-    try dir.writeFile(io, .{ .sub_path = "all_test.zig", .data = "test {\n    _ = @import(\"service_test.zig\");\n}\n" });
-    try dir.writeFile(io, .{ .sub_path = "pyproject.toml", .data = "[tool.ruff]\nline-length = 200  # judge: weakened-check\n# judge: unscheduled-analysis\n" });
+    try scratch.writeFile(io, .{ .sub_path = "service.py", .data = service });
+    try scratch.writeFile(io, .{ .sub_path = "tsconfig.json", .data = "{\n  \"compilerOptions\": {\n    \"strict\": true\n  }\n}\n" });
+    try scratch.writeFile(io, .{ .sub_path = "all_test.zig", .data = "test {\n    _ = @import(\"service_test.zig\");\n}\n" });
+    try scratch.writeFile(io, .{ .sub_path = "pyproject.toml", .data = "[tool.ruff]\nline-length = 200  # judge: weakened-check\n# judge: unscheduled-analysis\n" });
 }
 
 /// writeInferProject's project in a temporary directory, and the mock TypeSafe it asks.

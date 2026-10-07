@@ -89,7 +89,7 @@ fn sharedWord(names: []const []const u8) ?Shared {
             }
         }
     }
-    if (best != null and best_count < 2) assert.panic("chose the word '{s}' shared by {d} names; a shared word needs two", .{ best.?.word, best_count });
+    if (best != null and best_count < 2) assert.panic("chose the word '{s}' shared by {d} names; a shared word needs two, so sharedWord() must start best_count at 1 and only replace it with a larger count", .{ best.?.word, best_count });
     return best;
 }
 

@@ -64,7 +64,7 @@ fn ownMethod(receivers: []const []const u8, callee: []const u8) bool {
 fn bare(text: []const u8) []const u8 {
     if (text.len == 0) assert.panic("stripping the marks from an empty name; arguments and parameters always have text", .{});
     const name = std.mem.trim(u8, text, " \t\r\n*.&");
-    if (name.len > text.len) assert.panic("'{s}' came out longer than '{s}'; trimming only shortens", .{ name, text });
+    if (name.len > text.len) assert.panic("'{s}' came out longer than '{s}'; bare() must only trim marks off the ends, so check its std.mem.trim call", .{ name, text });
     return name;
 }
 

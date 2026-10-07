@@ -39,11 +39,11 @@ fn byShape(_: void, a: Shape, b: Shape) bool {
 
 /// Where the run of shapes alike to `shapes[start]` ends: the same hash, size and testness.
 fn groupEnd(shapes: []const Shape, start: usize) usize {
-    if (start >= shapes.len) assert.panic("grouping shapes from {d} of {d}; callers stop at the end", .{ start, shapes.len });
+    if (start >= shapes.len) assert.panic("grouping shapes from {d} of {d}; twins() and clusterUnits() must stop their loops at the last shape before calling groupEnd()", .{ start, shapes.len });
     const head = shapes[start];
     var end = start + 1;
     while (end < shapes.len and alike(shapes[end], head)) end += 1;
-    if (end > shapes.len) assert.panic("a group of shapes ran to {d}, past the {d} recorded", .{ end, shapes.len });
+    if (end > shapes.len) assert.panic("a group of shapes ran to {d}, past the {d} recorded; groupEnd() must stop at shapes.len, so check its while condition", .{ end, shapes.len });
     return end;
 }
 
