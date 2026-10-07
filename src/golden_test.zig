@@ -256,17 +256,17 @@ fn checkForAgent(arena: std.mem.Allocator, io: Io, environ: *const std.process.E
     return exited(try std.process.run(arena, io, .{ .argv = argv[0 .. 3 + flags.len], .cwd = .{ .path = "tests/agent" }, .environ_map = environ }), "zanity check for an agent");
 }
 
-test "--agent puts the totals and the next command first, then each rule's fix once and its findings up to --limit" {
+test "--agent puts the totals and the next command first, then findings up to --limit, then the other rules by name" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
     const arena = arena_state.allocator();
     var plain = std.process.Environ.Map.init(arena);
     const run = try checkForAgent(arena, std.testing.io, &plain, &.{ "--agent", "--limit=1" });
     try std.testing.expectEqual(std.process.Child.Term{ .exited = 1 }, run.term);
-    try std.testing.expect(std.mem.startsWith(u8, run.stdout, "zanity: 2 errors and 2 warnings in 1 of 1 file; 1 marked [--fix] can be fixed automatically.\nNext: run `zanity check a.py --fix`"));
-    try std.testing.expect(std.mem.indexOf(u8, run.stdout, "\n\nassertion-density (error, 2 in 1 file). Fix: ") != null);
-    try std.testing.expect(std.mem.indexOf(u8, run.stdout, "\n  ...and 1 more; `zanity check a.py --rules assertion-density --limit 0` lists them all.\n") != null);
-    try std.testing.expect(std.mem.indexOf(u8, run.stdout, "\n  a.py\n    3:9 [--fix] This assertion has no message") != null);
+    try std.testing.expect(std.mem.startsWith(u8, run.stdout, "zanity: 2 errors, 2 warnings in 1/1 file; 1 [--fix].\nNext: `zanity check a.py --fix`"));
+    try std.testing.expect(std.mem.indexOf(u8, run.stdout, "\n\nassertion-density [error] 2 in 1 file\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, run.stdout, "\n  +1 more: --rules assertion-density --limit 0\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, run.stdout, "\nAlso, to see with --rules <name>:\n  unbounded-loop [warning] 1 in 1 file\n  assertion-message [warning] 1 in 1 file\n") != null);
 }
 
 test "under Claude Code, check speaks to the agent unless --json or --plain asks otherwise" {
@@ -294,7 +294,7 @@ test "unbounded-loop's fix names where the loop stops, leaving out breaks of inn
     try tmp.dir.writeFile(io, .{ .sub_path = "loops.py", .data = "def poll(q):\n    while True:\n        for x in q.get():\n            if x:\n                break\n        if q.empty():\n            return None\n        continue\n\n\ndef spin():\n    while True:\n        pass\n" });
     const work = try std.fs.path.join(arena, &.{ ".zig-cache", "tmp", &tmp.sub_path });
     const run = try std.process.run(arena, io, .{ .argv = &.{ zanity, "check", "--rules", "unbounded-loop", "--plain", "loops.py" }, .cwd = .{ .path = work } });
-    for ([_][]const u8{ "fix=\"It stops only at line 7 (`return None`); add a limit", "fix=\"Nothing in it stops it, so only an error or the process ending does;" }) |expected| {
+    for ([_][]const u8{ "fix=\"It stops only at line 7 (`return None`); add a limit", "fix=\"Give it a condition, or a limit such as a maximum number of attempts: nothing in it stops it" }) |expected| {
         if (std.mem.indexOf(u8, run.stdout, expected) == null) std.debug.print("\nmissing {s} in:\n{s}", .{ expected, run.stdout });
         try std.testing.expect(std.mem.indexOf(u8, run.stdout, expected) != null);
     }

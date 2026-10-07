@@ -76,7 +76,7 @@ const app: zcli.App = .{
             .{ .name = "fix", .help = "Apply the fixes zanity can make, then report what is left." },
             .{ .name = "strict", .help = "Exit 1 on any finding, warnings included, as a pre-commit hook or CI should." },
             .{ .name = "agent", .help = "Print findings for a coding agent: totals and the next command first, then each finding with its fix. On by default when CLAUDECODE is set and neither --json nor --plain is given.", .env = "ZANITY_AGENT" },
-            .{ .name = "limit", .metavar = "N", .help = "With --agent, show at most N findings per rule and count the rest; 0 shows them all.", .example = "0" },
+            .{ .name = "limit", .metavar = "N", .help = "With --agent, show at most N findings in all, rules first to last, and list the other rules by name; 0 shows them all.", .example = "0" },
             .{ .name = "infer", .help = "Also ask TypeSafe what no deterministic check can decide, such as whether an error message misleads. Needs TYPESAFE_API_KEY." },
         },
     }, .{ .run = runCheck, .human = renderHuman }), zcli.command(InitOptions, InitRow, .{

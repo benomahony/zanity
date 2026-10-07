@@ -351,37 +351,81 @@ pub fn renderAgent(out: *std.Io.Writer, report: AgentReport) !void {
     const findings = report.findings;
     const counts = report.counts;
     const paths = report.paths;
-    const scope: CheckedPaths = .{ .paths = paths };
     if (paths.len == 0) assert.panic("rendering agent output with no paths to name in the next command; pass the paths the run checked", .{});
     if (counts.errors + counts.warnings != findings.len) assert.panic("rendering {d} findings for {d} errors and {d} warnings; count() the findings being rendered", .{ findings.len, counts.errors, counts.warnings });
     const files = if (counts.files == 1) "file" else "files";
     if (findings.len == 0) return out.print("zanity: checked {d} {s}, no issues found.\n", .{ counts.files, files });
     var fixable: usize = 0;
     for (findings) |f| fixable += @intFromBool(f.edit != null);
-    try out.print("zanity: {d} {s} and {d} {s} in {d} of {d} {s}", .{ counts.errors, if (counts.errors == 1) "error" else "errors", counts.warnings, if (counts.warnings == 1) "warning" else "warnings", counts.flagged, counts.files, files });
+    try out.print("zanity: {d} {s}, {d} {s} in {d}/{d} {s}", .{ counts.errors, if (counts.errors == 1) "error" else "errors", counts.warnings, if (counts.warnings == 1) "warning" else "warnings", counts.flagged, counts.files, files });
     if (fixable > 0) {
-        try out.print("; {d} marked [--fix] can be fixed automatically.\nNext: run `zanity check {f} --fix`, fix the rest by hand", .{ fixable, scope });
-    } else try out.writeAll(".\nNext: fix each finding by hand");
-    try out.print(", then rerun `zanity check {f} --strict` until it passes. Change the code rather than disabling rules, and suppress a finding only where its fix says to.\n", .{scope});
+        const scope: CheckedPaths = .{ .paths = paths };
+        try out.print("; {d} [--fix].\nNext: `zanity check {f} --fix`, fix the rest", .{ fixable, scope });
+    } else try out.writeAll(".\nNext: fix these");
+    try out.writeAll(", rerun with --strict. Don't silence rules.\n");
     const fired = Fired.initFired(findings);
-    for (fired.order[0..fired.count]) |index| try renderAgentRule(out, report, .{ .index = index, .total = fired.per_rule[index], .files = fired.files[index] });
+    var budget = report.limit;
+    var listed = false;
+    for (fired.order[0..fired.count]) |index| {
+        const tally: RuleTally = .{ .index = index, .total = fired.per_rule[index], .files = fired.files[index] };
+        if (report.limit == 0 or budget > 0) {
+            var part = report;
+            part.limit = budget;
+            budget -|= try renderAgentRule(out, part, tally);
+            continue;
+        }
+        const rule = rules.all[index];
+        if (!listed) try out.writeAll("\nAlso, to see with --rules <name>:\n");
+        listed = true;
+        try out.print("  {s} [{s}] {d} in {d} {s}\n", .{ rule.name, label(rule.severity), tally.total, tally.files, if (tally.files == 1) "file" else "files" });
+    }
+    if (report.limit > 0 and budget > report.limit) assert.panic("showed findings past the budget of {d}; renderAgentRule() shows at most what remains", .{report.limit});
+}
+
+/// Whether any of the first `limit` findings of `rule` has no fix of its own, so the rule's advice is
+/// needed; 0 means all of them.
+fn anyWithoutFix(findings: []const Finding, rule: []const u8, limit: u32) bool {
+    if (rule.len == 0) assert.panic("looking for findings of an unnamed rule; every rule has a name", .{});
+    var seen: u32 = 0;
+    for (findings) |f| {
+        if (!std.mem.eql(u8, f.rule, rule)) continue;
+        if (limit > 0 and seen == limit) break;
+        seen += 1;
+        if (f.fix.len == 0) return true;
+    }
+    if (seen == 0) assert.panic("no finding of '{s}' to show; renderAgentRule() runs only for rules that fired", .{rule});
+    return false;
+}
+
+/// A finding's message or fix without its explanation, which is the same for every finding of its rule:
+/// "'x' is written 3 times in 'f'" from "..., so a change to it has to be made in every copy."
+fn brief(message: []const u8) []const u8 {
+    if (message.len == 0) assert.panic("shortening an empty message; every finding says what is wrong", .{});
+    const end = std.mem.indexOf(u8, message, ", so ") orelse message.len;
+    const kept = std.mem.trimEnd(u8, message[0..end], ".");
+    if (kept.len > message.len) assert.panic("'{s}' came out longer than '{s}'; brief() only cuts", .{ kept, message });
+    return kept;
 }
 
 /// What renderAgent() reports: the run's sorted findings and their counts, the paths it checked,
-/// and how many findings to show per rule, 0 for all.
+/// and how many findings to show in all, 0 for every one; rules past that are listed by name.
 pub const AgentReport = struct { findings: []const Finding, counts: Counts, paths: []const []const u8, limit: u32 };
 
 /// A rule that fired: its index in rules.all, its findings, and the files they are in.
 const RuleTally = struct { index: usize, total: u32, files: u32 };
 
-/// One rule's heading with its fix, then up to `limit` of its findings and a count of the rest.
-fn renderAgentRule(out: *std.Io.Writer, report: AgentReport, tally: RuleTally) !void {
+/// One rule's heading, then up to `limit` of its findings and a count of the rest; returns how many
+/// it showed. A
+/// finding with a fix of its own shows only that fix, which names what to change; one without
+/// shows its message without the explanation its rule's findings share.
+fn renderAgentRule(out: *std.Io.Writer, report: AgentReport, tally: RuleTally) !u32 {
     const findings = report.findings;
     const limit = report.limit;
-    const scope: CheckedPaths = .{ .paths = report.paths };
     const rule = rules.all[tally.index];
     if (tally.total == 0 or tally.files > tally.total) assert.panic("{s} fired {d} times in {d} files; a rule renders only when it fired, in at most one file per finding", .{ rule.name, tally.total, tally.files });
-    try out.print("\n{s} ({s}, {d} in {d} {s}). Fix: {s}\n", .{ rule.name, label(rule.severity), tally.total, tally.files, if (tally.files == 1) "file" else "files", rule.advice });
+    try out.print("\n{s} [{s}] {d} in {d} {s}", .{ rule.name, label(rule.severity), tally.total, tally.files, if (tally.files == 1) "file" else "files" });
+    if (anyWithoutFix(findings, rule.name, limit)) try out.print(": {s}", .{rule.advice});
+    try out.writeByte('\n');
     var shown: u32 = 0;
     var path: []const u8 = "";
     for (findings) |f| {
@@ -390,12 +434,12 @@ fn renderAgentRule(out: *std.Io.Writer, report: AgentReport, tally: RuleTally) !
         shown += 1;
         if (!std.mem.eql(u8, path, f.path)) try out.print("  {s}\n", .{f.path});
         path = f.path;
-        try out.print("    {d}:{d}{s} {s}", .{ f.line + 1, f.column + 1, if (f.edit != null) " [--fix]" else "", f.message });
-        if (f.fix.len > 0) try out.print(" Fix: {s}", .{f.fix});
-        try out.writeByte('\n');
+        try out.print("    {d}:{d}{s} ", .{ f.line + 1, f.column + 1, if (f.edit != null) " [--fix]" else "" });
+        try out.print("{s}.\n", .{brief(if (f.fix.len > 0) f.fix else f.message)});
     }
-    if (shown < tally.total) try out.print("  ...and {d} more; `zanity check {f} --rules {s} --limit 0` lists them all.\n", .{ tally.total - shown, scope, rule.name });
+    if (shown < tally.total) try out.print("  +{d} more: --rules {s} --limit 0\n", .{ tally.total - shown, rule.name });
     if (shown > tally.total) assert.panic("showed {d} {s} findings of {d}; show only the rule's own findings", .{ shown, rule.name, tally.total });
+    return shown;
 }
 
 /// The paths a run checked, written as they would be typed after `zanity check`.

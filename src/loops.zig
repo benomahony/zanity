@@ -32,7 +32,7 @@ pub fn unboundedFix(self: *File, loop: ts.Node) ![]const u8 {
         const separator = if (found == 1) "It stops only at " else ", ";
         _ = try text.format("{s}line {d} (`{s}`)", .{ separator, ts.ts_node_start_point(t.node).row + 1, check.header(t.node.text(self.source)) });
     }
-    if (found == 0) return self.say("Nothing in it stops it, so only an error or the process ending does; give it a condition, or a limit such as a maximum number of attempts.", .{});
+    if (found == 0) return self.say("Give it a condition, or a limit such as a maximum number of attempts: nothing in it stops it, only an error or the process ending.", .{});
     if (found > max_shown) _ = try text.format(" and {d} more places", .{found - max_shown});
     _ = try text.copy("; add a limit, such as a maximum number of attempts, and decide what happens when it is reached.");
     const fix = text.buffer[from..text.used];
