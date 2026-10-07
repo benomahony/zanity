@@ -193,7 +193,7 @@ pub fn assertionFix(self: *File, ctx: Context, name: []const u8) ![]const u8 {
     const params = self.s.signature.items()[ctx.parameter_start..][0..ctx.parameter_count];
     const start = self.work.text.used;
     if (params.len == 0) {
-        _ = try self.work.text.format("Assert what state '{s}' relies on when it starts and what it guarantees before it returns", .{name});
+        _ = try self.work.text.format("Assert the state '{s}' starts from and what it returns", .{name});
     } else {
         _ = try self.work.text.format("Assert what '{s}' needs from ", .{name});
         const shown = @min(params.len, 3);
@@ -202,13 +202,13 @@ pub fn assertionFix(self: *File, ctx: Context, name: []const u8) ![]const u8 {
             _ = try self.work.text.format("{s}'{s}'", .{ separator, p.name.text(self.source) });
         }
         if (shown < params.len) _ = try self.work.text.copy(" and the rest");
-        _ = try self.work.text.copy(" (a range, a length, how they relate) and what it guarantees before it returns");
+        _ = try self.work.text.copy(" and what it returns");
     }
     const discounted = weakLines(self, ctx);
     if (discounted > 0) {
         _ = try self.work.text.format("; {d} of its assertions can't fail, so they don't count", .{discounted});
     }
-    _ = try self.work.text.copy(". An assertion that can't fail catches nothing.");
+    _ = try self.work.text.copy(".");
     const fix = self.work.text.buffer[start..self.work.text.used];
     if (fix.len <= name.len) assert.panic("{s}: the assertion advice for '{s}' came out as '{s}', shorter than the name; assertionFix() must write the advice around the name, so check its format calls", .{ self.work.facts.path, name, fix });
     if (!std.mem.endsWith(u8, fix, ".")) assert.panic("{s}: the assertion advice for '{s}' does not end with a full stop: '{s}'; end the advice in assertionFix() with a full stop", .{ self.work.facts.path, name, fix });
