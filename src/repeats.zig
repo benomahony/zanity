@@ -59,7 +59,7 @@ pub fn noteRepeatable(self: *File, node: ts.Node) !void {
         size += 1;
     };
     if (size < rules.min_repeated_expression) return;
-    if (mutates(self, text)) return;
+    if (copiesDiffer(self, text) or self.inTest() or self.inTestFile()) return;
     if (size > text.len) assert.panic("{s}: counted {d} visible bytes in the {d}-byte expression {f}; noteRepeatable() must count each byte once", .{ self.work.facts.path, size, text.len, node.where() });
     try self.s.repeats.add(.{ .node = node, .hash = hasher.final(), .size = size });
 }
@@ -72,6 +72,56 @@ fn mutates(self: *File, text: []const u8) bool {
     const name = callee[if (std.mem.lastIndexOfAny(u8, callee, ".:>")) |at| at + 1 else 0..];
     if (name.len > callee.len) assert.panic("{s}: the called name '{s}' is longer than its callee '{s}'; mutates() must slice the name out of the callee", .{ self.work.facts.path, name, callee });
     return name.len > 0 and contains(self.tables.mutating_calls, name);
+}
+
+/// Whether the expression makes a new object, as `new Event()` or Python's `Event()` do, whose
+/// copies are each a different object, so computing it once would share one.
+fn constructs(self: *File, text: []const u8) bool {
+    if (text.len == 0) assert.panic("{s}: asked whether an empty expression makes an object; the @expression.repeatable capture matched no text", .{self.work.facts.path});
+    if (std.mem.startsWith(u8, text, "new ")) return true;
+    if (!self.tables.constructors_capitalised or text[text.len - 1] != ')') return false;
+    const callee = text[0 .. std.mem.indexOfScalar(u8, text, '(') orelse return false];
+    const name = callee[if (std.mem.lastIndexOfScalar(u8, callee, '.')) |at| at + 1 else 0..];
+    if (name.len > callee.len) assert.panic("{s}: the called name '{s}' is longer than its callee '{s}'", .{ self.work.facts.path, name, callee });
+    return name.len > 0 and std.ascii.isUpper(name[0]);
+}
+
+/// Whether copies of the expression aren't the same computation: each changes state, makes a new
+/// object or gives its own value, so writing it once would change what the code does.
+fn copiesDiffer(self: *File, text: []const u8) bool {
+    if (text.len == 0) assert.panic("{s}: asked whether copies of an empty expression differ; the @expression.repeatable capture matched no text", .{self.work.facts.path});
+    if (std.mem.indexOfScalar(u8, text, '\n') != null) assert.panic("{s}: '{s}' spans lines; noteRepeatable() skips those first", .{ self.work.facts.path, text });
+    return mutates(self, text) or constructs(self, text) or varies(self, text);
+}
+
+/// Whether each copy of the expression gives its own value, as a clock or a random call does, or
+/// the expression is a generic type such as `dict[str, Any]`, which isn't computed at all.
+fn varies(self: *File, text: []const u8) bool {
+    if (text.len == 0) assert.panic("{s}: asked whether an empty expression varies; the @expression.repeatable capture matched no text", .{self.work.facts.path});
+    const bracket = std.mem.indexOfScalar(u8, text, '[');
+    if (bracket) |at| if (at > 0 and text[text.len - 1] == ']' and contains(self.tables.generic_types, text[0..at])) return true;
+    if (text[text.len - 1] != ')') return false;
+    const open = std.mem.indexOfScalar(u8, text, '(') orelse return false;
+    if (open == 0) return false;
+    if (open >= text.len) assert.panic("{s}: the call '{s}' opens at {d}, past its end", .{ self.work.facts.path, text, open });
+    return contains(self.tables.nondeterministic, text[0..open]);
+}
+
+/// A name for the variable that holds an expression computed once: its last word of two or more
+/// letters, such as `retry_at` for `data.get('retry_at')`, or empty when it has none.
+fn variableName(text: []const u8) []const u8 {
+    if (text.len == 0) assert.panic("naming a variable for an empty expression; noteRepeatable() skips short ones", .{});
+    var end = text.len;
+    for (0..text.len) |_| {
+        while (end > 0 and !(std.ascii.isAlphanumeric(text[end - 1]) or text[end - 1] == '_')) end -= 1;
+        var start = end;
+        while (start > 0 and (std.ascii.isAlphanumeric(text[start - 1]) or text[start - 1] == '_')) start -= 1;
+        if (end - start >= 2 and std.ascii.isAlphabetic(text[start])) return text[start..end];
+        if (start == 0) return "";
+        end = start;
+    }
+    if (end > text.len) assert.panic("looking for a name in '{s}' from byte {d}, past its end", .{ text, end });
+    return "";
 }
 
 /// Reports each expression written `rules.min_repeats` times or more in the function that is
@@ -94,7 +144,14 @@ pub fn checkRepeats(self: *File, ctx: Context, name: []const u8) !void {
         if (copies.len < rules.min_repeats or covered(mine, groups[0..reported], copies)) continue;
         if (changesBetween(self, copies)) continue;
         const first = earliest(copies);
-        _ = try self.report(first, "duplicated-expression", try self.say("'{s}' is written {d} times in '{s}', so a change to it has to be made in every copy.", .{ first.text(self.source), copies.len, name }));
+        const text = first.text(self.source);
+        if (try self.report(first, "duplicated-expression", try self.say("'{s}' is written {d} times in '{s}', so a change to it has to be made in every copy.", .{ text, copies.len, name }))) {
+            const variable = variableName(text);
+            self.s.diagnostics.last().?.fix = if (variable.len > 0)
+                try self.say("Compute `{s}` once, before line {d}, into a variable such as '{s}', and use that in all {d} places.", .{ text, ts.ts_node_start_point(first).row + 1, variable, copies.len })
+            else
+                try self.say("Compute `{s}` once, before line {d}, into a variable named for what it is, and use that in all {d} places.", .{ text, ts.ts_node_start_point(first).row + 1, copies.len });
+        }
         if (reported < groups.len) {
             groups[reported] = group;
             reported += 1;

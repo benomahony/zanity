@@ -87,6 +87,10 @@ pub const Tables = struct {
     exported_by_case: bool = false,
     /// The prefix that keeps a name private to its module by convention, as `_` does in Python.
     private_prefix: []const u8 = "",
+    /// Whether a call to a capitalised name makes a new object, as `Event()` does in Python.
+    constructors_capitalised: bool = false,
+    /// Generic types written as values, as `dict[str, Any]` is in a `cast()`: a type, not a computation.
+    generic_types: []const []const u8 = &.{},
     allocating_calls: []const []const u8 = &.{},
     initializer_prefixes: []const []const u8 = &.{},
     test_file_prefixes: []const []const u8 = &.{},

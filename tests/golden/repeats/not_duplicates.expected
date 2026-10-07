@@ -1,0 +1,3 @@
+rules: duplicated-expression
+exit: 0
+not_duplicates.py:14:13: warning [duplicated-expression]

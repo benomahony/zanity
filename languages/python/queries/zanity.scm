@@ -503,13 +503,14 @@
 (attribute) @chain.link
 
 ; Expressions whose copies within a function are duplication: calls, member accesses, indexing
-; and arithmetic.
-[
+; and arithmetic. A type annotation such as `str | None` isn't computed, so its copies aren't.
+([
   (call)
   (attribute)
   (subscript)
   (binary_operator)
 ] @expression.repeatable
+  (#not-has-ancestor? @expression.repeatable type))
 
 ; What an assignment or increment writes to, so an expression that reads it is known to change.
 [
