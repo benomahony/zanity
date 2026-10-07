@@ -5,9 +5,7 @@ const rules = @import("rules.zig");
 const memory = @import("memory.zig");
 const Finding = @import("facts.zig").Finding;
 
-const path_style: zrich.Style = .{ .bold = true, .underline = true };
 const quiet: zrich.Style = .{ .dim = true };
-const fix_style: zrich.Style = .{ .fg = .{ .named = .green } };
 
 pub const Counts = struct {
     files: usize,
@@ -59,28 +57,25 @@ const FileTally = struct {
 
 pub const TableScratch = struct {
     tallies: memory.Bounded(FileTally),
-    cells: [][3]zrich.Cell,
-    rows: [][]const zrich.Cell,
 
     pub fn initTableScratch(gpa: std.mem.Allocator, files: u32) std.mem.Allocator.Error!TableScratch {
         if (files == 0) assert.panic("the report table was given room for 0 files; memory.Limits.files must be above 0", .{});
-        const cells = try memory.reserve(gpa, [3]zrich.Cell, files);
-        if (cells.len != files) assert.panic("the report table asked for {d} rows and got {d}; raise the rows given to initTableScratch()", .{ files, cells.len });
-        return .{ .tallies = try .initBounded(gpa, files, "files with findings"), .cells = cells, .rows = try memory.reserve(gpa, []const zrich.Cell, files) };
+        const scratch: TableScratch = .{ .tallies = try .initBounded(gpa, files, "files with findings") };
+        if (scratch.tallies.capacity() != files) assert.panic("the report table asked for room for {d} files and got {d}", .{ files, scratch.tallies.capacity() });
+        return scratch;
     }
 };
 
 pub const Sink = struct { console: zrich.Console, scratch: *TableScratch, text: *memory.Text };
 
-/// Each file's findings with their fixes, then a table of files, worst first, and a table of rules.
+/// The first findings, errors first, then a table of files, worst first, with a total, as a
+/// coverage report has. How to fix each finding is in --agent, --plain and --json.
 pub fn render(sink: Sink, findings: []const Finding) !void {
     if (!std.sort.isSorted(Finding, findings, {}, findingOrder)) assert.panic("expected findings sorted by path and position, got {d} findings out of order; call sortFindings() before render()", .{findings.len});
     if (findings.len >= std.math.maxInt(u32)) assert.panic("{d} findings is more than a report can number; lower memory.Limits.findings below 4 billion", .{findings.len});
     try summariseFiles(sink, findings);
-    const tallies = sink.scratch.tallies;
-    for (tallies.items()) |t| try renderFile(sink.console, t, findings[t.start..t.end]);
-    try renderTable(sink);
-    try renderRules(sink, findings);
+    try renderPreview(sink.console, findings);
+    try renderTable(sink, findings);
 }
 
 fn summariseFiles(sink: Sink, findings: []const Finding) !void {
@@ -123,94 +118,150 @@ fn ruleOrder(per_rule: *const [rules.all.len]u32, a: usize, b: usize) bool {
     return a < b;
 }
 
-/// A file's header and counts, then each finding followed by how to fix it.
-fn renderFile(console: zrich.Console, tally: FileTally, findings: []const Finding) !void {
+/// Findings shown before the table, errors first; the table counts the rest.
+const preview_findings = 10;
+/// Files the table lists, worst first; the others share one row.
+const table_files = 20;
+
+/// Up to `preview_findings` findings, errors first, one line each: where, how bad, which rule, and
+/// what is wrong without the explanation every finding of its rule shares.
+fn renderPreview(console: zrich.Console, findings: []const Finding) !void {
+    if (findings.len == 0) return;
+    var picked: [preview_findings]usize = undefined;
+    var picked_count: usize = 0;
+    for ([_]bool{ true, false }) |errors| {
+        for (findings, 0..) |f, i| {
+            if (picked_count == preview_findings) break;
+            if ((rules.all[ruleIndex(f.rule)].severity == .@"error") != errors) continue;
+            picked[picked_count] = i;
+            picked_count += 1;
+        }
+    }
+    var where: usize = 0;
+    var rule: usize = 0;
+    for (picked[0..picked_count]) |i| {
+        const f = findings[i];
+        where = @max(where, f.path.len + 1 + locationWidth(f));
+        rule = @max(rule, f.rule.len);
+    }
     const out = console.writer;
-    var width: usize = 0;
-    for (findings) |f| width = @max(width, locationWidth(f));
-    try out.writeByte('\n');
-    try console.styled(tally.path, path_style);
-    var counts: [64]u8 = undefined;
-    try console.styled(try std.fmt.bufPrint(&counts, "  {d} {s}, {d} {s}", .{ tally.errors, plural(tally.errors, "error"), tally.warnings, plural(tally.warnings, "warning") }), quiet);
-    try out.writeByte('\n');
-    for (findings) |f| try renderFinding(console, f, width);
-    if (findings.len != tally.end - tally.start) assert.panic("{s}: rendering {d} findings for a tally of {d} ({d}..{d}); render the tally's own range of findings", .{ tally.path, findings.len, tally.end - tally.start, tally.start, tally.end });
-    if (width < 3) assert.panic("{s}: the widest location is {d} characters; a location is at least '1:1', so locationWidth() must measure line and column counted from 1", .{ tally.path, width });
+    var buffer: [512]u8 = undefined;
+    for (picked[0..picked_count]) |i| {
+        const f = findings[i];
+        const severity = rules.all[ruleIndex(f.rule)].severity;
+        const location = std.fmt.bufPrint(&buffer, "{s}:{d}:{d}", .{ f.path, f.line + 1, f.column + 1 }) catch f.path;
+        try out.writeAll(location);
+        try out.splatByteAll(' ', where - @min(where, location.len) + 2);
+        try console.styled(label(severity), severityStyle(severity));
+        try out.splatByteAll(' ', "warning".len - label(severity).len + 2);
+        try console.styled(f.rule, quiet);
+        try out.splatByteAll(' ', rule - f.rule.len + 2);
+        const message = brief(f.message);
+        const room = console.options.width -| (where + 2 + "warning".len + 2 + rule + 2);
+        if (message.len <= room or room < 20) try out.print("{s}\n", .{message}) else try out.print("{s}...\n", .{message[0 .. room - 3]});
+    }
+    if (findings.len > picked_count) try console.styled(try std.fmt.bufPrint(&buffer, "+{d} more\n", .{findings.len - picked_count}), quiet);
+    if (where < "a:1:1".len or rule == 0) assert.panic("the preview's columns came out {d} and {d} wide; a location is at least 'a:1:1' and every finding names its rule", .{ where, rule });
+    if (picked_count > preview_findings) assert.panic("picked {d} findings to show, past the {d} the preview holds; the loops stop at preview_findings", .{ picked_count, preview_findings });
 }
 
-/// A finding's location, severity, message and rule on one line, aligned to `width`, and how to fix it on the next.
-fn renderFinding(console: zrich.Console, f: Finding, width: usize) !void {
+/// One row per file with findings, worst first, up to `table_files`, then one row for the rest and
+/// a total, each with its errors, its warnings and the rule that fired most there: plain aligned
+/// columns, as a coverage report has, fitted to the terminal by shortening paths from the left.
+fn renderTable(sink: Sink, findings: []const Finding) !void {
+    const scratch = sink.scratch;
+    const tallies = scratch.tallies.items();
+    if (tallies.len == 0) return;
+    if (tallies.len > findings.len) assert.panic("{d} files with findings among {d} findings; each tallied file has at least one", .{ tallies.len, findings.len });
+    std.mem.sort(FileTally, tallies, {}, worstFirst);
+    const listed = @min(tallies.len, table_files);
+    var rows: [table_files + 2]Row = undefined;
+    for (tallies[0..listed], 0..) |t, i| rows[i] = .{ .name = t.path, .counts = .{ .errors = t.errors, .warnings = t.warnings }, .most = mostCommon(findings, tallies[i .. i + 1]) };
+    var filled = listed;
+    var total: Pair = .{};
+    for (tallies) |t| total = .{ .errors = total.errors + t.errors, .warnings = total.warnings + t.warnings };
+    if (tallies.len > listed) {
+        var rest: Pair = .{};
+        for (tallies[listed..]) |t| rest = .{ .errors = rest.errors + t.errors, .warnings = rest.warnings + t.warnings };
+        const more = tallies.len - listed;
+        rows[filled] = .{ .name = try sink.text.format("... {d} more {s}", .{ more, if (more == 1) "file" else "files" }), .counts = rest, .most = mostCommon(findings, tallies[listed..]) };
+        filled += 1;
+    }
+    rows[filled] = .{ .name = "TOTAL", .counts = total, .most = mostCommon(findings, tallies) };
+    try writeTable(sink.console, rows[0 .. filled + 1]);
+    if (filled + 1 > rows.len) assert.panic("filled {d} table rows in room for {d}; the table lists at most table_files files, the rest and the total", .{ filled + 1, rows.len });
+}
+
+const Pair = struct { errors: u32 = 0, warnings: u32 = 0 };
+const Row = struct { name: []const u8, counts: Pair, most: []const u8 };
+
+/// The rule that fired most in the files of `tallies`.
+fn mostCommon(findings: []const Finding, tallies: []const FileTally) []const u8 {
+    if (tallies.len == 0) assert.panic("finding the most common rule of no files; renderTable() passes at least one", .{});
+    var per_rule: [rules.all.len]u32 = @splat(0);
+    for (tallies) |t| for (findings[t.start..t.end]) |f| {
+        per_rule[ruleIndex(f.rule)] += 1;
+    };
+    var most: usize = 0;
+    for (per_rule, 0..) |n, i| if (n > per_rule[most]) {
+        most = i;
+    };
+    if (per_rule[most] == 0) assert.panic("the files of {d} tallies hold no findings; summariseFiles() only tallies files with some", .{tallies.len});
+    return rules.all[most].name;
+}
+
+/// Writes `rows` as aligned columns under a header, the last row, the total, below a rule.
+fn writeTable(console: zrich.Console, rows: []const Row) !void {
+    if (rows.len < 2) assert.panic("writing a table of {d} rows; it always has a file and the total", .{rows.len});
     const out = console.writer;
-    const rule = rules.find(f.rule) orelse unreachable;
-    if (locationWidth(f) > width) assert.panic("{s}: the location of {d}:{d} is wider than the {d} columns kept for locations; measure every finding before rendering any", .{ f.path, f.line + 1, f.column + 1, width });
-    try renderColumns(console, f, width);
-    try console.write(f.message);
-    try out.writeAll("  ");
-    try console.styled(rule.name, quiet);
+    var most: usize = "Most common".len;
+    var name: usize = "File".len;
+    for (rows) |r| {
+        most = @max(most, r.most.len);
+        name = @max(name, r.name.len);
+    }
+    const counts = 2 + "Errors".len + 2 + "Warnings".len + 2;
+    const room = console.options.width -| (counts + most);
+    name = @max(@min(name, room), "TOTAL".len + 8);
+    if (name < "TOTAL".len) assert.panic("the name column came out {d} wide, too narrow for TOTAL", .{name});
     try out.writeByte('\n');
-    if (f.fix.len > 0) {
-        try out.splatByteAll(' ', 2 + width + 2 + "warning".len + 2);
-        try console.styled("fix: ", quiet);
-        try console.styled(f.fix, fix_style);
+    try writePadded(console, "File", name, .{ .bold = true });
+    try console.styled("  Errors  Warnings  Most common\n", .{ .bold = true });
+    for (rows, 0..) |r, i| {
+        const last = i + 1 == rows.len;
+        if (last) {
+            try out.splatByteAll('-', name + counts + most);
+            try out.writeByte('\n');
+        }
+        try writePadded(console, r.name, name, if (last) .{ .bold = true } else .{});
+        try out.print("  {d:>6}  {d:>8}  ", .{ r.counts.errors, r.counts.warnings });
+        try console.styled(r.most, quiet);
         try out.writeByte('\n');
     }
-    if (f.message.len == 0) assert.panic("{s}:{d}: a {s} finding has no message; report() must pass one", .{ f.path, f.line + 1, f.rule });
 }
 
-/// The location right-aligned to `width` and the severity padded to the widest label, so every
-/// finding's message starts in the same column.
-fn renderColumns(console: zrich.Console, f: Finding, width: usize) !void {
-    const out = console.writer;
-    const severity = (rules.find(f.rule) orelse unreachable).severity;
-    const shown = label(severity);
-    if (shown.len > "warning".len) assert.panic("the {t} label '{s}' is wider than 'warning'; widen the severity column to the longest label", .{ severity, shown });
-    var location: [24]u8 = undefined;
-    try out.splatByteAll(' ', 2 + width - locationWidth(f));
-    try console.styled(try std.fmt.bufPrint(&location, "{d}:{d}", .{ f.line + 1, f.column + 1 }), quiet);
-    try out.writeAll("  ");
-    try console.styled(shown, severityStyle(severity));
-    try out.splatByteAll(' ', 2 + "warning".len - shown.len);
-    if (width < 3) assert.panic("{s}: the location column is {d} wide, narrower than '1:1'; measure locations counting from 1", .{ f.path, width });
+/// The last `width - 3` bytes of `text`, which padded() writes after `...`.
+fn shortened(text: []const u8, width: usize) []const u8 {
+    if (width < 4) assert.panic("shortening '{s}' to {d} bytes; writeTable() keeps at least 13 for names", .{ text, width });
+    if (text.len <= width) return text;
+    const kept = text[text.len - (width - 3) ..];
+    if (kept.len + 3 != width) assert.panic("shortened '{s}' to {d} bytes, not {d}", .{ text, kept.len + 3, width });
+    return kept;
 }
 
-fn plural(n: u32, word: []const u8) []const u8 {
-    if (word.len == 0) assert.panic("asked for the plural of an empty word (count {d}); pass the word to pluralise", .{n});
-    if (word[word.len - 1] == 's') assert.panic("'{s}' already ends in 's'; pass the singular", .{word});
-    return if (n == 1) word else if (std.mem.eql(u8, word, "error")) "errors" else "warnings";
+/// Writes `text` padded with spaces to `width`, after shortening it from the left with `...` when
+/// it is longer, so the end of a path, its file name, stays.
+fn writePadded(console: zrich.Console, text: []const u8, width: usize, style: zrich.Style) !void {
+    if (text.len == 0 or width < 4) assert.panic("padding '{s}' to {d} columns; table cells hold a name and are at least 4 wide", .{ text, width });
+    const fits = text.len <= width;
+    const shown = if (fits) text else shortened(text, width);
+    if (!fits) try console.styled("...", style);
+    try console.styled(shown, style);
+    const used = shown.len + @as(usize, if (fits) 0 else 3);
+    if (used > width) assert.panic("'{s}' took {d} columns of a {d}-column table cell; shortened() keeps width - 3 bytes", .{ text, used, width });
+    try console.writer.splatByteAll(' ', width - used);
 }
 
-/// One row per file with findings, the files most in need of work first.
-fn renderTable(sink: Sink) !void {
-    const s = sink.scratch;
-    const tallies = s.tallies.items();
-    if (tallies.len == 0) return;
-    std.mem.sort(FileTally, tallies, {}, worstFirst);
-    if (!std.sort.isSorted(FileTally, tallies, {}, worstFirst)) assert.panic("expected files worst first, got {d} files out of order; sort the tallies worst first before rendering them", .{tallies.len});
-    for (tallies, 0..) |t, row| {
-        s.cells[row] = .{
-            .{ .text = t.path },
-            .{ .text = try sink.text.format("{d}", .{t.errors}), .style = if (t.errors > 0) severityStyle(.@"error") else quiet },
-            .{ .text = try sink.text.format("{d}", .{t.warnings}), .style = if (t.warnings > 0) severityStyle(.warning) else quiet },
-        };
-        s.rows[row] = &s.cells[row];
-    }
-    var buffer: [4096]u8 = undefined;
-    var fixed: std.heap.FixedBufferAllocator = .init(&buffer);
-    const table: zrich.Table = .{
-        .columns = &.{
-            .{ .header = "File" },
-            .{ .header = "Errors", .alignment = .right },
-            .{ .header = "Warnings", .alignment = .right },
-        },
-        .rows = s.rows[0..tallies.len],
-    };
-    const console = sink.console;
-    try console.writer.writeByte('\n');
-    try table.render(sink.console.context(), fixed.allocator());
-    if (tallies.len > s.rows.len) assert.panic("{d} files have findings but the table has {d} rows; raise memory.Limits.files", .{ tallies.len, s.rows.len });
-}
-
-/// One row per rule that fired: errors first, then the rules that fired most, so the table says where to start.
 /// How often each rule fired and in how many files, and the fired rules' indexes in rules.all,
 /// errors first and then the most frequent.
 const Fired = struct {
@@ -243,52 +294,6 @@ const Fired = struct {
         return fired;
     }
 };
-
-fn renderRules(sink: Sink, findings: []const Finding) !void {
-    if (findings.len == 0) return;
-    const counted = Fired.initFired(findings);
-    const per_rule = counted.per_rule;
-    const files = counted.files;
-    const order = counted.order;
-    const fired = counted.count;
-    var cells: [rules.all.len][4]zrich.Cell = undefined;
-    var rows: [rules.all.len][]const zrich.Cell = undefined;
-    for (order[0..fired], 0..) |i, row| {
-        const rule = rules.all[i];
-        cells[row] = .{
-            .{ .text = rule.name },
-            .{ .text = label(rule.severity), .style = severityStyle(rule.severity) },
-            .{ .text = try sink.text.format("{d}", .{per_rule[i]}) },
-            .{ .text = try sink.text.format("{d}", .{files[i]}), .style = quiet },
-        };
-        rows[row] = &cells[row];
-    }
-    var buffer: [4096]u8 = undefined;
-    var fixed: std.heap.FixedBufferAllocator = .init(&buffer);
-    const table: zrich.Table = .{
-        .columns = &.{
-            .{ .header = "Rule" },
-            .{ .header = "Severity" },
-            .{ .header = "Findings", .alignment = .right },
-            .{ .header = "Files", .alignment = .right },
-        },
-        .rows = rows[0..fired],
-    };
-    const console = sink.console;
-    try console.writer.writeByte('\n');
-    try table.render(sink.console.context(), fixed.allocator());
-    try console.writer.writeAll("\nHow to fix what each rule found:\n");
-    for (order[0..fired]) |i| {
-        const rule = rules.all[i];
-        try console.writer.writeAll("  ");
-        try console.styled(rule.name, quiet);
-        try console.writer.writeAll("  ");
-        try console.styled(rule.advice, fix_style);
-        try console.writer.writeByte('\n');
-    }
-    if (per_rule[order[fired - 1]] == 0) assert.panic("listed {s}, which did not fire; the rule table lists only rules with findings", .{rules.all[order[fired - 1]].name});
-    if (fired == 0) assert.panic("{d} findings but no rule fired; renderRules() must count every finding under its rule", .{findings.len});
-}
 
 fn worstFirst(_: void, a: FileTally, b: FileTally) bool {
     if (a.path.len == 0) assert.panic("a file tally with {d} errors has no path; summarise() must set each tally's path from its findings", .{a.errors});

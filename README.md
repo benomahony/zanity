@@ -8,10 +8,14 @@ zanity checks Python, Zig, Go, TypeScript, Rust and Java for the mistakes that m
 
 ```console
 $ zanity check src
-src/billing.py  2 errors, 1 warning
-  12:5  error    'charge' has 0 assertions that can catch a bug; it needs at least 2.  assertion-density
-                 fix: Assert what 'charge' needs from 'amount' and what it guarantees before it returns.
-  ...
+src/billing.py:12:5  error    assertion-density  'charge' has 0 assertions that can catch a bug; it needs at least 2
+src/billing.py:31:5  error    assertion-density  'refund' has 1 assertion that can catch a bug; it needs at least 2
+src/billing.py:40:9  warning  unbounded-loop     'while True' has no bound
+
+File            Errors  Warnings  Most common
+src/billing.py       2         1  assertion-density
+---------------------------------------------
+TOTAL                2         1  assertion-density
 zanity: 2 errors and 1 warning in 1 of 14 files
 ```
 
@@ -136,7 +140,7 @@ zanity check . --infer                        # also have a language model judge
 zanity help check                             # every option
 ```
 
-`check` exits 0 when nothing fired, 1 when an error-level rule fired (or any rule, with `--strict`), and 2 on a usage error such as a mistake in `zanity.toml`. Findings go to stdout and the one-line summary to stderr, so output can be piped cleanly. On a terminal the report is grouped by file and ends with two tables, the files with the most errors and the rules that fired most, and then how to fix what each rule found. A finding shows a fix of its own only where it has one. A progress line shows how far a long run has got; `-q` hides it, and it never appears in piped output. `--no-color` or `NO_COLOR` turns colour off.
+`check` exits 0 when nothing fired, 1 when an error-level rule fired (or any rule, with `--strict`), and 2 on a usage error such as a mistake in `zanity.toml`. Findings go to stdout and the one-line summary to stderr, so output can be piped cleanly. On a terminal the report reads like a coverage report: the first ten findings, errors first, one line each, then a table of the files with the most errors and warnings and the rule that fired most in each, the rest of the files on one row, and a total. How to fix each finding is in `--agent`, `--plain` and `--json`. A progress line shows how far a long run has got; `-q` hides it, and it never appears in piped output. `--no-color` or `NO_COLOR` turns colour off.
 
 `--agent` writes for a coding agent, in about 1% of the bytes of the terminal report once a run has more than a handful of findings: the totals and the command to run next, then the first findings in rule order, errors first, each as `line:column` and its own fix (or its message, without the explanation every finding of its rule shares), with `[--fix]` on those zanity can fix itself. `--limit N` sets how many findings it shows in all (10 by default, 0 for every one); the rules past them are listed by name and count, to look at with `--rules <name>`. It is on by default under Claude Code (when `CLAUDECODE` is set) unless `--json` or `--plain` is given; `ZANITY_AGENT=1` turns it on for any other agent.
 
