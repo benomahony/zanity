@@ -93,9 +93,71 @@ pub fn checkTestDouble(self: *File, ctx: Context, name: []const u8) !void {
     if (ctx.family != .call) assert.panic("{s}: checking {f} for a test double, but it is a {t}; call checkTestDouble() only from closeCall(), with a call context", .{ self.work.facts.path, ctx.node.where(), ctx.family });
     if (name.len == 0) assert.panic("{s}: the call {f} has an empty name; capture the callee as @call.name in the language's zanity.scm", .{ self.work.facts.path, ctx.node.where() });
     const double = self.calleeIn(ctx, name, self.tables.test_doubles) orelse (if (ctx.receiver == null and contains(self.tables.test_doubles, name)) name else null);
-    if (double) |callee| {
-        _ = try self.report(ctx.node, "test-double", try self.say("'{s}' replaces real behaviour with a stand-in, so the test can pass while the real code is broken.", .{callee}));
-    }
+    const callee = double orelse return;
+    var buffer: [256]u8 = undefined;
+    const target = patchTarget(self, ctx, &buffer);
+    if (target.len > 0 and boundary(self, target)) return;
+    if (!try self.report(ctx.node, "test-double", try self.say("'{s}' replaces real behaviour with a stand-in, so the test can pass while the real code is broken.", .{callee}))) return;
+    self.s.diagnostics.last().?.fix = if (target.len > 0)
+        try self.say("It replaces `{s}`: if that is the project's own code, let the test run it for real; if it is a boundary such as a network client or a keychain, give the code under test a parameter to take a fake through instead of patching it.", .{target})
+    else if (patches(callee))
+        try self.say("Instead of patching with `{s}`, give the code under test a parameter to take a fake through, or let it run for real.", .{callee})
+    else
+        try self.say("Instead of a `{s}` with no behaviour of its own, pass in a small fake that behaves like the real thing.", .{callee});
+}
+
+/// Whether a test double replaces something in place, as `patch` and `monkeypatch.setattr` do,
+/// rather than being a stand-in object, as `Mock()` and `jest.fn()` are.
+fn patches(callee: []const u8) bool {
+    if (callee.len == 0) assert.panic("asked whether an empty callee patches; checkTestDouble() names the double it found", .{});
+    const words = [_][]const u8{ "patch", "setattr", "spy", "replace", "stubGlobal", "mock.mock", "doMock", ".mock" };
+    for (words) |word| if (std.ascii.findIgnoreCase(callee, word) != null) return true;
+    if (callee.len > 256) assert.panic("a test double's callee is {d} bytes; callees from the tables are short", .{callee.len});
+    return false;
+}
+
+/// What a patch replaces, as a dotted path: the string `patch("pkg.mod.fn")` names, or the object
+/// and attribute `patch.object(mod, "fn")` and `monkeypatch.setattr(mod, "fn", fake)` name. Empty
+/// for a double that replaces nothing by name, such as `Mock()`.
+fn patchTarget(self: *File, ctx: Context, buffer: []u8) []const u8 {
+    if (buffer.len < 64) assert.panic("{s}: naming a patch target in {d} bytes; give patchTarget() room for a dotted path", .{ self.work.facts.path, buffer.len });
+    const first = ctx.arguments[0] orelse return "";
+    const first_text = first.text(self.source);
+    if (unquoted(first_text)) |path| return path;
+    const second = ctx.arguments[1] orelse return "";
+    const attribute = unquoted(second.text(self.source)) orelse return "";
+    const joined = std.fmt.bufPrint(buffer, "{s}.{s}", .{ first_text, attribute }) catch return "";
+    if (joined.len != first_text.len + attribute.len + 1) assert.panic("{s}: joined '{s}' and '{s}' into '{s}'; bufPrint writes both with a dot between", .{ self.work.facts.path, first_text, attribute, joined });
+    return joined;
+}
+
+/// The text inside a quoted string literal that holds a dotted name, or null for anything else.
+fn unquoted(text: []const u8) ?[]const u8 {
+    if (text.len > 1 << 20) assert.panic("a call argument of {d} bytes; arguments come from one file, which is smaller", .{text.len});
+    if (text.len < 3) return null;
+    const quote = text[0];
+    if ((quote != '"' and quote != '\'') or text[text.len - 1] != quote) return null;
+    const inner = text[1 .. text.len - 1];
+    for (inner) |c| if (!(std.ascii.isAlphanumeric(c) or c == '_' or c == '.')) return null;
+    if (inner.len + 2 != text.len) assert.panic("the inside of '{s}' came out {d} bytes; a quoted string loses only its quotes", .{ text, inner.len });
+    return inner;
+}
+
+/// Whether `target` is a boundary the language's tables list, such as `time.monotonic`,
+/// `requests.get` or `subprocess.run`, or lives in the same module as one: replacing those with a
+/// fake is what isolates a test, so it isn't a test double to report.
+fn boundary(self: *File, target: []const u8) bool {
+    if (target.len == 0) assert.panic("{s}: asked whether an empty target is a boundary; patchTarget() returns empty only when nothing is named", .{self.work.facts.path});
+    const t = self.tables;
+    const tables = [_][]const []const u8{ t.network_calls, t.nondeterministic, t.sleeps, t.filesystem_calls, t.process_calls, t.database_calls, t.stdin_reads, t.wall_clocks };
+    const module = target[0 .. std.mem.indexOfScalar(u8, target, '.') orelse target.len];
+    for (tables) |table| for (table) |entry| {
+        if (std.mem.eql(u8, entry, target) or std.mem.endsWith(u8, target, entry)) return true;
+        const entry_module = entry[0 .. std.mem.indexOfScalar(u8, entry, '.') orelse entry.len];
+        if (std.mem.indexOfScalar(u8, entry, '.') != null and std.mem.eql(u8, entry_module, module)) return true;
+    };
+    if (module.len > target.len) assert.panic("{s}: the module of '{s}' came out longer than it", .{ self.work.facts.path, target });
+    return false;
 }
 
 /// A test whose name doesn't say what behaviour it expects, such as `test_1`, `it("works")`, or,
