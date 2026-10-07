@@ -16,4 +16,5 @@ test {
     _ = @import("assert.zig");
     _ = @import("main.zig");
     _ = @import("twins.zig");
+    _ = @import("passthrough.zig");
 }

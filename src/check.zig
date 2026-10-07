@@ -24,6 +24,7 @@ const shapes = @import("shapes.zig");
 const notes = @import("notes.zig");
 const extract = @import("extract.zig");
 const loops = @import("loops.zig");
+const passthrough = @import("passthrough.zig");
 
 pub const Diagnostic = struct {
     line: u32,
@@ -993,9 +994,7 @@ pub const File = struct {
         try repeats.checkRepeats(self, ctx, name);
         try shapes.recordShape(self, ctx);
         try extract.checkExtractable(self, ctx, name);
-        if (self.index.marks(ctx.span, self.v.function_passthrough) or self.index.marks(ctx.node, self.v.function_passthrough)) {
-            _ = try self.report(name_node, "passthrough-wrapper", try self.say("'{s}' only forwards to another call, so it adds a name without adding behaviour.", .{name}));
-        }
+        if (self.index.marks(ctx.span, self.v.function_passthrough) or self.index.marks(ctx.node, self.v.function_passthrough)) try passthrough.checkPassthrough(self, ctx, name_node, name);
         const meaningful = ctx.asserts -| weak.weakLines(self, ctx);
         if (meaningful < rules.min_asserts_per_function) {
             const noun = if (meaningful == 1) "assertion" else "assertions";

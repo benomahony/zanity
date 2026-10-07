@@ -62,9 +62,9 @@ pub fn crossCheck(s: *ConceptScratch, facts: *Facts, enabled: rules.Set, finding
 /// Go's blank identifier `_`, which say nothing a reader could confuse.
 fn exempt(name: []const u8) bool {
     if (name.len == 0) assert.panic("asked whether an empty name is exempt from naming checks; the @name capture matched an empty node", .{});
-    const dunder = name.len > 4 and std.mem.startsWith(u8, name, "__") and std.mem.endsWith(u8, name, "__");
-    if (dunder and name.len <= 4) assert.panic("'{s}' was taken for a dunder name, but those need at least 5 bytes, like __x__; exempt() must check the length before treating a name as a dunder name", .{name});
+    const dunder = strings.dunder(name);
     const wordless = std.mem.indexOfNone(u8, name, separators) == null;
+    if (wordless and std.mem.indexOfNone(u8, name, "_-") != null and std.mem.trim(u8, name, " \t\r\n").len > 0) assert.panic("'{s}' was taken as having no words though it holds more than separators; check separators", .{name});
     return dunder or wordless;
 }
 

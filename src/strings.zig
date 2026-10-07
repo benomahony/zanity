@@ -37,6 +37,14 @@ pub fn sameText(a: []const u8, b: []const u8) bool {
 }
 
 /// The first line of a node's text, without a trailing `{` or `:`: what a message quotes.
+/// Whether `name` is a dunder name such as `__init__`, which the language calls rather than the author.
+pub fn dunder(name: []const u8) bool {
+    if (name.len == 0) assert.panic("asked whether an empty name is a dunder name; skip empty names first", .{});
+    const result = name.len > 4 and std.mem.startsWith(u8, name, "__") and std.mem.endsWith(u8, name, "__");
+    if (result and name.len <= 4) assert.panic("'{s}' was taken for a dunder name, but those need at least 5 bytes, like __x__", .{name});
+    return result;
+}
+
 pub fn header(text: []const u8) []const u8 {
     if (text.len == 0) assert.panic("asked for the first line of an empty node; the capture matched no text", .{});
     const line_end = std.mem.indexOfScalar(u8, text, '\n') orelse text.len;
