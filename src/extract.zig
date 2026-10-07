@@ -11,6 +11,7 @@ const hazards = @import("hazards.zig");
 const facts_module = @import("facts.zig");
 const File = check.File;
 const Context = check.Context;
+const header = check.header;
 
 /// Statements a body is searched in; a longer body is searched in its first this-many.
 const max_statements = 128;
@@ -64,8 +65,21 @@ pub fn checkExtractable(self: *File, ctx: Context, name: []const u8) !void {
     const long = if (self.s.diagnostics.last()) |d| std.mem.eql(u8, d.rule, "long-function") and d.line == ts.ts_node_start_point(ctx.name.?).row else false;
     if (!long and !self.checker.enabled.enabled("extractable-block")) return;
     var body: Body = .{};
-    if (!readBody(self, ctx, &body)) return;
-    const window = best(&body) orelse return;
+    const window = (if (readBody(self, ctx, &body)) best(&body) else null) orelse {
+        if (long) self.s.diagnostics.last().?.fix = try largestStepFix(self, ctx, name, &body);
+        return;
+    };
+    const message = try windowMessage(self, &body, window, name);
+    if (long) {
+        self.s.diagnostics.last().?.fix = message;
+        return;
+    }
+    _ = try self.report(body.statements[window.start], "extractable-block", message);
+}
+
+/// What a movable run of statements needs and gives back, so it can become a function.
+fn windowMessage(self: *File, body: *const Body, window: Window, name: []const u8) ![]const u8 {
+    if (window.end > body.count or window.start >= window.end) assert.panic("{s}: the block of '{s}' is statements {d}..{d} of {d}; best() returns a run inside the body", .{ self.work.facts.path, name, window.start, window.end, body.count });
     const first = ts.ts_node_start_point(body.statements[window.start]).row + 1;
     const last = ts.ts_node_end_point(body.statements[window.end - 1]).row + 1;
     const text = self.work.text;
@@ -77,12 +91,27 @@ pub fn checkExtractable(self: *File, ctx: Context, name: []const u8) !void {
     }
     if (window.output) |output| _ = try text.format(" and give back only '{s}'", .{output.text}) else _ = try text.copy(" and set nothing read after them");
     _ = try text.copy(", so they can move into a function of their own.");
-    const message = text.buffer[start..text.used];
-    if (long) {
-        self.s.diagnostics.last().?.fix = message;
-        return;
+    if (last < first) assert.panic("{s}: the block of '{s}' ends on line {d}, before it starts on {d}", .{ self.work.facts.path, name, last, first });
+    return text.buffer[start..text.used];
+}
+
+/// When no run of statements can move out as it is: the longest top-level step of the function,
+/// where splitting it should start.
+fn largestStepFix(self: *File, ctx: Context, name: []const u8, body: *Body) ![]const u8 {
+    if (body.count == 0) listStatements(self, ctx, body);
+    if (body.count > max_statements) assert.panic("{s}: '{s}' lists {d} statements in room for {d}; listStatements() stops at max_statements", .{ self.work.facts.path, name, body.count, max_statements });
+    var largest: ?ts.Node = null;
+    var largest_lines: u32 = 0;
+    for (body.statements[0..body.count]) |statement| {
+        const lines = ts.ts_node_end_point(statement).row - ts.ts_node_start_point(statement).row + 1;
+        if (lines <= largest_lines) continue;
+        largest = statement;
+        largest_lines = lines;
     }
-    _ = try self.report(body.statements[window.start], "extractable-block", message);
+    const step = largest orelse return self.say("Move a self-contained step of '{s}' into its own function.", .{name});
+    const first = ts.ts_node_start_point(step).row + 1;
+    if (largest_lines == 0) assert.panic("{s}: the longest step of '{s}' spans no lines; a statement spans at least its own", .{ self.work.facts.path, name });
+    return self.say("Its longest step is lines {d}-{d}, starting `{s}`; move that, or the steps inside it, into a function of its own, passing in what it reads.", .{ first, first + largest_lines - 1, header(step.text(self.source)) });
 }
 
 /// The body's top-level statements, and for each name which of them set it and which read it.
