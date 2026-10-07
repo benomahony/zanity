@@ -154,10 +154,11 @@ fn blockTop(self: *File, block: ts.Node) ?BlockTop {
     return .{ .insert = insert, .indent = next[0 .. next.len - code.len] };
 }
 
-const Line = struct { start: u32, end: u32 };
+/// A line of the source: its first byte, and the newline that ends it.
+pub const Line = struct { start: u32, end: u32 };
 
 /// The line `node` is on, when it is on one line with nothing else on it but whitespace.
-fn lineAlone(self: *File, node: ts.Node) ?Line {
+pub fn lineAlone(self: *File, node: ts.Node) ?Line {
     const start = ts.ts_node_start_byte(node);
     const end = ts.ts_node_end_byte(node);
     if (end <= start) assert.panic("{s}: the declaration {f} covers no text, so the query matched an empty node; in that language's zanity.scm, put @declaration.outer on the declaration statement itself", .{ self.work.facts.path, node.where() });

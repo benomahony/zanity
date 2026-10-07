@@ -4,6 +4,7 @@
 const std = @import("std");
 const assert = @import("assert.zig");
 const ts = @import("ts.zig");
+const scope = @import("scope.zig");
 const captures = @import("captures.zig");
 const rules = @import("rules.zig");
 const memory = @import("memory.zig");
@@ -122,7 +123,15 @@ pub fn afterAssertion(self: *File, here: Assertion, previous: ts.Node, previous_
     const call = typeCheck(self, condition) orelse return;
     if (!sameText(call.arguments[0].?.text(self.source), subject.text(self.source))) return;
     const null_name = if (self.tables.null_types.len > 0) self.tables.null_types[0] else "missing";
+    const before = self.s.diagnostics.len;
     try weak(self, function, .{ .node = previous, .rule = "redundant-null-check", .message = try self.say("Checking that '{s}' is not {s} is redundant: the {s} on the next line already rules it out.", .{ subject.text(self.source), null_name, call.name.?.text(self.source) }) });
+    if (self.s.diagnostics.len == before) return;
+    const finding = self.s.diagnostics.last() orelse unreachable;
+    if (!std.mem.eql(u8, finding.rule, "redundant-null-check")) assert.panic("{s}: the finding just reported for {f} is {s}, not redundant-null-check; weak() must report the rule it is given", .{ self.work.facts.path, previous.where(), finding.rule });
+    const line = scope.lineAlone(self, previous) orelse return;
+    finding.fix = try self.say("Delete line {d}, `{s}`.", .{ ts.ts_node_start_point(previous).row + 1, previous.text(self.source) });
+    finding.edit = .{ .start = line.start, .end = line.end + 1, .replacement = "" };
+    if (line.end >= self.source.len or self.source[line.end] != '\n') assert.panic("{s}: the line of {f} ends at byte {d}, which is not a newline; lineAlone() returns the newline that ends the line", .{ self.work.facts.path, previous.where(), line.end });
 }
 
 pub fn isPath(self: *File, node: ts.Node, target: []const u8) bool {

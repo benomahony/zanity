@@ -284,6 +284,20 @@ test "under Claude Code, check speaks to the agent unless --json or --plain asks
     try std.testing.expectEqual(std.process.Child.Term{ .exited = 2 }, both.term);
 }
 
+test "--fix deletes a null check that the type check after it makes redundant" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    const io = std.testing.io;
+    const zanity = try Io.Dir.cwd().realPathFileAlloc(io, paths.zanity, arena);
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(io, .{ .sub_path = "checks.py", .data = "def f(x):\n    assert x is not None\n    assert isinstance(x, int)\n    return x\n" });
+    const work = try std.fs.path.join(arena, &.{ ".zig-cache", "tmp", &tmp.sub_path });
+    _ = try std.process.run(arena, io, .{ .argv = &.{ zanity, "check", "--fix", "--rules", "redundant-null-check", "checks.py" }, .cwd = .{ .path = work } });
+    try std.testing.expectEqualStrings("def f(x):\n    assert isinstance(x, int)\n    return x\n", try tmp.dir.readFileAlloc(io, "checks.py", arena, .unlimited));
+}
+
 test "precedence-trap's fix shows how the code runs and the grouping it reads as" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
