@@ -82,6 +82,24 @@
 (for_in_statement
   right: (_) @loop.iterable)
 
+; A loop whose body is one statement without braces: that statement is its body, so a loop
+; written there is a loop of its own, as in `for (const t of i) for (o = 0; o < c; ++o) g(t);`.
+((for_in_statement
+  body: (_) @loop.inner)
+  (#not-kind-eq? @loop.inner "statement_block"))
+
+((for_statement
+  body: (_) @loop.inner)
+  (#not-kind-eq? @loop.inner "statement_block"))
+
+((while_statement
+  body: (_) @loop.inner)
+  (#not-kind-eq? @loop.inner "statement_block"))
+
+((do_statement
+  body: (_) @loop.inner)
+  (#not-kind-eq? @loop.inner "statement_block"))
+
 (true) @literal.true
 
 ((call_expression

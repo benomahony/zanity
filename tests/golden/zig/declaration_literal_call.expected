@@ -1,0 +1,3 @@
+rules: passthrough-wrapper
+exit: 0
+declaration_literal_call.zig:13:8: warning [passthrough-wrapper]

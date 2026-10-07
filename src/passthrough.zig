@@ -99,12 +99,14 @@ fn soleCall(body: []const u8) ?Call {
 }
 
 /// Whether `callee` is a name or a dotted path to one, such as `g`, `mod.g` or `pkg::g`, and not
-/// a keyword and a call such as `yield g`, which changes what the function is.
+/// a keyword and a call such as `yield g`, which changes what the function is, or a Zig
+/// declaration literal such as `.fromType`, whose type comes from where it is used.
 fn plainName(callee: []const u8) bool {
     if (callee.len == 0) assert.panic("asked whether an empty callee is a plain name; soleCall() checks the length first", .{});
     for (callee) |c| if (!(std.ascii.isAlphanumeric(c) or c == '_' or c == '.' or c == ':' or c == '$')) return false;
     if (std.mem.indexOfAny(u8, callee, " \t") != null) assert.panic("'{s}' passed as a plain name with a space in it; the loop above rejects spaces", .{callee});
-    return !std.ascii.isDigit(callee[0]);
+    const lead = callee[0];
+    return std.ascii.isAlphabetic(lead) or lead == '_' or lead == '$';
 }
 
 /// The parenthesis that opens the call ending at the last byte of `text`.

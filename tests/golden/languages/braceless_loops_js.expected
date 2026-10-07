@@ -1,0 +1,2 @@
+rules: unbounded-loop
+exit: 0
