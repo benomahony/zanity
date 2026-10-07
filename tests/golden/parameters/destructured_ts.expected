@@ -1,0 +1,3 @@
+rules: long-parameter-list,dead-parameter
+exit: 0
+destructured_ts.ts:1:17: warning [long-parameter-list]

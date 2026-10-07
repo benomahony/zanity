@@ -8,7 +8,152 @@ const hazards = @import("hazards.zig");
 const File = check.File;
 const Context = check.Context;
 const contains = check.contains;
+const memory = @import("memory.zig");
 const strings = @import("strings.zig");
+const rules = @import("rules.zig");
+const naming = @import("naming.zig");
+
+/// Parameters a long list is read with when advising how to group them.
+const max_listed = 32;
+/// Names a piece of grouping advice shows; the rest are counted.
+const max_named = 4;
+
+/// Reports a function that takes more than `rules.max_parameters` parameters, unless it is a test,
+/// whose parameters are fixtures it asks for, or something else fixes its signature. The fix says
+/// which parameters to group: those whose names share a word, and those with defaults.
+pub fn checkParameterCount(self: *File, ctx: Context, name_node: ts.Node, name: []const u8) !void {
+    if (ctx.family != .function) assert.panic("{s}: counting the parameters of the {t} '{s}'; only functions have them", .{ self.work.facts.path, ctx.family, name });
+    if (ctx.formal_parameters <= rules.max_parameters or ctx.is_test) return;
+    if (ctx.parameter_start + ctx.parameter_count > self.s.signature.len) assert.panic("{s}: '{s}' owns parameters {d}..{d}, but only {d} are recorded; parameter() adds each to the signature", .{ self.work.facts.path, name, ctx.parameter_start, ctx.parameter_start + ctx.parameter_count, self.s.signature.len });
+    if (signatureFixedElsewhere(self, ctx, name)) return;
+    if (!try self.report(name_node, "long-parameter-list", try self.say("'{s}' takes {d} parameters; functions should take at most {d}.", .{ name, ctx.formal_parameters, rules.max_parameters }))) return;
+    self.s.diagnostics.last().?.fix = try groupingFix(self, ctx, name);
+}
+
+/// Which of `ctx`'s parameters to pass as one value: the most that share a word of their names,
+/// and those with a default, which can go in an options value.
+fn groupingFix(self: *File, ctx: Context, name: []const u8) ![]const u8 {
+    if (ctx.formal_parameters <= rules.max_parameters) assert.panic("{s}: advising how to group the {d} parameters of '{s}', no more than the {d} allowed; checkParameterCount() returns before short lists", .{ self.work.facts.path, ctx.formal_parameters, name, rules.max_parameters });
+    var names: [max_listed][]const u8 = undefined;
+    var defaulted: [max_listed][]const u8 = undefined;
+    var count: usize = 0;
+    var defaults: usize = 0;
+    const signature = self.s.signature.items()[ctx.parameter_start..][0..ctx.parameter_count];
+    for (signature) |parameter| {
+        const text = parameter.name.text(self.source);
+        if (text.len == 0 or contains(self.tables.self_receivers, text) or count == max_listed) continue;
+        names[count] = text;
+        count += 1;
+        const declaration = parameter.name.parent() orelse continue;
+        const whole = declaration.text(self.source);
+        if (std.mem.indexOfScalar(u8, whole, '=') != null or std.mem.indexOf(u8, whole, "?:") != null) {
+            defaulted[defaults] = text;
+            defaults += 1;
+        }
+    }
+    const text = self.work.text;
+    const start = text.used;
+    const group = sharedWord(names[0..count]);
+    if (group) |shared| {
+        _ = try text.copy("Pass ");
+        try list(text, names[0..count], shared);
+        _ = try text.format(" as one '{s}' value", .{shared.word});
+        defaults = outside(defaulted[0..defaults], shared);
+    }
+    if (defaults >= 2) {
+        _ = try text.copy(if (text.used > start) ", and move " else "Move ");
+        try list(text, defaulted[0..defaults], null);
+        _ = try text.copy(", which have defaults, into one options value");
+    }
+    if (text.used == start) return self.say("Split '{s}' by what each part needs, or pass the parameters that always travel together as one value.", .{name});
+    _ = try text.copy(".");
+    if (defaults > count) assert.panic("{s}: '{s}' has {d} parameters with defaults among {d}; each is counted once", .{ self.work.facts.path, name, defaults, count });
+    return text.buffer[start..text.used];
+}
+
+/// The first or last word most parameter names share in that place, such as `tokens` in
+/// `input_tokens` and `output_tokens`, when at least two share one.
+fn sharedWord(names: []const []const u8) ?Shared {
+    if (names.len > max_listed) assert.panic("looking for a shared word among {d} names, more than the {d} groupingFix() collects", .{ names.len, max_listed });
+    var best: ?Shared = null;
+    var best_count: usize = 1;
+    for (names) |candidate| {
+        for ([_]Place{ .first, .last }) |place| {
+            const word = wordAt(candidate, place) orelse continue;
+            if (word.len < 3) continue;
+            var sharing: usize = 0;
+            for (names) |other| sharing += @intFromBool(sameWordAt(other, word, place));
+            if (sharing > best_count) {
+                best = .{ .word = word, .place = place };
+                best_count = sharing;
+            }
+        }
+    }
+    if (best != null and best_count < 2) assert.panic("chose the word '{s}' shared by {d} names; a shared word needs two", .{ best.?.word, best_count });
+    return best;
+}
+
+const Place = enum { first, last };
+const Shared = struct { word: []const u8, place: Place };
+
+/// Keeps the names of `names` that don't share `shared`'s word, in order, and returns how many.
+fn outside(names: [][]const u8, shared: Shared) usize {
+    if (shared.word.len == 0) assert.panic("filtering names by an empty word; sharedWord() skips short words", .{});
+    var kept: usize = 0;
+    for (names) |n| {
+        if (sameWordAt(n, shared.word, shared.place)) continue;
+        names[kept] = n;
+        kept += 1;
+    }
+    if (kept > names.len) assert.panic("kept {d} of {d} names; filtering only removes", .{ kept, names.len });
+    return kept;
+}
+
+/// The first or last word of a name with at least two words.
+fn wordAt(name: []const u8, place: Place) ?[]const u8 {
+    if (name.len == 0) assert.panic("reading the words of an empty name; skip unnamed parameters first", .{});
+    var words: naming.Words = .{ .text = name };
+    const first = words.next() orelse return null;
+    var last = first;
+    var count: usize = 1;
+    for (0..name.len) |_| {
+        last = words.next() orelse break;
+        count += 1;
+    }
+    if (count < 2) return null;
+    if (last.len == 0) assert.panic("the last word of '{s}' is empty; Words never returns one", .{name});
+    return if (place == .first) first else last;
+}
+
+fn sameWordAt(name: []const u8, word: []const u8, place: Place) bool {
+    if (word.len == 0) assert.panic("comparing '{s}' with an empty word; sharedWord() skips short words", .{name});
+    if (name.len == 0) assert.panic("comparing an empty name with '{s}'; skip unnamed parameters first", .{word});
+    const own = wordAt(name, place) orelse return false;
+    return std.ascii.eqlIgnoreCase(own, word);
+}
+
+/// Writes `names`, or only those sharing `shared`'s word in its place, quoted, with the rest counted.
+fn list(text: *memory.Text, names: []const []const u8, shared: ?Shared) !void {
+    if (names.len < 2) assert.panic("listing {d} names to group; a group needs two", .{names.len});
+    var picked: [max_named][]const u8 = undefined;
+    var shown: usize = 0;
+    var rest: usize = 0;
+    for (names) |n| {
+        if (shared) |sh| if (!sameWordAt(n, sh.word, sh.place)) continue;
+        if (shown == max_named) {
+            rest += 1;
+            continue;
+        }
+        picked[shown] = n;
+        shown += 1;
+    }
+    if (shown < 2) assert.panic("listing {d} parameters to group; a group needs two", .{shown});
+    for (picked[0..shown], 0..) |n, i| {
+        const separator = if (i == 0) "" else if (i + 1 == shown and rest == 0) " and " else ", ";
+        _ = try text.format("{s}'{s}'", .{ separator, n });
+    }
+    if (rest > 0) _ = try text.format(" and {d} more", .{rest});
+}
 
 /// Reports each parameter of `ctx` that nothing in its body refers to. Only names declared between
 /// the function's name and its body count, so not a Go receiver or a caught exception. A function
@@ -71,27 +216,25 @@ fn signatureFixedElsewhere(self: *File, ctx: Context, name: []const u8) bool {
     if (self.index.marks(ctx.node, self.checker.compiled.id("method.override"))) return true;
     const own = ts.ts_node_start_byte(ctx.name orelse ctx.node);
     if (own >= self.source.len) assert.panic("{s}: '{s}' is named at byte {d} of a {d}-byte file; pass a function from this file", .{ self.work.facts.path, name, own, self.source.len });
-    return passedAsValue(self.source, name, own);
+    return passedAsValue(self, name, own);
 }
 
-/// Whether `name` appears in `source` as a whole word that isn't called, at a place other than
-/// `own`, the function's own name: passed to something, stored or returned.
-fn passedAsValue(source: []const u8, name: []const u8, own: usize) bool {
+/// Whether code in the file names `name` without calling it, other than at `own`, the function's
+/// own name: passing it to something, storing or returning it. Only identifiers count, so a
+/// mention in a comment, a docstring or a string such as `__all__` doesn't.
+fn passedAsValue(self: *File, name: []const u8, own: usize) bool {
     if (name.len == 0) assert.panic("searching for an empty name; skip unnamed functions first", .{});
-    var from: usize = 0;
-    for (0..source.len + 1) |_| {
-        const at = std.mem.indexOfPos(u8, source, from, name) orelse return false;
-        from = at + name.len;
-        if (at == own) continue;
-        const before_ok = at == 0 or std.mem.indexOfScalar(u8, word_bytes, source[at - 1]) == null;
-        const after = std.mem.trimStart(u8, source[from..], " \t");
-        const after_ok = from == source.len or std.mem.indexOfScalar(u8, word_bytes, source[from]) == null;
-        if (!before_ok or !after_ok) continue;
-        if (at > 0 and source[at - 1] == '.') continue;
-        if (after.len > 0 and (after[0] == '(' or after[0] == '=')) continue;
+    const reference = self.checker.compiled.id("reference.name") orelse return false;
+    for (self.index.triples) |t| {
+        if (t.id != reference or t.key.start == own) continue;
+        const end = ts.ts_node_end_byte(t.node);
+        if (end - t.key.start != name.len or !std.mem.eql(u8, self.source[t.key.start..end], name)) continue;
+        if (t.key.start > 0 and self.source[t.key.start - 1] == '.') continue;
+        const after = std.mem.trimStart(u8, self.source[end..], " \t");
+        if (after.len > 0 and std.mem.indexOfScalar(u8, "(=:", after[0]) != null) continue;
         return true;
     }
-    if (from <= source.len) assert.panic("searched '{s}' past every occurrence without finishing; each pass moves past one", .{name});
+    if (own >= self.source.len) assert.panic("{s}: '{s}' is named at byte {d} of a {d}-byte file; pass a function from this file", .{ self.work.facts.path, name, own, self.source.len });
     return false;
 }
 

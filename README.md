@@ -312,7 +312,7 @@ Rules marked *off* run only with `--rules all`, `rules = ["all"]`, or when named
 
 | Rule | Severity | Flags |
 |---|---|---|
-| `long-parameter-list` | warning | more than four parameters |
+| `long-parameter-list` | warning | more than four parameters; not tests, whose parameters are fixtures, or functions whose signature something else fixes, as for `dead-parameter`. Its fix names the parameters to pass as one value: those whose names share a first or last word, and those with defaults |
 | `dead-parameter` | warning | a parameter the function's body never uses; not stubs, tests, `_`-prefixed names, methods an interface fixes such as `__exit__`, overrides of a base class's method, decorated or annotated functions, or functions their file passes as a value, such as a callback (not Zig, whose compiler already rejects these) |
 | `passthrough-wrapper` | warning | a function whose whole body passes its own parameters, unchanged and in order, to another call; not one that fixes or transforms an argument, a decorated one, or a method delegating to another object |
 | `message-chain` | warning | code that reaches through objects, such as `order.customer.address.city`: three member accesses from a local or parameter, or two from a field of `self`; module paths such as `xml.etree.ElementTree` are fine, and so are tests, which configure mocks and check results this way |

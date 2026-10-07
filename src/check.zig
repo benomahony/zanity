@@ -987,9 +987,7 @@ pub const File = struct {
         if (name.len == 0) assert.panic("{s}: @function.name matched the empty {f}; capture the function's identifier", .{ self.work.facts.path, name_node.where() });
         const last = ts.ts_node_end_point(ctx.span).row;
         try self.checkFunctionLength(ctx, name_node, name);
-        if (ctx.formal_parameters > rules.max_parameters) {
-            _ = try self.report(name_node, "long-parameter-list", try self.say("'{s}' takes {d} parameters; functions should take at most {d}.", .{ name, ctx.formal_parameters, rules.max_parameters }));
-        }
+        try parameters.checkParameterCount(self, ctx, name_node, name);
         try parameters.checkUnusedParameters(self, ctx, name);
         try repeats.checkRepeats(self, ctx, name);
         try shapes.recordShape(self, ctx);
