@@ -3,7 +3,7 @@
 src/rules.zig is the source of truth. `import_cwe.py` rebuilds catalogue.json and catalogue.yaml with
 empty `rule_ids`, so run this after every import too; `zig build test` fails until they agree.
 
-    uv run --with 'PyYAML>=6,<7' python catalogue/sync.py
+    uv run --with 'PyYAML==6.0.3' python catalogue/sync.py
 """
 
 import json
@@ -33,7 +33,7 @@ def sync() -> None:
         import yaml
     except ImportError:
         sys.exit("catalogue.yaml must stay equal to catalogue.json, and writing it needs PyYAML. Run:\n"
-                 "    uv run --with 'PyYAML>=6,<7' python catalogue/sync.py")
+                 "    uv run --with 'PyYAML==6.0.3' python catalogue/sync.py")
     catalogue = json.loads((HERE / "catalogue.json").read_text())
     entries = {e["id"]: e for e in catalogue["entries"]}
     assert entries, "catalogue/catalogue.json has no entries; rebuild it with catalogue/import_cwe.py, then run this again"

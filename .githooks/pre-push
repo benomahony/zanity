@@ -27,7 +27,7 @@ zig build test test-integration --summary all
 zig build
 ./zig-out/bin/zanity check . --strict
 zig build release
-uv run --with 'PyYAML>=6,<7' python catalogue/sync.py
+uv run --with 'PyYAML==6.0.3' python catalogue/sync.py
 python3 catalogue/triage.py
 git diff --exit-code -- catalogue
 ./scripts/zig-cache --check

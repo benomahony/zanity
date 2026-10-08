@@ -49,7 +49,7 @@ python catalogue.py show EXT-ASYNC-001
 Rebuild JSON/YAML after editing `extensions.json` or the explicit classification overrides:
 
 ```bash
-python -m pip install 'PyYAML>=6,<7'
+python -m pip install 'PyYAML==6.0.3'
 python import_cwe.py
 python catalogue.py validate
 ```

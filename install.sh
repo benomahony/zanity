@@ -42,7 +42,7 @@ curl -fsSL -o "$tmp/zanity" "$url" || fail "could not download $url; check that 
 
 # GitHub records each release file's SHA-256; check the download against it.
 expected=$(curl -fsSL "$api" 2>/dev/null | tr ',' '\n' |
-    awk -v name="\"$asset\"" '/"name":/ { mine = index($0, name) > 0 } mine && /"digest":/ { sub(/.*sha256:/, ""); sub(/".*/, ""); print; exit }') || true
+    awk -v name="\"$asset\"" '/"name":/ { mine = index($0, name) > 0 } mine && /"digest":/ { sub(/.*sha256:/, ""); sub(/".*/, ""); print; exit }')
 if command -v sha256sum >/dev/null 2>&1; then
     actual=$(sha256sum "$tmp/zanity" | cut -d' ' -f1)
 else
