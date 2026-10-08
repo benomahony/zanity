@@ -413,3 +413,162 @@
   (break_statement)
   (continue_statement)
 ] @flow.exit
+
+; CWE-369: a literal zero divisor.
+((binary_expression
+  operator: ["/" "%"]
+  right: [(decimal_integer_literal) (decimal_floating_point_literal)] @_zero_divisor) @finding.divide-by-zero
+  (#any-of? @_zero_divisor "0" "00" "0.0" "0." ".0"))
+
+; CWE-481: assignment used as a condition instead of an equality comparison.
+(if_statement
+  condition: (parenthesized_expression
+    (assignment_expression) @finding.assignment-in-condition))
+
+; Java-specific executable weakness patterns.
+((catch_clause
+  (catch_formal_parameter
+    (catch_type
+      (type_identifier) @_null_exception))) @finding.null-catch
+  (#eq? @_null_exception "NullPointerException"))
+
+((synchronized_statement
+  body: (block) @_synchronized_body) @finding.empty-synchronized
+  (#empty? @_synchronized_body))
+
+((method_declaration
+  (modifiers "public")
+  name: (identifier) @_finalizer) @finding.public-finalizer
+  (#eq? @_finalizer "finalize"))
+
+((object_creation_expression
+  type: (type_identifier) @_thread_type) @finding.direct-thread
+  (#eq? @_thread_type "Thread"))
+
+(method_declaration
+  (modifiers "native")) @finding.unsafe-jni
+
+(field_declaration
+  (modifiers
+    "public"
+    "static")) @finding.public-static-field
+
+(field_declaration
+  (modifiers
+    "static"
+    "public")) @finding.public-static-field
+
+(field_declaration
+  (modifiers
+    "final" @unless.public-static-field))
+
+[
+  (field_declaration
+    (modifiers "public" "static" "final")
+    type: (array_type))
+  (field_declaration
+    (modifiers "public" "final" "static")
+    type: (array_type))
+  (field_declaration
+    (modifiers "static" "public" "final")
+    type: (array_type))
+  (field_declaration
+    (modifiers "static" "final" "public")
+    type: (array_type))
+  (field_declaration
+    (modifiers "final" "public" "static")
+    type: (array_type))
+  (field_declaration
+    (modifiers "final" "static" "public")
+    type: (array_type))
+] @finding.public-static-array
+
+; Java lifecycle and object-model contracts whose evidence is wholly inside one expression or
+; method. The @unless captures are descendants of the method finding, so patternFinding can cancel
+; the absence finding when the required superclass call or final modifier is present.
+((method_declaration
+  name: (identifier) @_finalize_name
+  body: (block)) @finding.missing-super-finalizer
+  (#eq? @_finalize_name "finalize"))
+
+((method_invocation
+  object: (super)
+  name: (identifier) @_super_finalize) @unless.missing-super-finalizer
+  (#eq? @_super_finalize "finalize"))
+
+((method_declaration
+  name: (identifier) @_clone_name
+  body: (block)) @finding.missing-super-clone
+  (#eq? @_clone_name "clone"))
+
+((method_invocation
+  object: (super)
+  name: (identifier) @_super_clone) @unless.missing-super-clone
+  (#eq? @_super_clone "clone"))
+
+((method_declaration
+  (modifiers "public")
+  name: (identifier) @_public_clone) @finding.public-clone-method
+  (#eq? @_public_clone "clone"))
+
+((method_declaration
+  (modifiers
+    "final" @unless.public-clone-method)
+  name: (identifier) @_final_clone)
+  (#eq? @_final_clone "clone"))
+
+((method_invocation
+  object: (object_creation_expression
+    type: (type_identifier) @_thread_constructor)
+  name: (identifier) @_run_method) @finding.thread-run
+  (#eq? @_thread_constructor "Thread")
+  (#eq? @_run_method "run"))
+
+; Comparing Class objects by their names can confuse equal simple names from different packages.
+((binary_expression
+  left: (method_invocation
+    object: (method_invocation
+      name: (identifier) @_left_get_class)
+    name: (identifier) @_left_get_name)
+  operator: ["==" "!="]
+  right: (method_invocation
+    object: (method_invocation
+      name: (identifier) @_right_get_class)
+    name: (identifier) @_right_get_name)) @finding.class-name-comparison
+  (#eq? @_left_get_class "getClass")
+  (#eq? @_left_get_name "getName")
+  (#eq? @_right_get_class "getClass")
+  (#eq? @_right_get_name "getName"))
+
+; A Java class that defines only one side of the equals/hashCode contract.
+((class_declaration
+  body: (class_body
+    (method_declaration
+      name: (identifier) @_equals_method))) @finding.equals-without-hashcode
+  (#eq? @_equals_method "equals"))
+
+((method_declaration
+  name: (identifier) @_hash_for_equals) @unless.equals-without-hashcode
+  (#eq? @_hash_for_equals "hashCode"))
+
+((class_declaration
+  body: (class_body
+    (method_declaration
+      name: (identifier) @_hash_method))) @finding.hashcode-without-equals
+  (#eq? @_hash_method "hashCode"))
+
+((method_declaration
+  name: (identifier) @_equals_for_hash) @unless.hashcode-without-equals
+  (#eq? @_equals_for_hash "equals"))
+
+; Struts ActionForm fields must stay behind bean accessors.
+((class_declaration
+  superclass: (superclass
+    (type_identifier) @_action_form)
+  body: (class_body
+    (field_declaration) @finding.struts-public-field))
+  (#eq? @_action_form "ActionForm"))
+
+((field_declaration
+  (modifiers
+    "private" @unless.struts-public-field)))

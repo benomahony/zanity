@@ -1,0 +1,9 @@
+database_password: correct-horse-battery-staple
+service_secret: ${SERVICE_SECRET}
+masked_secret: "********"
+example_password: changeme
+privileged: true
+allowPrivilegeEscalation: true
+hostNetwork: true
+runAsUser: 0
+allowPrivilegeEscalation: false

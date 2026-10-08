@@ -1,0 +1,3 @@
+rules: parameter-allocation-size
+exit: 0
+allocation_size_ts.ts:2:23: warning [parameter-allocation-size]

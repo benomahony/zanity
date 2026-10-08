@@ -1,0 +1,3 @@
+rules: parameter-redirect-target
+exit: 0
+redirect_target_go.go:6:22: warning [parameter-redirect-target]

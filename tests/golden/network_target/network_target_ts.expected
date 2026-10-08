@@ -1,0 +1,3 @@
+rules: parameter-network-target
+exit: 0
+network_target_ts.ts:2:16: warning [parameter-network-target]

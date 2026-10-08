@@ -123,46 +123,53 @@ const preview_findings = 10;
 /// Files the table lists, worst first; the others share one row.
 const table_files = 20;
 
+const Preview = struct { picked: [preview_findings]usize, len: usize, where: usize, rule: usize };
+
+fn choosePreview(findings: []const Finding) Preview {
+    if (findings.len == 0) assert.panic("choosing a preview from no findings; renderPreview returns before calling choosePreview", .{});
+    var preview: Preview = .{ .picked = undefined, .len = 0, .where = 0, .rule = 0 };
+    for ([_]bool{ true, false }) |errors| {
+        for (findings, 0..) |f, i| {
+            if (preview.len == preview_findings) break;
+            if ((rules.all[ruleIndex(f.rule)].severity == .@"error") != errors) continue;
+            preview.picked[preview.len] = i;
+            preview.len += 1;
+        }
+    }
+    for (preview.picked[0..preview.len]) |i| {
+        const f = findings[i];
+        preview.where = @max(preview.where, f.path.len + 1 + locationWidth(f));
+        preview.rule = @max(preview.rule, f.rule.len);
+    }
+    if (preview.where < "a:1:1".len or preview.rule == 0) assert.panic("the preview's columns came out {d} and {d} wide; a location is at least 'a:1:1' and every finding names its rule", .{ preview.where, preview.rule });
+    if (preview.len > preview_findings) assert.panic("picked {d} findings to show, past the {d} the preview holds; the loops stop at preview_findings", .{ preview.len, preview_findings });
+    return preview;
+}
+
 /// Up to `preview_findings` findings, errors first, one line each: where, how bad, which rule, and
 /// what is wrong without the explanation every finding of its rule shares.
 fn renderPreview(console: zrich.Console, findings: []const Finding) !void {
     if (findings.len == 0) return;
-    var picked: [preview_findings]usize = undefined;
-    var picked_count: usize = 0;
-    for ([_]bool{ true, false }) |errors| {
-        for (findings, 0..) |f, i| {
-            if (picked_count == preview_findings) break;
-            if ((rules.all[ruleIndex(f.rule)].severity == .@"error") != errors) continue;
-            picked[picked_count] = i;
-            picked_count += 1;
-        }
-    }
-    var where: usize = 0;
-    var rule: usize = 0;
-    for (picked[0..picked_count]) |i| {
-        const f = findings[i];
-        where = @max(where, f.path.len + 1 + locationWidth(f));
-        rule = @max(rule, f.rule.len);
-    }
+    const preview = choosePreview(findings);
+    if (preview.len == 0) assert.panic("choosePreview selected nothing from {d} findings; it must choose at least one", .{findings.len});
+    if (preview.len > findings.len) assert.panic("choosePreview selected {d} indices from {d} findings; it cannot select more than exist", .{ preview.len, findings.len });
     const out = console.writer;
     var buffer: [512]u8 = undefined;
-    for (picked[0..picked_count]) |i| {
+    for (preview.picked[0..preview.len]) |i| {
         const f = findings[i];
         const severity = rules.all[ruleIndex(f.rule)].severity;
         const location = std.fmt.bufPrint(&buffer, "{s}:{d}:{d}", .{ f.path, f.line + 1, f.column + 1 }) catch f.path;
         try out.writeAll(location);
-        try out.splatByteAll(' ', where - @min(where, location.len) + 2);
+        try out.splatByteAll(' ', preview.where - @min(preview.where, location.len) + 2);
         try console.styled(label(severity), severityStyle(severity));
         try out.splatByteAll(' ', "warning".len - label(severity).len + 2);
         try console.styled(f.rule, quiet);
-        try out.splatByteAll(' ', rule - f.rule.len + 2);
+        try out.splatByteAll(' ', preview.rule - f.rule.len + 2);
         const message = brief(f.message);
-        const room = console.options.width -| (where + 2 + "warning".len + 2 + rule + 2);
+        const room = console.options.width -| (preview.where + 2 + "warning".len + 2 + preview.rule + 2);
         if (message.len <= room or room < 20) try out.print("{s}\n", .{message}) else try out.print("{s}...\n", .{message[0 .. room - 3]});
     }
-    if (findings.len > picked_count) try console.styled(try std.fmt.bufPrint(&buffer, "+{d} more\n", .{findings.len - picked_count}), quiet);
-    if (where < "a:1:1".len or rule == 0) assert.panic("the preview's columns came out {d} and {d} wide; a location is at least 'a:1:1' and every finding names its rule", .{ where, rule });
-    if (picked_count > preview_findings) assert.panic("picked {d} findings to show, past the {d} the preview holds; the loops stop at preview_findings", .{ picked_count, preview_findings });
+    if (findings.len > preview.len) try console.styled(try std.fmt.bufPrint(&buffer, "+{d} more\n", .{findings.len - preview.len}), quiet);
 }
 
 /// One row per file with findings, worst first, up to `table_files`, then one row for the rest and
@@ -205,7 +212,7 @@ fn mostCommon(findings: []const Finding, tallies: []const FileTally) []const u8 
     for (per_rule, 0..) |n, i| if (n > per_rule[most]) {
         most = i;
     };
-    if (per_rule[most] == 0) assert.panic("the files of {d} tallies hold no findings; summariseFiles() only tallies files with some", .{tallies.len});
+    if (per_rule[most] == 0) assert.panic("the files of {d} tallies hold no findings; pass only non-empty tallies produced by summariseFiles()", .{tallies.len});
     return rules.all[most].name;
 }
 
@@ -391,7 +398,7 @@ fn brief(message: []const u8) []const u8 {
     if (message.len == 0) assert.panic("shortening an empty message; every finding says what is wrong", .{});
     const end = std.mem.indexOf(u8, message, ", so ") orelse message.len;
     const kept = std.mem.trimEnd(u8, message[0..end], ".");
-    if (kept.len > message.len) assert.panic("'{s}' came out longer than '{s}'; brief() only cuts", .{ kept, message });
+    if (kept.len > message.len) assert.panic("'{s}' came out longer than '{s}'; check brief()'s delimiter and trim bounds", .{ kept, message });
     return kept;
 }
 

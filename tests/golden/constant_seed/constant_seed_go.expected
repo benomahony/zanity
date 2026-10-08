@@ -1,0 +1,3 @@
+rules: constant-random-seed
+exit: 1
+constant_seed_go.go:6:12: error [constant-random-seed]

@@ -1,0 +1,3 @@
+rules: nested-regex-quantifier
+exit: 1
+regex_complexity.py:3:24: error [nested-regex-quantifier]

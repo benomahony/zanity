@@ -1,0 +1,3 @@
+rules: parameter-allocation-size
+exit: 0
+AllocationSize.java:3:36: warning [parameter-allocation-size]

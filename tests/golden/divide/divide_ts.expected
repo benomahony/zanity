@@ -1,0 +1,3 @@
+rules: divide-by-zero
+exit: 1
+divide_ts.ts:2:15: error [divide-by-zero]

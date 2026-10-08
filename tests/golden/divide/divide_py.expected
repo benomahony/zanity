@@ -1,0 +1,3 @@
+rules: divide-by-zero
+exit: 1
+divide_py.py:2:11: error [divide-by-zero]

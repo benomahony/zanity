@@ -1,0 +1,3 @@
+rules: parameter-redirect-target
+exit: 0
+redirect_target_ts.ts:2:21: warning [parameter-redirect-target]

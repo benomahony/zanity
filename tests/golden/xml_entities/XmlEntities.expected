@@ -1,0 +1,4 @@
+rules: xml-entity-expansion
+exit: 1
+XmlEntities.java:3:43: error [xml-entity-expansion]
+XmlEntities.java:5:85: error [xml-entity-expansion]

@@ -1,0 +1,3 @@
+rules: parameter-log-message
+exit: 0
+log_message.py:2:17: warning [parameter-log-message]

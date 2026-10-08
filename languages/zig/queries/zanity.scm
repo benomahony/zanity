@@ -443,3 +443,9 @@
   (break_expression)
   (continue_expression)
 ] @flow.exit
+
+; CWE-369: a literal zero divisor.
+((binary_expression
+  operator: ["/" "%"]
+  right: [(integer) (float)] @_zero_divisor) @finding.divide-by-zero
+  (#any-of? @_zero_divisor "0" "00" "0.0" "0." "0x0" "0o0" "0b0"))

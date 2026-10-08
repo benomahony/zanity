@@ -708,9 +708,9 @@ fn applyEdits(source: []const u8, findings: []Finding, out: []u8) error{LimitExc
 /// A file to fix: its path, the bytes the fixes were made against, and the fixed bytes.
 const Replacement = struct { path: []const u8, read: []const u8, fixed: []const u8 };
 
-/// Writes the fixed file in place of the original, unless someone changed the original since it
-/// was read: their change would be lost, so it is left for the next run instead.
-fn replaceFile(ctx: *zcli.Context, ws: *Workspace, r: Replacement) !void {
+/// Writes the fixed file by atomic rename after one last content check. A non-cooperating writer
+/// can still race that final rename; ordinary filesystems offer no compare-and-swap replacement.
+fn replaceFile(ctx: *zcli.Context, ws: *Workspace, r: Replacement) !void { // zanity: ignore[check-then-act]
     const path = r.path;
     const bytes = r.fixed;
     if (!(path.len > 0 and bytes.len <= ws.fixed.len)) assert.panic("expected a path and at most {d} bytes, got '{s}' and {d} bytes; fixFile() must write at most the fixed buffer's size", .{ ws.fixed.len, path, bytes.len });

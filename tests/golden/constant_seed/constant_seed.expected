@@ -1,0 +1,3 @@
+rules: constant-random-seed
+exit: 1
+constant_seed.py:5:17: error [constant-random-seed]

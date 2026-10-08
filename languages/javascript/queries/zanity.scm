@@ -605,3 +605,25 @@
   (class_heritage)
   body: (class_body
     (method_definition) @visibility.public))
+
+; CWE-369: a literal zero divisor.
+((binary_expression
+  operator: ["/" "%"]
+  right: (number) @_zero_divisor) @finding.divide-by-zero
+  (#any-of? @_zero_divisor "0" "00" "0.0" "0." ".0" "0x0" "0o0" "0b0"))
+
+; CWE-1321: direct writes through the legacy prototype mutator.
+((assignment_expression
+  left: (member_expression
+    property: (property_identifier) @_prototype_property)) @finding.prototype-mutation
+  (#eq? @_prototype_property "__proto__"))
+
+((assignment_expression
+  left: (subscript_expression
+    index: (string) @_prototype_key)) @finding.prototype-mutation
+  (#any-of? @_prototype_key "\"__proto__\"" "'__proto__'"))
+
+; CWE-481: assignment used as a condition instead of an equality comparison.
+(if_statement
+  condition: (parenthesized_expression
+    (assignment_expression) @finding.assignment-in-condition))

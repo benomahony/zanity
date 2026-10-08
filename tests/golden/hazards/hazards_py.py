@@ -93,3 +93,9 @@ def classify(n):
     elif n == 15:
         return 15
     return -1
+
+
+def temporary_files(fake):
+    tempfile.mktemp()
+    tempfile.NamedTemporaryFile()
+    fake.mktemp()

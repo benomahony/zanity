@@ -1,0 +1,3 @@
+rules: rsa-without-oaep
+exit: 1
+rsa_padding.py:2:40: error [rsa-without-oaep]

@@ -1,0 +1,3 @@
+rules: nested-regex-quantifier
+exit: 1
+regex_complexity_rs.rs:4:33: error [nested-regex-quantifier]

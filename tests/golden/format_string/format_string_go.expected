@@ -1,0 +1,3 @@
+rules: parameter-format-string
+exit: 0
+format_string_go.go:6:21: warning [parameter-format-string]

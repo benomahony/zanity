@@ -681,8 +681,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - parameter-file-path
   tags: []
 - id: CWE-23
   title: Relative Path Traversal
@@ -739,8 +740,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - parameter-file-path
   tags: []
 - id: CWE-24
   title: 'Path Traversal: ''../filedir'''
@@ -783,8 +785,9 @@ entries:
     effectiveness: ''
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - parameter-file-path
   tags: []
 - id: CWE-25
   title: 'Path Traversal: ''/../filedir'''
@@ -827,8 +830,9 @@ entries:
     effectiveness: ''
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - parameter-file-path
   tags: []
 - id: CWE-26
   title: 'Path Traversal: ''/dir/../filename'''
@@ -874,8 +878,9 @@ entries:
     effectiveness: ''
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - parameter-file-path
   tags: []
 - id: CWE-27
   title: 'Path Traversal: ''dir/../../filename'''
@@ -919,8 +924,9 @@ entries:
     effectiveness: ''
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - parameter-file-path
   tags: []
 - id: CWE-28
   title: 'Path Traversal: ''..\filedir'''
@@ -969,8 +975,9 @@ entries:
     effectiveness: ''
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - parameter-file-path
   tags: []
 - id: CWE-29
   title: 'Path Traversal: ''\..\filename'''
@@ -1017,8 +1024,9 @@ entries:
     effectiveness: ''
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - parameter-file-path
   tags: []
 - id: CWE-30
   title: 'Path Traversal: ''\dir\..\filename'''
@@ -1065,8 +1073,9 @@ entries:
     effectiveness: ''
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - parameter-file-path
   tags: []
 - id: CWE-31
   title: 'Path Traversal: ''dir\..\..\filename'''
@@ -1116,8 +1125,9 @@ entries:
     effectiveness: ''
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - parameter-file-path
   tags: []
 - id: CWE-32
   title: 'Path Traversal: ''...'' (Triple Dot)'
@@ -1166,8 +1176,9 @@ entries:
     effectiveness: ''
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - parameter-file-path
   tags: []
 - id: CWE-33
   title: 'Path Traversal: ''....'' (Multiple Dot)'
@@ -1216,8 +1227,9 @@ entries:
     effectiveness: ''
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - parameter-file-path
   tags: []
 - id: CWE-34
   title: 'Path Traversal: ''....//'''
@@ -1262,8 +1274,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - parameter-file-path
   tags: []
 - id: CWE-35
   title: 'Path Traversal: ''.../...//'''
@@ -1308,8 +1321,9 @@ entries:
     effectiveness: ''
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - parameter-file-path
   tags: []
 - id: CWE-36
   title: Absolute Path Traversal
@@ -1366,8 +1380,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - parameter-file-path
   tags: []
 - id: CWE-37
   title: 'Path Traversal: ''/absolute/pathname/here'''
@@ -1412,8 +1427,9 @@ entries:
     effectiveness: ''
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - parameter-file-path
   tags: []
 - id: CWE-38
   title: 'Path Traversal: ''\absolute\pathname\here'''
@@ -1458,8 +1474,9 @@ entries:
     effectiveness: ''
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - parameter-file-path
   tags: []
 - id: CWE-39
   title: 'Path Traversal: ''C:dirname'''
@@ -1504,8 +1521,9 @@ entries:
     effectiveness: ''
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - parameter-file-path
   tags: []
 - id: CWE-40
   title: 'Path Traversal: ''\\UNC\share\name\'' (Windows UNC Share)'
@@ -1553,8 +1571,9 @@ entries:
     effectiveness: ''
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - parameter-file-path
   tags: []
 - id: CWE-41
   title: Improper Resolution of Path Equivalence
@@ -1630,8 +1649,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - parameter-file-path
   tags: []
 - id: CWE-42
   title: 'Path Equivalence: ''filename.'' (Trailing Dot)'
@@ -2368,8 +2388,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - parameter-file-path
   tags: []
 - id: CWE-61
   title: UNIX Symbolic Link (Symlink) Following
@@ -2416,8 +2437,9 @@ entries:
     effectiveness: ''
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - parameter-file-path
   tags: []
 - id: CWE-62
   title: UNIX Hard Link
@@ -2622,8 +2644,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - parameter-file-path
   tags: []
 - id: CWE-67
   title: Improper Handling of Windows Device Names
@@ -2827,8 +2850,9 @@ entries:
     effectiveness: ''
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - parameter-file-path
   tags: []
 - id: CWE-74
   title: Improper Neutralization of Special Elements in Output Used by a Downstream
@@ -3235,8 +3259,9 @@ entries:
     effectiveness: Moderate
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - parameter-raw-html
   tags: []
 - id: CWE-80
   title: Improper Neutralization of Script-Related HTML Tags in a Web Page (Basic
@@ -3289,8 +3314,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - parameter-raw-html
   tags: []
 - id: CWE-81
   title: Improper Neutralization of Script in an Error Message Web Page
@@ -3431,8 +3457,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - parameter-raw-html
   tags: []
 - id: CWE-84
   title: Improper Neutralization of Encoded URI Schemes in a Web Page
@@ -3561,8 +3588,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - parameter-raw-html
   tags: []
 - id: CWE-87
   title: Improper Neutralization of Alternate XSS Syntax
@@ -3660,8 +3688,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - shell-command
   tags: []
 - id: CWE-89
   title: Improper Neutralization of Special Elements used in an SQL Command ('SQL
@@ -3849,8 +3878,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - parameter-ldap-filter
   tags: []
 - id: CWE-91
   title: XML Injection (aka Blind XPath Injection)
@@ -3906,8 +3936,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - parameter-xpath-expression
   tags: []
 - id: CWE-92
   title: 'DEPRECATED: Improper Sanitization of Custom Special Characters'
@@ -3982,8 +4013,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - parameter-header-value
   tags: []
 - id: CWE-94
   title: Improper Control of Generation of Code ('Code Injection')
@@ -4121,8 +4153,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - forbidden-call
   tags: []
 - id: CWE-96
   title: Improper Neutralization of Directives in Statically Saved Code ('Static Code
@@ -4731,8 +4764,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - unsafe-jni
   tags: []
 - id: CWE-112
   title: Missing XML Validation
@@ -4832,8 +4866,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - parameter-header-value
   tags: []
 - id: CWE-114
   title: Process Control
@@ -5046,8 +5081,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - parameter-log-message
   tags: []
 - id: CWE-118
   title: Incorrect Access of Indexable Resource ('Range Error')
@@ -6195,8 +6231,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - parameter-format-string
   tags: []
 - id: CWE-135
   title: Incorrect Calculation of Multi-Byte String Length
@@ -9092,8 +9129,9 @@ entries:
     effectiveness: ''
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - secret-in-log
   tags: []
 - id: CWE-210
   title: Self-generated Error Message Containing Sensitive Information
@@ -9341,8 +9379,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - secret-in-log
   tags: []
 - id: CWE-216
   title: 'DEPRECATED: Containment Errors (Container Errors)'
@@ -10729,8 +10768,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - privileged-container
   tags: []
 - id: CWE-252
   title: Unchecked Return Value
@@ -10888,8 +10928,10 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - hardcoded-secret
+  - plaintext-config-secret
   tags: []
 - id: CWE-257
   title: Storing Passwords in a Recoverable Format
@@ -10939,8 +10981,10 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - hardcoded-secret
+  - plaintext-config-secret
   tags: []
 - id: CWE-258
   title: Empty Password in Configuration File
@@ -11052,6 +11096,7 @@ entries:
   implementation_status: partial
   rule_ids:
   - hardcoded-secret
+  - plaintext-config-secret
   tags: []
 - id: CWE-260
   title: Password in Configuration File
@@ -11098,8 +11143,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - plaintext-config-secret
   tags: []
 - id: CWE-261
   title: Weak Encoding for Password
@@ -11541,8 +11587,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - privileged-container
   tags: []
 - id: CWE-273
   title: Improper Check for Dropped Privileges
@@ -11730,8 +11777,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - world-writable-permission
   tags: []
 - id: CWE-277
   title: Insecure Inherited Permissions
@@ -11851,8 +11899,9 @@ entries:
     effectiveness: ''
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - world-writable-permission
   tags: []
 - id: CWE-280
   title: Improper Handling of Insufficient Permissions or Privileges
@@ -12749,8 +12798,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - tls-verification-disabled
   tags: []
 - id: CWE-297
   title: Improper Validation of Certificate with Host Mismatch
@@ -12818,8 +12868,9 @@ entries:
     effectiveness: ''
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - tls-verification-disabled
   tags: []
 - id: CWE-298
   title: Improper Validation of Certificate Expiration
@@ -12906,8 +12957,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - tls-verification-disabled
   tags: []
 - id: CWE-300
   title: Channel Accessible by Non-Endpoint
@@ -13355,8 +13407,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - authentication-lockout-disabled
   tags: []
 - id: CWE-308
   title: Use of Single-factor Authentication
@@ -13586,8 +13639,10 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - hardcoded-secret
+  - plaintext-config-secret
   tags: []
 - id: CWE-313
   title: Cleartext Storage in a File or on Disk
@@ -13632,8 +13687,10 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - hardcoded-secret
+  - plaintext-config-secret
   tags: []
 - id: CWE-314
   title: Cleartext Storage in the Registry
@@ -13908,8 +13965,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - cleartext-http
   tags: []
 - id: CWE-321
   title: Use of Hard-coded Cryptographic Key
@@ -13960,8 +14018,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - hardcoded-secret
   tags: []
 - id: CWE-322
   title: Key Exchange without Entity Authentication
@@ -14055,8 +14114,9 @@ entries:
     effectiveness: ''
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - constant-aead-nonce
   tags: []
 - id: CWE-324
   title: Use of a Key Past its Expiration Date
@@ -14422,8 +14482,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - constant-cbc-iv
   tags: []
 - id: CWE-330
   title: Use of Insufficiently Random Values
@@ -14569,8 +14630,9 @@ entries:
     effectiveness: ''
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - weak-random
   tags: []
 - id: CWE-332
   title: Insufficient Entropy in PRNG
@@ -14616,8 +14678,9 @@ entries:
     effectiveness: ''
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - weak-random
   tags: []
 - id: CWE-333
   title: Improper Handling of Insufficient Entropy in TRNG
@@ -14742,8 +14805,9 @@ entries:
     effectiveness: ''
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - constant-random-seed
   tags: []
 - id: CWE-336
   title: Same Seed in Pseudo-Random Number Generator (PRNG)
@@ -14791,8 +14855,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - constant-random-seed
   tags: []
 - id: CWE-337
   title: Predictable Seed in Pseudo-Random Number Generator (PRNG)
@@ -14840,8 +14905,9 @@ entries:
     effectiveness: ''
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - constant-random-seed
   tags: []
 - id: CWE-338
   title: Use of Cryptographically Weak Pseudo-Random Number Generator (PRNG)
@@ -14893,8 +14959,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - weak-random
   tags: []
 - id: CWE-339
   title: Small Seed Space in PRNG
@@ -15018,8 +15085,9 @@ entries:
     effectiveness: ''
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - weak-random
   tags: []
 - id: CWE-342
   title: Predictable Exact Value from Previous Values
@@ -15555,8 +15623,9 @@ entries:
     effectiveness: SOAR Partial
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - csrf-protection-disabled
   tags: []
 - id: CWE-353
   title: Missing Support for Integrity Check
@@ -16302,8 +16371,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - divide-by-zero
   tags: []
 - id: CWE-370
   title: Missing Check for Certificate Revocation after Initial Check
@@ -16543,8 +16613,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - insecure-temp-file
   tags: []
 - id: CWE-378
   title: Creation of Temporary File With Insecure Permissions
@@ -16688,8 +16759,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - process-exit
   tags: []
 - id: CWE-383
   title: 'J2EE Bad Practices: Direct Use of Threads'
@@ -16738,8 +16810,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - direct-thread
   tags: []
 - id: CWE-384
   title: Session Fixation
@@ -16969,8 +17042,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - swallowed-error
   tags: []
 - id: CWE-392
   title: Missing Report of Error Condition
@@ -17166,8 +17240,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - null-catch
   tags: []
 - id: CWE-396
   title: Declaration of Catch for Generic Exception
@@ -18478,8 +18553,9 @@ entries:
     effectiveness: ''
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - untrusted-search-path
   tags: []
 - id: CWE-427
   title: Uncontrolled Search Path Element
@@ -18538,8 +18614,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - untrusted-search-path
   tags: []
 - id: CWE-428
   title: Unquoted Search Path or Element
@@ -20156,8 +20233,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - forbidden-call
   tags: []
 - id: CWE-471
   title: Modification of Assumed-Immutable Data (MAID)
@@ -20557,8 +20635,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - obsolete-call
   tags: []
 - id: CWE-478
   title: Missing Default Case in Multiple Condition Expression
@@ -20786,8 +20865,9 @@ entries:
     effectiveness: ''
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - assignment-in-condition
   tags: []
 - id: CWE-482
   title: Comparing instead of Assigning
@@ -21008,8 +21088,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - class-name-comparison
   tags: []
 - id: CWE-487
   title: Reliance on Package-level Scope
@@ -21201,8 +21282,9 @@ entries:
     effectiveness: ''
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - public-clone-method
   tags: []
 - id: CWE-492
   title: Use of Inner Class Containing Sensitive Data
@@ -21299,8 +21381,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - public-static-field
   tags: []
 - id: CWE-494
   title: Download of Code Without Integrity Check
@@ -21377,8 +21460,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - download-execution
   tags: []
 - id: CWE-495
   title: Private Data Structure Returned From A Public Method
@@ -21698,8 +21782,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - public-static-field
   tags: []
 - id: CWE-501
   title: Trust Boundary Violation
@@ -22331,8 +22416,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - weak-password-length
   tags: []
 - id: CWE-522
   title: Insufficiently Protected Credentials
@@ -22441,8 +22527,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - cleartext-credential-url
   tags: []
 - id: CWE-524
   title: Use of Cache Containing Sensitive Information
@@ -22575,8 +22662,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - plaintext-config-secret
   tags: []
 - id: CWE-527
   title: Exposure of Version-Control Repository to an Unauthorized Control Sphere
@@ -23166,8 +23254,9 @@ entries:
     effectiveness: ''
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - hardcoded-secret
   tags: []
 - id: CWE-541
   title: Inclusion of Sensitive Information in an Include File
@@ -23385,8 +23474,9 @@ entries:
     effectiveness: ''
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - suspicious-comment
   tags: []
 - id: CWE-547
   title: Use of Hard-coded, Security-relevant Constants
@@ -23434,8 +23524,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - hardcoded-secret
   tags: []
 - id: CWE-548
   title: Exposure of Information Through Directory Listing
@@ -23482,8 +23573,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - directory-listing-enabled
   tags: []
 - id: CWE-549
   title: Missing Password Field Masking
@@ -23676,8 +23768,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - public-storage
   tags: []
 - id: CWE-553
   title: Command Shell in Externally Accessible Directory
@@ -24330,8 +24423,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - missing-super-finalizer
   tags: []
 - id: CWE-570
   title: Expression is Always False
@@ -24469,8 +24563,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - thread-run
   tags: []
 - id: CWE-573
   title: Improper Following of Specification by Caller
@@ -24772,8 +24867,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - missing-super-clone
   tags: []
 - id: CWE-581
   title: 'Object Model Violation: Just One of Equals and Hashcode Defined'
@@ -24817,8 +24913,10 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - equals-without-hashcode
+  - hashcode-without-equals
   tags: []
 - id: CWE-582
   title: Array Declared Public, Final, and Static
@@ -24861,8 +24959,9 @@ entries:
     effectiveness: ''
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - public-static-array
   tags: []
 - id: CWE-583
   title: finalize() Method Declared Public
@@ -24906,8 +25005,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - public-finalizer
   tags: []
 - id: CWE-584
   title: Return Inside Finally Block
@@ -24995,8 +25095,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - empty-synchronized
   tags: []
 - id: CWE-586
   title: Explicit Call to Finalize()
@@ -25041,8 +25142,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - explicit-finalizer
   tags: []
 - id: CWE-587
   title: Assignment of a Fixed Address to a Pointer
@@ -25592,8 +25694,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - sensitive-query-string
   tags: []
 - id: CWE-599
   title: Missing Validation of OpenSSL Certificate
@@ -25773,8 +25876,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - parameter-redirect-target
   tags: []
 - id: CWE-602
   title: Client-Side Enforcement of Server-Side Security
@@ -26010,8 +26114,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - public-static-array
   tags: []
 - id: CWE-608
   title: 'Struts: Non-private Field in ActionForm Class'
@@ -26053,8 +26158,9 @@ entries:
     effectiveness: ''
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - struts-public-field
   tags: []
 - id: CWE-609
   title: Double-Checked Locking
@@ -26201,8 +26307,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - xml-entity-expansion
   tags: []
 - id: CWE-612
   title: Improper Authorization of Index Containing Sensitive Information
@@ -26304,8 +26411,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - session-expiry-disabled
   tags: []
 - id: CWE-614
   title: Sensitive Cookie in HTTPS Session Without 'Secure' Attribute
@@ -26349,8 +26457,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - cookie-secure-disabled
   tags: []
 - id: CWE-615
   title: Inclusion of Sensitive Information in Source Code Comments
@@ -27332,8 +27441,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - parameter-xpath-expression
   tags: []
 - id: CWE-644
   title: Improper Neutralization of HTTP Headers for Scripting Syntax
@@ -30284,8 +30394,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - legacy-tls-version
   tags: []
 - id: CWE-758
   title: Reliance on Undefined, Unspecified, or Implementation-Defined Behavior
@@ -30445,8 +30556,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - constant-password-salt
   tags: []
 - id: CWE-761
   title: Free of Pointer not at Start of Buffer
@@ -30939,8 +31051,9 @@ entries:
     effectiveness: ''
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - parameter-allocation-size
   tags: []
 - id: CWE-771
   title: Missing Reference to Active Allocated Resource
@@ -31227,8 +31340,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - xml-entity-expansion
   tags: []
 - id: CWE-777
   title: Regular Expression without Anchors
@@ -31407,8 +31521,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - rsa-without-oaep
   tags: []
 - id: CWE-781
   title: Improper Address Validation in IOCTL with METHOD_NEITHER I/O Control Code
@@ -31905,8 +32020,9 @@ entries:
     effectiveness: Moderate
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - parameter-allocation-size
   tags: []
 - id: CWE-790
   title: Improper Filtering of Special Elements
@@ -32312,6 +32428,7 @@ entries:
   implementation_status: partial
   rule_ids:
   - hardcoded-secret
+  - plaintext-config-secret
   tags: []
 - id: CWE-799
   title: Improper Control of Interaction Frequency
@@ -33134,8 +33251,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - download-execution
   tags: []
 - id: CWE-830
   title: Inclusion of Web Functionality from an Untrusted Source
@@ -33535,8 +33653,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - parameter-raw-html
   tags: []
 - id: CWE-839
   title: Numeric Range Comparison Without Minimum Check
@@ -34295,8 +34414,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - forbidden-call
   tags: []
 - id: CWE-916
   title: Use of Password Hash With Insufficient Computational Effort
@@ -34365,8 +34485,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - weak-hash
   tags: []
 - id: CWE-917
   title: Improper Neutralization of Special Elements used in an Expression Language
@@ -34417,8 +34538,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - parameter-expression-language
   tags: []
 - id: CWE-918
   title: Server-Side Request Forgery (SSRF)
@@ -34479,8 +34601,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - parameter-network-target
   tags: []
 - id: CWE-920
   title: Improper Restriction of Power Consumption
@@ -35004,8 +35127,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - wildcard-cors-origin
   tags: []
 - id: CWE-943
   title: Improper Neutralization of Special Elements in Data Query Logic
@@ -35097,8 +35221,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - cookie-httponly-disabled
   tags: []
 - id: CWE-1007
   title: Insufficient Visual Distinction of Homoglyphs Presented to User
@@ -35196,8 +35321,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - unrestricted-framing
   tags: []
 - id: CWE-1022
   title: Use of Web Link to Untrusted Target with window.opener Access
@@ -35250,8 +35376,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - parameter-window-opener
   tags: []
 - id: CWE-1023
   title: Incomplete Comparison with Missing Factors
@@ -38966,8 +39093,10 @@ entries:
     effectiveness: ''
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - default-credential
+  - default-password
   tags: []
 - id: CWE-1189
   title: Improper Isolation of Shared Resources on System-on-a-Chip (SoC)
@@ -39230,8 +39359,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - constant-cbc-iv
   tags: []
 - id: CWE-1209
   title: Failure to Disable Reserved Bits
@@ -41765,8 +41895,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - cookie-samesite-disabled
   tags: []
 - id: CWE-1276
   title: Hardware Child Block Incorrectly Connected to Parent System
@@ -42194,8 +42325,9 @@ entries:
     effectiveness: ''
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - parameter-allocation-size
   tags: []
 - id: CWE-1285
   title: Improper Validation of Specified Index, Position, or Offset in Input
@@ -42662,8 +42794,9 @@ entries:
     effectiveness: ''
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - secret-in-log
   tags: []
 - id: CWE-1296
   title: Incorrect Chaining or Granularity of Debug Components
@@ -43720,8 +43853,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - prototype-mutation
   tags: []
 - id: CWE-1322
   title: Use of Blocking Code in Single-threaded, Non-blocking Context
@@ -44288,8 +44422,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - nested-regex-quantifier
   tags: []
 - id: CWE-1334
   title: Unauthorized Error Injection Can Degrade Hardware Redundancy
@@ -44462,8 +44597,9 @@ entries:
     effectiveness: High
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - parameter-template-source
   tags: []
 - id: CWE-1338
   title: Improper Protections Against Hardware Overheating
@@ -44948,8 +45084,9 @@ entries:
     effectiveness: ''
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - missing-integer-radix
   tags: []
 - id: CWE-1390
   title: Weak Authentication
@@ -45078,8 +45215,10 @@ entries:
   upstream_detection_methods: []
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - default-credential
+  - default-password
   tags: []
 - id: CWE-1393
   title: Use of Default Password
@@ -45124,8 +45263,9 @@ entries:
   upstream_detection_methods: []
   detection_methods: []
   detection_review: unreviewed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - default-password
   tags: []
 - id: CWE-1394
   title: Use of Default Cryptographic Key
@@ -46078,8 +46218,9 @@ entries:
   evidence_required: Hermetic build comparison
   positive_example: Build fetches an unpinned generated schema
   negative_example: Schema content is pinned and verified
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - mutable-artifact-reference
   cwe_mapping_status: not_reviewed
   assessment_kind: defect
   classification_review: proposed
@@ -46650,8 +46791,9 @@ entries:
   evidence_required: Pipeline policy inspection
   positive_example: Release proceeds after a required check fails
   negative_example: Release is blocked on failure
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - relaxed-check
   cwe_mapping_status: not_reviewed
   assessment_kind: policy_violation
   classification_review: proposed
@@ -47031,8 +47173,9 @@ entries:
   - static
   - runtime
   detection_review: proposed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - unawaited-call
   assessment_kind: defect
   classification_review: proposed
   classification_basis: Original family definition; validate applicability against
@@ -47335,8 +47478,9 @@ entries:
   - runtime
   - specification
   detection_review: proposed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - mutable-artifact-reference
   assessment_kind: policy_violation
   classification_review: proposed
   classification_basis: Original family definition; validate applicability against
@@ -47385,8 +47529,9 @@ entries:
   - configuration
   - specification
   detection_review: proposed
-  implementation_status: unsupported
-  rule_ids: []
+  implementation_status: partial
+  rule_ids:
+  - download-execution
   assessment_kind: policy_violation
   classification_review: proposed
   classification_basis: Original family definition; validate applicability against

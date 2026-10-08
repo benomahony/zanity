@@ -1,0 +1,3 @@
+rules: assignment-in-condition
+exit: 0
+Assignment.java:3:13: warning [assignment-in-condition]

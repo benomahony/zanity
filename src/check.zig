@@ -61,7 +61,7 @@ pub const Call = struct {
     key: ts.Node.Key,
     name: ?ts.Node,
     receiver: bool,
-    arguments: [2]?ts.Node,
+    arguments: [4]?ts.Node,
     count: u32,
 };
 
@@ -85,7 +85,7 @@ pub const Context = struct {
     iterable: ?ts.Node = null,
     lhs: ?ts.Node = null,
     rhs: ?ts.Node = null,
-    arguments: [2]?ts.Node = .{ null, null },
+    arguments: [4]?ts.Node = .{ null, null, null, null },
     argument_count: u32 = 0,
     parameter_start: usize = 0,
     parameter_count: u32 = 0,
@@ -313,6 +313,7 @@ pub const Checker = struct {
             .index = try captures.index(&work.scratch.captures, self.compiled, root, source),
         };
         try suppress.collectSuppressions(&file);
+        try hazards.checkSuspiciousComments(&file);
         file.code_lines = file.codeLines();
         if (ts.ts_node_has_error(root)) {
             _ = try file.report(root, "parse-error", "zanity couldn't fully parse this file, so some findings may be missing.");

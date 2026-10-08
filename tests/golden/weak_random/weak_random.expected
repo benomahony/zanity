@@ -1,0 +1,3 @@
+rules: weak-random
+exit: 1
+weak_random.py:4:9: error [weak-random]

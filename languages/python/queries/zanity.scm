@@ -30,7 +30,7 @@
 
 (call
   arguments: (argument_list
-    (expression) @call.argument))
+    (_) @call.argument))
 
 (augmented_assignment) @assignment.compound
 
@@ -546,6 +546,12 @@
         attribute: (identifier) @_base)
     ]))
   (#any-of? @_base "ABC" "Protocol"))
+
+; CWE-369: a literal zero divisor.
+((binary_operator
+  operator: ["/" "//" "%"]
+  right: [(integer) (float)] @_zero_divisor) @finding.divide-by-zero
+  (#any-of? @_zero_divisor "0" "00" "0.0" "0." ".0" "0x0" "0o0" "0b0"))
 
 ((class_definition
   name: (identifier) @abstraction.name

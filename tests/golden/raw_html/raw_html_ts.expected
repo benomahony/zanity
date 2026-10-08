@@ -1,0 +1,3 @@
+rules: parameter-raw-html
+exit: 1
+raw_html_ts.ts:2:21: error [parameter-raw-html]

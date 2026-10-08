@@ -1,0 +1,8 @@
+rules: class-name-comparison,equals-without-hashcode,hashcode-without-equals,struts-public-field
+exit: 1
+JavaContracts.java:11:1: error [equals-without-hashcode]
+JavaContracts.java:15:1: error [hashcode-without-equals]
+JavaContracts.java:24:1: error [equals-without-hashcode]
+JavaContracts.java:27:5: error [hashcode-without-equals]
+JavaContracts.java:33:5: warning [struts-public-field]
+JavaContracts.java:3:16: error [class-name-comparison]

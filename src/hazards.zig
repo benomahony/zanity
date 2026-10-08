@@ -49,6 +49,42 @@ fn placeholder(value: []const u8) bool {
     return false;
 }
 
+/// Conventional defect markers in comments. These exact uppercase tokens are deliberately
+/// narrower than prose containing words such as "debug" or "bugfix".
+pub fn checkSuspiciousComments(self: *File) !void {
+    if (!self.checker.enabled.enabled("suspicious-comment")) return;
+    const comment = self.v.comment orelse return;
+    if (comment >= self.checker.compiled.captureCount()) assert.panic("comment capture {d} is outside the query's {d} captures; build the vocabulary from this checker", .{ comment, self.checker.compiled.captureCount() });
+    var inspected: usize = 0;
+    for (self.index.triples) |t| {
+        if (t.id != comment) continue;
+        inspected += 1;
+        const text = t.node.text(self.source);
+        const marker = commentMarker(text) orelse continue;
+        _ = try self.report(t.node, "suspicious-comment", try self.say("This comment contains the defect marker '{s}', saying the code is broken or unfinished.", .{marker}));
+    }
+    if (inspected > self.index.triples.len) assert.panic("inspected {d} comments among {d} captures; count only matching captures", .{ inspected, self.index.triples.len });
+}
+
+fn commentMarker(text: []const u8) ?[]const u8 {
+    if (text.len == 0) assert.panic("checking an empty comment for a marker; comment nodes include their delimiter", .{});
+    const markers = [_][]const u8{ "FIXME", "XXX", "BUG" };
+    for (markers) |marker| {
+        var from: usize = 0;
+        while (std.mem.indexOfPos(u8, text, from, marker)) |at| {
+            const before_word = at > 0 and (std.ascii.isAlphanumeric(text[at - 1]) or text[at - 1] == '_');
+            const end = at + marker.len;
+            const after_word = end < text.len and (std.ascii.isAlphanumeric(text[end]) or text[end] == '_');
+            if (!before_word and !after_word) {
+                if (marker.len == 0) assert.panic("matched an empty comment marker; every marker must name visible text", .{});
+                return marker;
+            }
+            from = end;
+        }
+    }
+    return null;
+}
+
 /// Whether a node captured `@unless.<rule>` sits inside `node` and belongs to it rather than to
 /// a nested finding of the same rule, like the default case of this switch and not an inner one.
 pub fn cancelled(self: *File, node: ts.Node, rule: []const u8) !bool {
@@ -56,20 +92,41 @@ pub fn cancelled(self: *File, node: ts.Node, rule: []const u8) !bool {
     var name_buffer: [96]u8 = undefined;
     const unless = self.checker.compiled.id(try std.fmt.bufPrint(&name_buffer, "unless.{s}", .{rule})) orelse return false;
     const finding = self.checker.compiled.id(try std.fmt.bufPrint(&name_buffer, "finding.{s}", .{rule})) orelse assert.panic("{s}: {f} was reported as {s}, but the query has no @finding.{s}; add @finding.<rule> to the language's zanity.scm, or report the rule without cancelled()", .{ self.work.facts.path, node.where(), rule, rule });
+    const barrier = self.checker.compiled.id("declaration.barrier");
     const start = ts.ts_node_start_byte(node);
     const end = ts.ts_node_end_byte(node);
     const first = std.sort.lowerBound(captures.Triple, self.index.triples, start, startsBefore);
+    const scoped_contract = cancellationIsScopeBound(rule);
     for (self.index.triples[first..]) |t| {
         if (t.key.start >= end) break;
         if (t.id != unless or ts.ts_node_end_byte(t.node) > end) continue;
-        var current = self.parentOf(t.node);
-        const owner = while (current) |c| : (current = self.parentOf(c)) {
-            if (self.index.marks(c, finding)) break c;
-        } else null;
-        if (owner) |o| if (o.eql(node)) return true;
+        if (cancellationBelongs(self, .{ .finding_node = node, .unless_node = t.node, .finding = finding, .barrier = barrier, .scoped = scoped_contract })) return true;
     }
     if (first > self.index.triples.len) assert.panic("{s}: the captures inside {f} start at {d}, past the {d} recorded; take the start from lowerBound over the recorded captures", .{ self.work.facts.path, node.where(), first, self.index.triples.len });
     return false;
+}
+
+fn cancellationIsScopeBound(rule: []const u8) bool {
+    if (rule.len == 0) assert.panic("checking cancellation scope for an empty rule; cancelled rejects it first", .{});
+    const contracts = [_][]const u8{ "missing-super-finalizer", "missing-super-clone", "equals-without-hashcode", "hashcode-without-equals" };
+    if (contracts.len == 0) assert.panic("no scope-bound contracts; remove this helper and its barrier walk", .{});
+    return strings.contains(&contracts, rule);
+}
+
+const Cancellation = struct { finding_node: ts.Node, unless_node: ts.Node, finding: captures.Id, barrier: ?captures.Id, scoped: bool };
+
+fn cancellationBelongs(self: *File, c: Cancellation) bool {
+    if (ts.ts_node_start_byte(c.unless_node) < ts.ts_node_start_byte(c.finding_node)) assert.panic("cancellation {f} starts before its finding {f}; pass a descendant", .{ c.unless_node.where(), c.finding_node.where() });
+    if (ts.ts_node_end_byte(c.unless_node) > ts.ts_node_end_byte(c.finding_node)) assert.panic("cancellation {f} ends after its finding {f}; pass a descendant", .{ c.unless_node.where(), c.finding_node.where() });
+    var current = self.parentOf(c.unless_node);
+    var first_barrier_parent: ?ts.Node = null;
+    const owner = while (current) |candidate| : (current = self.parentOf(candidate)) {
+        if (self.index.marks(candidate, c.finding)) break candidate;
+        if (first_barrier_parent == null and self.index.marks(candidate, c.barrier)) first_barrier_parent = self.parentOf(candidate);
+    } else return false;
+    if (!owner.eql(c.finding_node)) return false;
+    if (!c.scoped) return true;
+    return if (first_barrier_parent) |parent| parent.eql(owner) else true;
 }
 
 /// Calls whose name alone makes them risky, or whose arguments do: weak hashes, unsafe
@@ -82,10 +139,33 @@ pub fn checkRiskyCall(self: *File, ctx: Context, name: []const u8) !void {
     if (self.calleeIn(ctx, name, t.weak_hashes)) |m| {
         _ = try self.report(at, "weak-hash", try self.say("'{s}' is a broken hash: collisions can be forged, so it can't protect passwords, signatures or integrity.", .{m}));
     }
+    if (self.calleeIn(ctx, name, t.weak_randoms)) |m| {
+        _ = try self.report(at, "weak-random", try self.say("'{s}' is a predictable pseudo-random generator, so its output cannot safely choose secrets, tokens, nonces or security outcomes.", .{m}));
+    }
     if (self.calleeIn(ctx, name, t.unsafe_deserializers)) |m| {
         _ = try self.report(at, "unsafe-deserialization", try self.say("'{s}' can run code chosen by whoever wrote the data it reads.", .{m}));
     }
+    if (self.calleeIn(ctx, name, t.insecure_temp_calls)) |m| {
+        _ = try self.report(at, "insecure-temp-file", try self.say("'{s}' chooses a temporary name before opening it, so another process can create or replace the path first.", .{m}));
+    }
+    if (self.calleeIn(ctx, name, t.process_exit_calls)) |m| {
+        _ = try self.report(at, "process-exit", try self.say("'{s}' stops the whole process, so callers cannot recover or finish cleanup.", .{m}));
+    }
+    if (self.calleeIn(ctx, name, t.obsolete_calls)) |m| {
+        _ = try self.report(at, "obsolete-call", try self.say("'{s}' is an obsolete API retained only for compatibility and can disappear or preserve outdated behaviour.", .{m}));
+    }
+    if (ctx.receiver != null and contains(t.explicit_finalizer_methods, name)) {
+        _ = try self.report(at, "explicit-finalizer", try self.say("'{s}' invokes a finalizer directly, so the runtime can finalize the object again or observe an invalid lifetime.", .{name}));
+    }
     if (ctx.arguments[0]) |first| try checkRiskyArgument(self, ctx, name, first);
+    try checkConstantCbcIv(self, ctx, name);
+    try checkConstantAeadNonce(self, ctx, name);
+    try checkConstantPasswordSalt(self, ctx, name);
+    try checkRsaWithoutOaep(self, ctx, name);
+    try checkXmlEntityExpansion(self, ctx, name);
+    try checkMissingIntegerRadix(self, ctx, name);
+    try checkWindowOpener(self, ctx, name);
+    try checkDirectParameterSinks(self, ctx, name);
     if (self.calleeIn(ctx, name, t.wall_clocks)) |m| if (self.parentOf(ctx.node)) |parent| {
         if (self.index.marks(parent, self.v.arith_difference)) {
             _ = try self.report(ctx.node, "wall-clock-duration", try self.say("'{s}' reads the wall clock, which jumps when the clock is set, so this difference can be negative or wildly wrong.", .{m}));
@@ -93,6 +173,54 @@ pub fn checkRiskyCall(self: *File, ctx: Context, name: []const u8) !void {
     };
     if (self.calleeIn(ctx, name, t.log_calls) != null or self.calleeIn(ctx, name, t.error_calls) != null) try checkLoggedSecret(self, ctx, at);
     if (name.len == 0) assert.panic("{s}: the call {f} has an empty name; capture the callee as @call.name in the language's zanity.scm", .{ self.work.facts.path, ctx.node.where() });
+}
+
+fn checkDirectParameterSinks(self: *File, ctx: Context, name: []const u8) !void {
+    if (ctx.family != .call) assert.panic("{s}: checking direct parameter sinks in {f}, which is a {t}; call only from checkRiskyCall", .{ self.work.facts.path, ctx.node.where(), ctx.family });
+    if (name.len == 0) assert.panic("{s}: checking direct parameter sinks for an unnamed call; capture @call.name in the language query", .{self.work.facts.path});
+    const t = self.tables;
+    try checkParameterFormatString(self, ctx, name);
+    try checkDirectSinkParameter(self, ctx, name, .{
+        .sink = .{ .first_calls = t.redirect_first_calls, .third_calls = t.redirect_third_calls, .first_methods = t.redirect_first_methods },
+        .rule = "parameter-redirect-target",
+        .problem = "flows directly into a redirect destination, so a caller can send users to an untrusted site",
+    });
+    try checkParameterFilePath(self, ctx, name);
+    try checkDirectSinkParameter(self, ctx, name, .{
+        .sink = .{ .first_calls = t.xpath_first_calls, .second_calls = t.xpath_second_calls, .first_methods = t.xpath_first_methods },
+        .rule = "parameter-xpath-expression",
+        .problem = "flows directly into an XPath expression, so its operators can change which data the query selects",
+    });
+    try checkDirectSinkParameter(self, ctx, name, .{
+        .sink = .{ .second_methods = t.ldap_second_methods, .third_methods = t.ldap_third_methods },
+        .rule = "parameter-ldap-filter",
+        .problem = "flows directly into an LDAP filter, so its operators can change which directory entries the query selects",
+    });
+    try checkDirectSinkParameter(self, ctx, name, .{
+        .sink = .{ .second_methods = t.header_second_methods },
+        .rule = "parameter-header-value",
+        .problem = "flows directly into an HTTP header value, so carriage returns or line feeds can create additional headers or a response body",
+    });
+    try checkDirectSinkParameter(self, ctx, name, .{
+        .sink = .{ .first_calls = t.template_first_calls, .first_methods = t.template_first_methods, .second_methods = t.template_second_methods },
+        .rule = "parameter-template-source",
+        .problem = "is compiled as template source, so template directives can execute or expose server-side data",
+    });
+    try checkDirectSinkParameter(self, ctx, name, .{
+        .sink = .{ .first_methods = t.expression_first_methods },
+        .rule = "parameter-expression-language",
+        .problem = "is parsed as expression-language code, so its operators can access or invoke unintended application objects",
+    });
+    try checkDirectSinkParameter(self, ctx, name, .{
+        .sink = .{ .first_calls = t.raw_html_first_calls },
+        .rule = "parameter-raw-html",
+        .problem = "is marked as already-safe HTML, so markup and script in it bypass automatic output escaping",
+    });
+    try checkDirectSinkParameter(self, ctx, name, .{
+        .sink = .{ .first_calls = t.allocation_size_first_calls, .second_calls = t.allocation_size_second_calls },
+        .rule = "parameter-allocation-size",
+        .problem = "controls an allocation size without a visible bound, so a caller can exhaust memory",
+    });
 }
 
 /// A call that runs code no one can review: a bare builtin such as Python's `compile(source, ...)`,
@@ -130,15 +258,432 @@ fn literalName(self: *File, argument: ?ts.Node) bool {
 /// A shell command line or SQL text built from values at runtime.
 fn checkRiskyArgument(self: *File, ctx: Context, name: []const u8, first: ts.Node) !void {
     if (ts.ts_node_start_byte(first) < ts.ts_node_start_byte(ctx.node)) assert.panic("{s}: the argument {f} starts before the call {f} it belongs to, so the language's query linked it to the wrong call; in that language's zanity.scm, move the argument's capture (@call.argument) inside the pattern for the call itself (@call.outer)", .{ self.work.facts.path, first.where(), ctx.node.where() });
+    const first_text = first.text(self.source);
+    const first_shown = header(first_text);
     const built = self.index.marks(first, self.v.string_built) or self.index.marks(first, self.v.string_format);
     const literal = self.index.marks(first, self.v.literal_string) and !self.index.marks(first, self.v.string_format);
+    try checkConstantSeed(self, ctx, name, first);
+    try checkNestedRegexQuantifier(self, ctx, name, first);
     if (self.calleeIn(ctx, name, self.tables.shell_calls)) |m| if (!literal) {
-        _ = try self.report(ctx.callee orelse ctx.name.?, "shell-command", try self.say("'{s}' runs '{s}' through a shell, so a crafted value in it can run other commands.", .{ m, header(first.text(self.source)) }));
+        _ = try self.report(ctx.callee orelse ctx.name.?, "shell-command", try self.say("'{s}' runs '{s}' through a shell, so a crafted value in it can run other commands.", .{ m, first_shown }));
     };
     if (ctx.receiver != null and contains(self.tables.sql_methods, name) and built) {
-        _ = try self.report(first, "sql-built-from-strings", try self.say("This SQL is built from strings at runtime, so a value containing a quote can change the query: '{s}'.", .{header(first.text(self.source))}));
+        _ = try self.report(first, "sql-built-from-strings", try self.say("This SQL is built from strings at runtime, so a value containing a quote can change the query: '{s}'.", .{first_shown}));
     }
+    const network = self.calleeIn(ctx, name, self.tables.network_calls) != null;
+    if (network and directFunctionParameter(self, first)) {
+        _ = try self.report(first, "parameter-network-target", try self.say("Function parameter '{s}' flows directly into a server-side network target, so a caller can choose the scheme, host or port.", .{first_text}));
+    }
+    if (literal and network) try checkLiteralNetworkEndpoint(self, first);
     if (built and literal and !self.index.marks(first, self.v.string_format)) assert.panic("{s}: {f} is treated both as fixed text and as text put together at runtime, which can't both be true, so the language's query marks it twice; in that language's zanity.scm, keep only one of its two captures (@literal.string for fixed text, @string.built for text built at runtime)", .{ self.work.facts.path, first.where() });
+}
+
+fn checkLiteralNetworkEndpoint(self: *File, first: ts.Node) !void {
+    if (ts.ts_node_start_byte(first) > ts.ts_node_end_byte(first)) assert.panic("{s}: literal network endpoint {f} runs backwards; pass a node from the live tree", .{ self.work.facts.path, first.where() });
+    if (ts.ts_node_end_byte(first) > self.source.len) assert.panic("{s}: literal network endpoint {f} ends past the {d}-byte source", .{ self.work.facts.path, first.where(), self.source.len });
+    const endpoint = first.text(self.source);
+    if (sensitiveQueryKey(endpoint)) |key| {
+        _ = try self.report(first, "sensitive-query-string", try self.say("The URL puts secret parameter '{s}' in its query string, where logs, browser history and intermediaries can retain it.", .{key}));
+    }
+    if (!cleartextHttp(endpoint)) return;
+    _ = try self.report(first, "cleartext-http", try self.say("This request uses plain HTTP to a non-local endpoint, so anyone on the network path can read or alter it.", .{}));
+    if (cleartextCredentialUrl(endpoint)) _ = try self.report(first, "cleartext-credential-url", try self.say("This plain-HTTP URL contains a credential, so anyone on the network path can read it.", .{}));
+}
+
+fn checkConstantSeed(self: *File, ctx: Context, name: []const u8, first: ts.Node) !void {
+    if (ctx.family != .call) assert.panic("{s}: checking a fixed seed in {f}, which is a {t}; call only from checkRiskyArgument", .{ self.work.facts.path, ctx.node.where(), ctx.family });
+    if (name.len == 0) assert.panic("{s}: checking a fixed seed for an unnamed call; capture @call.name in the language query", .{self.work.facts.path});
+    if (self.inTest() or self.inTestFile() or !self.index.marks(first, self.v.literal_constant)) return;
+    const matched = self.calleeIn(ctx, name, self.tables.seed_calls) orelse return;
+    _ = try self.report(first, "constant-random-seed", try self.say("'{s}' uses the fixed seed '{s}', so it produces the same predictable sequence whenever it starts.", .{ matched, header(first.text(self.source)) }));
+}
+
+fn checkNestedRegexQuantifier(self: *File, ctx: Context, name: []const u8, first: ts.Node) !void {
+    if (ctx.family != .call) assert.panic("{s}: checking a regex in {f}, which is a {t}; call only from checkRiskyArgument", .{ self.work.facts.path, ctx.node.where(), ctx.family });
+    if (name.len == 0) assert.panic("{s}: checking a regex for an unnamed call; capture @call.name in the language query", .{self.work.facts.path});
+    if (!self.index.marks(first, self.v.literal_string)) return;
+    const matched = self.calleeIn(ctx, name, self.tables.regex_calls) orelse return;
+    const pattern = first.text(self.source);
+    if (!hasNestedRegexQuantifier(pattern)) return;
+    _ = try self.report(first, "nested-regex-quantifier", try self.say("'{s}' compiles a pattern with an unbounded quantifier nested inside another, so crafted input can take exponential time: '{s}'.", .{ matched, header(pattern) }));
+}
+
+fn checkConstantCbcIv(self: *File, ctx: Context, name: []const u8) !void {
+    if (ctx.family != .call) assert.panic("{s}: checking an IV in {f}, which is a {t}; call only from checkRiskyCall", .{ self.work.facts.path, ctx.node.where(), ctx.family });
+    if (name.len == 0) assert.panic("{s}: checking an IV for an unnamed call; capture @call.name in the language query", .{self.work.facts.path});
+    const position: usize = if (self.calleeIn(ctx, name, self.tables.iv_first_calls) != null)
+        0
+    else if (self.calleeIn(ctx, name, self.tables.iv_second_calls) != null)
+        1
+    else if (self.calleeIn(ctx, name, self.tables.iv_third_calls) != null)
+        2
+    else
+        return;
+    if (position == 2 and !callAlgorithmContains(self, ctx, "cbc")) return;
+    const iv = ctx.arguments[position] orelse return;
+    if (!fixedByteValue(self, iv)) return;
+    _ = try self.report(iv, "constant-cbc-iv", try self.say("This CBC initialization vector is fixed in source, so encrypting with the same key repeats it and reveals relationships between messages: '{s}'.", .{header(iv.text(self.source))}));
+}
+
+fn checkConstantAeadNonce(self: *File, ctx: Context, name: []const u8) !void {
+    if (ctx.family != .call) assert.panic("{s}: checking an AEAD nonce in {f}, which is a {t}; call only from checkRiskyCall", .{ self.work.facts.path, ctx.node.where(), ctx.family });
+    if (name.len == 0) assert.panic("{s}: checking an AEAD nonce for an unnamed call; capture @call.name in the language query", .{self.work.facts.path});
+    var nonce: ?ts.Node = null;
+    if (self.calleeIn(ctx, name, self.tables.iv_third_calls) != null and (callAlgorithmContains(self, ctx, "gcm") or callAlgorithmContains(self, ctx, "chacha"))) {
+        if (ctx.arguments[2]) |argument| {
+            if (fixedByteValue(self, argument)) nonce = argument;
+        }
+    } else if (self.calleeIn(ctx, name, self.tables.aead_nonce_calls) != null) {
+        for (ctx.arguments) |argument| if (argument) |node| {
+            if (fixedNonceOption(node.text(self.source))) nonce = node;
+        };
+    }
+    const fixed = nonce orelse return;
+    _ = try self.report(fixed, "constant-aead-nonce", try self.say("This authenticated-encryption nonce is fixed in source, so reuse under the same key breaks confidentiality or authenticity: '{s}'.", .{header(fixed.text(self.source))}));
+}
+
+fn checkConstantPasswordSalt(self: *File, ctx: Context, name: []const u8) !void {
+    if (ctx.family != .call) assert.panic("{s}: checking a password salt in {f}, which is a {t}; call only from checkRiskyCall", .{ self.work.facts.path, ctx.node.where(), ctx.family });
+    if (name.len == 0) assert.panic("{s}: checking a password salt for an unnamed call; capture @call.name in the language query", .{self.work.facts.path});
+    const position: usize = if (self.calleeIn(ctx, name, self.tables.password_salt_second_calls) != null)
+        1
+    else if (self.calleeIn(ctx, name, self.tables.password_salt_third_calls) != null)
+        2
+    else
+        return;
+    const salt = ctx.arguments[position] orelse return;
+    if (!fixedByteValue(self, salt)) return;
+    _ = try self.report(salt, "constant-password-salt", try self.say("This password salt is fixed in source, so equal passwords reuse it and produce equal derived hashes: '{s}'.", .{header(salt.text(self.source))}));
+}
+
+fn checkRsaWithoutOaep(self: *File, ctx: Context, name: []const u8) !void {
+    if (ctx.family != .call) assert.panic("{s}: checking RSA padding in {f}, which is a {t}; call only from checkRiskyCall", .{ self.work.facts.path, ctx.node.where(), ctx.family });
+    if (name.len == 0) assert.panic("{s}: checking RSA padding for an unnamed call; capture @call.name in the language query", .{self.work.facts.path});
+    const unsafe = if (self.calleeIn(ctx, name, self.tables.rsa_pkcs1_calls) != null)
+        ctx.callee orelse ctx.name.?
+    else if (self.calleeIn(ctx, name, self.tables.rsa_transformation_calls) != null) transformation: {
+        const argument = ctx.arguments[0] orelse return;
+        const text = argument.text(self.source);
+        var lowered: [128]u8 = undefined;
+        if (text.len > lowered.len) return;
+        const normalized = std.ascii.lowerString(lowered[0..text.len], text);
+        if (std.mem.indexOf(u8, normalized, "pkcs1padding") == null) return;
+        break :transformation argument;
+    } else return;
+    _ = try self.report(unsafe, "rsa-without-oaep", try self.say("This RSA operation selects PKCS#1 v1.5 padding, which is vulnerable to padding-oracle attacks when decryption failures are observable.", .{}));
+}
+
+fn checkMissingIntegerRadix(self: *File, ctx: Context, name: []const u8) !void {
+    if (ctx.family != .call) assert.panic("{s}: checking an integer radix in {f}, which is a {t}; call only from checkRiskyCall", .{ self.work.facts.path, ctx.node.where(), ctx.family });
+    if (name.len == 0) assert.panic("{s}: checking an integer radix for an unnamed call; capture @call.name in the language query", .{self.work.facts.path});
+    const matched = self.calleeIn(ctx, name, self.tables.integer_parse_calls) orelse return;
+    if (ctx.argument_count != 1) return;
+    const input = ctx.arguments[0] orelse assert.panic("{s}: '{s}' counted one argument but did not retain it; @call.argument must capture the argument expression", .{ self.work.facts.path, matched });
+    _ = try self.report(input, "missing-integer-radix", try self.say("'{s}' parses this text without an explicit radix, so prefixes can change how the number is interpreted.", .{matched}));
+}
+
+fn checkWindowOpener(self: *File, ctx: Context, name: []const u8) !void {
+    if (ctx.family != .call) assert.panic("{s}: checking a browser opener in {f}, which is a {t}; call only from checkRiskyCall", .{ self.work.facts.path, ctx.node.where(), ctx.family });
+    if (name.len == 0) assert.panic("{s}: checking a browser opener for an unnamed call; capture @call.name in the language query", .{self.work.facts.path});
+    _ = self.calleeIn(ctx, name, self.tables.window_open_calls) orelse return;
+    const url = ctx.arguments[0] orelse return;
+    if (!directFunctionParameter(self, url)) return;
+    const target = ctx.arguments[1] orelse return;
+    if (!self.index.marks(target, self.v.literal_string)) return;
+    if (!std.ascii.eqlIgnoreCase(std.mem.trim(u8, target.text(self.source), "\"'`"), "_blank")) return;
+    if (ctx.arguments[2]) |features| {
+        if (!self.index.marks(features, self.v.literal_string)) return;
+        const text = features.text(self.source);
+        var lowered: [256]u8 = undefined;
+        if (text.len > lowered.len) return;
+        const normalized = std.ascii.lowerString(lowered[0..text.len], text);
+        if (std.mem.indexOf(u8, normalized, "noopener") != null or std.mem.indexOf(u8, normalized, "noreferrer") != null) return;
+    }
+    _ = try self.report(url, "parameter-window-opener", try self.say("Function parameter '{s}' opens in a new tab without noopener, so the opened site can navigate or replace the original page.", .{url.text(self.source)}));
+}
+
+fn callAlgorithmContains(self: *File, ctx: Context, needle: []const u8) bool {
+    if (needle.len == 0) assert.panic("{s}: checking a cipher algorithm for an empty name", .{self.work.facts.path});
+    const algorithm = ctx.arguments[0] orelse return false;
+    if (ts.ts_node_end_byte(algorithm) > self.source.len) assert.panic("{s}: cipher algorithm {f} ends past the {d}-byte source", .{ self.work.facts.path, algorithm.where(), self.source.len });
+    const algorithm_text = algorithm.text(self.source);
+    var lowered: [128]u8 = undefined;
+    if (algorithm_text.len > lowered.len) return false;
+    return std.mem.indexOf(u8, std.ascii.lowerString(lowered[0..algorithm_text.len], algorithm_text), needle) != null;
+}
+
+fn fixedNonceOption(text: []const u8) bool {
+    if (text.len == 0 or text.len > 512) return false;
+    if (std.mem.indexOfAny(u8, text, "\r\n") != null) return false;
+    const equals = std.mem.indexOfScalar(u8, text, '=') orelse return false;
+    if (equals >= text.len) assert.panic("nonce assignment separator at {d} lies past its {d} bytes", .{ equals, text.len });
+    const name = std.mem.trim(u8, text[0..equals], " \t");
+    if (!std.ascii.eqlIgnoreCase(name, "nonce")) return false;
+    const value = std.mem.trim(u8, text[equals + 1 ..], " \t");
+    if (value.len > text.len) assert.panic("trimmed a {d}-byte nonce from a {d}-byte option", .{ value.len, text.len });
+    if (value.len < 2) return false;
+    const quote_at: usize = if (value[0] == 'b' or value[0] == 'r') 1 else 0;
+    if (quote_at >= value.len) assert.panic("nonce prefix at {d} lies past its {d}-byte value", .{ quote_at, value.len });
+    const quote = value[quote_at];
+    return (quote == '"' or quote == '\'') and value[value.len - 1] == quote;
+}
+
+fn checkParameterFormatString(self: *File, ctx: Context, name: []const u8) !void {
+    if (ctx.family != .call) assert.panic("{s}: checking a format string in {f}, which is a {t}; call only from checkRiskyCall", .{ self.work.facts.path, ctx.node.where(), ctx.family });
+    if (name.len == 0) assert.panic("{s}: checking a format string for an unnamed call; capture @call.name in the language query", .{self.work.facts.path});
+    const position: usize = if (self.calleeIn(ctx, name, self.tables.format_first_calls) != null)
+        0
+    else if (self.calleeIn(ctx, name, self.tables.format_second_calls) != null)
+        1
+    else
+        return;
+    const format = ctx.arguments[position] orelse return;
+    if (!directFunctionParameter(self, format)) return;
+    _ = try self.report(format, "parameter-format-string", try self.say("Function parameter '{s}' is used as the format string, so its format directives control how later values are interpreted.", .{format.text(self.source)}));
+}
+
+fn checkParameterFilePath(self: *File, ctx: Context, name: []const u8) !void {
+    if (ctx.family != .call) assert.panic("{s}: checking a file path in {f}, which is a {t}; call only from checkRiskyCall", .{ self.work.facts.path, ctx.node.where(), ctx.family });
+    if (name.len == 0) assert.panic("{s}: checking a file path for an unnamed call; capture @call.name in the language query", .{self.work.facts.path});
+    if (self.inTest() or self.inTestFile()) return;
+    const target = if (self.calleeIn(ctx, name, self.tables.filesystem_calls) != null)
+        ctx.arguments[0]
+    else if (ctx.receiver != null and contains(self.tables.filesystem_methods, name))
+        ctx.receiver
+    else
+        null;
+    const path = target orelse return;
+    if (!directFunctionParameter(self, path)) return;
+    _ = try self.report(path, "parameter-file-path", try self.say("Function parameter '{s}' flows directly into file access, so absolute paths, parent traversal or symlinks can escape the intended directory.", .{path.text(self.source)}));
+}
+
+const ParameterSink = struct {
+    first_calls: []const []const u8 = &.{},
+    second_calls: []const []const u8 = &.{},
+    third_calls: []const []const u8 = &.{},
+    first_methods: []const []const u8 = &.{},
+    second_methods: []const []const u8 = &.{},
+    third_methods: []const []const u8 = &.{},
+};
+
+const DirectParameterRule = struct {
+    sink: ParameterSink,
+    rule: []const u8,
+    problem: []const u8,
+};
+
+fn checkDirectSinkParameter(self: *File, ctx: Context, name: []const u8, spec: DirectParameterRule) !void {
+    if (spec.rule.len == 0) assert.panic("{s}: checking a direct sink parameter without a rule name", .{self.work.facts.path});
+    if (spec.problem.len == 0) assert.panic("{s}: checking direct sink rule '{s}' without explaining the problem", .{ self.work.facts.path, spec.rule });
+    const argument = directSinkParameter(self, ctx, name, spec.sink) orelse return;
+    _ = try self.report(argument, spec.rule, try self.say("Function parameter '{s}' {s}.", .{ argument.text(self.source), spec.problem }));
+}
+
+fn directSinkParameter(self: *File, ctx: Context, name: []const u8, sink: ParameterSink) ?ts.Node {
+    if (ctx.family != .call) assert.panic("{s}: checking a direct sink parameter in {f}, which is a {t}; call only from checkRiskyCall", .{ self.work.facts.path, ctx.node.where(), ctx.family });
+    if (name.len == 0) assert.panic("{s}: checking a direct sink parameter for an unnamed call; capture @call.name in the language query", .{self.work.facts.path});
+    const has_receiver = ctx.receiver != null;
+    const position: usize = if (self.calleeIn(ctx, name, sink.first_calls) != null)
+        0
+    else if (self.calleeIn(ctx, name, sink.second_calls) != null)
+        1
+    else if (self.calleeIn(ctx, name, sink.third_calls) != null)
+        2
+    else if (has_receiver and contains(sink.first_methods, name))
+        0
+    else if (has_receiver and contains(sink.second_methods, name))
+        1
+    else if (has_receiver and contains(sink.third_methods, name))
+        2
+    else
+        return null;
+    const argument = ctx.arguments[position] orelse return null;
+    return if (directFunctionParameter(self, argument)) argument else null;
+}
+
+fn directFunctionParameter(self: *File, node: ts.Node) bool {
+    if (!self.index.marks(node, self.v.expression_path)) return false;
+    const function = self.innermost(.function) orelse return false;
+    const signature = self.s.signature.items();
+    if (function.parameter_start + function.parameter_count > signature.len) assert.panic("{s}: function {f} owns parameters {d}..{d}, past the {d} recorded", .{ self.work.facts.path, function.node.where(), function.parameter_start, function.parameter_start + function.parameter_count, signature.len });
+    const candidate = node.text(self.source);
+    if (candidate.len == 0) assert.panic("{s}: direct parameter candidate {f} has no text; capture an expression path", .{ self.work.facts.path, node.where() });
+    for (signature[function.parameter_start..][0..function.parameter_count]) |parameter| {
+        if (std.mem.eql(u8, parameter.name.text(self.source), candidate)) return true;
+    }
+    return false;
+}
+
+fn fixedByteValue(self: *File, node: ts.Node) bool {
+    if (ts.ts_node_start_byte(node) > ts.ts_node_end_byte(node)) assert.panic("{s}: fixed-byte candidate {f} runs backwards; pass a node from the live tree", .{ self.work.facts.path, node.where() });
+    if (ts.ts_node_end_byte(node) > self.source.len) assert.panic("{s}: fixed-byte candidate {f} ends past the {d}-byte source", .{ self.work.facts.path, node.where(), self.source.len });
+    if (self.index.marks(node, self.v.literal_string) and !self.index.marks(node, self.v.string_format)) return true;
+    const value = std.mem.trim(u8, node.text(self.source), " \t\r\n");
+    if (quotedByteConversion(value)) return true;
+    return fixedNumericByteArray(value);
+}
+
+fn quotedByteConversion(value: []const u8) bool {
+    if (!std.mem.startsWith(u8, value, "[]byte(") or !std.mem.endsWith(u8, value, ")")) return false;
+    if (value.len < "[]byte()".len) assert.panic("a byte conversion matched both delimiters in only {d} bytes", .{value.len});
+    const inner = std.mem.trim(u8, value["[]byte(".len .. value.len - 1], " \t");
+    if (inner.len > value.len) assert.panic("trimmed a {d}-byte byte-conversion value from {d} bytes", .{ inner.len, value.len });
+    if (inner.len < 2) return false;
+    const quote = inner[0];
+    return (quote == '"' or quote == '\'') and inner[inner.len - 1] == quote;
+}
+
+fn fixedNumericByteArray(value: []const u8) bool {
+    const braces = std.mem.startsWith(u8, value, "[]byte{") and std.mem.endsWith(u8, value, "}");
+    const brackets = std.mem.startsWith(u8, value, "[") and std.mem.endsWith(u8, value, "]");
+    if (!braces and !brackets) return false;
+    const start: usize = if (braces) "[]byte{".len else 1;
+    if (start >= value.len) assert.panic("fixed byte elements start at {d} in a {d}-byte value", .{ start, value.len });
+    if (value[value.len - 1] != '}' and value[value.len - 1] != ']') assert.panic("fixed byte array ends with '{c}' after a closing delimiter was matched in its {d} bytes", .{ value[value.len - 1], value.len });
+    for (value[start .. value.len - 1]) |c| if (!std.ascii.isHex(c) and std.mem.indexOfScalar(u8, " \t\r\n,xX", c) == null) return false;
+    return value.len > start + 1;
+}
+
+fn checkXmlEntityExpansion(self: *File, ctx: Context, name: []const u8) !void {
+    if (ctx.family != .call) assert.panic("{s}: checking XML options in {f}, which is a {t}; call only from checkRiskyCall", .{ self.work.facts.path, ctx.node.where(), ctx.family });
+    if (name.len == 0) assert.panic("{s}: checking XML options for an unnamed call; capture @call.name in the language query", .{self.work.facts.path});
+    var unsafe: ?ts.Node = null;
+    if (self.calleeIn(ctx, name, self.tables.xml_entity_calls) != null) {
+        for (ctx.arguments) |argument| if (argument) |node| {
+            if (unsafeXmlEntityOption(node.text(self.source))) unsafe = node;
+        };
+    } else if (std.mem.eql(u8, name, "setExpandEntityReferences")) {
+        if (ctx.arguments[0]) |enabled| {
+            if (self.index.marks(enabled, self.v.literal_true)) unsafe = enabled;
+        }
+    } else if (std.mem.eql(u8, name, "setFeature")) {
+        unsafe = insecureXmlFeature(self, ctx);
+    }
+    const option = unsafe orelse return;
+    _ = try self.report(option, "xml-entity-expansion", try self.say("This XML parser enables DTD entity expansion, so untrusted XML can read local resources or expand recursively until resources are exhausted: '{s}'.", .{header(option.text(self.source))}));
+}
+
+fn unsafeXmlEntityOption(text: []const u8) bool {
+    if (text.len == 0) return false;
+    if (text.len > 512) return false;
+    var normalized: [512]u8 = undefined;
+    var len: usize = 0;
+    for (text) |c| {
+        if (std.ascii.isWhitespace(c)) continue;
+        normalized[len] = std.ascii.toLower(c);
+        len += 1;
+    }
+    if (len > text.len) assert.panic("normalized {d} XML-option bytes from {d}; normalization only removes whitespace", .{ len, text.len });
+    if (len > normalized.len) assert.panic("normalized {d} XML-option bytes into a {d}-byte buffer; reject oversized options first", .{ len, normalized.len });
+    const option = normalized[0..len];
+    return std.mem.indexOf(u8, option, "resolve_entities=true") != null or std.mem.indexOf(u8, option, "resolveentities:true") != null or std.mem.indexOf(u8, option, "noent:true") != null;
+}
+
+fn insecureXmlFeature(self: *File, ctx: Context) ?ts.Node {
+    if (ctx.family != .call) assert.panic("{s}: checking an XML feature outside a call; checkXmlEntityExpansion passes a call", .{self.work.facts.path});
+    const feature = ctx.arguments[0] orelse return null;
+    const enabled = ctx.arguments[1] orelse return null;
+    if (ts.ts_node_end_byte(feature) > ts.ts_node_start_byte(enabled)) assert.panic("{s}: XML feature name {f} overlaps its value {f}; @call.argument must capture sibling arguments", .{ self.work.facts.path, feature.where(), enabled.where() });
+    const name = std.mem.trim(u8, feature.text(self.source), "\"'");
+    const value = enabled.text(self.source);
+    const external = std.mem.endsWith(u8, name, "/external-general-entities") or std.mem.endsWith(u8, name, "/external-parameter-entities") or std.mem.endsWith(u8, name, "/load-external-dtd");
+    const false_word = [_]u8{ 'f', 'a', 'l', 's', 'e' };
+    const allows_doctype = std.mem.endsWith(u8, name, "/disallow-doctype-decl") and std.mem.eql(u8, value, &false_word);
+    if (external and self.index.marks(enabled, self.v.literal_true)) return enabled;
+    return if (allows_doctype) enabled else null;
+}
+
+fn hasNestedRegexQuantifier(pattern: []const u8) bool {
+    if (pattern.len == 0) assert.panic("checking an empty regex source; string literal captures include their quotes", .{});
+    if (std.mem.indexOfAny(u8, pattern, "\r\n") != null) return false;
+    var group: usize = 0;
+    while (group + 4 < pattern.len) : (group += 1) {
+        if (pattern[group] == '\\') {
+            group += 1;
+            continue;
+        }
+        if (pattern[group] != '(') continue;
+        var atom = group + 1;
+        if (std.mem.startsWith(u8, pattern[atom..], "?:")) atom += 2;
+        const atom_end = regexAtomEnd(pattern, atom) orelse continue;
+        if (atom_end + 2 >= pattern.len or (pattern[atom_end] != '+' and pattern[atom_end] != '*')) continue;
+        if (pattern[atom_end + 1] != ')') continue;
+        const outer = pattern[atom_end + 2];
+        if (outer == '+' or outer == '*') return true;
+    }
+    if (group > pattern.len) assert.panic("regex scan advanced to {d} past a {d}-byte pattern; escaped bytes may skip only one byte", .{ group, pattern.len });
+    return false;
+}
+
+fn regexAtomEnd(pattern: []const u8, start: usize) ?usize {
+    if (start > pattern.len) assert.panic("regex atom starts at {d}, past a {d}-byte pattern", .{ start, pattern.len });
+    if (std.mem.indexOfAny(u8, pattern, "\r\n") != null) assert.panic("finding an atom in a multiline regex; hasNestedRegexQuantifier rejects it first", .{});
+    if (start >= pattern.len) return null;
+    if (pattern[start] == '\\') return if (start + 1 < pattern.len) start + 2 else null;
+    if (pattern[start] != '[') return start + 1;
+    var at = start + 1;
+    while (at < pattern.len) : (at += 1) {
+        if (pattern[at] == '\\') {
+            at += 1;
+            continue;
+        }
+        if (pattern[at] == ']') return at + 1;
+    }
+    return null;
+}
+
+fn sensitiveQueryKey(literal: []const u8) ?[]const u8 {
+    if (literal.len == 0) assert.panic("checking an empty string literal for a query parameter; literal nodes include their quotes", .{});
+    const url = std.mem.trim(u8, literal, "\"'`");
+    const query = std.mem.indexOfScalar(u8, url, '?') orelse return null;
+    if (query >= url.len) assert.panic("query marker at {d} lies past a {d}-byte URL", .{ query, url.len });
+    var parameters = std.mem.splitScalar(u8, url[query + 1 ..], '&');
+    while (parameters.next()) |parameter| {
+        const equals = std.mem.indexOfScalar(u8, parameter, '=') orelse continue;
+        const key = parameter[0..equals];
+        if (queryKeyNamesSecret(key)) return key;
+    }
+    return null;
+}
+
+fn queryKeyNamesSecret(key: []const u8) bool {
+    if (key.len == 0) return false;
+    if (std.mem.indexOfAny(u8, key, "&=") != null) assert.panic("checking unsplit query key '{s}'; sensitiveQueryKey must remove separators first", .{key});
+    var squeezed: [96]u8 = undefined;
+    var len: usize = 0;
+    for (key) |c| {
+        if (!std.ascii.isAlphanumeric(c)) continue;
+        if (len == squeezed.len) return false;
+        squeezed[len] = std.ascii.toLower(c);
+        len += 1;
+    }
+    if (len > key.len) assert.panic("normalized a {d}-byte query key from {d} bytes; normalization can only remove bytes", .{ len, key.len });
+    if (len == 0) return false;
+    for (rules.secret_names) |word| if (std.mem.endsWith(u8, squeezed[0..len], word)) return true;
+    return false;
+}
+
+fn cleartextHttp(literal: []const u8) bool {
+    if (literal.len == 0) assert.panic("checking an empty string literal as a URL; literal nodes include their quotes", .{});
+    const url = std.mem.trim(u8, literal, "\"'`");
+    if (!std.ascii.startsWithIgnoreCase(url, "http://")) return false;
+    const rest = url["http://".len..];
+    if (std.mem.startsWith(u8, rest, "[::1]") and (rest.len == "[::1]".len or std.mem.indexOfScalar(u8, ":/?#", rest["[::1]".len]) != null)) return false;
+    const end = std.mem.indexOfAny(u8, rest, "/?#:") orelse rest.len;
+    const host = rest[0..end];
+    if (host.len > rest.len) assert.panic("read a {d}-byte HTTP host from {d} bytes after the scheme", .{ host.len, rest.len });
+    return !(std.ascii.eqlIgnoreCase(host, "localhost") or std.mem.startsWith(u8, host, "127.") or std.mem.eql(u8, host, "[::1]"));
+}
+
+fn cleartextCredentialUrl(literal: []const u8) bool {
+    if (literal.len == 0) assert.panic("checking an empty URL literal for a credential; literal nodes include their quotes", .{});
+    if (!cleartextHttp(literal)) return false;
+    if (sensitiveQueryKey(literal) != null) return true;
+    const url = std.mem.trim(u8, literal, "\"'`");
+    const authority = url["http://".len .. std.mem.indexOfAnyPos(u8, url, "http://".len, "/?#") orelse url.len];
+    const at = std.mem.lastIndexOfScalar(u8, authority, '@') orelse return false;
+    if (at >= authority.len) assert.panic("userinfo separator at {d} lies past a {d}-byte URL authority", .{ at, authority.len });
+    return std.mem.indexOfScalar(u8, authority[0..at], ':') != null;
 }
 
 /// Reports a logged value whose name says it is a secret, such as `token` or `db_password`.
@@ -146,6 +691,9 @@ pub fn checkLoggedSecret(self: *File, ctx: Context, callee: ts.Node) !void {
     const start = ts.ts_node_end_byte(callee);
     const end = ts.ts_node_end_byte(ctx.node);
     if (start > end) assert.panic("{s}: the callee {f} ends after its call {f}; capture @call.name inside @call.outer in the language's zanity.scm", .{ self.work.facts.path, callee.where(), ctx.node.where() });
+    if (ctx.arguments[0]) |message| if (directFunctionParameter(self, message)) {
+        _ = try self.report(message, "parameter-log-message", try self.say("Function parameter '{s}' is used as the whole log message, so line breaks or control characters can forge additional log entries.", .{message.text(self.source)}));
+    };
     const first = std.sort.lowerBound(captures.Triple, self.index.triples, start, startsBefore);
     for (self.index.triples[first..]) |t| {
         if (t.key.start >= end) break;

@@ -1,0 +1,3 @@
+rules: obsolete-call
+exit: 0
+ObsoleteCall.java:3:16: warning [obsolete-call]

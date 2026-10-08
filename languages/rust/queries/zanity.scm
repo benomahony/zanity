@@ -49,6 +49,8 @@
 ((boolean_literal) @literal.true
   (#eq? @literal.true "true"))
 
+(identifier) @expression.path
+
 ((macro_invocation
   macro: (identifier) @_assert
   (token_tree) @assertion.condition) @assertion.outer
@@ -103,6 +105,13 @@
   (string_literal)
   (raw_string_literal)
 ] @literal.string
+
+[
+  (integer_literal)
+  (float_literal)
+  (char_literal)
+  (boolean_literal)
+] @literal.constant
 
 ; Textobjects capture `let` and plain assignments; constants and statics are added here.
 [
@@ -333,3 +342,9 @@
   trait: (_)
   body: (declaration_list
     (function_item) @visibility.public))
+
+; CWE-369: a literal zero divisor.
+((binary_expression
+  operator: ["/" "%"]
+  right: [(integer_literal) (float_literal)] @_zero_divisor) @finding.divide-by-zero
+  (#any-of? @_zero_divisor "0" "00" "0.0" "0." "0x0" "0o0" "0b0"))

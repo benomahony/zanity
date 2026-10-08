@@ -1,0 +1,3 @@
+rules: xml-entity-expansion
+exit: 1
+xml_entities_ts.ts:1:30: error [xml-entity-expansion]

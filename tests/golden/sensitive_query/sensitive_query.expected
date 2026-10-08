@@ -1,0 +1,3 @@
+rules: sensitive-query-string
+exit: 1
+sensitive_query.py:3:14: error [sensitive-query-string]

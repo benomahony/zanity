@@ -5,6 +5,8 @@ class Hazards {
     if (!s.isEmpty() == true) {}
     switch (x) { case 1: run(); case 2: break; }
     long d = System.currentTimeMillis() - x;
+    System.exit(1);
+    thing.finalize();
     throw new Exception("boom");
   }
 

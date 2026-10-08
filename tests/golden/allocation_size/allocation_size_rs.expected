@@ -1,0 +1,3 @@
+rules: parameter-allocation-size
+exit: 0
+allocation_size_rs.rs:2:24: warning [parameter-allocation-size]

@@ -1,0 +1,3 @@
+rules: obsolete-call
+exit: 0
+obsolete_call.py:2:12: warning [obsolete-call]

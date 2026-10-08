@@ -1,0 +1,3 @@
+rules: parameter-template-source
+exit: 0
+template_source_ts.ts:2:29: warning [parameter-template-source]

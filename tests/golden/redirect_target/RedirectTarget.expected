@@ -1,0 +1,3 @@
+rules: parameter-redirect-target
+exit: 0
+RedirectTarget.java:3:31: warning [parameter-redirect-target]

@@ -1,0 +1,3 @@
+rules: parameter-ldap-filter
+exit: 0
+ldap_filter_rs.rs:2:39: warning [parameter-ldap-filter]

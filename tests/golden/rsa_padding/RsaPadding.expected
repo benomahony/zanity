@@ -1,0 +1,3 @@
+rules: rsa-without-oaep
+exit: 1
+RsaPadding.java:3:35: error [rsa-without-oaep]

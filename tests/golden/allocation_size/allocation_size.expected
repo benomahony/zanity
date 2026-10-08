@@ -1,0 +1,3 @@
+rules: parameter-allocation-size
+exit: 0
+allocation_size.py:2:22: warning [parameter-allocation-size]

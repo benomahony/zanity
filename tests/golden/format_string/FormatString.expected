@@ -1,0 +1,3 @@
+rules: parameter-format-string
+exit: 0
+FormatString.java:3:30: warning [parameter-format-string]

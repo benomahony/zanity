@@ -1,0 +1,3 @@
+rules: prototype-mutation
+exit: 0
+prototype.js:2:3: warning [prototype-mutation]

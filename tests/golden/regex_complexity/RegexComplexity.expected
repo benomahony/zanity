@@ -1,0 +1,3 @@
+rules: nested-regex-quantifier
+exit: 1
+RegexComplexity.java:4:41: error [nested-regex-quantifier]

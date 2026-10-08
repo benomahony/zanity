@@ -1,0 +1,8 @@
+rules: missing-super-finalizer,missing-super-clone,public-clone-method,thread-run
+exit: 1
+JavaObjectModel.java:2:5: warning [missing-super-finalizer]
+JavaObjectModel.java:31:5: warning [missing-super-clone]
+JavaObjectModel.java:31:5: warning [public-clone-method]
+JavaObjectModel.java:4:5: warning [missing-super-clone]
+JavaObjectModel.java:4:5: warning [public-clone-method]
+JavaObjectModel.java:9:9: error [thread-run]

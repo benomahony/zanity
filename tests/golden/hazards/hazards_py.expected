@@ -1,4 +1,4 @@
-rules: return-in-finally,identity-comparison,precedence-trap,generic-throw,switch-fallthrough,missing-default,no-effect-statement,tls-verification-disabled,weak-hash,unsafe-deserialization,shell-command,sql-built-from-strings,secret-in-log,wall-clock-duration,unawaited-call,deep-nesting,complex-function
+rules: return-in-finally,identity-comparison,precedence-trap,generic-throw,switch-fallthrough,missing-default,no-effect-statement,tls-verification-disabled,weak-hash,unsafe-deserialization,insecure-temp-file,shell-command,sql-built-from-strings,secret-in-log,wall-clock-duration,unawaited-call,deep-nesting,complex-function
 exit: 1
 hazards_py.py:15:9: error [unawaited-call]
 hazards_py.py:17:9: error [return-in-finally]
@@ -16,3 +16,4 @@ hazards_py.py:31:30: error [secret-in-log]
 hazards_py.py:32:5: error [unawaited-call]
 hazards_py.py:37:21: warning [deep-nesting]
 hazards_py.py:62:5: warning [complex-function]
+hazards_py.py:99:5: error [insecure-temp-file]

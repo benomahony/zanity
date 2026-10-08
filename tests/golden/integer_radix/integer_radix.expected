@@ -1,0 +1,3 @@
+rules: missing-integer-radix
+exit: 0
+integer_radix.ts:2:19: warning [missing-integer-radix]

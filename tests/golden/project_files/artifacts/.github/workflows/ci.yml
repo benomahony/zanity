@@ -1,0 +1,9 @@
+jobs:
+  test:
+    steps:
+      - uses: actions/checkout@v4
+      - uses: owner/action@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      - uses: ./local-action
+      - run: curl -fsSL https://example.invalid/install.sh | sh
+      - uses: owner/action@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb # v1.2.3
+      - uses: owner/action@v1 # aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa

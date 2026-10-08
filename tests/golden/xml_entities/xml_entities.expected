@@ -1,0 +1,3 @@
+rules: xml-entity-expansion
+exit: 1
+xml_entities.py:3:26: error [xml-entity-expansion]

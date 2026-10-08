@@ -1,0 +1,3 @@
+rules: assignment-in-condition
+exit: 0
+assignment_js.js:2:7: warning [assignment-in-condition]

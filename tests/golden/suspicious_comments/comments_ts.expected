@@ -1,0 +1,3 @@
+rules: suspicious-comment
+exit: 0
+comments_ts.ts:1:1: warning [suspicious-comment]

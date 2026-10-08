@@ -1,0 +1,3 @@
+rules: constant-aead-nonce
+exit: 1
+constant_nonce_ts.ts:3:36: error [constant-aead-nonce]

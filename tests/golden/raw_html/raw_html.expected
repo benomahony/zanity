@@ -1,0 +1,3 @@
+rules: parameter-raw-html
+exit: 1
+raw_html.py:2:22: error [parameter-raw-html]

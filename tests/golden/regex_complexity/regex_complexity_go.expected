@@ -1,0 +1,3 @@
+rules: nested-regex-quantifier
+exit: 1
+regex_complexity_go.go:5:36: error [nested-regex-quantifier]

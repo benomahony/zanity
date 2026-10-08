@@ -1,0 +1,3 @@
+rules: parameter-xpath-expression
+exit: 0
+xpath_expression_ts.ts:2:23: warning [parameter-xpath-expression]

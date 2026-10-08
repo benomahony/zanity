@@ -1,0 +1,3 @@
+rules: parameter-ldap-filter
+exit: 0
+LdapFilter.java:3:32: warning [parameter-ldap-filter]

@@ -1,0 +1,3 @@
+rules: parameter-window-opener
+exit: 0
+window_opener.ts:2:22: warning [parameter-window-opener]

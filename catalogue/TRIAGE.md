@@ -5,14 +5,14 @@ unreviewed: a bucket is a starting point for review, not a claim about the weakn
 
 | Bucket | Families | Meaning |
 |---|---:|---|
-| mapped | 42 | Has a zanity rule |
-| static | 290 | Static analysis can find it (upstream says so); a candidate for a deterministic rule |
-| inference | 383 | Visible in source but needs judgement; a candidate for a --infer question |
+| mapped | 178 | Has a zanity rule |
+| static | 162 | Static analysis can find it (upstream says so); a candidate for a deterministic rule |
+| inference | 381 | Visible in source but needs judgement; a candidate for a --infer question |
 | other-languages | 73 | Specific to languages zanity has no grammar for yet (C, C++, PHP, C#...) |
-| hardware | 59 | Hardware design weaknesses; not in software source |
-| abstract | 116 | A class or pillar; covered through its more specific children |
+| hardware | 58 | Hardware design weaknesses; not in software source |
+| abstract | 115 | A class or pillar; covered through its more specific children |
 | deprecated | 25 | Deprecated upstream; do not build new rules on it |
-| runtime-or-process | 47 | Needs a running system, a specification or a person; not decidable from source |
+| runtime-or-process | 43 | Needs a running system, a specification or a person; not decidable from source |
 
 Total: 1035 families.
 
@@ -20,7 +20,6 @@ Total: 1035 families.
 
 | ID | Kind | Title |
 |---|---|---|
-| CWE-1021 | defect | Improper Restriction of Rendered UI Layers or Frames |
 | CWE-1024 | defect | Comparison of Incompatible Types |
 | CWE-1025 | defect | Comparison Using Wrong Factors |
 | CWE-1079 | defect | Parent Class without Virtual Destructor Method |
@@ -28,23 +27,14 @@ Total: 1035 families.
 | CWE-1091 | defect | Use of Object without Invoking Destructor Method |
 | CWE-1105 | defect | Insufficient Encapsulation of Machine-Dependent Functionality |
 | CWE-112 | defect | Missing XML Validation |
-| CWE-117 | defect | Improper Output Neutralization for Logs |
 | CWE-1173 | defect | Improper Use of Validation Framework |
-| CWE-1188 | defect | Initialization of a Resource with an Insecure Default |
-| CWE-1204 | defect | Generation of Weak Initialization Vector (IV) |
 | CWE-1235 | defect | Incorrect Use of Autoboxing and Unboxing for Performance Critical Operations |
 | CWE-1236 | defect | Improper Neutralization of Formula Elements in a CSV File |
-| CWE-1284 | defect | Improper Validation of Specified Quantity in Input |
 | CWE-1285 | defect | Improper Validation of Specified Index, Position, or Offset in Input |
-| CWE-1295 | defect | Debug Messages Revealing Unnecessary Information |
 | CWE-130 | defect | Improper Handling of Length Parameter Inconsistency |
-| CWE-1333 | defect | Inefficient Regular Expression Complexity |
 | CWE-1335 | defect | Incorrect Bitwise Shift of Integer |
-| CWE-1336 | defect | Improper Neutralization of Special Elements Used in a Template Engine |
 | CWE-1339 | defect | Insufficient Precision or Accuracy of a Real Number |
-| CWE-134 | defect | Use of Externally-Controlled Format String |
 | CWE-1341 | defect | Multiple Releases of Same Resource or Handle |
-| CWE-1389 | defect | Incorrect Parsing of Numbers with Different Radices |
 | CWE-1420 | defect | Exposure of Sensitive Information during Transient Execution |
 | CWE-1422 | defect | Exposure of Sensitive Information caused by Incorrect Data Forwarding during Transient Execution |
 | CWE-15 | defect | External Control of System or Configuration Setting |
@@ -55,239 +45,122 @@ Total: 1035 families.
 | CWE-193 | defect | Off-by-one Error |
 | CWE-197 | defect | Numeric Truncation Error |
 | CWE-201 | defect | Insertion of Sensitive Information Into Sent Data |
-| CWE-209 | defect | Generation of Error Message Containing Sensitive Information |
 | CWE-212 | defect | Improper Removal of Sensitive Information Before Storage or Transfer |
-| CWE-215 | defect | Insertion of Sensitive Information Into Debugging Code |
-| CWE-22 | defect | Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal') |
 | CWE-226 | defect | Sensitive Information in Resource Not Removed Before Reuse |
-| CWE-23 | defect | Relative Path Traversal |
 | CWE-233 | defect | Improper Handling of Parameters |
 | CWE-248 | defect | Uncaught Exception |
-| CWE-250 | defect | Execution with Unnecessary Privileges |
 | CWE-252 | defect | Unchecked Return Value |
 | CWE-253 | defect | Incorrect Check of Function Return Value |
-| CWE-256 | defect | Plaintext Storage of a Password |
-| CWE-257 | defect | Storing Passwords in a Recoverable Format |
-| CWE-260 | defect | Password in Configuration File |
 | CWE-261 | defect | Weak Encoding for Password |
-| CWE-272 | defect | Least Privilege Violation |
 | CWE-273 | defect | Improper Check for Dropped Privileges |
 | CWE-274 | defect | Improper Handling of Insufficient Privileges |
-| CWE-276 | defect | Incorrect Default Permissions |
 | CWE-280 | defect | Improper Handling of Insufficient Permissions or Privileges |
 | CWE-289 | defect | Authentication Bypass by Alternate Name |
-| CWE-296 | defect | Improper Following of a Certificate's Chain of Trust |
-| CWE-299 | defect | Improper Check for Certificate Revocation |
 | CWE-304 | defect | Missing Critical Step in Authentication |
 | CWE-306 | defect | Missing Authentication for Critical Function |
-| CWE-307 | defect | Improper Restriction of Excessive Authentication Attempts |
-| CWE-312 | defect | Cleartext Storage of Sensitive Information |
 | CWE-322 | defect | Key Exchange without Entity Authentication |
-| CWE-323 | defect | Reusing a Nonce, Key Pair in Encryption |
 | CWE-325 | defect | Missing Cryptographic Step |
-| CWE-331 | defect | Insufficient Entropy |
-| CWE-335 | defect | Incorrect Usage of Seeds in Pseudo-Random Number Generator (PRNG) |
-| CWE-338 | defect | Use of Cryptographically Weak Pseudo-Random Number Generator (PRNG) |
-| CWE-341 | defect | Predictable from Observable State |
 | CWE-347 | defect | Improper Verification of Cryptographic Signature |
 | CWE-359 | defect | Exposure of Private Personal Information to an Unauthorized Actor |
-| CWE-36 | defect | Absolute Path Traversal |
 | CWE-363 | defect | Race Condition Enabling Link Following |
 | CWE-366 | defect | Race Condition within a Thread |
 | CWE-367 | defect | Time-of-check Time-of-use (TOCTOU) Race Condition |
 | CWE-368 | defect | Context Switching Race Condition |
-| CWE-369 | defect | Divide By Zero |
 | CWE-378 | defect | Creation of Temporary File With Insecure Permissions |
 | CWE-379 | defect | Creation of Temporary File in Directory with Insecure Permissions |
-| CWE-391 | defect | Unchecked Error Condition |
 | CWE-394 | defect | Unexpected Status Code or Return Value |
-| CWE-395 | defect | Use of NullPointerException Catch to Detect NULL Pointer Dereference |
 | CWE-403 | defect | Exposure of File Descriptor to Unintended Control Sphere ('File Descriptor Leak') |
-| CWE-41 | defect | Improper Resolution of Path Equivalence |
 | CWE-413 | defect | Improper Resource Locking |
 | CWE-414 | defect | Missing Lock Check |
-| CWE-426 | defect | Untrusted Search Path |
-| CWE-427 | defect | Uncontrolled Search Path Element |
 | CWE-434 | defect | Unrestricted Upload of File with Dangerous Type |
 | CWE-444 | defect | Inconsistent Interpretation of HTTP Requests ('HTTP Request/Response Smuggling') |
 | CWE-454 | defect | External Initialization of Trusted Variables or Data Stores |
 | CWE-459 | defect | Incomplete Cleanup |
 | CWE-460 | defect | Improper Cleanup on Thrown Exception |
-| CWE-470 | defect | Use of Externally-Controlled Input to Select Classes or Code ('Unsafe Reflection') |
 | CWE-472 | defect | External Control of Assumed-Immutable Web Parameter |
 | CWE-474 | defect | Use of Function with Inconsistent Implementations |
 | CWE-475 | defect | Undefined Behavior for Input to API |
 | CWE-476 | defect | NULL Pointer Dereference |
 | CWE-487 | defect | Reliance on Package-level Scope |
 | CWE-488 | defect | Exposure of Data Element to Wrong Session |
-| CWE-494 | defect | Download of Code Without Integrity Check |
 | CWE-497 | defect | Exposure of Sensitive System Information to an Unauthorized Control Sphere |
 | CWE-501 | defect | Trust Boundary Violation |
 | CWE-510 | defect | Trapdoor |
 | CWE-511 | defect | Logic/Time Bomb |
-| CWE-521 | defect | Weak Password Requirements |
-| CWE-523 | defect | Unprotected Transport of Credentials |
 | CWE-524 | defect | Use of Cache Containing Sensitive Information |
 | CWE-538 | defect | Insertion of Sensitive Information into Externally-Accessible File or Directory |
-| CWE-540 | defect | Inclusion of Sensitive Information in Source Code |
-| CWE-547 | defect | Use of Hard-coded, Security-relevant Constants |
 | CWE-549 | defect | Missing Password Field Masking |
-| CWE-552 | defect | Files or Directories Accessible to External Parties |
 | CWE-565 | defect | Reliance on Cookies without Validation and Integrity Checking |
 | CWE-567 | defect | Unsynchronized Access to Shared Data in a Multithreaded Context |
-| CWE-586 | defect | Explicit Call to Finalize() |
-| CWE-59 | defect | Improper Link Resolution Before File Access ('Link Following') |
-| CWE-601 | defect | URL Redirection to Untrusted Site ('Open Redirect') |
 | CWE-606 | defect | Unchecked Input for Loop Condition |
 | CWE-609 | defect | Double-Checked Locking |
-| CWE-611 | defect | Improper Restriction of XML External Entity Reference |
-| CWE-613 | defect | Insufficient Session Expiration |
 | CWE-617 | defect | Reachable Assertion |
 | CWE-639 | defect | Authorization Bypass Through User-Controlled Key |
-| CWE-643 | defect | Improper Neutralization of Data within XPath Expressions ('XPath Injection') |
-| CWE-66 | defect | Improper Handling of File Names that Identify Virtual Resources |
 | CWE-663 | defect | Use of a Non-reentrant Function in a Concurrent Context |
 | CWE-681 | defect | Incorrect Conversion between Numeric Types |
 | CWE-695 | defect | Use of Low-Level Functionality |
-| CWE-73 | defect | External Control of File Name or Path |
 | CWE-749 | defect | Exposed Dangerous Method or Function |
-| CWE-757 | defect | Selection of Less-Secure Algorithm During Negotiation ('Algorithm Downgrade') |
 | CWE-764 | defect | Multiple Locks of a Critical Resource |
 | CWE-765 | defect | Multiple Unlocks of a Critical Resource |
 | CWE-766 | defect | Critical Data Element Declared Public |
-| CWE-770 | defect | Allocation of Resources Without Limits or Throttling |
 | CWE-771 | defect | Missing Reference to Active Allocated Resource |
 | CWE-772 | defect | Missing Release of Resource after Effective Lifetime |
-| CWE-776 | defect | Improper Restriction of Recursive Entity References in DTDs ('XML Entity Expansion') |
 | CWE-778 | defect | Insufficient Logging |
 | CWE-779 | defect | Logging of Excessive Data |
-| CWE-79 | defect | Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting') |
 | CWE-807 | defect | Reliance on Untrusted Inputs in a Security Decision |
 | CWE-821 | defect | Incorrect Synchronization |
 | CWE-826 | defect | Premature Release of Resource During Expected Lifetime |
-| CWE-829 | defect | Inclusion of Functionality from Untrusted Control Sphere |
 | CWE-832 | defect | Unlock of a Resource that is not Locked |
 | CWE-833 | defect | Deadlock |
-| CWE-838 | defect | Inappropriate Encoding for Output Context |
-| CWE-88 | defect | Improper Neutralization of Argument Delimiters in a Command ('Argument Injection') |
-| CWE-90 | defect | Improper Neutralization of Special Elements used in an LDAP Query ('LDAP Injection') |
 | CWE-908 | defect | Use of Uninitialized Resource |
-| CWE-91 | defect | XML Injection (aka Blind XPath Injection) |
 | CWE-910 | defect | Use of Expired File Descriptor |
-| CWE-915 | defect | Improperly Controlled Modification of Dynamically-Determined Object Attributes |
-| CWE-916 | defect | Use of Password Hash With Insufficient Computational Effort |
-| CWE-917 | defect | Improper Neutralization of Special Elements used in an Expression Language Statement ('Expression Language Injection') |
-| CWE-918 | defect | Server-Side Request Forgery (SSRF) |
-| CWE-93 | defect | Improper Neutralization of CRLF Sequences ('CRLF Injection') |
 | CWE-939 | defect | Improper Authorization in Handler for Custom URL Scheme |
 | CWE-96 | defect | Improper Neutralization of Directives in Statically Saved Code ('Static Code Injection') |
-| CWE-1004 | defect | Sensitive Cookie Without 'HttpOnly' Flag |
-| CWE-1022 | defect | Use of Web Link to Untrusted Target with window.opener Access |
 | CWE-103 | defect | Struts: Incomplete validate() Method Definition |
 | CWE-104 | defect | Struts: Form Bean Does Not Extend Validation Class |
 | CWE-110 | defect | Struts: Validator Without Form Field |
-| CWE-111 | defect | Direct Use of Unsafe JNI |
-| CWE-113 | defect | Improper Neutralization of CRLF Sequences in HTTP Headers ('HTTP Request/Response Splitting') |
-| CWE-1275 | defect | Sensitive Cookie with Improper SameSite Attribute |
 | CWE-129 | defect | Improper Validation of Array Index |
-| CWE-1321 | defect | Improperly Controlled Modification of Object Prototype Attributes ('Prototype Pollution') |
 | CWE-150 | defect | Improper Neutralization of Escape, Meta, or Control Sequences |
 | CWE-155 | defect | Improper Neutralization of Wildcards or Matching Symbols |
 | CWE-192 | defect | Integer Coercion Error |
-| CWE-24 | defect | Path Traversal: '../filedir' |
 | CWE-245 | defect | J2EE Bad Practices: Direct Management of Connections |
 | CWE-246 | defect | J2EE Bad Practices: Direct Use of Sockets |
-| CWE-25 | defect | Path Traversal: '/../filedir' |
-| CWE-26 | defect | Path Traversal: '/dir/../filename' |
-| CWE-27 | defect | Path Traversal: 'dir/../../filename' |
-| CWE-279 | defect | Incorrect Execution-Assigned Permissions |
-| CWE-28 | defect | Path Traversal: '..\filedir' |
-| CWE-29 | defect | Path Traversal: '\..\filename' |
 | CWE-293 | defect | Using Referer Field for Authentication |
-| CWE-297 | defect | Improper Validation of Certificate with Host Mismatch |
-| CWE-30 | defect | Path Traversal: '\dir\..\filename' |
-| CWE-31 | defect | Path Traversal: 'dir\..\..\filename' |
-| CWE-313 | defect | Cleartext Storage in a File or on Disk |
 | CWE-315 | defect | Cleartext Storage of Sensitive Information in a Cookie |
-| CWE-32 | defect | Path Traversal: '...' (Triple Dot) |
-| CWE-321 | defect | Use of Hard-coded Cryptographic Key |
-| CWE-329 | defect | Generation of Predictable IV with CBC Mode |
-| CWE-33 | defect | Path Traversal: '....' (Multiple Dot) |
-| CWE-332 | defect | Insufficient Entropy in PRNG |
-| CWE-336 | defect | Same Seed in Pseudo-Random Number Generator (PRNG) |
-| CWE-337 | defect | Predictable Seed in Pseudo-Random Number Generator (PRNG) |
-| CWE-34 | defect | Path Traversal: '....//' |
-| CWE-35 | defect | Path Traversal: '.../...//' |
 | CWE-350 | defect | Reliance on Reverse DNS Resolution for a Security-Critical Action |
-| CWE-352 | defect | Cross-Site Request Forgery (CSRF) |
-| CWE-37 | defect | Path Traversal: '/absolute/pathname/here' |
-| CWE-38 | defect | Path Traversal: '\absolute\pathname\here' |
-| CWE-382 | defect | J2EE Bad Practices: Use of System.exit() |
-| CWE-383 | defect | J2EE Bad Practices: Direct Use of Threads |
-| CWE-39 | defect | Path Traversal: 'C:dirname' |
-| CWE-40 | defect | Path Traversal: '\\UNC\share\name\' (Windows UNC Share) |
 | CWE-401 | defect | Missing Release of Memory after Effective Lifetime |
 | CWE-453 | defect | Insecure Default Variable Initialization |
 | CWE-456 | defect | Missing Initialization of a Variable |
 | CWE-457 | defect | Use of Uninitialized Variable |
-| CWE-481 | defect | Assigning instead of Comparing |
-| CWE-486 | defect | Comparison of Classes by Name |
-| CWE-491 | defect | Public cloneable() Method Without Final ('Object Hijack') |
 | CWE-492 | defect | Use of Inner Class Containing Sensitive Data |
-| CWE-493 | defect | Critical Public Variable Without Final Modifier |
 | CWE-495 | defect | Private Data Structure Returned From A Public Method |
 | CWE-496 | defect | Public Data Assigned to Private Array-Typed Field |
 | CWE-498 | defect | Cloneable Class Containing Sensitive Information |
 | CWE-499 | defect | Serializable Class Containing Sensitive Data |
-| CWE-500 | defect | Public Static Field Not Marked Final |
-| CWE-526 | defect | Cleartext Storage of Sensitive Information in an Environment Variable |
 | CWE-528 | defect | Exposure of Core Dump File to an Unauthorized Control Sphere |
 | CWE-530 | defect | Exposure of Backup File to an Unauthorized Control Sphere |
 | CWE-535 | defect | Exposure of Information Through Shell Error Message |
 | CWE-539 | defect | Use of Persistent Cookies Containing Sensitive Information |
 | CWE-543 | defect | Use of Singleton Pattern Without Synchronization in a Multithreaded Context |
-| CWE-546 | defect | Suspicious Comment |
-| CWE-548 | defect | Exposure of Information Through Directory Listing |
 | CWE-566 | defect | Authorization Bypass Through User-Controlled SQL Primary Key |
-| CWE-568 | defect | finalize() Method Without super.finalize() |
-| CWE-572 | defect | Call to Thread run() instead of start() |
 | CWE-579 | defect | J2EE Bad Practices: Non-serializable Object Stored in Session |
-| CWE-580 | defect | clone() Method Without super.clone() |
-| CWE-581 | defect | Object Model Violation: Just One of Equals and Hashcode Defined |
-| CWE-582 | defect | Array Declared Public, Final, and Static |
-| CWE-583 | defect | finalize() Method Declared Public |
-| CWE-585 | defect | Empty Synchronized Block |
 | CWE-589 | defect | Call to Non-ubiquitous API |
-| CWE-598 | defect | Use of HTTP Request With Sensitive Query String |
 | CWE-605 | defect | Multiple Binds to the Same Port |
-| CWE-607 | defect | Public Static Final Field References Mutable Object |
-| CWE-608 | defect | Struts: Non-private Field in ActionForm Class |
-| CWE-61 | defect | UNIX Symbolic Link (Symlink) Following |
-| CWE-614 | defect | Sensitive Cookie in HTTPS Session Without 'Secure' Attribute |
 | CWE-615 | defect | Inclusion of Sensitive Information in Source Code Comments |
 | CWE-618 | defect | Exposed Unsafe ActiveX Method |
 | CWE-647 | defect | Use of Non-Canonical URL Paths for Authorization Decisions |
 | CWE-687 | defect | Function Call With Incorrectly Specified Argument Value |
 | CWE-759 | defect | Use of a One-Way Hash without a Salt |
-| CWE-760 | defect | Use of a One-Way Hash with a Predictable Salt |
 | CWE-768 | defect | Incorrect Short Circuit Evaluation |
 | CWE-773 | defect | Missing Reference to Active File Descriptor or Handle |
 | CWE-774 | defect | Allocation of File Descriptors or Handles Without Limits or Throttling |
 | CWE-775 | defect | Missing Release of File Descriptor or Handle after Effective Lifetime |
-| CWE-780 | defect | Use of RSA Algorithm without OAEP |
-| CWE-789 | defect | Memory Allocation with Excessive Size Value |
-| CWE-80 | defect | Improper Neutralization of Script-Related HTML Tags in a Web Page (Basic XSS) |
 | CWE-81 | defect | Improper Neutralization of Script in an Error Message Web Page |
 | CWE-828 | defect | Signal Handler with Functionality that is not Asynchronous-Safe |
-| CWE-83 | defect | Improper Neutralization of Script in Attributes in a Web Page |
-| CWE-86 | defect | Improper Neutralization of Invalid Characters in Identifiers in Web Pages |
 | CWE-925 | defect | Improper Verification of Intent by Broadcast Receiver |
 | CWE-926 | defect | Improper Export of Android Application Components |
 | CWE-927 | defect | Use of Implicit Intent for Sensitive Communication |
-| CWE-942 | defect | Permissive Cross-domain Security Policy with Untrusted Domains |
-| CWE-95 | defect | Improper Neutralization of Directives in Dynamically Evaluated Code ('Eval Injection') |
 | EXT-ASYNC-001 | defect | Cancellation is swallowed |
-| EXT-ASYNC-002 | defect | Abandoned task lifetime |
 | EXT-BUILD-002 | defect | Unresolved binding |
 | EXT-BUILD-003 | defect | Type incompatibility |
 | EXT-DATA-001 | defect | Join multiplicity error |
@@ -304,7 +177,6 @@ Total: 1035 families.
 | CWE-1104 | risk_indicator | Use of Unmaintained Third Party Components |
 | CWE-1106 | risk_indicator | Insufficient Use of Symbolic Constants |
 | CWE-1108 | risk_indicator | Excessive Reliance on Global Variables |
-| CWE-477 | risk_indicator | Use of Obsolete Function |
 | CWE-563 | risk_indicator | Assignment to Variable without Use |
 | EXT-ARCH-001 | policy_violation | Dependency boundary violation |
 | EXT-ARCH-002 | policy_violation | Dependency cycle forbidden by policy |
@@ -393,8 +265,6 @@ Total: 1035 families.
 | CWE-1329 | defect | Reliance on Component That is Not Updateable |
 | CWE-1334 | defect | Unauthorized Error Injection Can Degrade Hardware Redundancy |
 | CWE-1386 | defect | Insecure Operation on Windows Junction / Mount Point |
-| CWE-1392 | defect | Use of Default Credentials |
-| CWE-1393 | defect | Use of Default Password |
 | CWE-1394 | defect | Use of Default Cryptographic Key |
 | CWE-140 | defect | Improper Neutralization of Delimiters |
 | CWE-1421 | defect | Exposure of Sensitive Information in Shared Microarchitectural Structures during Transient Execution |

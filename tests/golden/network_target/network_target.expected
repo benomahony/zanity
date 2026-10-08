@@ -1,0 +1,3 @@
+rules: parameter-network-target
+exit: 0
+network_target.py:5:25: warning [parameter-network-target]

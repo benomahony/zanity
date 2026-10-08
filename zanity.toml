@@ -22,4 +22,4 @@ disable = ["filesystem-in-test"]
 # useful bar, rather than the default 0.8.
 [infer]
 concurrency = 8
-threshold = 0.8
+threshold = 0.5

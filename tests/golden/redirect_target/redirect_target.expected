@@ -1,0 +1,3 @@
+rules: parameter-redirect-target
+exit: 0
+redirect_target.py:5:21: warning [parameter-redirect-target]

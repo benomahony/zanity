@@ -1,7 +1,7 @@
 .{
     .{
         .name = "python",
-        .not_applicable = .{ "dynamic-allocation", "precedence-trap", "switch-fallthrough", "wide-scope" },
+        .not_applicable = .{ "dynamic-allocation", "precedence-trap", "switch-fallthrough", "wide-scope", "assignment-in-condition", "null-catch", "empty-synchronized", "public-finalizer", "direct-thread", "unsafe-jni", "public-static-field", "public-static-array", "missing-super-finalizer", "missing-super-clone", "public-clone-method", "thread-run", "prototype-mutation", "class-name-comparison", "equals-without-hashcode", "hashcode-without-equals", "struts-public-field" },
         .extensions = .{ "py", "pyi" },
         .ecosystem = "python",
         .scanner = true,
@@ -13,11 +13,11 @@
         .ecosystem = "zig",
         .scanner = false,
         .queries = .{ "locals", "textobjects", "zanity" },
-        .not_applicable = .{ "broad-expected-error", "dead-parameter", "single-impl-abstraction", "NASA05-M1", "NASA05-M3", "NASA05-M4", "NASA05-M5", "discarded-comparison", "unreachable-code", "generic-catch", "return-in-finally", "identity-comparison", "precedence-trap", "generic-throw", "switch-fallthrough", "missing-default", "no-effect-statement", "tls-verification-disabled", "unsafe-deserialization", "shell-command", "sql-built-from-strings", "unawaited-call" },
+        .not_applicable = .{ "broad-expected-error", "dead-parameter", "single-impl-abstraction", "NASA05-M1", "NASA05-M3", "NASA05-M4", "NASA05-M5", "discarded-comparison", "unreachable-code", "generic-catch", "return-in-finally", "identity-comparison", "precedence-trap", "generic-throw", "switch-fallthrough", "missing-default", "no-effect-statement", "tls-verification-disabled", "unsafe-deserialization", "shell-command", "sql-built-from-strings", "unawaited-call", "assignment-in-condition", "null-catch", "empty-synchronized", "public-finalizer", "direct-thread", "unsafe-jni", "public-static-field", "public-static-array", "missing-super-finalizer", "missing-super-clone", "public-clone-method", "thread-run", "weak-random", "constant-random-seed", "nested-regex-quantifier", "constant-cbc-iv", "constant-aead-nonce", "constant-password-salt", "rsa-without-oaep", "xml-entity-expansion", "parameter-format-string", "parameter-network-target", "parameter-redirect-target", "parameter-xpath-expression", "parameter-ldap-filter", "parameter-header-value", "parameter-template-source", "parameter-expression-language", "prototype-mutation", "class-name-comparison", "equals-without-hashcode", "hashcode-without-equals", "struts-public-field" },
     },
     .{
         .name = "go",
-        .not_applicable = .{ "broad-expected-error", "single-impl-abstraction", "dynamic-allocation", "restated-type", "constant-assertion", "redundant-null-check", "conversion-assertion", "guaranteed-length", "discarded-comparison", "generic-catch", "return-in-finally", "identity-comparison", "precedence-trap", "generic-throw", "switch-fallthrough", "no-effect-statement", "unsafe-deserialization", "shell-command", "wall-clock-duration", "unawaited-call" },
+        .not_applicable = .{ "broad-expected-error", "single-impl-abstraction", "dynamic-allocation", "restated-type", "constant-assertion", "redundant-null-check", "conversion-assertion", "guaranteed-length", "discarded-comparison", "generic-catch", "return-in-finally", "identity-comparison", "precedence-trap", "generic-throw", "switch-fallthrough", "no-effect-statement", "unsafe-deserialization", "shell-command", "wall-clock-duration", "unawaited-call", "assignment-in-condition", "null-catch", "empty-synchronized", "public-finalizer", "direct-thread", "unsafe-jni", "public-static-field", "public-static-array", "missing-super-finalizer", "missing-super-clone", "public-clone-method", "thread-run", "weak-random", "constant-aead-nonce", "xml-entity-expansion", "prototype-mutation", "class-name-comparison", "equals-without-hashcode", "hashcode-without-equals", "struts-public-field" },
         .extensions = .{"go"},
         .ecosystem = "go",
         .scanner = false,
@@ -25,7 +25,7 @@
     },
     .{
         .name = "typescript",
-        .not_applicable = .{ "dynamic-allocation", "restated-type", "redundant-null-check", "conversion-assertion", "guaranteed-length", "float-equality", "generic-catch", "identity-comparison", "generic-throw", "weak-hash" },
+        .not_applicable = .{ "dynamic-allocation", "restated-type", "redundant-null-check", "conversion-assertion", "guaranteed-length", "float-equality", "generic-catch", "identity-comparison", "generic-throw", "weak-hash", "constant-random-seed", "null-catch", "empty-synchronized", "public-finalizer", "direct-thread", "unsafe-jni", "public-static-field", "public-static-array", "missing-super-finalizer", "missing-super-clone", "public-clone-method", "thread-run", "class-name-comparison", "equals-without-hashcode", "hashcode-without-equals", "struts-public-field" },
         .extensions = .{ "ts", "mts", "cts" },
         .ecosystem = "node",
         .scanner = true,
@@ -33,7 +33,7 @@
     },
     .{
         .name = "javascript",
-        .not_applicable = .{ "single-impl-abstraction", "dynamic-allocation", "restated-type", "redundant-null-check", "conversion-assertion", "guaranteed-length", "float-equality", "generic-catch", "identity-comparison", "generic-throw", "weak-hash" },
+        .not_applicable = .{ "single-impl-abstraction", "dynamic-allocation", "restated-type", "redundant-null-check", "conversion-assertion", "guaranteed-length", "float-equality", "generic-catch", "identity-comparison", "generic-throw", "weak-hash", "constant-random-seed", "null-catch", "empty-synchronized", "public-finalizer", "direct-thread", "unsafe-jni", "public-static-field", "public-static-array", "missing-super-finalizer", "missing-super-clone", "public-clone-method", "thread-run", "class-name-comparison", "equals-without-hashcode", "hashcode-without-equals", "struts-public-field" },
         .extensions = .{ "js", "mjs", "cjs", "jsx" },
         .ecosystem = "node",
         .scanner = true,
@@ -41,7 +41,7 @@
     },
     .{
         .name = "rust",
-        .not_applicable = .{ "assertion-side-effect", "restated-type", "constant-assertion", "redundant-null-check", "conversion-assertion", "guaranteed-length", "generic-catch", "return-in-finally", "identity-comparison", "precedence-trap", "generic-throw", "switch-fallthrough", "missing-default", "unsafe-deserialization", "shell-command", "sql-built-from-strings", "secret-in-log", "unawaited-call" },
+        .not_applicable = .{ "assertion-side-effect", "restated-type", "constant-assertion", "redundant-null-check", "conversion-assertion", "guaranteed-length", "generic-catch", "return-in-finally", "identity-comparison", "precedence-trap", "generic-throw", "switch-fallthrough", "missing-default", "unsafe-deserialization", "shell-command", "sql-built-from-strings", "secret-in-log", "unawaited-call", "assignment-in-condition", "null-catch", "empty-synchronized", "public-finalizer", "direct-thread", "unsafe-jni", "public-static-field", "public-static-array", "missing-super-finalizer", "missing-super-clone", "public-clone-method", "thread-run", "weak-random", "constant-cbc-iv", "constant-aead-nonce", "xml-entity-expansion", "parameter-format-string", "prototype-mutation", "class-name-comparison", "equals-without-hashcode", "hashcode-without-equals", "struts-public-field" },
         .extensions = .{"rs"},
         .ecosystem = "rust",
         .scanner = true,
@@ -49,7 +49,7 @@
     },
     .{
         .name = "java",
-        .not_applicable = .{ "dynamic-allocation", "restated-type", "redundant-null-check", "conversion-assertion", "guaranteed-length", "discarded-comparison", "unreachable-code", "debug-leftover", "no-effect-statement", "tls-verification-disabled", "weak-hash", "unsafe-deserialization", "shell-command", "unawaited-call" },
+        .not_applicable = .{ "dynamic-allocation", "restated-type", "redundant-null-check", "conversion-assertion", "guaranteed-length", "discarded-comparison", "unreachable-code", "debug-leftover", "no-effect-statement", "tls-verification-disabled", "weak-hash", "constant-random-seed", "constant-cbc-iv", "constant-aead-nonce", "unsafe-deserialization", "shell-command", "unawaited-call", "prototype-mutation" },
         .extensions = .{"java"},
         .ecosystem = "jvm",
         .scanner = false,

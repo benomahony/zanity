@@ -1,0 +1,3 @@
+rules: parameter-network-target
+exit: 0
+network_target_rs.rs:2:26: warning [parameter-network-target]

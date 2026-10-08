@@ -1,0 +1,3 @@
+rules: constant-cbc-iv
+exit: 1
+constant_iv.py:3:19: error [constant-cbc-iv]

@@ -1,0 +1,3 @@
+rules: constant-random-seed
+exit: 1
+constant_seed_rs.rs:4:38: error [constant-random-seed]

@@ -137,6 +137,13 @@
 
 (raw_string_literal) @literal.string
 
+[
+  (int_literal)
+  (float_literal)
+  (imaginary_literal)
+  (rune_literal)
+] @literal.constant
+
 ; CWE-1071: an empty body with not even a comment.
 ([
   (if_statement
@@ -345,3 +352,9 @@
   (continue_statement)
   (goto_statement)
 ] @flow.exit
+
+; CWE-369: a literal zero divisor.
+((binary_expression
+  operator: ["/" "%"]
+  right: [(int_literal) (float_literal)] @_zero_divisor) @finding.divide-by-zero
+  (#any-of? @_zero_divisor "0" "00" "0.0" "0." ".0" "0x0" "0o0" "0b0"))

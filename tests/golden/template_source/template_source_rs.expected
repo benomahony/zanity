@@ -1,0 +1,4 @@
+rules: parameter-template-source
+exit: 0
+template_source_rs.rs:2:21: warning [parameter-template-source]
+template_source_rs.rs:6:33: warning [parameter-template-source]

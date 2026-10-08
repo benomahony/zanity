@@ -1,0 +1,10 @@
+rules: null-catch,empty-synchronized,public-finalizer,direct-thread,unsafe-jni,public-static-field,public-static-array
+exit: 0
+JavaPatterns.java:14:11: warning [null-catch]
+JavaPatterns.java:23:9: warning [empty-synchronized]
+JavaPatterns.java:28:25: warning [direct-thread]
+JavaPatterns.java:2:5: warning [public-static-field]
+JavaPatterns.java:3:5: warning [public-static-field]
+JavaPatterns.java:5:5: warning [public-static-array]
+JavaPatterns.java:7:5: warning [unsafe-jni]
+JavaPatterns.java:9:5: warning [public-finalizer]

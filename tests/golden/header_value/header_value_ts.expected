@@ -1,0 +1,3 @@
+rules: parameter-header-value
+exit: 0
+header_value_ts.ts:2:45: warning [parameter-header-value]

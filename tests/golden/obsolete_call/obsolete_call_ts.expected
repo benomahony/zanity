@@ -1,0 +1,3 @@
+rules: obsolete-call
+exit: 0
+obsolete_call_ts.ts:2:10: warning [obsolete-call]

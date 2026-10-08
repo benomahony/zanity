@@ -646,8 +646,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "parameter-file-path"
+      ],
       "tags": []
     },
     {
@@ -705,8 +707,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "parameter-file-path"
+      ],
       "tags": []
     },
     {
@@ -744,8 +748,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "parameter-file-path"
+      ],
       "tags": []
     },
     {
@@ -783,8 +789,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "parameter-file-path"
+      ],
       "tags": []
     },
     {
@@ -827,8 +835,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "parameter-file-path"
+      ],
       "tags": []
     },
     {
@@ -866,8 +876,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "parameter-file-path"
+      ],
       "tags": []
     },
     {
@@ -915,8 +927,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "parameter-file-path"
+      ],
       "tags": []
     },
     {
@@ -959,8 +973,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "parameter-file-path"
+      ],
       "tags": []
     },
     {
@@ -1003,8 +1019,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "parameter-file-path"
+      ],
       "tags": []
     },
     {
@@ -1052,8 +1070,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "parameter-file-path"
+      ],
       "tags": []
     },
     {
@@ -1101,8 +1121,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "parameter-file-path"
+      ],
       "tags": []
     },
     {
@@ -1150,8 +1172,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "parameter-file-path"
+      ],
       "tags": []
     },
     {
@@ -1194,8 +1218,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "parameter-file-path"
+      ],
       "tags": []
     },
     {
@@ -1234,8 +1260,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "parameter-file-path"
+      ],
       "tags": []
     },
     {
@@ -1292,8 +1320,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "parameter-file-path"
+      ],
       "tags": []
     },
     {
@@ -1333,8 +1363,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "parameter-file-path"
+      ],
       "tags": []
     },
     {
@@ -1374,8 +1406,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "parameter-file-path"
+      ],
       "tags": []
     },
     {
@@ -1415,8 +1449,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "parameter-file-path"
+      ],
       "tags": []
     },
     {
@@ -1464,8 +1500,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "parameter-file-path"
+      ],
       "tags": []
     },
     {
@@ -1538,8 +1576,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "parameter-file-path"
+      ],
       "tags": []
     },
     {
@@ -2254,8 +2294,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "parameter-file-path"
+      ],
       "tags": []
     },
     {
@@ -2293,8 +2335,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "parameter-file-path"
+      ],
       "tags": []
     },
     {
@@ -2499,8 +2543,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "parameter-file-path"
+      ],
       "tags": []
     },
     {
@@ -2709,8 +2755,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "parameter-file-path"
+      ],
       "tags": []
     },
     {
@@ -3100,8 +3148,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "parameter-raw-html"
+      ],
       "tags": []
     },
     {
@@ -3151,8 +3201,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "parameter-raw-html"
+      ],
       "tags": []
     },
     {
@@ -3294,8 +3346,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "parameter-raw-html"
+      ],
       "tags": []
     },
     {
@@ -3430,8 +3484,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "parameter-raw-html"
+      ],
       "tags": []
     },
     {
@@ -3527,8 +3583,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "shell-command"
+      ],
       "tags": []
     },
     {
@@ -3699,8 +3757,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "parameter-ldap-filter"
+      ],
       "tags": []
     },
     {
@@ -3750,8 +3810,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "parameter-xpath-expression"
+      ],
       "tags": []
     },
     {
@@ -3817,8 +3879,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "parameter-header-value"
+      ],
       "tags": []
     },
     {
@@ -3960,8 +4024,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "forbidden-call"
+      ],
       "tags": []
     },
     {
@@ -4545,8 +4611,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "unsafe-jni"
+      ],
       "tags": []
     },
     {
@@ -4640,8 +4708,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "parameter-header-value"
+      ],
       "tags": []
     },
     {
@@ -4843,8 +4913,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "parameter-log-message"
+      ],
       "tags": []
     },
     {
@@ -5962,8 +6034,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "parameter-format-string"
+      ],
       "tags": []
     },
     {
@@ -8764,8 +8838,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "secret-in-log"
+      ],
       "tags": []
     },
     {
@@ -9003,8 +9079,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "secret-in-log"
+      ],
       "tags": []
     },
     {
@@ -10339,8 +10417,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "privileged-container"
+      ],
       "tags": []
     },
     {
@@ -10490,8 +10570,11 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "hardcoded-secret",
+        "plaintext-config-secret"
+      ],
       "tags": []
     },
     {
@@ -10532,8 +10615,11 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "hardcoded-secret",
+        "plaintext-config-secret"
+      ],
       "tags": []
     },
     {
@@ -10634,7 +10720,8 @@
       "detection_review": "unreviewed",
       "implementation_status": "partial",
       "rule_ids": [
-        "hardcoded-secret"
+        "hardcoded-secret",
+        "plaintext-config-secret"
       ],
       "tags": []
     },
@@ -10678,8 +10765,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "plaintext-config-secret"
+      ],
       "tags": []
     },
     {
@@ -11104,8 +11193,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "privileged-container"
+      ],
       "tags": []
     },
     {
@@ -11289,8 +11380,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "world-writable-permission"
+      ],
       "tags": []
     },
     {
@@ -11403,8 +11496,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "world-writable-permission"
+      ],
       "tags": []
     },
     {
@@ -12297,8 +12392,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "tls-verification-disabled"
+      ],
       "tags": []
     },
     {
@@ -12364,8 +12461,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "tls-verification-disabled"
+      ],
       "tags": []
     },
     {
@@ -12452,8 +12551,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "tls-verification-disabled"
+      ],
       "tags": []
     },
     {
@@ -12881,8 +12982,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "authentication-lockout-disabled"
+      ],
       "tags": []
     },
     {
@@ -13109,8 +13212,11 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "hardcoded-secret",
+        "plaintext-config-secret"
+      ],
       "tags": []
     },
     {
@@ -13151,8 +13257,11 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "hardcoded-secret",
+        "plaintext-config-secret"
+      ],
       "tags": []
     },
     {
@@ -13424,8 +13533,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "cleartext-http"
+      ],
       "tags": []
     },
     {
@@ -13475,8 +13586,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "hardcoded-secret"
+      ],
       "tags": []
     },
     {
@@ -13563,8 +13676,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "constant-aead-nonce"
+      ],
       "tags": []
     },
     {
@@ -13924,8 +14039,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "constant-cbc-iv"
+      ],
       "tags": []
     },
     {
@@ -14059,8 +14176,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "weak-random"
+      ],
       "tags": []
     },
     {
@@ -14102,8 +14221,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "weak-random"
+      ],
       "tags": []
     },
     {
@@ -14224,8 +14345,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "constant-random-seed"
+      ],
       "tags": []
     },
     {
@@ -14269,8 +14392,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "constant-random-seed"
+      ],
       "tags": []
     },
     {
@@ -14314,8 +14439,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "constant-random-seed"
+      ],
       "tags": []
     },
     {
@@ -14365,8 +14492,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "weak-random"
+      ],
       "tags": []
     },
     {
@@ -14483,8 +14612,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "weak-random"
+      ],
       "tags": []
     },
     {
@@ -14996,8 +15127,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "csrf-protection-disabled"
+      ],
       "tags": []
     },
     {
@@ -15707,8 +15840,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "divide-by-zero"
+      ],
       "tags": []
     },
     {
@@ -15957,8 +16092,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "insecure-temp-file"
+      ],
       "tags": []
     },
     {
@@ -16094,8 +16231,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "process-exit"
+      ],
       "tags": []
     },
     {
@@ -16144,8 +16283,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "direct-thread"
+      ],
       "tags": []
     },
     {
@@ -16362,8 +16503,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "swallowed-error"
+      ],
       "tags": []
     },
     {
@@ -16549,8 +16692,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "null-catch"
+      ],
       "tags": []
     },
     {
@@ -17794,8 +17939,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "untrusted-search-path"
+      ],
       "tags": []
     },
     {
@@ -17846,8 +17993,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "untrusted-search-path"
+      ],
       "tags": []
     },
     {
@@ -19457,8 +19606,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "forbidden-call"
+      ],
       "tags": []
     },
     {
@@ -19850,8 +20001,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "obsolete-call"
+      ],
       "tags": []
     },
     {
@@ -20095,8 +20248,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "assignment-in-condition"
+      ],
       "tags": []
     },
     {
@@ -20317,8 +20472,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "class-name-comparison"
+      ],
       "tags": []
     },
     {
@@ -20499,8 +20656,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "public-clone-method"
+      ],
       "tags": []
     },
     {
@@ -20593,8 +20752,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "public-static-field"
+      ],
       "tags": []
     },
     {
@@ -20653,8 +20814,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "download-execution"
+      ],
       "tags": []
     },
     {
@@ -20976,8 +21139,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "public-static-field"
+      ],
       "tags": []
     },
     {
@@ -21613,8 +21778,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "weak-password-length"
+      ],
       "tags": []
     },
     {
@@ -21723,8 +21890,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "cleartext-credential-url"
+      ],
       "tags": []
     },
     {
@@ -21851,8 +22020,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "plaintext-config-secret"
+      ],
       "tags": []
     },
     {
@@ -22422,8 +22593,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "hardcoded-secret"
+      ],
       "tags": []
     },
     {
@@ -22627,8 +22800,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "suspicious-comment"
+      ],
       "tags": []
     },
     {
@@ -22671,8 +22846,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "hardcoded-secret"
+      ],
       "tags": []
     },
     {
@@ -22715,8 +22892,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "directory-listing-enabled"
+      ],
       "tags": []
     },
     {
@@ -22914,8 +23093,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "public-storage"
+      ],
       "tags": []
     },
     {
@@ -23544,8 +23725,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "missing-super-finalizer"
+      ],
       "tags": []
     },
     {
@@ -23675,8 +23858,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "thread-run"
+      ],
       "tags": []
     },
     {
@@ -23962,8 +24147,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "missing-super-clone"
+      ],
       "tags": []
     },
     {
@@ -24004,8 +24191,11 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "equals-without-hashcode",
+        "hashcode-without-equals"
+      ],
       "tags": []
     },
     {
@@ -24044,8 +24234,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "public-static-array"
+      ],
       "tags": []
     },
     {
@@ -24085,8 +24277,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "public-finalizer"
+      ],
       "tags": []
     },
     {
@@ -24168,8 +24362,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "empty-synchronized"
+      ],
       "tags": []
     },
     {
@@ -24210,8 +24406,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "explicit-finalizer"
+      ],
       "tags": []
     },
     {
@@ -24752,8 +24950,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "sensitive-query-string"
+      ],
       "tags": []
     },
     {
@@ -24931,8 +25131,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "parameter-redirect-target"
+      ],
       "tags": []
     },
     {
@@ -25157,8 +25359,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "public-static-array"
+      ],
       "tags": []
     },
     {
@@ -25196,8 +25400,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "struts-public-field"
+      ],
       "tags": []
     },
     {
@@ -25342,8 +25548,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "xml-entity-expansion"
+      ],
       "tags": []
     },
     {
@@ -25447,8 +25655,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "session-expiry-disabled"
+      ],
       "tags": []
     },
     {
@@ -25488,8 +25698,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "cookie-secure-disabled"
+      ],
       "tags": []
     },
     {
@@ -26439,8 +26651,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "parameter-xpath-expression"
+      ],
       "tags": []
     },
     {
@@ -29340,8 +29554,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "legacy-tls-version"
+      ],
       "tags": []
     },
     {
@@ -29492,8 +29708,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "constant-password-salt"
+      ],
       "tags": []
     },
     {
@@ -29964,8 +30182,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "parameter-allocation-size"
+      ],
       "tags": []
     },
     {
@@ -30229,8 +30449,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "xml-entity-expansion"
+      ],
       "tags": []
     },
     {
@@ -30401,8 +30623,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "rsa-without-oaep"
+      ],
       "tags": []
     },
     {
@@ -30899,8 +31123,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "parameter-allocation-size"
+      ],
       "tags": []
     },
     {
@@ -31287,7 +31513,8 @@
       "detection_review": "unreviewed",
       "implementation_status": "partial",
       "rule_ids": [
-        "hardcoded-secret"
+        "hardcoded-secret",
+        "plaintext-config-secret"
       ],
       "tags": []
     },
@@ -32099,8 +32326,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "download-execution"
+      ],
       "tags": []
     },
     {
@@ -32496,8 +32725,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "parameter-raw-html"
+      ],
       "tags": []
     },
     {
@@ -33261,8 +33492,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "forbidden-call"
+      ],
       "tags": []
     },
     {
@@ -33329,8 +33562,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "weak-hash"
+      ],
       "tags": []
     },
     {
@@ -33374,8 +33609,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "parameter-expression-language"
+      ],
       "tags": []
     },
     {
@@ -33437,8 +33674,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "parameter-network-target"
+      ],
       "tags": []
     },
     {
@@ -33949,8 +34188,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "wildcard-cors-origin"
+      ],
       "tags": []
     },
     {
@@ -34039,8 +34280,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "cookie-httponly-disabled"
+      ],
       "tags": []
     },
     {
@@ -34140,8 +34383,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "unrestricted-framing"
+      ],
       "tags": []
     },
     {
@@ -34194,8 +34439,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "parameter-window-opener"
+      ],
       "tags": []
     },
     {
@@ -37860,8 +38107,11 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "default-credential",
+        "default-password"
+      ],
       "tags": []
     },
     {
@@ -38126,8 +38376,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "constant-cbc-iv"
+      ],
       "tags": []
     },
     {
@@ -40859,8 +41111,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "cookie-samesite-disabled"
+      ],
       "tags": []
     },
     {
@@ -41331,8 +41585,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "parameter-allocation-size"
+      ],
       "tags": []
     },
     {
@@ -41821,8 +42077,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "secret-in-log"
+      ],
       "tags": []
     },
     {
@@ -43010,8 +43268,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "prototype-mutation"
+      ],
       "tags": []
     },
     {
@@ -43631,8 +43891,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "nested-regex-quantifier"
+      ],
       "tags": []
     },
     {
@@ -43827,8 +44089,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "parameter-template-source"
+      ],
       "tags": []
     },
     {
@@ -44369,8 +44633,10 @@
       ],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "missing-integer-radix"
+      ],
       "tags": []
     },
     {
@@ -44519,8 +44785,11 @@
       "upstream_detection_methods": [],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "default-credential",
+        "default-password"
+      ],
       "tags": []
     },
     {
@@ -44573,8 +44842,10 @@
       "upstream_detection_methods": [],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "default-password"
+      ],
       "tags": []
     },
     {
@@ -45531,8 +45802,10 @@
       "evidence_required": "Hermetic build comparison",
       "positive_example": "Build fetches an unpinned generated schema",
       "negative_example": "Schema content is pinned and verified",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "mutable-artifact-reference"
+      ],
       "cwe_mapping_status": "not_reviewed",
       "assessment_kind": "defect",
       "classification_review": "proposed",
@@ -46159,8 +46432,10 @@
       "evidence_required": "Pipeline policy inspection",
       "positive_example": "Release proceeds after a required check fails",
       "negative_example": "Release is blocked on failure",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "relaxed-check"
+      ],
       "cwe_mapping_status": "not_reviewed",
       "assessment_kind": "policy_violation",
       "classification_review": "proposed",
@@ -46567,8 +46842,10 @@
         "runtime"
       ],
       "detection_review": "proposed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "unawaited-call"
+      ],
       "assessment_kind": "defect",
       "classification_review": "proposed",
       "classification_basis": "Original family definition; validate applicability against the target contract.",
@@ -46886,8 +47163,10 @@
         "specification"
       ],
       "detection_review": "proposed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "mutable-artifact-reference"
+      ],
       "assessment_kind": "policy_violation",
       "classification_review": "proposed",
       "classification_basis": "Original family definition; validate applicability against the target contract.",
@@ -46938,8 +47217,10 @@
         "specification"
       ],
       "detection_review": "proposed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "download-execution"
+      ],
       "assessment_kind": "policy_violation",
       "classification_review": "proposed",
       "classification_basis": "Original family definition; validate applicability against the target contract.",

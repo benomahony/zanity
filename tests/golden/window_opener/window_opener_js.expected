@@ -1,0 +1,3 @@
+rules: parameter-window-opener
+exit: 0
+window_opener_js.js:2:22: warning [parameter-window-opener]

@@ -1,0 +1,3 @@
+requests>=2
+flask==3.0.0
+-r base.txt

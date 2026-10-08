@@ -1,0 +1,3 @@
+rules: parameter-ldap-filter
+exit: 0
+ldap_filter.py:2:40: warning [parameter-ldap-filter]
