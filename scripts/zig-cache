@@ -1,0 +1,34 @@
+#!/bin/sh
+set -eu
+
+root=$(git rev-parse --show-toplevel)
+cache="$root/.zig-cache"
+limit_mb=${ZANITY_ZIG_CACHE_WARN_MB:-10240}
+
+size_kb() {
+    if [ -d "$cache" ]; then
+        du -sk "$cache" | awk 'NR == 1 { print $1 }'
+    else
+        printf '0\n'
+    fi
+}
+
+case "${1:-}" in
+    --check)
+        used_kb=$(size_kb)
+        if [ "$used_kb" -gt "$((limit_mb * 1024))" ]; then
+            used_mb=$(((used_kb + 1023) / 1024))
+            echo "pre-push: .zig-cache is ${used_mb} MB; run ./scripts/zig-cache to reclaim it" >&2
+        fi
+        ;;
+    "")
+        used_kb=$(size_kb)
+        rm -rf "$cache"
+        used_mb=$(((used_kb + 1023) / 1024))
+        echo "Removed ${used_mb} MB from .zig-cache; the next Zig build will recompile." >&2
+        ;;
+    *)
+        echo "usage: ./scripts/zig-cache [--check]" >&2
+        exit 2
+        ;;
+esac

@@ -451,6 +451,8 @@ zig build test --fuzz=100K  # fuzz the checker with arbitrary bytes in every lan
 
 `git config core.hooksPath .githooks` turns on the repository's hooks. `pre-commit` runs the same format check as CI. `pre-push` refuses to test a dirty or different checkout, then runs the complete CI gate: formatting, unit and integration tests, zanity's strict self-check, every release build, and the generated catalogue check.
 
+Zig does not prune `.zig-cache`; run `./scripts/zig-cache` when its old content is no longer worth keeping. The pre-push hook warns above 10 GB without deleting anything. Set `ZANITY_ZIG_CACHE_WARN_MB` to choose a different warning threshold.
+
 Golden cases in `tests/golden/` run through the real binary and compare where each finding lands, its rule, its severity and the exit code, not the wording. The self-check runs zanity over its own source with every rule and fails on any finding.
 
 ### Releasing

@@ -85,7 +85,7 @@ jobs:
       - uses: actions/checkout@v5
         with:
           ref: ${{ needs.version.outputs.commit }}
-      - uses: mlugg/setup-zig@v2
+      - uses: xyzzylabs/setup-zig@7e5af686da64007a0797898801de180e5f4d3762 # v1.0.5
         with:
           cache-key: ${{ matrix.platform }}
       - name: Build ${{ matrix.platform }}
