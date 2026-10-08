@@ -23,7 +23,7 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     env:
-      ZIG_CACHE_LIMIT_MB: 1024
+      ZIG_CACHE_LIMIT_MB: 2048
     steps:
       - uses: actions/checkout@v5
       # Installs the Zig in build.zig.zon's minimum_zig_version.
