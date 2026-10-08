@@ -4,7 +4,7 @@
 
 Fast, deterministic sanity checks for code written by people and agents.
 
-zanity checks Python, Zig, Go, TypeScript, Rust and Java for the mistakes that make code unsafe, untestable or hard to follow: unbounded loops, functions with no assertions, tests that sleep or touch the network, error messages that don't say what to do, and dozens more. It parses each file once with [tree-sitter](https://tree-sitter.github.io) and runs every rule in a single pass, so checking a whole repository takes moments. It is one static binary with no runtime to install, and it never touches the network, unless you add `--infer` to have a language model judge what code structure can't, such as whether an error message misleads.
+zanity checks Python, Zig, Go, TypeScript, Rust and Java for the mistakes that make code unsafe, untestable or hard to follow: unbounded loops, functions with no assertions, tests that sleep or touch the network, error messages that don't say what to do, and dozens more. It parses each file once with [tree-sitter](https://tree-sitter.github.io) and runs every rule in a single pass, so checking a whole repository takes moments. It is one static binary with no runtime to install, and checking never touches the network, unless you add `--infer` to have a language model judge what code structure can't, such as whether an error message misleads.
 
 ```console
 $ zanity check src
@@ -38,6 +38,16 @@ On Windows, in PowerShell:
 New-Item -ItemType Directory -Force "$HOME\bin" | Out-Null
 Invoke-WebRequest -OutFile "$HOME\bin\zanity.exe" "https://github.com/benomahony/zanity/releases/latest/download/zanity-windows-x86_64.exe"
 ```
+
+### Upgrading
+
+```sh
+zanity upgrade            # replace this zanity with the latest release
+zanity upgrade --dry-run  # say which release that would be, and change nothing
+zanity upgrade --to 0.1.4 # install that release instead, even an older one
+```
+
+It checks the download against the SHA-256 GitHub lists for the release before it replaces the running binary, and leaves it untouched if anything fails. Set `GITHUB_TOKEN` if GitHub's rate limit for anonymous requests gets in the way. A zanity installed by mise or Homebrew is left to that tool to upgrade, and one built from source needs `--to`, since `dev` is no release.
 
 If you use [mise](https://mise.jdx.dev), `mise use -g github:benomahony/zanity` installs and updates it, as does [eget](https://github.com/zyedidia/eget) with `eget benomahony/zanity`. Or download `zanity-<os>-<arch>` from the release page yourself: it is a single file with nothing else to install, and the Linux builds are static, so they run on any distribution.
 
