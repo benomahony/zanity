@@ -1,2 +1,0 @@
-# Only required to rebuild YAML; inspection CLI is standard-library-only.
-PyYAML==6.0.3

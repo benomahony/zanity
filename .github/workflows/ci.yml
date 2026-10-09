@@ -51,10 +51,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
-      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
       # The catalogue's rule mapping and triage are generated; a stale copy fails here.
       - name: Generated catalogue files are current
         run: |
-          uv run --with 'PyYAML==6.0.3' python catalogue/sync.py
+          python3 catalogue/sync.py
           python3 catalogue/triage.py
-          git diff --exit-code -- catalogue || { echo "::error::The files above are out of date. Run: uv run --with 'PyYAML==6.0.3' python catalogue/sync.py && python3 catalogue/triage.py, then commit the result."; exit 1; }
+          git diff --exit-code -- catalogue || { echo "::error::The files above are out of date. Run: python3 catalogue/sync.py && python3 catalogue/triage.py, then commit the result."; exit 1; }

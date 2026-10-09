@@ -24,7 +24,7 @@ fn listsName(names: []const []const u8, wanted: []const u8) bool {
 }
 
 fn entryById(entries: []const CatalogueEntry, id: []const u8) ?CatalogueEntry {
-    if (id.len == 0) assert.panic("expected an entry id, got an empty one among {d} entries; every entry in catalogue/catalogue.json needs an id, so re-import it with catalogue/import_cwe.py", .{entries.len});
+    if (id.len == 0) assert.panic("expected an entry id, got an empty one among {d} entries; every entry in catalogue/catalogue.json needs an id, so copy catalogue.json from the engineering error catalogue's next release", .{entries.len});
     const index = for (entries, 0..) |e, i| {
         if (std.mem.eql(u8, e.id, id)) break i;
     } else return null;
@@ -51,18 +51,18 @@ test "the catalogue and the rules agree on which rule detects which entry" {
             problems += 1;
         }
         if (!listsName(entry.rule_ids, rule.name) or std.mem.eql(u8, entry.implementation_status, "unsupported")) {
-            std.debug.print("\n{s} does not list rule {s} as support; run uv run --with 'PyYAML>=6,<7' python catalogue/sync.py", .{ id, rule.name });
+            std.debug.print("\n{s} does not list rule {s} as support; run python3 catalogue/sync.py", .{ id, rule.name });
             problems += 1;
         }
     };
     for (catalogue.entries) |entry| for (entry.rule_ids) |name| {
         const rule = rules.find(name) orelse {
-            std.debug.print("\n{s} names rule {s}, which zanity does not have; run uv run --with 'PyYAML>=6,<7' python catalogue/sync.py", .{ entry.id, name });
+            std.debug.print("\n{s} names rule {s}, which zanity does not have; run python3 catalogue/sync.py", .{ entry.id, name });
             problems += 1;
             continue;
         };
         if (!listsName(rule.catalogue, entry.id)) {
-            std.debug.print("\n{s} names rule {s}, whose .catalogue does not list it; run uv run --with 'PyYAML>=6,<7' python catalogue/sync.py", .{ entry.id, name });
+            std.debug.print("\n{s} names rule {s}, whose .catalogue does not list it; run python3 catalogue/sync.py", .{ entry.id, name });
             problems += 1;
         }
     };
