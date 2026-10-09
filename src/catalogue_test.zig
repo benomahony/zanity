@@ -24,7 +24,7 @@ fn listsName(names: []const []const u8, wanted: []const u8) bool {
 }
 
 fn entryById(entries: []const CatalogueEntry, id: []const u8) ?CatalogueEntry {
-    if (id.len == 0) assert.panic("expected an entry id, got an empty one among {d} entries; every entry in catalogue/catalogue.json needs an id, so copy catalogue.json from the engineering error catalogue's next release", .{entries.len});
+    if (id.len == 0) assert.panic("expected an entry id, got an empty one among {d} entries; every entry in catalogue/catalogue.json needs an id, so copy catalogue.json from the engineering-error-catalogue repository", .{entries.len});
     const index = for (entries, 0..) |e, i| {
         if (std.mem.eql(u8, e.id, id)) break i;
     } else return null;

@@ -29,7 +29,7 @@ BUCKETS = {
 
 
 def platforms(entry: dict) -> list[str]:
-    assert "id" in entry, f"a catalogue entry has no id (keys: {sorted(entry)}); copy catalogue.json from the engineering error catalogue's next release"
+    assert "id" in entry, f"a catalogue entry has no id (keys: {sorted(entry)}); copy catalogue.json from the engineering-error-catalogue repository"
     listed = entry.get("applicable_platforms", [])
     names = [p.get("Name") or p.get("Class") or "" for p in listed]
     assert len(names) == len(listed), f"{entry['id']}: read {len(names)} platform names from {len(listed)} platforms; each platform needs a Name or Class"
@@ -56,7 +56,7 @@ def out_of_scope(entry: dict) -> str | None:
 def detection(entry: dict) -> str:
     """How a weakness zanity could take on would be found: statically, by inference, or neither."""
     methods = {m.get("method", "") for m in entry.get("upstream_detection_methods", [])} | set(entry.get("detection_methods", []))
-    assert all(isinstance(m, str) for m in methods), f"{entry['id']}: detection methods {sorted(map(repr, methods))} are not all names; copy catalogue.json from the engineering error catalogue's next release"
+    assert all(isinstance(m, str) for m in methods), f"{entry['id']}: detection methods {sorted(map(repr, methods))} are not all names; copy catalogue.json from the engineering-error-catalogue repository"
     if any("Static" in m or m == "static" for m in methods):
         return "static"
     if methods & {"specification", "runtime", "manual", "configuration"}:
@@ -75,7 +75,7 @@ def bucket(entry: dict) -> str:
 
 def write_triage() -> None:
     catalogue = json.loads((HERE / "catalogue.json").read_text())
-    assert catalogue["entries"], "catalogue/catalogue.json has no entries; copy catalogue.json from the engineering error catalogue's next release"
+    assert catalogue["entries"], "catalogue/catalogue.json has no entries; copy catalogue.json from the engineering-error-catalogue repository"
     groups: dict[str, list[dict]] = defaultdict(list)
     for entry in catalogue["entries"]:
         groups[bucket(entry)].append(entry)

@@ -1,6 +1,6 @@
 """Write zanity's rule mapping (the `.catalogue` field of each rule in src/rules.zig) into the catalogue.
 
-src/rules.zig is the source of truth. A new catalogue.json from the catalogue's release comes with
+src/rules.zig is the source of truth. A catalogue.json copied from the engineering-error-catalogue repository comes with
 empty `rule_ids`, so run this after copying one in too; `zig build test` fails until they agree.
 
     python3 catalogue/sync.py
@@ -30,11 +30,11 @@ def mapping() -> dict[str, list[str]]:
 def sync() -> None:
     catalogue = json.loads((HERE / "catalogue.json").read_text())
     entries = {e["id"]: e for e in catalogue["entries"]}
-    assert entries, "catalogue/catalogue.json has no entries; copy catalogue.json from the engineering error catalogue's next release, then run this again"
+    assert entries, "catalogue/catalogue.json has no entries; copy catalogue.json from the engineering-error-catalogue repository, then run this again"
     by_entry: dict[str, list[str]] = {}
     for rule, ids in mapping().items():
         for entry in ids:
-            assert entry in entries, f"rule {rule} in src/rules.zig maps to {entry}, which catalogue.json does not have; fix the ID, or copy catalogue.json from the engineering error catalogue's next release"
+            assert entry in entries, f"rule {rule} in src/rules.zig maps to {entry}, which catalogue.json does not have; fix the ID, or copy catalogue.json from the engineering-error-catalogue repository"
             by_entry.setdefault(entry, []).append(rule)
     for entry in catalogue["entries"]:
         rules = sorted(by_entry.get(entry["id"], []))
