@@ -79,6 +79,17 @@ pub const schema =
     \\    input_tokens INTEGER NOT NULL,
     \\    output_tokens INTEGER NOT NULL
     \\);
+    \\CREATE TABLE IF NOT EXISTS false_positives (
+    \\    path TEXT NOT NULL,
+    \\    line INTEGER NOT NULL,
+    \\    column INTEGER NOT NULL,
+    \\    rule TEXT NOT NULL,
+    \\    message TEXT NOT NULL,
+    \\    code TEXT NOT NULL,
+    \\    version TEXT NOT NULL,
+    \\    flagged_at TEXT NOT NULL,
+    \\    PRIMARY KEY (path, rule, message, code)
+    \\);
     \\CREATE TABLE IF NOT EXISTS source_analyses (
     \\    analysis_hash TEXT PRIMARY KEY,
     \\    source_hash TEXT NOT NULL,
@@ -97,6 +108,7 @@ const save_answer = "INSERT OR REPLACE INTO answers (model, question_hash, unit_
 
 const save_observation = "INSERT OR REPLACE INTO observations (path, rule, unit_hash, unit_name, line, language, model, question_hash, probability, threshold, fired, seen_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now'))";
 const save_run = "INSERT INTO runs (at, path, units, asked, cached, input_tokens, output_tokens) VALUES (strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now'), ?1, ?2, ?3, ?4, ?5, ?6)";
+const save_false_positive = "INSERT OR REPLACE INTO false_positives (path, line, column, rule, message, code, version, flagged_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now'))";
 const find_analysis = "SELECT result FROM source_analyses WHERE analysis_hash = ?1 AND source_hash = ?2";
 const touch_analysis = "UPDATE source_analyses SET used_at = strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now'), hits = hits + 1 WHERE analysis_hash = ?1";
 const save_analysis = "INSERT OR REPLACE INTO source_analyses (analysis_hash, source_hash, path, language, result, created_at, used_at, hits) VALUES (?1, ?2, ?3, ?4, ?5, strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now'), strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now'), 0)";
@@ -164,6 +176,19 @@ pub const Analysis = struct {
     result: []const u8,
 };
 
+/// A finding someone flagged as wrong from their editor: where it was, what it said, the line of
+/// code it was about, and the zanity that reported it, so the rule can be made more precise.
+pub const FalsePositive = struct {
+    path: []const u8,
+    /// Counting from 1, as `--json` reports them.
+    line: u32,
+    column: u32,
+    rule: []const u8,
+    message: []const u8,
+    code: []const u8,
+    version: []const u8,
+};
+
 /// Why the last store operation failed, as SQLite put it.
 pub var failure: [512]u8 = undefined;
 pub var failure_len: usize = 0;
@@ -181,6 +206,7 @@ pub const Store = struct {
     find_analysis: *sqlite3_stmt,
     touch_analysis: *sqlite3_stmt,
     save_analysis: *sqlite3_stmt,
+    false_positive: *sqlite3_stmt,
 
     /// Gives SQLite one fixed heap, then opens the store and prepares every statement, so
     /// nothing allocates after start-up. SQLite keeps the first heap for the life of the process,
@@ -212,6 +238,7 @@ pub const Store = struct {
             .find_analysis = try prepare(db, find_analysis),
             .touch_analysis = try prepare(db, touch_analysis),
             .save_analysis = try prepare(db, save_analysis),
+            .false_positive = try prepare(db, save_false_positive),
         };
         if (!configured) assert.panic("opened {s} before SQLite was given its heap; install the heap with sqlite3_config before opening the store", .{path});
         return opened;
@@ -280,6 +307,21 @@ pub const Store = struct {
         try bindInt(self.run, 5, r.input_tokens);
         try bindInt(self.run, 6, r.output_tokens);
         if (sqlite3_step(self.run) != done) return failed(self.db);
+    }
+
+    /// Keeps a flagged finding, replacing an earlier flag of the same finding on the same code.
+    pub fn keepFalsePositive(self: *const Store, f: FalsePositive) !void {
+        if (f.line == 0 or f.column == 0) assert.panic("{s}: flagging '{s}' at line {d} column {d}; both count from 1", .{ f.path, f.rule, f.line, f.column });
+        if (f.path.len == 0 or f.rule.len == 0) assert.panic("flagging a finding with no path or rule; pass the finding the editor flagged", .{});
+        defer _ = sqlite3_reset(self.false_positive);
+        try bind(self.false_positive, 1, f.path);
+        try bindInt(self.false_positive, 2, f.line);
+        try bindInt(self.false_positive, 3, f.column);
+        try bind(self.false_positive, 4, f.rule);
+        try bind(self.false_positive, 5, f.message);
+        try bind(self.false_positive, 6, f.code);
+        try bind(self.false_positive, 7, f.version);
+        if (sqlite3_step(self.false_positive) != done) return failed(self.db);
     }
 
     /// Copies a cached JSON analysis into caller-owned memory, and records that it was reused.

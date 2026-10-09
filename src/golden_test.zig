@@ -548,3 +548,47 @@ test "a mistake in zanity.toml stops the run and says where" {
     try std.testing.expectEqual(std.process.Child.Term{ .exited = 2 }, run.term);
     try std.testing.expect(std.mem.indexOf(u8, run.stderr, "zanity.toml:1: 'recursions' isn't a rule") != null);
 }
+
+/// One LSP message, framed as the protocol sends it.
+fn frame(arena: std.mem.Allocator, body: []const u8) ![]const u8 {
+    if (body.len == 0 or body[0] != '{') assert.panic("framing '{s}', which is not a JSON object", .{body});
+    const framed = try std.fmt.allocPrint(arena, "Content-Length: {d}\r\n\r\n{s}", .{ body.len, body });
+    if (!std.mem.endsWith(u8, framed, body)) assert.panic("the frame of '{s}' does not end with it", .{body});
+    return framed;
+}
+
+test "zanity lsp publishes findings and offers their fixes and a false-positive flag as code actions" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    const io = std.testing.io;
+    const zanity = try Io.Dir.cwd().realPathFileAlloc(io, paths.zanity, arena);
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(io, .{ .sub_path = "checks.py", .data = "def f(x):\n    assert x is not None\n    assert isinstance(x, int)\n    return x\n" });
+    const work = try tmp.dir.realPathFileAlloc(io, ".", arena);
+    const uri = try std.fmt.allocPrint(arena, "file://{s}/checks.py", .{work});
+    const messages = [_][]const u8{
+        try std.fmt.allocPrint(arena, "{{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{{\"rootUri\":\"file://{s}\",\"capabilities\":{{}}}}}}", .{work}),
+        "{\"jsonrpc\":\"2.0\",\"method\":\"initialized\",\"params\":{}}",
+        try std.fmt.allocPrint(arena, "{{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"textDocument/codeAction\",\"params\":{{\"textDocument\":{{\"uri\":\"{s}\"}},\"range\":{{\"start\":{{\"line\":1,\"character\":0}},\"end\":{{\"line\":1,\"character\":0}}}},\"context\":{{\"diagnostics\":[]}}}}}}", .{uri}),
+        "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"shutdown\"}",
+        "{\"jsonrpc\":\"2.0\",\"method\":\"exit\"}",
+    };
+    var input: std.ArrayList(u8) = .empty;
+    for (messages) |m| try input.appendSlice(arena, try frame(arena, m));
+    var environ = std.process.Environ.Map.init(arena);
+    try environ.put("OTEL_SDK_DISABLED", "true");
+    var child = try std.process.spawn(io, .{ .argv = &.{ zanity, "lsp" }, .stdin = .pipe, .stdout = .pipe, .stderr = .ignore, .environ_map = &environ });
+    try child.stdin.?.writeStreamingAll(io, input.items);
+    child.stdin.?.close(io);
+    child.stdin = null;
+    var buffer: [4096]u8 = undefined;
+    var reader = child.stdout.?.readerStreaming(io, &buffer);
+    const output = try reader.interface.allocRemaining(arena, .unlimited);
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, try child.wait(io));
+    for ([_][]const u8{ "\"method\":\"textDocument/publishDiagnostics\"", "\"code\":\"redundant-null-check\"", "\"title\":\"zanity: fix redundant-null-check\"", "\"command\":\"zanity.flagFalsePositive\"", "\"id\":3,\"result\":null" }) |expected| {
+        if (std.mem.indexOf(u8, output, expected) == null) std.debug.print("\nmissing {s} in:\n{s}", .{ expected, output });
+        try std.testing.expect(std.mem.indexOf(u8, output, expected) != null);
+    }
+}

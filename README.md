@@ -154,6 +154,7 @@ zanity check . --json                         # a JSON array, one object per fin
 zanity check . --plain                        # stable key=value lines for scripts
 zanity check . --agent                        # findings laid out for a coding agent to act on
 zanity check . --infer                        # also have a language model judge error messages
+zanity lsp                                    # serve findings and fixes to an editor
 zanity help check                             # every option
 ```
 
@@ -176,6 +177,29 @@ sqlite3 ~/.cache/zanity/zanity.db "
   ORDER BY used_at DESC, path
   LIMIT 20;"
 ```
+
+### In an editor with `zanity lsp`
+
+`zanity lsp` is a language server on stdin and stdout. It checks the workspace when the editor connects and again on every save, and shows each finding as a diagnostic, with its fix under the message. Its code actions are:
+
+- **zanity: fix &lt;rule&gt;**, the edit `--fix` would make, for each finding zanity can fix;
+- **zanity: fix all N in this file**, every such edit in the file at once (kind `source.fixAll.zanity`, so an editor can run it on save);
+- **zanity: flag &lt;rule&gt; here as a false positive**, for any finding that is wrong.
+
+A flag hides the finding for the rest of the session and keeps it, with the line of code it was about and the zanity version, in the `false_positives` table of `~/.cache/zanity/zanity.db`, so the rule can be made more precise:
+
+```sh
+sqlite3 ~/.cache/zanity/zanity.db "SELECT rule, path, line, code, message FROM false_positives ORDER BY flagged_at DESC"
+```
+
+A file edited since the last check offers no actions until it is saved, since its findings may have moved. In Neovim:
+
+```lua
+vim.lsp.config("zanity", { cmd = { "zanity", "lsp" }, root_markers = { "zanity.toml", ".git" }, filetypes = { "python", "zig", "go", "rust", "java", "javascript", "typescript" } })
+vim.lsp.enable("zanity")
+```
+
+**Telemetry.** Set `OTEL_EXPORTER_OTLP_ENDPOINT` and the server sends a trace span for each check (findings, fixable, hidden by a flag, files), each fix applied and each false positive flagged (rule, message, path, line and the line of code) as OTLP/HTTP JSON to `<endpoint>/v1/traces`, or to `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` as given. `OTEL_EXPORTER_OTLP_HEADERS` adds headers as `name=value` pairs, such as `Authorization=<write token>` for Logfire at `https://logfire-us.pydantic.dev`; `OTEL_SDK_DISABLED=true` turns it off. Nothing is sent without an endpoint, and a collector that can't be reached costs one warning, then telemetry is off for the session.
 
 ### Judging what structure can't settle with `--infer`
 

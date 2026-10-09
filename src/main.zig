@@ -24,6 +24,8 @@ const Live = @import("live.zig").Live;
 const config = @import("config.zig");
 const starter = @import("init.zig");
 const upgrade = @import("upgrade.zig");
+const lsp = @import("lsp.zig");
+const Telemetry = @import("telemetry.zig").Telemetry;
 const Facts = @import("facts.zig").Facts;
 const Finding = @import("facts.zig").Finding;
 
@@ -63,6 +65,11 @@ const UpgradeRow = struct {
     /// `upgraded`, `current` when there is nothing newer, or `available` for a --dry-run.
     status: []const u8,
 };
+
+const LspOptions = struct {};
+
+/// `zanity lsp` writes the protocol to stdout itself, so it has no rows.
+const LspRow = struct { messages: usize };
 
 /// One finding as `--json` and `--plain` publish it. Lines and columns count from 1. When zanity
 /// can fix it, the edit replaces bytes `edit_start` to `edit_end` of the file with `edit_text`.
@@ -114,7 +121,12 @@ const app: zcli.App = .{
         .options = &.{
             .{ .name = "to", .metavar = "VERSION", .help = "Install this release instead of the latest, even if it is older.", .example = "0.1.4" },
         },
-    }, .{ .run = runUpgrade, .dry_run = previewUpgrade, .human = renderUpgrade }) },
+    }, .{ .run = runUpgrade, .dry_run = previewUpgrade, .human = renderUpgrade }), zcli.command(LspOptions, LspRow, .{
+        .name = "lsp",
+        .description = "Serve the language server protocol on stdin and stdout: findings as diagnostics, refreshed on save, and zanity's fixes as code actions.",
+        .examples = &.{"zanity lsp"},
+        .result_title = "Language server",
+    }, .{ .run = runLsp }) },
 };
 
 /// Everything a run needs, allocated once at startup and reused for every file.
@@ -290,6 +302,31 @@ fn renderHuman(ctx: *zcli.Context, rows: []const Row) !void {
     try report.render(.{ .console = console(ctx, ctx.runtime.out), .scratch = &ws.table, .text = &ws.text }, findings);
     try report.summarise(console(ctx, ctx.runtime.err), report.count(findings, ws.checked + ws.project_files.len));
     if (ws.checked > ws.files.len) assert.panic("checked {d} files out of {d} collected; count a file as checked only once, in checkFiles()", .{ ws.checked, ws.files.len });
+}
+
+fn runLsp(ctx: *zcli.Context, _: LspOptions) ![]const LspRow {
+    const ws = workspaceOf(ctx);
+    const environ = ws.environ orelse assert.panic("zanity lsp ran without the environment; main() passes it to the workspace", .{});
+    const exe = std.process.executablePathAlloc(ws.io, ctx.allocator) catch |e| {
+        return ctx.fail(.io, try ws.text.format("Could not find where this zanity is installed, to run its checks: {t}.", .{e}), "Reinstall it with install.sh, as the README describes.");
+    };
+    ws.source_cache = store.Store.initStore(std.heap.page_allocator, ws.io, environ, ws.limits.store_bytes) catch null;
+    var telemetry = Telemetry.initTelemetry(std.heap.page_allocator, ws.io, environ, app.version) catch null;
+    const services: lsp.Services = .{
+        .exe = exe,
+        .version = app.version,
+        .store = if (ws.source_cache) |*s| s else null,
+        .telemetry = if (telemetry) |*t| t else null,
+    };
+    const out = ctx.runtime.out;
+    var server = try lsp.LanguageServer.initLanguageServer(std.heap.page_allocator, ws.io, out.writer, services);
+    var in_buffer: [64 * 1024]u8 = undefined;
+    var in = Io.File.stdin().readerStreaming(ws.io, &in_buffer);
+    if (!try server.serve(&in.interface)) ctx.status = .failure;
+    ctx.format = .plain;
+    if (exe.len == 0) assert.panic("found this zanity at an empty path; executablePathAlloc() returns a path or fails", .{});
+    if (ctx.format != .plain) assert.panic("zanity lsp left the {t} format on, which would print an empty result after the protocol", .{ctx.format});
+    return &.{};
 }
 
 fn runInit(ctx: *zcli.Context, options: InitOptions) ![]const InitRow {
