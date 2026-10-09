@@ -1,5 +1,5 @@
-//! `zanity.toml`: which rules run, which paths are skipped, and how hard `--infer` may push
-//! TypeSafe. zanity uses the nearest one at or above the directory it runs in, up to the
+//! `zanity.toml`: which rules run, which paths are skipped, and which model `--infer` asks and
+//! how hard. zanity uses the nearest one at or above the directory it runs in, up to the
 //! repository root. Anything it doesn't recognise is an error naming the line, never ignored.
 //!
 //!     rules = ["recursion", "long-function"]   # run exactly these, like --rules
@@ -7,7 +7,10 @@
 //!     exclude = ["vendor/", "tests/golden/**"] # gitignore syntax, relative to this file
 //!
 //!     [infer]
-//!     concurrency = 16                         # requests to TypeSafe at once
+//!     url = "http://127.0.0.1:8009"            # a System One server, such as a local Kev
+//!     model = "kev-latest"                     # the model to ask
+//!     api_key_env = "KEV_API_KEY"              # where the key is, if the server needs one
+//!     concurrency = 16                         # requests to the model at once
 //!     threshold = 0.9                          # how sure it must be to report
 //!
 //!     [paths."src/*_test.zig"]                 # gitignore syntax, relative to this file
@@ -75,8 +78,14 @@ pub const Config = struct {
     disable: rules.Set = .{},
     exclude: [max_excludes][]const u8 = undefined,
     exclude_len: usize = 0,
+    /// The System One server `--infer` asks; TYPESAFE_BASE_URL, then TypeSafe's API, when unset.
+    url: ?[]const u8 = null,
+    /// The model to ask; TYPESAFE_DEFAULT_MODEL, then jev-latest, when unset.
+    model: ?[]const u8 = null,
+    /// The environment variable holding the API key; TYPESAFE_API_KEY when unset.
+    api_key_env: ?[]const u8 = null,
     concurrency: ?u32 = null,
-    /// How sure TypeSafe must be for a judgement to become a finding, above 0 and at most 1.
+    /// How sure the model must be for a judgement to become a finding, above 0 and at most 1.
     threshold: ?f64 = null,
     paths: [max_path_sections]PathRules = undefined,
     paths_len: usize = 0,
@@ -483,8 +492,19 @@ const TomlReader = struct {
 
     fn readInferSetting(self: *TomlReader, config: *Config, key: []const u8) Error!void {
         if (self.table != .infer) assert.panic("reading '{s}' as an [infer] setting outside [infer]; readSetting() must hand over only [infer] settings", .{key});
-        const InferSetting = enum { concurrency, threshold };
-        switch (std.meta.stringToEnum(InferSetting, key) orelse return self.fail("'{s}' isn't an [infer] setting; the settings are concurrency and threshold.", .{key})) {
+        const InferSetting = enum { url, model, api_key_env, concurrency, threshold };
+        const setting = std.meta.stringToEnum(InferSetting, key) orelse return self.fail("'{s}' isn't an [infer] setting; the settings are url, model, api_key_env, concurrency and threshold.", .{key});
+        switch (setting) {
+            .url => {
+                const url = try self.readString(key);
+                if (!(std.mem.startsWith(u8, url, "http://") or std.mem.startsWith(u8, url, "https://"))) return self.fail("url is '{s}'; it must start with http:// or https://, such as \"http://127.0.0.1:8009\".", .{url});
+                config.url = url;
+            },
+            .model, .api_key_env => {
+                const text = try self.readString(key);
+                if (text.len == 0) return self.fail("'{s}' is empty; name one, or remove the line to use the default.", .{key});
+                if (setting == .model) config.model = text else config.api_key_env = text;
+            },
             .concurrency => {
                 const value = try self.readInteger(key);
                 if (value < 1 or value > max_concurrency) return self.fail("concurrency is {d}; it must be between 1 and {d}.", .{ value, max_concurrency });
@@ -492,11 +512,12 @@ const TomlReader = struct {
             },
             .threshold => {
                 const value = try self.readDecimal(key);
-                if (!(value > 0 and value <= 1)) return self.fail("threshold is {d}; it must be above 0 and at most 1, such as 0.9 to report only what TypeSafe is at least 90% sure of.", .{value});
+                if (!(value > 0 and value <= 1)) return self.fail("threshold is {d}; it must be above 0 and at most 1, such as 0.9 to report only what the model is at least 90% sure of.", .{value});
                 config.threshold = value;
             },
         }
-        if (config.concurrency == null and config.threshold == null) assert.panic("read the [infer] setting '{s}' but stored nothing; each branch of readInferSetting() must store its value", .{key});
+        if (setting == .concurrency and config.concurrency == null) assert.panic("read [infer] concurrency but stored nothing; its branch of readInferSetting() must store it", .{});
+        if (setting == .threshold and config.threshold == null) assert.panic("read [infer] threshold but stored nothing; its branch of readInferSetting() must store it", .{});
     }
 
     fn readSetting(self: *TomlReader, config: *Config, key: []const u8) Error!void {
@@ -505,7 +526,7 @@ const TomlReader = struct {
         if (self.table == .infer) return self.readInferSetting(config, key);
         if (self.table == .vocabulary or self.table == .synonyms or self.table == .scope) return self.readVocabularySetting(config, key);
         const Setting = enum { rules, disable, exclude };
-        const which = std.meta.stringToEnum(Setting, key) orelse return self.fail("'{s}' isn't a setting; the settings are rules, disable, exclude and, under [infer], concurrency and threshold.", .{key});
+        const which = std.meta.stringToEnum(Setting, key) orelse return self.fail("'{s}' isn't a setting; the settings are rules, disable, exclude and, under [infer], url, model, api_key_env, concurrency and threshold.", .{key});
         const items = try self.readStrings(key);
         switch (which) {
             .exclude => {

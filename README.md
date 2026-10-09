@@ -179,12 +179,23 @@ sqlite3 ~/.cache/zanity/zanity.db "
 
 ### Judging what structure can't settle with `--infer`
 
-Whether an error message is vague, cryptic or unhelpful can often be decided from the code: a message that shows none of the values its condition reads is vague. zanity checks that deterministically on every run. What code structure can't settle, such as whether a message describes a different failure from the one that happened, `--infer` asks of a language model through the [TypeSafe API](https://docs.typesafe.ai/api), after every deterministic check has run.
+Whether an error message is vague, cryptic or unhelpful can often be decided from the code: a message that shows none of the values its condition reads is vague. zanity checks that deterministically on every run. What code structure can't settle, such as whether a message describes a different failure from the one that happened, `--infer` asks of a decision model through the [System One API](https://docs.typesafe.ai/api), after every deterministic check has run. By default that is TypeSafe's hosted Jev:
 
 ```sh
 export TYPESAFE_API_KEY=...   # from your TypeSafe account
 zanity check . --infer
 ```
+
+Any other System One server works too, such as [Kev](https://github.com/jaredpalmer/kev) running on your own machine, so no code leaves it. Point `[infer]` in `zanity.toml` at it:
+
+```toml
+[infer]
+url = "http://127.0.0.1:8009"   # default: TYPESAFE_BASE_URL, then https://api.typesafe.ai
+model = "kev-latest"            # default: TYPESAFE_DEFAULT_MODEL, then jev-latest
+api_key_env = "KEV_API_KEY"     # default: TYPESAFE_API_KEY
+```
+
+Only TypeSafe's own API needs a key. For any other server the key is optional, and zanity reads it only from the variable `api_key_env` names, so your TypeSafe key is never sent anywhere else. Answers are stored per model and server, so switching between them never mixes their answers.
 
 | Rule | Asks whether a function |
 |---|---|
@@ -235,9 +246,9 @@ Its fix names the members and what varies between them, which is what that build
 
 A finding is reported when the model is at least 80% sure, and says how sure it was. `threshold` under `[infer]` in `zanity.toml` changes that: `threshold = 0.9` reports only what it is at least 90% sure of, and a lower value reports more.
 
-**What is sent:** the source of each function and test, the first three bodies of each cluster, and only the questions that apply to it and that no deterministic check already answered there: the error-message questions only about functions that raise, return or log an error. Nothing else leaves your machine, and without `--infer` nothing does at all.
+**What is sent**, to the server you chose: the source of each function and test, the first three bodies of each cluster, and only the questions that apply to it and that no deterministic check already answered there: the error-message questions only about functions that raise, return or log an error. Nothing else leaves your machine, and without `--infer` nothing does at all.
 
-**Cost and speed:** answers are cached in a SQLite file, `~/.cache/zanity/zanity.db` (or wherever `ZANITY_STORE` points), keyed by the function's source, so unchanged code is never asked about twice and a second run is instant. A progress line shows how many functions are answered and how long the rest will take. `[infer] concurrency` in `zanity.toml` sets how many requests run at once (default 8, up to 64); `TYPESAFE_BASE_URL` points at a different TypeSafe endpoint.
+**Cost and speed:** answers are cached in a SQLite file, `~/.cache/zanity/zanity.db` (or wherever `ZANITY_STORE` points), keyed by the function's source, so unchanged code is never asked about twice and a second run is instant. A progress line shows how many functions are answered and how long the rest will take. `[infer] concurrency` in `zanity.toml` sets how many requests run at once (default 8, up to 64).
 
 **Querying what the model said:** each run also keeps every answer in the store, including the ones below the threshold, in `observations` (one row per question, function and place, with the probability, the threshold and whether it fired) and a row in `runs` with the tokens it used. Any SQLite client can read them; with [DuckDB](https://duckdb.org):
 
@@ -269,9 +280,15 @@ disable = ["duplicate-name"]
 exclude = ["vendor/", "tests/fixtures/**"]
 
 [infer]
-# Requests sent to TypeSafe at once (1 to 64, default 8).
+# The System One server to ask, such as a local Kev (default: TypeSafe's API).
+url = "http://127.0.0.1:8009"
+# The model to ask (default: jev-latest).
+model = "kev-latest"
+# The variable holding the API key (default: TYPESAFE_API_KEY); optional except for TypeSafe.
+api_key_env = "KEV_API_KEY"
+# Requests sent to the model at once (1 to 64, default 8).
 concurrency = 16
-# How sure TypeSafe must be for a judgement to become a finding (above 0 up to 1, default 0.8).
+# How sure the model must be for a judgement to become a finding (above 0 up to 1, default 0.8).
 threshold = 0.9
 
 # Rules that don't report in some files. The pattern is .gitignore syntax, relative to this

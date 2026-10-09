@@ -104,13 +104,17 @@ fn renderInferNotes(w: *std.Io.Writer) !void {
     if (infer.default_concurrency > config.max_concurrency) assert.panic("the default concurrency {d} is above the most config allows, {d}; lower infer.default_concurrency or raise config.max_concurrency", .{ infer.default_concurrency, config.max_concurrency });
     try w.print(
         \\
-        \\# `zanity check --infer` also asks a language model, through TypeSafe, what code structure
-        \\# can't settle, such as whether an error message misleads. It sends only the source of
-        \\# functions that report errors, needs TYPESAFE_API_KEY, and caches every answer.
+        \\# `zanity check --infer` also asks a decision model what code structure can't settle, such
+        \\# as whether an error message misleads. It sends only the source of the functions it asks
+        \\# about, and caches every answer. By default it asks TypeSafe's Jev, which needs
+        \\# TYPESAFE_API_KEY; any other System One server works, such as Kev on your own machine.
         \\[infer]
-        \\# Requests sent to TypeSafe at once, 1 to {d}.
+        \\# url = "http://127.0.0.1:8009"    # default: TYPESAFE_BASE_URL, then TypeSafe's API
+        \\# model = "kev-latest"             # default: TYPESAFE_DEFAULT_MODEL, then jev-latest
+        \\# api_key_env = "KEV_API_KEY"      # default: TYPESAFE_API_KEY; optional except for TypeSafe
+        \\# Requests sent to the model at once, 1 to {d}.
         \\concurrency = {d}
-        \\# How sure TypeSafe must be for a judgement to become a finding, above 0 and at most 1: 0.9
+        \\# How sure the model must be for a judgement to become a finding, above 0 and at most 1: 0.9
         \\# reports only what it is at least 90% sure of, and a lower value reports more.
         \\threshold = {d}
         \\

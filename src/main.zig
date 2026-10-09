@@ -91,7 +91,7 @@ const app: zcli.App = .{
             .{ .name = "strict", .help = "Exit 1 on any finding, warnings included, as a pre-commit hook or CI should." },
             .{ .name = "agent", .help = "Print findings for a coding agent: totals and the next command first, then each finding with its fix. On by default when CLAUDECODE is set and neither --json nor --plain is given.", .env = "ZANITY_AGENT" },
             .{ .name = "limit", .metavar = "N", .help = "With --agent, show at most N findings in all, rules first to last, and list the other rules by name; 0 shows them all.", .example = "0" },
-            .{ .name = "infer", .help = "Also ask TypeSafe what no deterministic check can decide, such as whether an error message misleads. Needs TYPESAFE_API_KEY." },
+            .{ .name = "infer", .help = "Also ask a decision model what no deterministic check can decide, such as whether an error message misleads: TypeSafe's Jev, which needs TYPESAFE_API_KEY, or the System One server [infer] in zanity.toml names, such as a local Kev." },
         },
     }, .{ .run = runCheck, .human = renderHuman }), zcli.command(InitOptions, InitRow, .{
         .name = "init",
@@ -551,19 +551,20 @@ fn reportInference(state: *anyopaque, done: usize, total: usize) void {
     const live: *Live = @ptrCast(@alignCast(state));
     if (done > total) assert.panic("--infer reported {d} of {d} functions done; Inference.watch() must report no more answered functions than it queued", .{ done, total });
     if (total == 0) assert.panic("--infer reported progress over no functions; askAll() must start the watcher only when functions are queued", .{});
-    live.update("Asking TypeSafe", done, total);
+    live.update("Asking the model", done, total);
 }
 
-/// Says how much of --infer came from the store and how long TypeSafe took, so a slow run explains itself.
+/// Says how much of --infer came from the store and how long the model took, so a slow run explains itself.
 fn describeInference(ctx: *zcli.Context, ws: *Workspace, stats: infer.Stats) !void {
     if (stats.asked > stats.functions) assert.panic("--infer asked about {d} of {d} functions; askAll() must count only queued functions as asked", .{ stats.asked, stats.functions });
     if (stats.seconds < 0) assert.panic("--infer took {d} seconds; measure the time with the .awake clock, which never runs backwards", .{stats.seconds});
     if (ctx.quiet or stats.functions == 0) return;
-    const line = try ws.text.format("zanity: --infer had questions about {d} {s}: {d} answered from the store, {d} asked of TypeSafe in {d}m{d:0>2}s.", .{
+    const line = try ws.text.format("zanity: --infer had questions about {d} {s}: {d} answered from the store, {d} asked of {s} in {d}m{d:0>2}s.", .{
         stats.functions,
         if (stats.functions == 1) "function" else "functions",
         stats.functions - stats.asked,
         stats.asked,
+        (ws.inference orelse assert.panic("describing --infer with no model connected; connectInference() runs first", .{})).client.model,
         @divTrunc(stats.seconds, 60),
         @as(u64, @intCast(@mod(stats.seconds, 60))),
     });
@@ -579,13 +580,15 @@ fn storeProblem(ws: *Workspace) ![]const u8 {
     return text;
 }
 
-/// Connects to TypeSafe for `--infer`, collecting the functions it will ask about and, unless
+/// Connects to the decision model for `--infer`, collecting the functions it will ask about and, unless
 /// `--rules` chose otherwise, turning on the rules only inference can decide.
 fn connectInference(ctx: *zcli.Context, ws: *Workspace, selected: *rules.Set, add_inferred: bool) !void {
-    if (ws.inference != null) assert.panic("connecting to TypeSafe a second time; runCheck connects once per run", .{});
+    if (ws.inference != null) assert.panic("connecting to the decision model a second time; runCheck connects once per run", .{});
     const environ = ws.environ orelse assert.panic("--infer needs the process environment, but main did not store it in the workspace; main() must store the environment in the workspace before running a command", .{});
-    ws.inference = infer.Inference.initInference(std.heap.page_allocator, ws.io, environ, ws.limits) catch |e| switch (e) {
-        error.MissingApiKey => return ctx.fail(.usage, "--infer asks TypeSafe to judge error messages, and needs an API key in TYPESAFE_API_KEY.", "Set TYPESAFE_API_KEY, or run without --infer to use only the deterministic checks."),
+    const settings = ws.settings orelse assert.panic("connecting --infer before zanity.toml was read; runCheck() reads it first", .{});
+    const server: infer.Server = .{ .environ = environ, .url = settings.url, .model = settings.model, .api_key_env = settings.api_key_env };
+    ws.inference = infer.Inference.initInference(std.heap.page_allocator, ws.io, ws.limits, server) catch |e| switch (e) {
+        error.MissingApiKey => return ctx.fail(.usage, try ws.text.format("--infer asks TypeSafe's API, which needs an API key in {s}.", .{server.keyVariable()}), try ws.text.format("Set {s}; or point [infer] url in zanity.toml at another System One server, such as a local Kev; or run without --infer.", .{server.keyVariable()})),
         error.StoreUnavailable => return ctx.fail(.io, try storeProblem(ws), "Check that the cache directory is writable, or set ZANITY_STORE to a file zanity can create."),
         else => return e,
     };

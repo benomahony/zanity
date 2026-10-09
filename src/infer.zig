@@ -1,6 +1,7 @@
-//! The inference tier. For each function and test, `check --infer` asks TypeSafe the questions
-//! of the rules that no deterministic check can settle, skipping any a deterministic check
-//! already answered there. Answers are kept in a store by model, function
+//! The inference tier. For each function and test, `check --infer` asks a decision model the
+//! questions of the rules that no deterministic check can settle, skipping any a deterministic
+//! check already answered there. The model is TypeSafe's Jev unless [infer] in zanity.toml names
+//! another System One server, such as a local Kev. Answers are kept in a store by model, function
 //! and question, so unchanged code is never asked about twice.
 const std = @import("std");
 const assert = @import("assert.zig");
@@ -17,7 +18,7 @@ const strings = @import("strings.zig");
 
 /// How sure the model must be before a judgement becomes a finding.
 pub const default_threshold = 0.8;
-/// Requests to TypeSafe at once when zanity.toml doesn't say.
+/// Requests to the model at once when zanity.toml doesn't say.
 pub const default_concurrency = 8;
 const max_questions = 16;
 
@@ -35,43 +36,70 @@ const Job = struct {
     diagnostics: tai.Client.Diagnostics = .{},
 };
 
-/// Reports how many functions TypeSafe has answered for, while the answers arrive.
+/// Reports how many functions the model has answered for, while the answers arrive.
 pub const Reporter = struct {
     state: *anyopaque,
     report: *const fn (state: *anyopaque, done: usize, total: usize) void,
 };
 
-/// What the last `judge` did: functions it had questions about, how many needed TypeSafe, and how long it took.
+/// What the last `judge` did: functions it had questions about, how many needed the model, and how long it took.
 pub const Stats = struct { functions: usize = 0, asked: usize = 0, seconds: i64 = 0 };
 
-/// Why the last `judge` failed, with the detail TypeSafe returned.
+/// Why the last `judge` failed, with the detail the server returned.
 pub var failure: []const u8 = "";
+
+/// Which System One server to ask, from [infer] in zanity.toml. Each unset field falls back to
+/// TypeSafe's variable in `environ`, then to TypeSafe's API and model.
+pub const Server = struct {
+    environ: *const std.process.Environ.Map,
+    url: ?[]const u8 = null,
+    model: ?[]const u8 = null,
+    /// The variable holding the key; only this one is read, so another server never gets TypeSafe's key.
+    api_key_env: ?[]const u8 = null,
+
+    pub fn keyVariable(server: Server) []const u8 {
+        const name = server.api_key_env orelse tai.Client.env.api_key;
+        if (name.len == 0) assert.panic("[infer] api_key_env is empty; config refuses an empty name", .{});
+        if (server.api_key_env != null and !std.mem.eql(u8, name, server.api_key_env.?)) assert.panic("reading the key from {s} instead of api_key_env", .{name});
+        return name;
+    }
+};
 
 pub const Inference = struct {
     client: tai.Client,
+    /// What answers are stored under: the model, and the server when it isn't TypeSafe's.
+    model: []const u8,
     io: Io,
     store: store.Store,
     jobs: memory.Bounded(Job),
     json: memory.Text,
     reporter: ?Reporter = null,
     concurrency: usize = default_concurrency,
-    /// How sure TypeSafe must be for a judgement to become a finding; [infer] threshold sets it.
+    /// How sure the model must be for a judgement to become a finding; [infer] threshold sets it.
     threshold: f64 = default_threshold,
     answered: std.atomic.Value(usize) = .init(0),
     stats: Stats = .{},
 
-    /// Fails with `error.MissingApiKey` when `TYPESAFE_API_KEY` is not set.
-    pub fn initInference(gpa: Allocator, io: Io, environ: *const std.process.Environ.Map, limits: memory.Limits) !Inference {
+    /// Fails with `error.MissingApiKey` when asking TypeSafe's API and the key variable is not set.
+    pub fn initInference(gpa: Allocator, io: Io, limits: memory.Limits, server: Server) !Inference {
+        const environ = server.environ;
         if (limits.judgement_bytes == 0 or limits.store_bytes == 0) assert.panic("memory.Limits allows {d} bytes of --infer requests and a {d}-byte store; both must be above 0", .{ limits.judgement_bytes, limits.store_bytes });
+        const client = try tai.Client.init(gpa, io, .{
+            .api_key = present(environ, server.keyVariable()),
+            .base_url = server.url orelse present(environ, tai.Client.env.base_url),
+            .model = server.model orelse present(environ, tai.Client.env.default_model),
+        });
+        const remote = !std.mem.eql(u8, client.base_url, tai.Client.default_base_url);
         const inference: Inference = .{
-            .client = try tai.Client.init(gpa, io, .{ .environ_map = environ }),
+            .client = client,
+            .model = if (remote) try std.fmt.allocPrint(gpa, "{s}@{s}", .{ client.model, client.base_url }) else client.model,
             .io = io,
             .store = try .initStore(gpa, io, environ, limits.store_bytes),
             .jobs = try .initBounded(gpa, limits.functions, "functions to ask TypeSafe about"),
             .json = try .initText(gpa, limits.judgement_bytes),
         };
-        const model = inference.client.model;
-        if (model.len == 0) assert.panic("the TypeSafe client has no model name; answers are stored by model", .{});
+        if (inference.model.len < client.model.len) assert.panic("answers are stored under '{s}', shorter than the model '{s}'", .{ inference.model, client.model });
+        if (client.model.len == 0) assert.panic("the System One client has no model name; answers are stored by model", .{});
         return inference;
     }
 
@@ -98,7 +126,7 @@ pub const Inference = struct {
             if (rule.question.len == 0 or !enabled.enabled(rule.name) or !asked(rule.asks, unit) or decided(settled, unit, rule)) continue;
             if (job.count == max_questions) break;
             job.rules[job.count] = rule;
-            job.answers[job.count] = try self.store.cached(self.client.model, store.digest(&.{rule.question}), job.unit_hash);
+            job.answers[job.count] = try self.store.cached(self.model, store.digest(&.{rule.question}), job.unit_hash);
             job.known[job.count] = job.answers[job.count] != null;
             job.count += 1;
         }
@@ -121,7 +149,7 @@ pub const Inference = struct {
         self.stats = .{ .functions = self.jobs.len, .asked = waiting };
         if (pending == 0) return;
         self.answered.store(0, .monotonic);
-        if (self.concurrency == 0) assert.panic("--infer would ask TypeSafe with no requests allowed at once; set [infer] concurrency in zanity.toml to at least 1", .{});
+        if (self.concurrency == 0) assert.panic("--infer would ask the model with no requests allowed at once; set [infer] concurrency in zanity.toml to at least 1", .{});
         var semaphore: Io.Semaphore = .{ .permits = self.concurrency };
         var group: Io.Group = .init;
         // The watcher needs its own thread from the start: `async` may defer a task until `await`,
@@ -198,11 +226,11 @@ pub const Inference = struct {
         for (job.rules[0..job.count], job.answers[0..job.count], job.known[0..job.count]) |rule, answer, known| {
             const p = answer orelse continue;
             const question = store.digest(&.{rule.question});
-            if (!known) try self.store.keepAnswer(.{ .model = self.client.model, .question = question, .unit = job.unit_hash, .language = unit.language, .source = unit.source, .probability = p });
+            if (!known) try self.store.keepAnswer(.{ .model = self.model, .question = question, .unit = job.unit_hash, .language = unit.language, .source = unit.source, .probability = p });
             const fired = p >= self.threshold;
-            try self.store.observe(.{ .path = unit.path, .rule = rule.name, .unit = job.unit_hash, .unit_name = unit.name, .line = unit.line + 1, .language = unit.language, .model = self.client.model, .question = question, .probability = p, .threshold = self.threshold, .fired = fired });
+            try self.store.observe(.{ .path = unit.path, .rule = rule.name, .unit = job.unit_hash, .unit_name = unit.name, .line = unit.line + 1, .language = unit.language, .model = self.model, .question = question, .probability = p, .threshold = self.threshold, .fired = fired });
             if (!fired) continue;
-            const message = try self.json.format("'{s}' {s} (TypeSafe is {d:.0}% sure).", .{ unit.name, rule.judgement, p * 100 });
+            const message = try self.json.format("'{s}' {s} ({s} is {d:.0}% sure).", .{ unit.name, rule.judgement, self.client.model, p * 100 });
             try findings.add(.{ .path = unit.path, .line = unit.line, .column = unit.column, .rule = rule.name, .message = message, .fix = unit.fix });
         }
         if (job.count > max_questions) assert.panic("{s}: recorded {d} answers about '{s}', more than {d}; record() must keep at most one answer per queued question", .{ unit.path, job.count, unit.name, max_questions });
@@ -227,14 +255,14 @@ pub const Inference = struct {
 
     /// The language and source identify a function; the model is kept alongside.
     fn unitHash(self: *const Inference, unit: *const Unit) store.Digest {
-        if (self.client.model.len == 0) assert.panic("the TypeSafe client has no model name; tai falls back to jev-latest, so this is a broken client", .{});
+        if (self.model.len == 0) assert.panic("answers are stored under no model; initInference() names it", .{});
         if (unit.language.len == 0) assert.panic("{s}: unit '{s}' has no language; facts.unit() must record the file's language with each function", .{ unit.path, unit.name });
         return store.digest(&.{ unit.language, unit.source });
     }
 
     /// The request state: the language and the function's source, as JSON.
     fn stateOf(self: *Inference, unit: *const Unit) ![]const u8 {
-        if (unit.language.len == 0) assert.panic("{s}: '{s}' has no language to tell TypeSafe; facts.unit() must record the file's language with each function", .{ unit.path, unit.name });
+        if (unit.language.len == 0) assert.panic("{s}: '{s}' has no language to tell the model; facts.unit() must record the file's language with each function", .{ unit.path, unit.name });
         const start = self.json.used;
         var writer: Io.Writer = .fixed(self.json.buffer[start..]);
         var json: std.json.Stringify = .{ .writer = &writer };
@@ -258,11 +286,19 @@ pub const Inference = struct {
         const d = job.diagnostics;
         const status: u32 = if (d.status) |s| @backingInt(s) else 0;
         const detail = std.mem.trim(u8, d.body[0..@min(d.body.len, 300)], " \t\r\n");
-        const text = try self.json.format("TypeSafe could not judge '{s}' in {s}: {t} (HTTP {d}, {d} attempts){s}{s}", .{ job.unit.name, job.unit.path, err, status, d.attempts, if (detail.len > 0) ": " else "", detail });
-        if (text.len == 0) assert.panic("describing a failed TypeSafe call produced no text; describe() must write the error and the function, so check its format call", .{});
+        const text = try self.json.format("{s} at {s} could not judge '{s}' in {s}: {t} (HTTP {d}, {d} attempts){s}{s}", .{ self.client.model, self.client.base_url, job.unit.name, job.unit.path, err, status, d.attempts, if (detail.len > 0) ": " else "", detail });
+        if (text.len == 0) assert.panic("describing a failed model call produced no text; describe() must write the error and the function, so check its format call", .{});
         return text;
     }
 };
+
+/// The variable's value, or null when it is unset or blank, as tai treats the environment.
+fn present(environ: *const std.process.Environ.Map, name: []const u8) ?[]const u8 {
+    if (name.len == 0) assert.panic("reading an unnamed environment variable; pass a name such as TYPESAFE_API_KEY", .{});
+    const value = std.mem.trim(u8, environ.get(name) orelse return null, " \t\r\n");
+    if (std.mem.indexOfAny(u8, value, "\r\n") != null) assert.panic("{s} still holds a line break after trimming", .{name});
+    return if (value.len == 0) null else value;
+}
 
 /// Whether a question about `asks` applies to the unit: the error-message questions to functions
 /// that report errors, the function questions to every function, and the test questions to tests.

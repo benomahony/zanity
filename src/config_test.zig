@@ -33,6 +33,9 @@ test "a zanity.toml chooses rules, excludes paths and sets concurrency" {
         \\[infer]
         \\concurrency = 1_6
         \\threshold = 0.95
+        \\url = "http://127.0.0.1:8009/"
+        \\model = 'kev-latest'
+        \\api_key_env = "KEV_API_KEY"
         \\
     );
     try std.testing.expect(c.rules.?.enabled("recursion"));
@@ -42,6 +45,9 @@ test "a zanity.toml chooses rules, excludes paths and sets concurrency" {
     try std.testing.expectEqualStrings("tests/golden/**", c.exclude[1]);
     try std.testing.expectEqual(@as(?u32, 16), c.concurrency);
     try std.testing.expectEqual(@as(?f64, 0.95), c.threshold);
+    try std.testing.expectEqualStrings("http://127.0.0.1:8009/", c.url.?);
+    try std.testing.expectEqualStrings("kev-latest", c.model.?);
+    try std.testing.expectEqualStrings("KEV_API_KEY", c.api_key_env.?);
 }
 
 test "'all' enables every rule, including those off by default" {
@@ -67,7 +73,7 @@ test "disable removes rules from the defaults" {
 
 test "mistakes in zanity.toml name the line and what to write" {
     try expectProblem("rules = [\"recursions\"]\n", "zanity.toml:1: 'recursions' isn't a rule; the rules are listed in the README, 'all' names every rule, and 'zanity check --rules' takes the same names.");
-    try expectProblem("\ndisabled = []\n", "zanity.toml:2: 'disabled' isn't a setting; the settings are rules, disable, exclude and, under [infer], concurrency and threshold.");
+    try expectProblem("\ndisabled = []\n", "zanity.toml:2: 'disabled' isn't a setting; the settings are rules, disable, exclude and, under [infer], url, model, api_key_env, concurrency and threshold.");
     try expectProblem("[inference]\n", "zanity.toml:1: '[inference]' isn't a table zanity knows; the tables are [infer], [paths.\"<pattern>\"], [vocabulary], [domains.<name>] and [contexts.<name>].");
     try expectProblem("[contexts]\n", "zanity.toml:1: '[contexts]' needs a name, such as [contexts.billing].");
     try expectProblem("[vocabulary.words]\n", "zanity.toml:1: '[vocabulary.words]' isn't a table zanity knows; the only one inside [vocabulary] is synonyms.");
@@ -76,9 +82,11 @@ test "mistakes in zanity.toml name the line and what to write" {
     try expectProblem("[paths.\"\"]\n", "zanity.toml:1: a [paths] pattern is empty; name the files it covers, such as \"tests/**\".");
     try expectProblem("[paths.\"tests/\"]\nrules = [\"recursion\"]\n", "zanity.toml:2: 'rules' isn't a [paths] setting; the only one is disable.");
     try expectProblem("[infer]\nconcurrency = 500\n", "zanity.toml:2: concurrency is 500; it must be between 1 and 64.");
-    try expectProblem("[infer]\nthreshold = 1.5\n", "zanity.toml:2: threshold is 1.5; it must be above 0 and at most 1, such as 0.9 to report only what TypeSafe is at least 90% sure of.");
+    try expectProblem("[infer]\nthreshold = 1.5\n", "zanity.toml:2: threshold is 1.5; it must be above 0 and at most 1, such as 0.9 to report only what the model is at least 90% sure of.");
     try expectProblem("[infer]\nthreshold = high\n", "zanity.toml:2: 'threshold' needs a number, such as threshold = 0.9.");
-    try expectProblem("[infer]\nmodel = \"x\"\n", "zanity.toml:2: 'model' isn't an [infer] setting; the settings are concurrency and threshold.");
+    try expectProblem("[infer]\nmodels = \"x\"\n", "zanity.toml:2: 'models' isn't an [infer] setting; the settings are url, model, api_key_env, concurrency and threshold.");
+    try expectProblem("[infer]\nurl = \"localhost:8009\"\n", "zanity.toml:2: url is 'localhost:8009'; it must start with http:// or https://, such as \"http://127.0.0.1:8009\".");
+    try expectProblem("[infer]\nmodel = \"\"\n", "zanity.toml:2: 'model' is empty; name one, or remove the line to use the default.");
     try expectProblem("rules = []\n", "zanity.toml:1: 'rules' is empty, so nothing would run; list at least one rule, or remove it to run the defaults.");
     try expectProblem("exclude = [\"a\" \"b\"]\n", "zanity.toml:1: items in 'exclude' must be separated by commas, such as [\"a\", \"b\"].");
     try expectProblem("rules = [\"recursion\"] extra\n", "zanity.toml:1: unexpected 'e' after a value; put each setting on its own line.");

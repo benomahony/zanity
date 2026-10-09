@@ -27,7 +27,7 @@ pub fn renderSchema(w: *std.Io.Writer) !void {
         \\  "$schema": "http://json-schema.org/draft-07/schema#",
         \\  "$id": "{s}",
         \\  "title": "zanity.toml",
-        \\  "description": "Settings for zanity check: which rules run, which files are skipped, and how --infer asks TypeSafe.",
+        \\  "description": "Settings for zanity check: which rules run, which files are skipped, and which model --infer asks.",
         \\  "type": "object",
         \\  "additionalProperties": false,
         \\  "properties": {{
@@ -58,30 +58,9 @@ pub fn renderSchema(w: *std.Io.Writer) !void {
 
 /// The [infer] table and the [paths."<pattern>"] tables.
 fn renderInferAndPaths(w: *std.Io.Writer) !void {
-    if (config.max_concurrency < infer.default_concurrency) assert.panic("the default concurrency {d} is above the most config allows, {d}; lower infer.default_concurrency or raise config.max_concurrency", .{ infer.default_concurrency, config.max_concurrency });
     if (config.max_path_sections == 0) assert.panic("config.max_path_sections is 0, so no [paths] table could be written; raise it in src/config.zig", .{});
+    try renderInfer(w);
     try w.print(
-        \\    "infer": {{
-        \\      "description": "How check --infer asks TypeSafe about error messages.",
-        \\      "type": "object",
-        \\      "additionalProperties": false,
-        \\      "properties": {{
-        \\        "concurrency": {{
-        \\          "description": "Requests sent to TypeSafe at once.",
-        \\          "type": "integer",
-        \\          "minimum": 1,
-        \\          "maximum": {d},
-        \\          "default": {d}
-        \\        }},
-        \\        "threshold": {{
-        \\          "description": "How sure TypeSafe must be for a judgement to become a finding: 0.9 reports only what it is at least 90% sure of, and a lower value reports more.",
-        \\          "type": "number",
-        \\          "exclusiveMinimum": 0,
-        \\          "maximum": 1,
-        \\          "default": {d}
-        \\        }}
-        \\      }}
-        \\    }},
         \\    "paths": {{
         \\      "description": "Rules that don't report in some files, one table per pattern, such as [paths.\"tests/e2e/\"]. Patterns are .gitignore syntax, relative to this file.",
         \\      "type": "object",
@@ -101,8 +80,55 @@ fn renderInferAndPaths(w: *std.Io.Writer) !void {
         \\      }}
         \\    }},
         \\
-    , .{ config.max_concurrency, infer.default_concurrency, infer.default_threshold, config.max_path_sections });
+    , .{config.max_path_sections});
     try renderVocabulary(w);
+    if (w.end == 0) assert.panic("rendered the [infer] and [paths] tables into an empty writer; renderInfer() and the [paths] text must write", .{});
+}
+
+/// The [infer] table: which System One server --infer asks, and how hard.
+fn renderInfer(w: *std.Io.Writer) !void {
+    if (config.max_concurrency < infer.default_concurrency) assert.panic("the default concurrency {d} is above the most config allows, {d}; lower infer.default_concurrency or raise config.max_concurrency", .{ infer.default_concurrency, config.max_concurrency });
+    if (!(infer.default_threshold > 0 and infer.default_threshold <= 1)) assert.panic("infer.default_threshold is {d}, outside the (0, 1] the schema allows; set it between 0 and 1 in src/infer.zig", .{infer.default_threshold});
+    try w.print(
+        \\    "infer": {{
+        \\      "description": "Which System One server check --infer asks, and how hard.",
+        \\      "type": "object",
+        \\      "additionalProperties": false,
+        \\      "properties": {{
+        \\        "url": {{
+        \\          "description": "The System One server to ask, such as a local Kev. Defaults to TYPESAFE_BASE_URL, then TypeSafe's API.",
+        \\          "type": "string",
+        \\          "pattern": "^https?://",
+        \\          "examples": ["http://127.0.0.1:8009"]
+        \\        }},
+        \\        "model": {{
+        \\          "description": "The model to ask. Defaults to TYPESAFE_DEFAULT_MODEL, then jev-latest.",
+        \\          "type": "string",
+        \\          "minLength": 1,
+        \\          "examples": ["kev-latest"]
+        \\        }},
+        \\        "api_key_env": {{
+        \\          "description": "The environment variable holding the API key, which only TypeSafe's API requires. Defaults to TYPESAFE_API_KEY.",
+        \\          "type": "string",
+        \\          "minLength": 1
+        \\        }},
+        \\        "concurrency": {{
+        \\          "description": "Requests sent to the model at once.",
+        \\          "type": "integer",
+        \\          "minimum": 1,
+        \\          "maximum": {d},
+        \\          "default": {d}
+        \\        }},
+        \\        "threshold": {{
+        \\          "description": "How sure the model must be for a judgement to become a finding: 0.9 reports only what it is at least 90% sure of, and a lower value reports more.",
+        \\          "type": "number",
+        \\          "exclusiveMinimum": 0,
+        \\          "maximum": 1,
+        \\          "default": {d}
+        \\        }}
+        \\      }}
+        \\    }},
+    , .{ config.max_concurrency, infer.default_concurrency, infer.default_threshold });
 }
 
 /// The [vocabulary] table and the [domains.<name>] and [contexts.<name>] tables.

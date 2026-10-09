@@ -446,7 +446,7 @@ const InferRun = struct {
     }
 };
 
-test "--infer keeps every answer, so a second run asks TypeSafe nothing and reports the same" {
+test "--infer keeps every answer, so a second run asks the model nothing and reports the same" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
     const arena = arena_state.allocator();
@@ -456,11 +456,37 @@ test "--infer keeps every answer, so a second run asks TypeSafe nothing and repo
     const first = try project.checkInferring(arena, std.testing.io);
     const second = try project.checkInferring(arena, std.testing.io);
     try std.testing.expectEqualStrings(first.stdout, second.stdout);
-    try std.testing.expect(std.mem.indexOf(u8, first.stderr, ", 0 asked of TypeSafe") == null);
-    try std.testing.expect(std.mem.indexOf(u8, second.stderr, ", 0 asked of TypeSafe") != null);
+    try std.testing.expect(std.mem.indexOf(u8, first.stderr, ", 0 asked of jev-latest") == null);
+    try std.testing.expect(std.mem.indexOf(u8, second.stderr, ", 0 asked of jev-latest") != null);
+    const requests = try project.tmp.dir.readFileAlloc(std.testing.io, "requests.log", arena, .unlimited);
+    try std.testing.expect(std.mem.indexOf(u8, requests, "\"authorization\": \"Bearer test\"") != null);
 }
 
-test "--infer reports what TypeSafe is sure of, for functions, tests and project files" {
+test "--infer asks the System One server zanity.toml names, with only the key it names" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    const io = std.testing.io;
+    var project = try InferRun.initInferRun(arena, io);
+    defer project.tmp.cleanup();
+    defer project.mock.child.kill(io);
+    const url = project.mock.env.get("TYPESAFE_BASE_URL") orelse assert.panic("startMock() set no TYPESAFE_BASE_URL", .{});
+    try project.tmp.dir.writeFile(io, .{ .sub_path = "zanity.toml", .data = try std.fmt.allocPrint(arena, "[infer]\nurl = \"{s}\"\nmodel = \"kev-latest\"\napi_key_env = \"KEV_API_KEY\"\n", .{url}) });
+    const keyless = try project.checkInferring(arena, io);
+    try std.testing.expect(std.mem.indexOf(u8, keyless.stdout, "(kev-latest is 95% sure)") != null);
+    const requests = try project.tmp.dir.readFileAlloc(io, "requests.log", arena, .unlimited);
+    try std.testing.expect(std.mem.indexOf(u8, requests, "\"model\": \"kev-latest\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, requests, "Bearer") == null);
+    try project.mock.env.put("KEV_API_KEY", "local");
+    try project.tmp.dir.deleteFile(io, "requests.log");
+    try project.tmp.dir.writeFile(io, .{ .sub_path = "zanity.toml", .data = try std.fmt.allocPrint(arena, "[infer]\nurl = \"{s}\"\nmodel = \"kev-4b\"\napi_key_env = \"KEV_API_KEY\"\n", .{url}) });
+    _ = try project.checkInferring(arena, io);
+    const keyed = try project.tmp.dir.readFileAlloc(io, "requests.log", arena, .unlimited);
+    try std.testing.expect(std.mem.indexOf(u8, keyed, "\"authorization\": \"Bearer local\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, keyed, "Bearer test") == null);
+}
+
+test "--infer reports what the model is sure of, for functions, tests and project files" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
     const arena = arena_state.allocator();

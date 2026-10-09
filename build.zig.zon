@@ -41,8 +41,8 @@
             .hash = "zcli-0.1.0-ahKCbKgHAgCjUcxbUK_Ln65g316CDIClUrjG_LF8OkXl",
         },
         .tai = .{
-            .url = "git+https://github.com/benomahony/zig-typesafe-ai#2367fbdea8db0cdde20406e889d324f70d06880f",
-            .hash = "tai-0.1.0-ibOfVZ08AQDAiIBPqc-boY6buEPbza7rrCMKWxsdlCFb",
+            .url = "git+https://github.com/benomahony/zig-typesafe-ai#4794b11a1a0dc62791b39b6fdc8f69bd4190e9fc",
+            .hash = "tai-0.1.0-ibOfVatDAQDQQqdaCPD2eVDfm-OD354g1uaMrFd_VGSt",
         },
     },
     .paths = .{

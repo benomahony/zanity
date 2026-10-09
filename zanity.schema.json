@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://raw.githubusercontent.com/benomahony/zanity/main/zanity.schema.json",
   "title": "zanity.toml",
-  "description": "Settings for zanity check: which rules run, which files are skipped, and how --infer asks TypeSafe.",
+  "description": "Settings for zanity check: which rules run, which files are skipped, and which model --infer asks.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
@@ -26,27 +26,43 @@
       "items": { "type": "string", "minLength": 1 }
     },
     "infer": {
-      "description": "How check --infer asks TypeSafe about error messages.",
+      "description": "Which System One server check --infer asks, and how hard.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "url": {
+          "description": "The System One server to ask, such as a local Kev. Defaults to TYPESAFE_BASE_URL, then TypeSafe's API.",
+          "type": "string",
+          "pattern": "^https?://",
+          "examples": ["http://127.0.0.1:8009"]
+        },
+        "model": {
+          "description": "The model to ask. Defaults to TYPESAFE_DEFAULT_MODEL, then jev-latest.",
+          "type": "string",
+          "minLength": 1,
+          "examples": ["kev-latest"]
+        },
+        "api_key_env": {
+          "description": "The environment variable holding the API key, which only TypeSafe's API requires. Defaults to TYPESAFE_API_KEY.",
+          "type": "string",
+          "minLength": 1
+        },
         "concurrency": {
-          "description": "Requests sent to TypeSafe at once.",
+          "description": "Requests sent to the model at once.",
           "type": "integer",
           "minimum": 1,
           "maximum": 64,
           "default": 8
         },
         "threshold": {
-          "description": "How sure TypeSafe must be for a judgement to become a finding: 0.9 reports only what it is at least 90% sure of, and a lower value reports more.",
+          "description": "How sure the model must be for a judgement to become a finding: 0.9 reports only what it is at least 90% sure of, and a lower value reports more.",
           "type": "number",
           "exclusiveMinimum": 0,
           "maximum": 1,
           "default": 0.8
         }
       }
-    },
-    "paths": {
+    },    "paths": {
       "description": "Rules that don't report in some files, one table per pattern, such as [paths.\"tests/e2e/\"]. Patterns are .gitignore syntax, relative to this file.",
       "type": "object",
       "maxProperties": 32,

@@ -3,8 +3,8 @@
 Answers each noul question from markers in the source of the function, setting line or project
 files it is about: a comment
 `judge: <rule>` makes that rule's question answer 0.95, anything else 0.05.
-Each request is appended to the file named by MOCK_TYPESAFE_LOG, so tests can
-see what was asked. Prints the port it listens on, then serves until killed or until its
+Each request is appended to the file named by MOCK_TYPESAFE_LOG, with the model and the
+Authorization header it carried, so tests can see what was asked and with which key. Prints the port it listens on, then serves until killed or until its
 stdin closes: the test holds stdin open, so a test that dies without killing the mock still
 takes it down, and the mock can't hold the build's output open forever.
 """
@@ -21,7 +21,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         assert self.path == "/v1/systemone", f"zanity called {self.path}; only /v1/systemone is mocked"
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
-        assert self.headers.get("Authorization", "").startswith("Bearer "), "zanity sent no API key"
+        assert body.get("model"), "zanity sent no model; tai names one in every request"
         state = body["state"]
         source = state.get("function") or state.get("line") or state.get("files") or state.get("repeated")
         judged = set(re.findall(r"judge: ([a-z-]+)", source))
@@ -29,7 +29,7 @@ class Handler(BaseHTTPRequestHandler):
         log = os.environ.get("MOCK_TYPESAFE_LOG")
         if log:
             with open(log, "a") as f:
-                f.write(json.dumps({"function": source.splitlines()[0], "questions": sorted(body["questions"])}) + "\n")
+                f.write(json.dumps({"function": source.splitlines()[0], "questions": sorted(body["questions"]), "model": body["model"], "authorization": self.headers.get("Authorization", "")}) + "\n")
         reply = json.dumps({"model": body["model"], "answers": answers, "usage": {"input_tokens": 1, "output_tokens": 1}}).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
