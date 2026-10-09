@@ -64,7 +64,8 @@ const UpgradeRow = struct {
     status: []const u8,
 };
 
-/// One finding as `--json` and `--plain` publish it. Lines and columns count from 1.
+/// One finding as `--json` and `--plain` publish it. Lines and columns count from 1. When zanity
+/// can fix it, the edit replaces bytes `edit_start` to `edit_end` of the file with `edit_text`.
 const Row = struct {
     path: []const u8,
     line: u32,
@@ -73,6 +74,9 @@ const Row = struct {
     rule: []const u8,
     message: []const u8,
     fix: []const u8,
+    edit_start: ?u32 = null,
+    edit_end: ?u32 = null,
+    edit_text: ?[]const u8 = null,
 };
 
 const app: zcli.App = .{
@@ -501,7 +505,18 @@ fn checkPaths(ctx: *zcli.Context, ws: *Workspace, options: CheckOptions, selecte
     ws.rows.clear();
     for (findings) |f| {
         const rule = rules.find(f.rule) orelse unreachable;
-        try ws.rows.add(.{ .path = f.path, .line = f.line + 1, .column = f.column + 1, .severity = @tagName(rule.severity), .rule = rule.name, .message = f.message, .fix = f.advice() });
+        try ws.rows.add(.{
+            .path = f.path,
+            .line = f.line + 1,
+            .column = f.column + 1,
+            .severity = @tagName(rule.severity),
+            .rule = rule.name,
+            .message = f.message,
+            .fix = f.advice(),
+            .edit_start = if (f.edit) |e| e.start else null,
+            .edit_end = if (f.edit) |e| e.end else null,
+            .edit_text = if (f.edit) |e| e.replacement else null,
+        });
     }
     return report.count(findings, ws.checked + ws.project_files.len);
 }
