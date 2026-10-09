@@ -50,6 +50,32 @@ test "a zanity.toml chooses rules, excludes paths and sets concurrency" {
     try std.testing.expectEqualStrings("KEV_API_KEY", c.api_key_env.?);
 }
 
+test "a [rules] table at the end selects and disables rules, as zanity init writes it" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const c = try parsed(arena_state.allocator(),
+        \\exclude = ["vendor/"]
+        \\
+        \\[infer]
+        \\concurrency = 4
+        \\
+        \\[rules]
+        \\select = ["all"]
+        \\disable = [
+        \\  "long-file",
+        \\  # "recursion",
+        \\]
+        \\
+    );
+    const chosen = c.selection();
+    try std.testing.expect(chosen.enabled("restated-type"));
+    try std.testing.expect(chosen.enabled("recursion"));
+    try std.testing.expect(!chosen.enabled("long-file"));
+    try std.testing.expectEqual(@as(?u32, 4), c.concurrency);
+    try expectProblem("[rules]\nrules = [\"all\"]\n", "zanity.toml:2: 'rules' isn't a [rules] setting; the settings are select and disable.");
+    try expectProblem("[rules]\nselect = []\n", "zanity.toml:2: 'select' is empty, so nothing would run; list at least one rule, or remove it to run the defaults.");
+}
+
 test "'all' enables every rule, including those off by default" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
@@ -73,8 +99,8 @@ test "disable removes rules from the defaults" {
 
 test "mistakes in zanity.toml name the line and what to write" {
     try expectProblem("rules = [\"recursions\"]\n", "zanity.toml:1: 'recursions' isn't a rule; the rules are listed in the README, 'all' names every rule, and 'zanity check --rules' takes the same names.");
-    try expectProblem("\ndisabled = []\n", "zanity.toml:2: 'disabled' isn't a setting; the settings are rules, disable, exclude and, under [infer], url, model, api_key_env, concurrency and threshold.");
-    try expectProblem("[inference]\n", "zanity.toml:1: '[inference]' isn't a table zanity knows; the tables are [infer], [paths.\"<pattern>\"], [vocabulary], [domains.<name>] and [contexts.<name>].");
+    try expectProblem("\ndisabled = []\n", "zanity.toml:2: 'disabled' isn't a setting; the settings are exclude and, under [rules], select and disable, and under [infer], url, model, api_key_env, concurrency and threshold.");
+    try expectProblem("[inference]\n", "zanity.toml:1: '[inference]' isn't a table zanity knows; the tables are [rules], [infer], [paths.\"<pattern>\"], [vocabulary], [domains.<name>] and [contexts.<name>].");
     try expectProblem("[contexts]\n", "zanity.toml:1: '[contexts]' needs a name, such as [contexts.billing].");
     try expectProblem("[vocabulary.words]\n", "zanity.toml:1: '[vocabulary.words]' isn't a table zanity knows; the only one inside [vocabulary] is synonyms.");
     try expectProblem("[contexts.billing]\ninclude = [\"\"]\n", "zanity.toml:2: an include pattern of [billing] is empty; name the files it covers.");

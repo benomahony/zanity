@@ -88,7 +88,7 @@ Then write a `zanity.toml` to say what zanity should check:
 zanity init
 ```
 
-It writes every setting with notes on what it does, lists every rule with its severity and how to fix what it finds, turns on `rules = ["all"]`, and excludes the vendored and fixture directories it finds, such as `vendor/` and `tests/fixtures/`. Delete or change what you don't need; `--force` replaces an existing file.
+It writes every setting with notes on what it does, excludes the vendored and fixture directories it finds, such as `vendor/` and `tests/fixtures/`, and ends with a `[rules]` table that turns on `select = ["all"]` and lists every rule with its severity and how to fix what it finds, ready to uncomment into `disable`. Delete or change what you don't need; `--force` replaces an existing file. `zanity init --minimal` writes the same settings with none of the notes or the rule list.
 
 Once `zanity check .` is clean, keep it that way with `--strict`, which fails on warnings as well as errors. That is what a pre-commit hook or CI should run.
 
@@ -226,7 +226,7 @@ Only TypeSafe's own API needs a key. For any other server the key is optional, a
 | `vague-error` | has an error message too vague to find the problem: it doesn't name the input or value that failed, or what was expected |
 | `cryptic-error` | has an error message that isn't in plain language: a code, an internal name or jargon |
 | `unconstructive-error` | has an error message that says what failed but not what to do about it |
-| `misleading-error` | has an error message that describes a different failure from the one that happened (*off* by default; `rules = ["all"]` includes it) |
+| `misleading-error` | has an error message that describes a different failure from the one that happened (*off* by default; `select = ["all"]` includes it) |
 
 Every function is also asked:
 
@@ -293,13 +293,6 @@ zanity reads the nearest `zanity.toml` at or above the directory it runs in, sto
 Everything is optional:
 
 ```toml
-# Run only these rules; "all" is every rule, including those off by default.
-# Leave it out to run the defaults.
-rules = ["recursion", "unbounded-loop", "long-function"]
-
-# Or keep the defaults but switch some off.
-disable = ["duplicate-name"]
-
 # Paths to skip, in .gitignore syntax, relative to this file.
 exclude = ["vendor/", "tests/fixtures/**"]
 
@@ -339,9 +332,16 @@ forbidden = ["discount"]
 
 [contexts.billing.synonyms]
 invoice = ["bill", "statement"]
+
+[rules]
+# Run only these rules; "all" is every rule, including those off by default.
+# Leave it out to run the defaults.
+select = ["recursion", "unbounded-loop", "long-function"]
+# Rules to switch off, from the selection or the defaults.
+disable = ["duplicate-name"]
 ```
 
-`--rules` on the command line overrides `rules` and `disable`. A mistake in the file stops the run with exit code 2 and names the line and what to write instead, for example `zanity.toml:1: 'recursions' isn't a rule; ...`.
+`--rules` on the command line overrides `[rules]`. Files written before the `[rules]` table, with `rules` and `disable` at the top, still work. A mistake in the file stops the run with exit code 2 and names the line and what to write instead, for example `zanity.toml:1: 'recursions' isn't a rule; ...`.
 
 ## Suppressing a finding
 
@@ -369,7 +369,7 @@ Every rule runs on every language where it means something; `dynamic-allocation`
 
 ## Rules
 
-Rules marked *off* run only with `--rules all`, `rules = ["all"]`, or when named.
+Rules marked *off* run only with `--rules all`, `select = ["all"]`, or when named.
 
 **NASA's Power of Ten**
 

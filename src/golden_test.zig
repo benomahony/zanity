@@ -336,7 +336,7 @@ test "precedence-trap's fix shows how the code runs and the grouping it reads as
     }
 }
 
-test "zanity init writes a zanity.toml that check reads, and won't overwrite it unasked" {
+test "zanity init writes a zanity.toml that check reads, with [rules] last, and won't overwrite it unasked" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
     const arena = arena_state.allocator();
@@ -360,6 +360,27 @@ test "zanity init writes a zanity.toml that check reads, and won't overwrite it 
     try std.testing.expectEqual(std.process.Child.Term{ .exited = 2 }, again.term);
     const forced = try std.process.run(arena, io, .{ .argv = &.{ zanity, "init", "--force" }, .cwd = .{ .path = work } });
     try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, forced.term);
+    const full = try tmp.dir.readFileAlloc(io, "zanity.toml", arena, .unlimited);
+    const table = std.mem.indexOf(u8, full, "\n[rules]\n") orelse return error.NoRulesTable;
+    try std.testing.expect(std.mem.indexOf(u8, full[table + 1 ..], "\n[") == null);
+}
+
+test "zanity init --minimal writes only the settings, which check reads" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    const io = std.testing.io;
+    const zanity = try Io.Dir.cwd().realPathFileAlloc(io, paths.zanity, arena);
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.createDirPath(io, "vendor");
+    try tmp.dir.writeFile(io, .{ .sub_path = "app.py", .data = "LIMIT = 3\n" });
+    const work = try std.fs.path.join(arena, &.{ ".zig-cache", "tmp", &tmp.sub_path });
+    const minimal = try std.process.run(arena, io, .{ .argv = &.{ zanity, "init", "--minimal" }, .cwd = .{ .path = work } });
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, minimal.term);
+    try std.testing.expectEqualStrings("#:schema " ++ schema.url ++ "\nexclude = [\"vendor/\"]\n\n[rules]\nselect = [\"all\"]\ndisable = []\n", try tmp.dir.readFileAlloc(io, "zanity.toml", arena, .unlimited));
+    const checked = try std.process.run(arena, io, .{ .argv = &.{ zanity, "check", "." }, .cwd = .{ .path = work } });
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, checked.term);
 }
 
 test "--strict fails a run with only warnings, which a plain run passes" {

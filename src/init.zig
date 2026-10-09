@@ -1,6 +1,7 @@
 //! `zanity init`: a zanity.toml with every setting written out and explained, so a project can
 //! start from the whole picture and delete what it doesn't need. Like the schema, it is written
 //! from the rules and limits in the code, so it never offers a setting or rule zanity lacks.
+//! `zanity init --minimal` writes only the settings themselves, with no notes and no rule list.
 const std = @import("std");
 const assert = @import("assert.zig");
 const rules = @import("rules.zig");
@@ -17,14 +18,18 @@ pub const Project = struct {
     languages: []const Count,
     /// The entries of `usual_excludes` that exist in the project.
     present: []const []const u8,
+    /// Write only the settings, without the notes and the list of every rule.
+    minimal: bool = false,
 
     pub const Count = struct { name: []const u8, files: usize };
 };
 
-/// Writes the whole zanity.toml.
+/// Writes the whole zanity.toml: what applies to the whole project first, then the tables, and
+/// the long list of rules last, below everything else.
 pub fn renderConfig(w: *std.Io.Writer, project: Project) !void {
     if (project.present.len > usual_excludes.len) assert.panic("init found {d} usual excludes of {d}; pass only entries of init.usual_excludes that exist", .{ project.present.len, usual_excludes.len });
     if (rules.all.len == 0) assert.panic("rules.all is empty, so zanity init would list no rules; add the rules back to src/rules.zig", .{});
+    if (project.minimal) return renderMinimal(w, project.present);
     try w.print(
         \\#:schema {s}
         \\# zanity's settings for this project. Every line is optional: delete what you don't need.
@@ -34,9 +39,18 @@ pub fn renderConfig(w: *std.Io.Writer, project: Project) !void {
     try renderFound(w, project);
     try w.writeAll(
         \\
-        \\# Which rules run. "all" is every rule, including those off by default; leave `rules` out to
+        \\# Paths zanity never checks, in .gitignore syntax, relative to this file. It already skips what
+        \\# .gitignore ignores, dot directories and build output.
+        \\
+    );
+    try renderExcludes(w, project.present);
+    try renderInferNotes(w);
+    try w.writeAll(
+        \\
+        \\[rules]
+        \\# Which rules run. "all" is every rule, including those off by default; leave `select` out to
         \\# run only the defaults. `zanity check --rules a,b` overrides it for one run.
-        \\rules = ["all"]
+        \\select = ["all"]
         \\
         \\# Rules to switch off everywhere. Every rule is listed here, with its severity, whether it is
         \\# on by default, and how to fix what it finds; uncomment the ones you don't want.
@@ -44,15 +58,17 @@ pub fn renderConfig(w: *std.Io.Writer, project: Project) !void {
         \\
     );
     try renderRuleList(w);
-    try w.writeAll(
-        \\]
-        \\
-        \\# Paths zanity never checks, in .gitignore syntax, relative to this file. It already skips what
-        \\# .gitignore ignores, dot directories and build output.
-        \\
-    );
-    try renderExcludes(w, project.present);
-    try renderInferNotes(w);
+    try w.writeAll("]\n");
+}
+
+/// Only the settings init chooses: the schema line, the excludes it found, and every rule.
+fn renderMinimal(w: *std.Io.Writer, present: []const []const u8) !void {
+    if (present.len > usual_excludes.len) assert.panic("{d} excludes found of {d} candidates; pass only entries of init.usual_excludes", .{ present.len, usual_excludes.len });
+    const before = w.end;
+    try w.print("#:schema {s}\n", .{schema.url});
+    if (present.len > 0) try renderExcludeList(w, present);
+    try w.writeAll("\n[rules]\nselect = [\"all\"]\ndisable = []\n");
+    if (w.end <= before) assert.panic("zanity init --minimal left the writer at byte {d}, where it started at {d}", .{ w.end, before });
 }
 
 fn renderFound(w: *std.Io.Writer, project: Project) !void {
@@ -93,7 +109,15 @@ fn renderExcludes(w: *std.Io.Writer, present: []const []const u8) !void {
         try w.writeAll("# exclude = [\"vendor/\", \"tests/fixtures/\"]\n");
         return;
     }
-    try w.writeAll("# zanity init turned on the ones below that exist in this project.\nexclude = [");
+    const before = w.end;
+    try w.writeAll("# zanity init turned on the ones below that exist in this project.\n");
+    try renderExcludeList(w, present);
+    if (w.end <= before) assert.panic("listing {d} excludes left the writer at byte {d}, where it started", .{ present.len, before });
+}
+
+fn renderExcludeList(w: *std.Io.Writer, present: []const []const u8) !void {
+    if (present.len == 0) assert.panic("writing an exclude list with nothing in it; write the commented example instead", .{});
+    try w.writeAll("exclude = [");
     for (present, 0..) |dir, i| try w.print("{s}\"{s}/\"", .{ if (i == 0) "" else ", ", dir });
     try w.writeAll("]\n");
     if (present[0].len == 0) assert.panic("an empty directory name reached the excludes; init must pass only entries of usual_excludes", .{});

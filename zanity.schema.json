@@ -7,14 +7,37 @@
   "additionalProperties": false,
   "properties": {
     "rules": {
-      "description": "Run only these rules instead of the defaults. \"all\" is every rule, including those off by default. --rules on the command line overrides it.",
-      "type": "array",
-      "minItems": 1,
-      "uniqueItems": true,
-      "items": { "$ref": "#/definitions/ruleOrAll" }
+      "description": "Which rules run: a [rules] table with select and disable. A list here, the older form, works as select.",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "select": {
+              "description": "Run only these rules instead of the defaults. \"all\" is every rule, including those off by default. --rules on the command line overrides it.",
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": { "$ref": "#/definitions/ruleOrAll" }
+            },
+            "disable": {
+              "description": "Rules to leave out of the selection, such as [\"duplicate-name\"].",
+              "type": "array",
+              "uniqueItems": true,
+              "items": { "$ref": "#/definitions/rule" }
+            }
+          }
+        },
+        {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/definitions/ruleOrAll" }
+        }
+      ]
     },
     "disable": {
-      "description": "Rules to leave out of the selection, such as [\"duplicate-name\"].",
+      "description": "Rules to leave out of the selection, such as [\"duplicate-name\"]; the older form of [rules] disable.",
       "type": "array",
       "uniqueItems": true,
       "items": { "$ref": "#/definitions/rule" }

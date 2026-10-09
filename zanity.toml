@@ -1,7 +1,4 @@
 #:schema ./zanity.schema.json
-# Every rule, including those off by default: zanity's own code is held to all of them.
-rules = ["all"]
-
 # Fixtures are deliberately bad code, and their expected output depends on it: check them only
 # when a test names them, and never --fix them. The catalogue's own scripts are vendored from its
 # release unchanged, so they are fixed there, not here.
@@ -23,3 +20,7 @@ disable = ["filesystem-in-test"]
 [infer]
 concurrency = 8
 threshold = 0.5
+
+[rules]
+# Every rule, including those off by default: zanity's own code is held to all of them.
+select = ["all"]

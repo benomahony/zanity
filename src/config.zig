@@ -269,7 +269,7 @@ pub fn parseConfig(bytes: []u8) Error!Config {
     return config;
 }
 
-const Table = enum { root, infer, paths, vocabulary, synonyms, scope };
+const Table = enum { root, rules, infer, paths, vocabulary, synonyms, scope };
 
 const max_items = max_excludes;
 
@@ -382,7 +382,7 @@ const TomlReader = struct {
         if (self.peek() != ']') return self.fail("expected ']' after '[{s}'; close the table name with ']'.", .{name});
         self.at += 1;
         self.table = std.meta.stringToEnum(Table, name) orelse .root;
-        if (self.table == .root or self.table == .vocabulary) return self.fail("'[{s}]' isn't a table zanity knows; the tables are [infer], [paths.\"<pattern>\"], [vocabulary], [domains.<name>] and [contexts.<name>].", .{name});
+        if (self.table == .root or self.table == .vocabulary) return self.fail("'[{s}]' isn't a table zanity knows; the tables are [rules], [infer], [paths.\"<pattern>\"], [vocabulary], [domains.<name>] and [contexts.<name>].", .{name});
         if (self.table == .paths) try self.readPathSection(config);
         if (self.at <= start) assert.panic("reading a table header at byte {d} consumed nothing; readHeader() must consume at least the '[' it starts at", .{start});
     }
@@ -520,13 +520,33 @@ const TomlReader = struct {
         if (setting == .threshold and config.threshold == null) assert.panic("read [infer] threshold but stored nothing; its branch of readInferSetting() must store it", .{});
     }
 
+    const Setting = enum { rules, select, disable, exclude };
+
+    /// Which setting `key` is at the top of the file or in [rules]: `select` belongs in [rules],
+    /// `exclude` at the top, and `disable` in either; `rules` at the top is the older `select`.
+    fn settingNamed(self: *const TomlReader, key: []const u8) Error!Setting {
+        if (self.table != .root and self.table != .rules) assert.panic("reading '{s}' as a top-level or [rules] setting inside [{t}]; readSetting() hands over the other tables' settings first", .{ key, self.table });
+        const parsed = std.meta.stringToEnum(Setting, key);
+        const in_rules = self.table == .rules;
+        const fits = if (parsed) |s| switch (s) {
+            .select => in_rules,
+            .disable => true,
+            .rules, .exclude => !in_rules,
+        } else false;
+        if (fits) {
+            if (parsed.? == .select and !in_rules) assert.panic("accepted select outside [rules] at byte {d}; only [rules] takes select", .{self.at});
+            return parsed.?;
+        }
+        if (in_rules) return self.fail("'{s}' isn't a [rules] setting; the settings are select and disable.", .{key});
+        return self.fail("'{s}' isn't a setting; the settings are exclude and, under [rules], select and disable, and under [infer], url, model, api_key_env, concurrency and threshold.", .{key});
+    }
+
     fn readSetting(self: *TomlReader, config: *Config, key: []const u8) Error!void {
         if (key.len == 0) assert.panic("setting a key with no name at byte {d}; readEntry() must read a key before calling readSetting()", .{self.at});
         if (self.table == .paths) return self.readPathSetting(config, key);
         if (self.table == .infer) return self.readInferSetting(config, key);
         if (self.table == .vocabulary or self.table == .synonyms or self.table == .scope) return self.readVocabularySetting(config, key);
-        const Setting = enum { rules, disable, exclude };
-        const which = std.meta.stringToEnum(Setting, key) orelse return self.fail("'{s}' isn't a setting; the settings are rules, disable, exclude and, under [infer], url, model, api_key_env, concurrency and threshold.", .{key});
+        const which = try self.settingNamed(key);
         const items = try self.readStrings(key);
         switch (which) {
             .exclude => {
@@ -534,11 +554,11 @@ const TomlReader = struct {
                 @memcpy(config.exclude[0..items.len], items);
                 config.exclude_len = items.len;
             },
-            .rules, .disable => {
+            .rules, .select, .disable => {
                 var set: rules.Set = .{};
                 for (items) |name| if (!set.includeNamed(name)) return self.fail("'{s}' isn't a rule; the rules are listed in the README, 'all' names every rule, and 'zanity check --rules' takes the same names.", .{name});
-                if (which == .rules and set.len == 0) return self.fail("'rules' is empty, so nothing would run; list at least one rule, or remove it to run the defaults.", .{});
-                if (which == .rules) config.rules = set else config.disable = set;
+                if (which != .disable and set.len == 0) return self.fail("'{s}' is empty, so nothing would run; list at least one rule, or remove it to run the defaults.", .{key});
+                if (which == .disable) config.disable = set else config.rules = set;
             },
         }
         if (config.exclude_len > max_excludes) assert.panic("{d} exclude patterns in room for {d}; readStrings() must refuse lists longer than max_excludes", .{ config.exclude_len, max_excludes });

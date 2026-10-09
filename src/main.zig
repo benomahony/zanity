@@ -44,6 +44,7 @@ const CheckOptions = struct {
 const InitOptions = struct {
     paths: []const []const u8,
     force: bool = false,
+    minimal: bool = false,
 };
 
 /// What `zanity init` wrote, as `--json` and `--plain` publish it.
@@ -51,6 +52,8 @@ const InitRow = struct {
     path: []const u8,
     rules: usize,
     excluded: usize,
+    /// Whether it wrote only the settings, with --minimal.
+    minimal: bool,
 };
 
 const UpgradeOptions = struct {
@@ -107,11 +110,12 @@ const app: zcli.App = .{
     }, .{ .run = runCheck, .human = renderHuman }), zcli.command(InitOptions, InitRow, .{
         .name = "init",
         .description = "Write a zanity.toml with every setting and rule explained, ready to trim.",
-        .examples = &.{ "zanity init", "zanity init path/to/project", "zanity init --force" },
+        .examples = &.{ "zanity init", "zanity init --minimal", "zanity init path/to/project", "zanity init --force" },
         .result_title = "Written",
         .positional = .{ .name = "paths", .metavar = "DIR", .help = "The project's root, where zanity.toml goes.", .default = &.{"."} },
         .options = &.{
             .{ .name = "force", .help = "Replace an existing zanity.toml." },
+            .{ .name = "minimal", .help = "Write only the settings, without the notes and the list of every rule." },
         },
     }, .{ .run = runInit, .human = renderInit }), zcli.command(UpgradeOptions, UpgradeRow, .{
         .name = "upgrade",
@@ -351,14 +355,14 @@ fn runInit(ctx: *zcli.Context, options: InitOptions) ![]const InitRow {
     }
     var buffer: [64 * 1024]u8 = undefined;
     var w: std.Io.Writer = .fixed(&buffer);
-    try starter.renderConfig(&w, .{ .languages = &counts, .present = present[0..found] });
+    try starter.renderConfig(&w, .{ .languages = &counts, .present = present[0..found], .minimal = options.minimal });
     cwd.writeFile(ws.io, .{ .sub_path = target, .data = w.buffered(), .flags = .{ .exclusive = !options.force } }) catch |e| switch (e) {
         error.PathAlreadyExists => return ctx.fail(.usage, try ws.text.format("{s} already exists.", .{target}), "Edit it, or pass --force to replace it with a fresh one."),
         else => return ctx.fail(.io, try ws.text.format("Could not write {s}: {t}.", .{ target, e }), "Check that the directory exists and is writable."),
     };
     if (w.buffered().len == 0) assert.panic("zanity init wrote an empty {s}; renderConfig() in src/init.zig must write the whole file", .{target});
     if (found > starter.usual_excludes.len) assert.panic("found {d} of the {d} usual excludes; the loop in runInit() must add each at most once", .{ found, starter.usual_excludes.len });
-    ws.init_row[0] = .{ .path = target, .rules = rules.all.len, .excluded = found };
+    ws.init_row[0] = .{ .path = target, .rules = rules.all.len, .excluded = found, .minimal = options.minimal };
     return &ws.init_row;
 }
 
@@ -366,7 +370,9 @@ fn renderInit(ctx: *zcli.Context, rows: []const InitRow) !void {
     if (rows.len != 1) assert.panic("zanity init reported {d} files written; runInit() writes exactly one", .{rows.len});
     const row = rows[0];
     const out = console(ctx, ctx.runtime.out);
-    try out.writer.print("Wrote {s}: every setting explained, and all {d} rules listed with how to fix what they find.\n", .{ row.path, row.rules });
+    if (row.minimal) {
+        try out.writer.print("Wrote {s}: every rule on, with nothing explained; `zanity init --force` writes the full file with notes and the list of all {d} rules.\n", .{ row.path, row.rules });
+    } else try out.writer.print("Wrote {s}: every setting explained, and all {d} rules listed with how to fix what they find.\n", .{ row.path, row.rules });
     if (row.excluded > 0) try out.writer.print("It excludes the {d} fixture or vendored {s} it found; check that list.\n", .{ row.excluded, if (row.excluded == 1) "directory" else "directories" });
     try out.writer.writeAll("Next: run `zanity check .`, then delete or change what you don't need.\n");
     if (row.path.len == 0) assert.panic("zanity init reported writing a file with no path; runInit() must pass the path it wrote", .{});
