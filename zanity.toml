@@ -1,8 +1,42 @@
-#:schema ./zanity.schema.json
-# Fixtures are deliberately bad code, and their expected output depends on it: check them only
-# when a test names them, and never --fix them. The catalogue's own scripts are vendored from its
-# release unchanged, so they are fixed there, not here.
-exclude = ["tests/agent/", "tests/golden/", "tests/fix/", "tests/config/", "tests/infer/project/", "tests/infer/calibration/", "catalogue/catalogue.py", "catalogue/standards.py", "catalogue/import_cwe.py"]
+#:schema https://raw.githubusercontent.com/benomahony/zanity/main/zanity.schema.json
+# zanity's settings for this project. Every line is optional: delete what you don't need.
+# The first line lets TOML language servers complete and check this file as you type.
+#
+# zanity init found 167 python files, 93 zig files, 37 go files, 51 typescript files, 8 javascript files, 30 rust files, 39 java files.
+
+# Paths zanity never checks, in .gitignore syntax, relative to this file. It already skips what
+# .gitignore ignores, dot directories and build output.
+# zanity init turned on the ones below that exist in this project.
+exclude = [
+  "vendor/",
+  # Fixtures: deliberately bad code whose expected findings the tests compare against. Check
+  # them only when a test names them, and never --fix them.
+  "tests/agent/",
+  "tests/config/",
+  "tests/fix/",
+  "tests/golden/",
+  "tests/infer/calibration/",
+  "tests/infer/project/",
+]
+
+# `zanity check --infer` also asks a decision model what code structure can't settle, such
+# as whether an error message misleads. It sends only the source of the functions it asks
+# about, and caches every answer. By default it asks TypeSafe's Jev, which needs
+# TYPESAFE_API_KEY; any other System One server works, such as Kev on your own machine.
+[infer]
+# url = "http://127.0.0.1:8009"    # default: TYPESAFE_BASE_URL, then TypeSafe's API
+# model = "kev-latest"             # default: TYPESAFE_DEFAULT_MODEL, then jev-latest
+# api_key_env = "KEV_API_KEY"      # default: TYPESAFE_API_KEY; optional except for TypeSafe
+# Requests sent to the model at once, 1 to 64.
+concurrency = 8
+# How sure the model must be for a judgement to become a finding, above 0 and at most 1: 0.9
+# reports only what it is at least 90% sure of, and a lower value reports more.
+threshold = 0.8
+
+# Rules that don't report in some files, one table per pattern (.gitignore syntax, relative
+# to this file). For example, end-to-end tests are meant to start processes and read files:
+# [paths."tests/e2e/"]
+# disable = ["process-in-test", "filesystem-in-test", "network-in-test"]
 
 # End-to-end tests: they run the built zanity and read the fixtures and catalogue in the repo,
 # which is what they test.
@@ -15,12 +49,200 @@ disable = ["filesystem-in-test"]
 [paths."src/catalogue_test.zig"]
 disable = ["filesystem-in-test"]
 
-# --infer: report every judgement TypeSafe thinks is more likely right than not, the strictest
-# useful bar, rather than the default 0.8.
-[infer]
-concurrency = 8
-threshold = 0.5
+# The project's words for things. Names that use a banned word, or an alias of a word the
+# project settled on, are reported. Domains and contexts carry their own words; a context
+# applies after a domain, and a definition can share its name with one in another context.
+# [vocabulary]
+# forbidden = ["util", "manager"]
+#
+# [vocabulary.synonyms]
+# customer = ["client", "user"]
+#
+# [contexts.billing]
+# include = ["src/billing/**"]
+# forbidden = ["discount"]
+#
+# [contexts.billing.synonyms]
+# invoice = ["bill", "statement"]
 
 [rules]
-# Every rule, including those off by default: zanity's own code is held to all of them.
+# Which rules run. "all" is every rule, including those off by default; leave `select` out to
+# run only the defaults. `zanity check --rules a,b` overrides it for one run.
 select = ["all"]
+
+# Rules to switch off everywhere. Every rule is listed here, with its severity, whether it is
+# on by default, and how to fix what it finds; uncomment the ones you don't want.
+disable = [
+  # "parse-error",                     # warning, on by default. Fix the syntax error, or report the construct if the code is valid.
+  # "forbidden-call",                  # warning, on by default. Call the code you need directly.
+  # "recursion",                       # warning, on by default. Rewrite it as a loop with a fixed bound.
+  # "unbounded-loop",                  # warning, on by default. Loop over a collection or cap the number of iterations.
+  # "eager-test",                      # warning, on by default. Split it into tests that each check one behaviour, named for that behaviour.
+  # "long-test",                       # warning, on by default. Split it into tests that each check one behaviour, or move the setup into a helper.
+  # "long-function",                   # warning, on by default. Move a self-contained step into its own function.
+  # "assertion-density",               # error, on by default. Assert conditions a bug could actually break: what it needs from its inputs and what it guarantees about its result.
+  # "assertion-message",               # warning, on by default. Add a message stating what must be true.
+  # "dynamic-allocation",              # error, on by default. Allocate what it needs up front in an init function and reuse it.
+  # "assertion-side-effect",           # error, on by default. Do the work before the assertion and assert on its result.
+  # "long-parameter-list",             # warning, on by default. Group related parameters into a struct or split the function.
+  # "dead-parameter",                  # warning, on by default. Remove it and stop passing it, or name it with a leading underscore where the signature is fixed by an interface or a callback.
+  # "passthrough-wrapper",             # warning, on by default. Call the target directly, or give the wrapper work of its own.
+  # "message-chain",                   # warning, on by default. Ask the nearest object for what you need, so only it knows how to find it, or pass that value in.
+  # "duplicated-expression",           # warning, on by default. Compute it once into a variable named for what it is, and use that.
+  # "structural-twins",                # warning, on by default. Keep one, and make the other call it with what differs passed in.
+  # "dead-symbol",                     # warning, on by default. Delete it; if something reaches it by name at runtime, such as a framework or a config file, say so in a comment where it is defined and suppress this finding there.
+  # "single-impl-abstraction",         # information, on by default. Use the one implementation directly until a second one is needed.
+  # "extractable-block",               # information, on by default. Move them into a function named for what they do, taking the inputs and returning the output.
+  # "swallowed-error",                 # warning, on by default. Handle the error, log it with context, or let it propagate.
+  # "sleep-in-test",                   # warning, on by default. Wait for the event itself, or use a fake clock.
+  # "polling-loop",                    # warning, on by default. Wait on an event or callback, or inject a clock.
+  # "shared-state-in-test",            # warning, on by default. Set it for this test only and restore it after, with the framework's fixture (monkeypatch, t.Setenv, a try/finally), or pass the value in.
+  # "filesystem-in-test",              # warning, on by default. Work in the test framework's temporary directory, or pass the code a reader and writer instead of a path.
+  # "network-in-test",                 # warning, on by default. Stub the service at its boundary with a fake that answers like it, or move this to an integration suite.
+  # "database-in-test",                # warning, on by default. Use an in-memory database or a fake repository, or move this to an integration suite.
+  # "unmanaged-temp-in-test",          # warning, on by default. Use the framework's temporary directory (tmp_path, t.TempDir(), @TempDir, std.testing.tmpDir), which it cleans up.
+  # "stdin-in-test",                   # warning, on by default. Pass the input in as a value, or as a reader the test controls.
+  # "process-in-test",                 # warning, on by default. Call the code the process would run directly, or move this to an end-to-end suite.
+  # "nondeterministic-test",           # warning, on by default. Inject a seeded generator or a fixed value.
+  # "test-double",                     # warning, on by default. Use the real object, or a fake that behaves like it.
+  # "call-verification",               # warning, on by default. Assert on the result, or the state the code leaves behind; check a call only where the call is the behaviour, such as a message sent to another system.
+  # "broad-expected-error",            # warning, on by default. Expect the specific error type, and match its message where the type is shared, such as pytest.raises(ValueError, match=...) or #[should_panic(expected = "...")].
+  # "skipped-test",                    # warning, on by default. Fix the test and turn it back on, or delete it; to skip only where it can't run, put the skip under a condition (skipif, an if around t.Skip), or use xfail(strict=True).
+  # "vague-test-name",                 # warning, on by default. Name the behaviour it expects, such as test_rejects_expired_token or it("returns 404 for an unknown id").
+  # "forbidden-term",                  # warning, on by default. Rename it to say what it is or does, without the banned word.
+  # "non-canonical-term",              # warning, on by default. Rename it with the project's word, as zanity.toml's synonyms give it.
+  # "misplaced-test",                  # warning, on by default. Move the test next to the code it tests, or move the code to the domain the test is in.
+  # "vocabulary-conflict",             # error, on by default. Make the vocabulary in zanity.toml agree with itself: one word per meaning, and none both banned and canonical.
+  # "name-drift",                      # warning, on by default. Pick one spelling and use it everywhere.
+  # "duplicate-name",                  # warning, on by default. Give each a name that says how it differs.
+  # "restated-type",                   # warning, off by default. Assert something about its value instead.
+  # "constant-assertion",              # error, off by default. Assert something that depends on the input.
+  # "redundant-null-check",            # warning, off by default. Remove this check.
+  # "conversion-assertion",            # information, off by default. Assert the property you need it to have.
+  # "guaranteed-length",               # information, off by default. Assert the length you actually require.
+  # "empty-block",                     # warning, on by default. Fill in the body, delete the block, or leave a comment saying why nothing happens here.
+  # "constant-condition",              # warning, on by default. Delete the branch that can't run, or test the value that actually varies.
+  # "divide-by-zero",                  # error, on by default. Use the intended non-zero divisor, or validate a variable divisor before dividing.
+  # "float-equality",                  # warning, on by default. Compare within a tolerance, such as abs(a - b) <= epsilon.
+  # "discarded-comparison",            # error, on by default. Assign with '=', or use the comparison in a condition or an assertion.
+  # "assignment-in-condition",         # warning, on by default. Assign on the preceding line, or compare here with the language's equality operator.
+  # "null-catch",                      # warning, on by default. Check the value for null before using it, and let unexpected null dereferences fail at their source.
+  # "empty-synchronized",              # warning, on by default. Move the shared-state operation inside the synchronized block, or remove the empty block.
+  # "public-finalizer",                # warning, on by default. Remove the public modifier and provide an explicit close method for resources.
+  # "direct-thread",                   # warning, on by default. Submit the task to a bounded, application-managed executor.
+  # "unsafe-jni",                      # warning, on by default. Replace it with a safe Java API, or isolate and audit the native boundary with explicit input validation.
+  # "public-static-field",             # warning, on by default. Make it private, expose behaviour instead of state, and make constants static final.
+  # "public-static-array",             # warning, on by default. Keep the array private and return an immutable view or a defensive copy.
+  # "missing-super-finalizer",         # warning, on by default. Remove finalization in favour of explicit resource ownership, or call super.finalize() in a finally block while legacy finalization remains.
+  # "missing-super-clone",             # warning, on by default. Start with super.clone(), or replace Cloneable with an explicit copy constructor or factory.
+  # "public-clone-method",             # warning, on by default. Make clone final, or replace Cloneable with an explicit copy constructor or factory.
+  # "thread-run",                      # error, on by default. Call start(), or submit the task to an application-managed executor.
+  # "class-name-comparison",           # error, on by default. Compare the Class objects directly, or use instanceof when subclasses are valid.
+  # "equals-without-hashcode",         # error, on by default. Implement hashCode from the same fields as equals, and test the equality/hash contract together.
+  # "hashcode-without-equals",         # error, on by default. Implement equals from the same fields as hashCode, and test the equality/hash contract together.
+  # "struts-public-field",             # warning, on by default. Make the field private and expose it only through the validated bean accessor.
+  # "suspicious-comment",              # warning, on by default. Resolve the defect or incomplete code the marker identifies, then remove the marker; track longer work in the issue system.
+  # "prototype-mutation",              # warning, on by default. Use an own data property on an object with a fixed prototype; reject __proto__, constructor and prototype as externally supplied keys.
+  # "unreachable-code",                # warning, on by default. Delete it, or move it before the return, break, continue or throw.
+  # "generic-catch",                   # warning, on by default. Catch the specific exceptions you expect and let the rest propagate.
+  # "debug-leftover",                  # error, on by default. Delete it; set breakpoints in the debugger instead of in the code.
+  # "hardcoded-secret",                # error, on by default. Read it from the environment or a secret store at runtime.
+  # "vague-error",                     # warning, on by default. Name the input or value that failed, show it, and say what was expected.
+  # "cryptic-error",                   # warning, on by default. Say in plain words what went wrong and what to do; keep any code alongside if tools need it.
+  # "unconstructive-error",            # warning, on by default. Add the next step for whoever reads it: the input, setting, file or code to change.
+  # "misleading-error",                # warning, off by default. Reword the message to name the failure that actually occurred.
+  # "name-behaviour-mismatch",         # warning, on by default. Rename it to say what it does, or change the body to do what the name says.
+  # "comment-drift",                   # warning, on by default. Update the comment to match the code, or fix the code if the comment is right.
+  # "query-with-side-effect",          # warning, on by default. Rename it to say what it changes, or move the change into a separate function.
+  # "partial-failure",                 # warning, on by default. Wrap the steps in a transaction, or undo the earlier steps when a later one fails.
+  # "check-then-act",                  # warning, on by default. Make the check and the action one atomic operation, for example with a lock or a conditional write.
+  # "non-idempotent-retry",            # error, on by default. Make the operation idempotent, for example with an idempotency key, or stop retrying it.
+  # "unit-mismatch",                   # error, on by default. Convert them to one unit first, and put the unit in the variable names.
+  # "boundary-error",                  # error, on by default. Check the edge values and add a test for each boundary.
+  # "missing-authorisation",           # warning, on by default. Check the caller's permission before acting.
+  # "mixed-abstraction",               # information, on by default. Move the low-level detail into well-named helper functions.
+  # "order-dependent-test",            # warning, on by default. Give it its own state, or reset the shared state before it runs.
+  # "combinatorial-test",              # information, on by default. Split it into one test per dimension, or parametrise it.
+  # "flaky-test",                      # error, on by default. Inject a fixed clock, seed or fake, or sort before comparing.
+  # "slow-test",                       # warning, on by default. Replace the wait or service with a fake, and shrink the data.
+  # "heavy-setup-test",                # information, on by default. Simplify the code's dependencies, or move shared setup into a small builder.
+  # "unreadable-test",                 # information, on by default. Name it after the behaviour, name the magic values, and separate arrange, act and assert.
+  # "hollow-test",                     # error, on by default. Assert on the output or effect of that behaviour.
+  # "implementation-coupled-test",     # warning, on by default. Assert on public results instead of private state or internal calls.
+  # "manual-test",                     # error, on by default. Replace manual input, printing or setup with assertions and automated fixtures.
+  # "unfocused-test",                  # warning, on by default. Split it up, or assert only on the parts that matter.
+  # "self-mocking-test",               # warning, on by default. Exercise the real code, and mock only its external dependencies.
+  # "trivial-test",                    # warning, on by default. Test the risky behaviour and edge cases, and make the name match what is verified.
+  # "repeated-mechanics",              # information, on by default. Write the shared steps once as a builder, helper or table of cases named in the domain's words, so each one says only what differs.
+  # "relaxed-check",                   # warning, on by default. Remove it, or fix what the check reports and turn it back on at its strictest.
+  # "mutable-artifact-reference",      # warning, on by default. Pin the artifact by immutable digest or commit, and let an update tool propose reviewed changes.
+  # "download-execution",              # error, on by default. Download a versioned artifact, verify its published digest or signature, then execute the verified local file.
+  # "plaintext-config-secret",         # error, on by default. Replace the literal with a reference to an environment variable or secret manager, and rotate any credential already committed.
+  # "privileged-container",            # error, on by default. Run the container without privileged mode and add back only the specific capability it demonstrably needs.
+  # "world-writable-permission",       # error, on by default. Grant write access only to the owning user or group; do not make deployed paths world-writable.
+  # "public-storage",                  # error, on by default. Keep object storage private and grant access through authenticated, least-privilege policies or short-lived signed URLs.
+  # "directory-listing-enabled",       # error, on by default. Disable directory indexes and expose only explicitly routed files.
+  # "wildcard-cors-origin",            # error, on by default. Allow only the trusted origins that need browser access; do not grant cross-origin access to everyone.
+  # "unrestricted-framing",            # error, on by default. Restrict frame ancestors to 'self' or an explicit allowlist with Content-Security-Policy.
+  # "csrf-protection-disabled",        # error, on by default. Enable the framework's CSRF protection and require an unpredictable token on every state-changing browser request.
+  # "session-expiry-disabled",         # error, on by default. Expire authenticated sessions after a bounded idle and absolute lifetime.
+  # "authentication-lockout-disabled", # error, on by default. Throttle repeated authentication attempts and temporarily lock or challenge abusive clients.
+  # "weak-password-length",            # error, on by default. Require passwords of at least 8 characters, preferably longer, and permit password-manager-generated values.
+  # "legacy-tls-version",              # error, on by default. Require TLS 1.2 or newer and remove SSL and TLS 1.0/1.1 from the negotiated protocol set.
+  # "untrusted-search-path",           # error, on by default. Remove the current directory from PATH and invoke security-sensitive tools by an absolute trusted path.
+  # "default-credential",              # error, on by default. Require a unique credential from a secret manager or first-run provisioning; never ship a reusable default.
+  # "default-password",                # error, on by default. Require a unique password from a secret manager or first-run provisioning; never ship a reusable default password.
+  # "cookie-secure-disabled",          # error, on by default. Set the session cookie's Secure attribute and serve it only over HTTPS.
+  # "cookie-httponly-disabled",        # error, on by default. Set HttpOnly on session and authentication cookies so scripts cannot read them.
+  # "cookie-samesite-disabled",        # error, on by default. Use SameSite=Lax or Strict for sensitive cookies, with a narrowly justified exception where cross-site use is required.
+  # "weakened-check",                  # warning, on by default. Remove it, or turn the check back on at its strictest and fix what it reports.
+  # "unscheduled-analysis",            # warning, on by default. Run a strict type checker and a linter with every rule in CI on every change and on a daily schedule, and fail the build on any warning.
+  # "return-in-finally",               # error, on by default. Move the return after the try statement, or let the finally block only clean up.
+  # "identity-comparison",             # error, on by default. Compare values with == in Python or .equals() in Java.
+  # "precedence-trap",                 # error, on by default. Add parentheses to say which operation happens first.
+  # "generic-throw",                   # warning, on by default. Raise a specific exception type, defined for this failure if none fits.
+  # "switch-fallthrough",              # warning, on by default. End the case with break, or mark the fall-through as intended with a comment.
+  # "missing-default",                 # warning, on by default. Add a default case that handles or reports the unexpected value.
+  # "no-effect-statement",             # warning, on by default. Delete it, or finish the statement it was meant to be, such as a call or an assignment.
+  # "tls-verification-disabled",       # error, on by default. Remove the override; to trust a private certificate, add it to the trusted certificates instead.
+  # "weak-hash",                       # warning, on by default. Use SHA-256 or better; for passwords, a password hash such as argon2, scrypt or bcrypt.
+  # "weak-random",                     # error, on by default. Use the platform's cryptographically secure random generator for secrets, tokens, nonces and security decisions.
+  # "constant-random-seed",            # error, on by default. Use an unpredictable operating-system seed for production randomness; keep fixed seeds inside tests or reproducible offline simulations.
+  # "nested-regex-quantifier",         # error, on by default. Rewrite the repeated group so one input character has only one possible match, or use a linear-time regex engine.
+  # "constant-cbc-iv",                 # error, on by default. Generate a fresh unpredictable IV for every encryption and store it alongside the ciphertext.
+  # "constant-aead-nonce",             # error, on by default. Generate a unique nonce for every encryption under a key; never embed or reuse one.
+  # "constant-password-salt",          # error, on by default. Generate a unique random salt for each password and store it with that password's derived hash.
+  # "rsa-without-oaep",                # error, on by default. Use RSA-OAEP with an explicit modern digest for RSA encryption, or prefer a modern hybrid-encryption construction.
+  # "parameter-format-string",         # warning, on by default. Use a fixed format string and pass the parameter as a value to format, never as the format itself.
+  # "parameter-network-target",        # warning, on by default. Parse the target and allow only expected schemes, hosts and ports before making the server-side request.
+  # "parameter-redirect-target",       # warning, on by default. Redirect only to a fixed local route or a destination selected from an explicit allowlist.
+  # "parameter-file-path",             # warning, on by default. Resolve the path beneath a fixed trusted root and reject absolute paths, parent traversal, virtual device names and symlink escapes before file access.
+  # "parameter-xpath-expression",      # warning, on by default. Compile a fixed XPath expression and bind caller-controlled values as variables rather than concatenating or evaluating them as XPath.
+  # "parameter-ldap-filter",           # warning, on by default. Build LDAP filters with the library's escaping or filter-construction API instead of treating a caller-controlled parameter as filter syntax.
+  # "parameter-header-value",          # warning, on by default. Reject carriage returns and line feeds before placing caller-controlled data in an HTTP header, or use an API that guarantees that validation.
+  # "parameter-template-source",       # warning, on by default. Keep template source fixed and pass caller-controlled data only as escaped template values.
+  # "parameter-expression-language",   # warning, on by default. Use a fixed expression or select from an allowlist; never parse caller-controlled text as expression-language code.
+  # "parameter-raw-html",              # error, on by default. Keep automatic HTML escaping enabled and pass caller-controlled data as a value, not as pre-approved markup.
+  # "missing-integer-radix",           # warning, on by default. Pass an explicit radix, usually 10, whenever parsing an integer from text.
+  # "parameter-window-opener",         # warning, on by default. Open caller-controlled links with noopener (and usually noreferrer), or navigate within the current tab.
+  # "parameter-allocation-size",       # warning, on by default. Validate and cap the requested size before allocation, then pass only the bounded value to the allocator.
+  # "xml-entity-expansion",            # error, on by default. Disable DTD loading and external or recursive entity resolution, or use a hardened XML parser.
+  # "sensitive-query-string",          # error, on by default. Send credentials and secrets in an authenticated header or request body, never in the URL.
+  # "cleartext-http",                  # error, on by default. Use HTTPS and verify the peer; keep plain HTTP only for an explicitly local loopback endpoint.
+  # "cleartext-credential-url",        # error, on by default. Send credentials only over verified HTTPS, preferably in an authenticated header rather than the URL.
+  # "unsafe-deserialization",          # error, on by default. Parse a data-only format such as JSON, or use the library's safe loader.
+  # "insecure-temp-file",              # error, on by default. Create and open the temporary file atomically with the platform's secure temporary-file API.
+  # "process-exit",                    # warning, on by default. Return an error to the application boundary and let the owner decide how to stop or recover.
+  # "obsolete-call",                   # warning, on by default. Replace it with the supported standard-library API documented for the current language version.
+  # "explicit-finalizer",              # warning, on by default. Release the resource explicitly with close/deinit, or leave finalization to the runtime.
+  # "shell-command",                   # warning, on by default. Pass the program and its arguments as a list, without a shell, so no value is parsed as shell syntax.
+  # "sql-built-from-strings",          # error, on by default. Pass values as query parameters, such as ? or %s placeholders, instead of building the SQL text.
+  # "secret-in-log",                   # error, on by default. Log that the secret was used, or a redacted form, never its value.
+  # "parameter-log-message",           # warning, on by default. Use a fixed log message and record caller-controlled data in a structured field after removing line breaks and control characters.
+  # "wall-clock-duration",             # warning, on by default. Measure durations with a monotonic clock, such as time.monotonic(), performance.now() or Instant::now().
+  # "unawaited-call",                  # error, on by default. Await it, or keep the task and await it later, so it runs and its errors are seen.
+  # "deep-nesting",                    # warning, on by default. Return early for the edge cases, or move the inner block into its own function.
+  # "complex-function",                # warning, on by default. Split the function so each part makes fewer decisions, or replace a chain of branches with a table.
+  # "wide-scope",                      # warning, on by default. Declare it inside that block, where it is used.
+  # "long-file",                       # warning, on by default. Split the file by responsibility into modules of a few hundred lines.
+]
