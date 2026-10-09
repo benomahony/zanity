@@ -128,16 +128,19 @@ const managers = [_]Manager{
 pub fn get(client: *std.http.Client, url: []const u8, out: *Io.Writer.Allocating, token: ?[]const u8) !std.http.Status {
     if (url.len == 0) assert.panic("fetching an empty URL; build it with releaseUrl() or take it from the release", .{});
     var authorization: [512]u8 = undefined;
-    const bearer: []const std.http.Header = if (token) |t| &.{.{ .name = "authorization", .value = try std.fmt.bufPrint(&authorization, "Bearer {s}", .{t}) }} else &.{};
+    const bearer: std.http.Client.Request.Headers.Value = if (token) |t| .{ .override = try std.fmt.bufPrint(&authorization, "Bearer {s}", .{t}) } else .default;
+    // std.http drops privileged_headers without sending them, so the token goes in the
+    // authorization header, which a redirect would carry to any host; a request with a token
+    // therefore follows no redirect, as GitHub's API needs none.
     const result = try client.fetch(.{
         .location = .{ .url = url },
         .response_writer = &out.writer,
-        .headers = .{ .user_agent = .{ .override = "zanity-upgrade" } },
+        .headers = .{ .user_agent = .{ .override = "zanity-upgrade" }, .authorization = bearer },
         .extra_headers = &.{.{ .name = "accept", .value = "application/vnd.github+json, application/octet-stream" }},
-        .privileged_headers = bearer,
+        .redirect_behavior = if (token == null) null else .not_allowed,
     });
     if (out.written().len > max_binary_bytes) return error.StreamTooLong;
-    if (bearer.len > 0 and token == null) assert.panic("sending an authorization header without a token for {s}", .{url});
+    if ((bearer == .override) != (token != null)) assert.panic("sending {t} authorization with {s} token for {s}", .{ bearer, if (token == null) "no" else "a", url });
     return result.status;
 }
 
