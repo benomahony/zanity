@@ -1,4 +1,4 @@
-name: zanity
+name: zanity check
 description: Check code with zanity, using its prebuilt release binary for the runner.
 branding:
   icon: check-circle
