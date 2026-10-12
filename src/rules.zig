@@ -289,6 +289,7 @@ pub const max_test_lines = 50;
 /// Past this many checks, a failing test no longer says which behaviour broke.
 pub const max_test_checks = 10;
 pub const min_asserts_per_function = 2;
+pub const min_checks_per_test = 1;
 pub const max_parameters = 4;
 /// How alike two domain or context names can be before one looks like a misspelling of the other.
 pub const min_scope_similarity = 0.85;

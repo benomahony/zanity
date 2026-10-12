@@ -124,7 +124,8 @@ fn runsFix(self: *File, runs: Runs) ![]const u8 {
     return text.buffer[start..text.used];
 }
 
-/// A test's length against the tighter limit for tests, and its decisions against the usual one.
+/// A test's length against the tighter limit for tests, its checks if it is a function marked as a
+/// test, and its decisions against the usual one.
 pub fn closeTest(self: *File, ctx: Context) !void {
     if (ctx.family != .@"test") assert.panic("{s}: closing {f} as a test, but it is a {t}; close() must dispatch each construct by its family, so check its switch", .{ self.work.facts.path, ctx.node.where(), ctx.family });
     const name_node = self.functionNameOf(ctx.node);
@@ -133,6 +134,7 @@ pub fn closeTest(self: *File, ctx: Context) !void {
     if (name_node orelse ctx.name) |named| try checkTestName(self, named, named.text(self.source));
     try checkTestLength(self, ctx, at, shown);
     try checkEager(self, ctx, at, shown);
+    if (name_node) |named| try self.checkAssertionDensity(ctx, self.enclosingFunction().?.*, named);
     if (ctx.decisions + 1 > rules.max_complexity) {
         _ = try self.report(at, "complex-function", try self.say("'{s}' makes {d} decisions (cyclomatic complexity {d}), past the {d} a reader can follow and a test suite can cover.", .{ shown, ctx.decisions, ctx.decisions + 1, rules.max_complexity }));
     }

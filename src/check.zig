@@ -962,14 +962,7 @@ pub const File = struct {
         try shapes.recordShape(self, ctx);
         try extract.checkExtractable(self, ctx, name);
         if (self.index.marks(ctx.span, self.v.function_passthrough) or self.index.marks(ctx.node, self.v.function_passthrough)) try passthrough.checkPassthrough(self, ctx, name_node, name);
-        const meaningful = ctx.asserts -| weak.weakLines(self, ctx);
-        if (meaningful < rules.min_asserts_per_function) {
-            const noun = if (meaningful == 1) "assertion" else "assertions";
-            const message = try self.say("'{s}' has {d} {s} that can catch a bug; it needs at least {d}.", .{ name, meaningful, noun, rules.min_asserts_per_function });
-            if (try self.report(name_node, "assertion-density", message)) {
-                self.s.diagnostics.last().?.fix = try weak.assertionFix(self, ctx, name);
-            }
-        }
+        try self.checkAssertionDensity(ctx, ctx, name_node);
         if (ctx.decisions + 1 > rules.max_complexity) {
             if (try self.report(name_node, "complex-function", try self.say("'{s}' makes {d} decisions (cyclomatic complexity {d}), past the {d} a reader can follow and a test suite can cover.", .{ name, ctx.decisions, ctx.decisions + 1, rules.max_complexity }))) self.s.diagnostics.last().?.fix = try extract.decisionsFix(self, ctx, name);
         }
@@ -977,6 +970,27 @@ pub const File = struct {
             const at = ts.ts_node_start_point(name_node);
             try self.work.facts.unit(name, ctx.span.text(self.source), .{ .kind = if (ctx.is_test) .@"test" else .function, .reports_error = ctx.has_message, .at = .{ at.row, at.column, last } });
         }
+    }
+
+    /// A function's assertions against the function minimum, or a test's checks against the test
+    /// minimum: a test is itself the check on the code it calls, so one check that can fail is enough.
+    /// A function marked as a test by an attribute or annotation is measured by closeTest, which
+    /// holds its checks; `function` is the function context, which owns its weak assertions.
+    pub fn checkAssertionDensity(self: *File, ctx: Context, function: Context, name_node: ts.Node) !void {
+        const name = name_node.text(self.source);
+        if (ctx.family != .function and ctx.family != .@"test") assert.panic("{s}: counting the assertions of {f}, which is a {t}, not a function or test; call checkAssertionDensity() only from closeFunction() or closeTest()", .{ self.work.facts.path, ctx.node.where(), ctx.family });
+        if (!function.node.eql(ctx.node)) assert.panic("{s}: counting the assertions of {f} against the weak assertions of {f}; pass the function on the same node", .{ self.work.facts.path, ctx.node.where(), function.node.where() });
+        if (ctx.family == .function and self.index.marks(ctx.node, self.v.test_outer)) return;
+        const counted = if (ctx.is_test) ctx.checks else ctx.asserts;
+        const meaningful = counted -| weak.weakLines(self, function);
+        const minimum: u32 = if (ctx.is_test) rules.min_checks_per_test else rules.min_asserts_per_function;
+        if (meaningful >= minimum) return;
+        const message = if (ctx.is_test)
+            try self.say("'{s}' makes no check that can catch a bug; a test needs at least {d}.", .{ name, minimum })
+        else
+            try self.say("'{s}' has {d} {s} that can catch a bug; it needs at least {d}.", .{ name, meaningful, if (meaningful == 1) "assertion" else "assertions", minimum });
+        if (!try self.report(name_node, "assertion-density", message)) return;
+        self.s.diagnostics.last().?.fix = if (ctx.is_test) try weak.checkFix(self, function, name) else try weak.assertionFix(self, function, name);
     }
 
     /// A function against the function limit, or a test named as one (`test_x`, `TestX`) against the

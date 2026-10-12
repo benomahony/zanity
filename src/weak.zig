@@ -224,6 +224,20 @@ pub fn assertionFix(self: *File, ctx: Context, name: []const u8) ![]const u8 {
     return fix;
 }
 
+/// The fix for a test that checks nothing that can fail: what to check, and how many of its
+/// checks can't fail. `ctx` is the test's function, which owns its weak assertions.
+pub fn checkFix(self: *File, ctx: Context, name: []const u8) ![]const u8 {
+    if (ctx.family != .function) assert.panic("{s}: advising checks for {f}, which is a {t}, not a function; pass the test's function context", .{ self.work.facts.path, ctx.node.where(), ctx.family });
+    const start = self.work.text.used;
+    _ = try self.work.text.format("Check the result, effect or error that '{s}' expects of the code it calls", .{name});
+    const discounted = weakLines(self, ctx);
+    if (discounted > 0) _ = try self.work.text.format("; {d} of its checks can't fail, so they don't count", .{discounted});
+    _ = try self.work.text.copy(".");
+    const fix = self.work.text.buffer[start..self.work.text.used];
+    if (fix.len <= name.len) assert.panic("{s}: the check advice for '{s}' came out as '{s}', shorter than the name; checkFix() must write the advice around the name, so check its format calls", .{ self.work.facts.path, name, fix });
+    return fix;
+}
+
 pub fn weakLines(self: *File, ctx: Context) u32 {
     var lines: u32 = 0;
     for (self.s.weak.items()) |w| lines += @intFromBool(w.owner == ctx.serial);

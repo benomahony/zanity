@@ -380,7 +380,7 @@ Rules marked *off* run only with `--rules all`, `select = ["all"]`, or when name
 | `dynamic-allocation` | error | allocation after initialization, in Zig and Rust |
 | `long-function` | warning | a function with 60 or more lines of code, not counting blank and comment lines |
 | `wide-scope` | warning | a local declared in a wider block than the only one that uses it |
-| `assertion-density` | error | a function with fewer than two assertions that can catch a bug |
+| `assertion-density` | error | a function with fewer than two assertions that can catch a bug, or a test with no check that can |
 | `assertion-message` | warning | an assertion with no message |
 | `assertion-side-effect` | error | an assertion that assigns or calls something that changes state |
 | `forbidden-call` | warning | `eval`, `exec` and other calls that run code no one can review |
