@@ -115,6 +115,10 @@ pub const Tables = struct {
     integer_parse_calls: []const []const u8 = &.{},
     /// Browser APIs that open a new browsing context and can retain a writable opener.
     window_open_calls: []const []const u8 = &.{},
+    /// The specific check to write for a yes/no check of a comparison or method, such as
+    /// unittest's `assertEqual($1, $2)` for `assertTrue(a == b)`: `$1` and `$2` stand for the two
+    /// sides, and `negated` is the check for its `assertFalse` form, empty when there is none.
+    specific_checks: []const SpecificCheck = &.{},
     /// APIs formally deprecated or removed by the language or its standard library.
     obsolete_calls: []const []const u8 = &.{},
     /// Allocation APIs whose first or second argument controls the amount reserved.
@@ -173,6 +177,10 @@ pub const Tables = struct {
     /// Prefix bytes that mark a name private by convention, such as `_` in Python.
     private_prefixes: []const u8 = "",
 };
+
+/// A comparison operator or method, such as `==` or `contains`, and the specific checks that show
+/// both sides when they fail.
+pub const SpecificCheck = struct { when: []const u8, check: []const u8, negated: []const u8 = "" };
 
 pub const entries: []const Entry = @import("manifest.zon");
 pub const tables: []const Tables = @import("tables.zon");

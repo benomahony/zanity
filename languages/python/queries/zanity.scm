@@ -420,6 +420,37 @@
   (#eq? @_self "self")
   (#any-of? @_check "assertEqual" "assertNotEqual" "assertTrue" "assertFalse" "assertIs" "assertIsNot" "assertIsNone" "assertIsNotNone" "assertIn" "assertNotIn" "assertIsInstance" "assertNotIsInstance" "assertRaises" "assertRaisesRegex" "assertAlmostEqual" "assertNotAlmostEqual" "assertGreater" "assertGreaterEqual" "assertLess" "assertLessEqual" "assertRegex" "assertNotRegex" "assertCountEqual" "assertDictEqual" "assertListEqual" "assertSetEqual" "assertTupleEqual" "assertSequenceEqual" "assertMultiLineEqual" "fail"))
 
+; A yes/no check of one comparison, which fails with "False is not true" and hides both sides.
+((call
+  function: (attribute
+    object: (identifier) @_self
+    attribute: (identifier) @_check)
+  arguments: (argument_list
+    .
+    (comparison_operator
+      .
+      (_) @opaque.left
+      operators: _ @opaque.key
+      (_) @opaque.right
+      .))) @finding.opaque-check
+  (#eq? @_self "self")
+  (#eq? @_check "assertTrue"))
+
+((call
+  function: (attribute
+    object: (identifier) @_self
+    attribute: (identifier) @_check)
+  arguments: (argument_list
+    .
+    (comparison_operator
+      .
+      (_) @opaque.left
+      operators: _ @opaque.key
+      (_) @opaque.right
+      .))) @finding.opaque-check @opaque.negated
+  (#eq? @_self "self")
+  (#eq? @_check "assertFalse"))
+
 ; A check a test makes through PyHamcrest, imported or qualified.
 ((call
   function: (identifier) @_check) @test.check

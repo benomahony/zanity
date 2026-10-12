@@ -1,0 +1,4 @@
+rules: opaque-check
+exit: 0
+OpaqueChecks_java.java:4:9: warning [opaque-check]
+OpaqueChecks_java.java:9:9: warning [opaque-check]

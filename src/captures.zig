@@ -143,6 +143,21 @@ pub const Index = struct {
         for (found) |t| if (t.id == c) return true;
         return false;
     }
+
+    /// The first node inside `outer`, or `outer` itself, that `capture` marks.
+    pub fn within(self: *const Index, outer: ts.Node, capture: ?Id) ?ts.Node {
+        const c = capture orelse return null;
+        const end = ts.ts_node_end_byte(outer);
+        const first = std.sort.lowerBound(Triple, self.triples, outer.key(), compareKey);
+        if (first > self.triples.len) assert.panic("the captures inside the node at byte {d} start at {d}, past the {d} recorded; lowerBound() must stay within the triples", .{ ts.ts_node_start_byte(outer), first, self.triples.len });
+        for (self.triples[first..]) |t| {
+            if (t.key.start >= end) return null;
+            if (t.id != c or ts.ts_node_end_byte(t.node) > end) continue;
+            if (t.key.start < ts.ts_node_start_byte(outer)) assert.panic("found capture {d} at byte {d}, before the node at byte {d} it should be inside; within() must start from the node's own captures", .{ c, t.key.start, ts.ts_node_start_byte(outer) });
+            return t.node;
+        }
+        return null;
+    }
 };
 
 fn keyEql(a: ts.Node.Key, b: ts.Node.Key) bool {

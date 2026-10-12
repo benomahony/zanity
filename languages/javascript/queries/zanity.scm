@@ -627,3 +627,113 @@
 (if_statement
   condition: (parenthesized_expression
     (assignment_expression) @finding.assignment-in-condition))
+
+; A yes/no check of one comparison or `includes`, which fails with "expected true, received false"
+; and hides both sides.
+((call_expression
+  function: (member_expression
+    object: (call_expression
+      function: (identifier) @_expect
+      arguments: (arguments
+        .
+        [
+          (binary_expression
+            left: (_) @opaque.left
+            operator: _ @opaque.key
+            right: (_) @opaque.right)
+          (call_expression
+            function: (member_expression
+              object: (_) @opaque.left
+              property: (property_identifier) @opaque.key)
+            arguments: (arguments
+              .
+              (_) @opaque.right
+              .))
+        ]
+        .))
+    property: (property_identifier) @_matcher)
+  arguments: (arguments
+    .
+    (true)
+    .)) @finding.opaque-check
+  (#eq? @_expect "expect")
+  (#eq? @_matcher "toBe"))
+
+((call_expression
+  function: (member_expression
+    object: (call_expression
+      function: (identifier) @_expect
+      arguments: (arguments
+        .
+        [
+          (binary_expression
+            left: (_) @opaque.left
+            operator: _ @opaque.key
+            right: (_) @opaque.right)
+          (call_expression
+            function: (member_expression
+              object: (_) @opaque.left
+              property: (property_identifier) @opaque.key)
+            arguments: (arguments
+              .
+              (_) @opaque.right
+              .))
+        ]
+        .))
+    property: (property_identifier) @_matcher)) @finding.opaque-check
+  (#eq? @_expect "expect")
+  (#eq? @_matcher "toBeTruthy"))
+
+((call_expression
+  function: (member_expression
+    object: (call_expression
+      function: (identifier) @_expect
+      arguments: (arguments
+        .
+        [
+          (binary_expression
+            left: (_) @opaque.left
+            operator: _ @opaque.key
+            right: (_) @opaque.right)
+          (call_expression
+            function: (member_expression
+              object: (_) @opaque.left
+              property: (property_identifier) @opaque.key)
+            arguments: (arguments
+              .
+              (_) @opaque.right
+              .))
+        ]
+        .))
+    property: (property_identifier) @_matcher)
+  arguments: (arguments
+    .
+    (false)
+    .)) @finding.opaque-check @opaque.negated
+  (#eq? @_expect "expect")
+  (#eq? @_matcher "toBe"))
+
+((call_expression
+  function: (member_expression
+    object: (call_expression
+      function: (identifier) @_expect
+      arguments: (arguments
+        .
+        [
+          (binary_expression
+            left: (_) @opaque.left
+            operator: _ @opaque.key
+            right: (_) @opaque.right)
+          (call_expression
+            function: (member_expression
+              object: (_) @opaque.left
+              property: (property_identifier) @opaque.key)
+            arguments: (arguments
+              .
+              (_) @opaque.right
+              .))
+        ]
+        .))
+    property: (property_identifier) @_matcher)) @finding.opaque-check @opaque.negated
+  (#eq? @_expect "expect")
+  (#eq? @_matcher "toBeFalsy"))

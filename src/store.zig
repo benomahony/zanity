@@ -452,7 +452,7 @@ test "a source analysis is queryable JSON and records cache hits" {
     var buffer: [1024]u8 = undefined;
     const result = (try store.cachedAnalysis(&buffer, key, source)).?;
     try std.testing.expectEqualStrings("{\"findings\":[{\"rule\":\"unbounded-loop\"}]}", result);
-    try std.testing.expect((try store.cachedAnalysis(&buffer, key, digest(&.{"changed"}))) == null);
+    try std.testing.expectEqual(null, try store.cachedAnalysis(&buffer, key, digest(&.{"changed"})));
     try std.testing.expectEqual(@as(f64, 1), try scalar(store.db, "SELECT json_array_length(result, '$.findings') FROM source_analyses"));
     try std.testing.expectEqual(@as(f64, 1), try scalar(store.db, "SELECT hits FROM source_analyses"));
 }

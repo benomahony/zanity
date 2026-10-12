@@ -572,3 +572,33 @@
 ((field_declaration
   (modifiers
     "private" @unless.struts-public-field)))
+
+; A yes/no check of `equals`, which fails with "expected: <true> but was: <false>" and hides both
+; sides.
+((method_invocation
+  name: (identifier) @_check
+  arguments: (argument_list
+    .
+    (method_invocation
+      object: (_) @opaque.left
+      name: (identifier) @opaque.key
+      arguments: (argument_list
+        .
+        (_) @opaque.right
+        .)))) @finding.opaque-check
+  (#eq? @_check "assertTrue")
+  (#eq? @opaque.key "equals"))
+
+((method_invocation
+  name: (identifier) @_check
+  arguments: (argument_list
+    .
+    (method_invocation
+      object: (_) @opaque.left
+      name: (identifier) @opaque.key
+      arguments: (argument_list
+        .
+        (_) @opaque.right
+        .)))) @finding.opaque-check @opaque.negated
+  (#eq? @_check "assertFalse")
+  (#eq? @opaque.key "equals"))

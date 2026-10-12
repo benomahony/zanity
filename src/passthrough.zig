@@ -180,10 +180,10 @@ test "a call that passes the parameters on unchanged is read as forwarding" {
     var arguments = Arguments{ .text = call.arguments };
     try std.testing.expectEqualStrings("'NFKC'", arguments.next().?);
     try std.testing.expectEqualStrings("name", arguments.next().?);
-    try std.testing.expect(arguments.next() == null);
+    try std.testing.expectEqual(null, arguments.next());
     try std.testing.expectEqualStrings("g", soleCall("  return try g(a, b);\n}").?.callee);
-    try std.testing.expect(soleCall("x = g(a)\nreturn x") == null);
-    try std.testing.expect(soleCall("yield object(a)") == null);
+    try std.testing.expectEqual(null, soleCall("x = g(a)\nreturn x"));
+    try std.testing.expectEqual(null, soleCall("yield object(a)"));
     try std.testing.expect(strings.decoratedAt("x = 1\n@agent.system_prompt\ndef f():\n", 27));
     try std.testing.expect(!strings.decoratedAt("x = 1\n\ndef f():\n", 7));
 }

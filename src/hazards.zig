@@ -756,6 +756,7 @@ pub fn patternFinding(self: *File, node: ts.Node, rule_name: []const u8) !void {
     if (rule.pattern.len == 0) assert.panic("expected rule {s} to have a pattern message for @finding captures, got none; give it a .pattern in rules.all, with $code where the code goes", .{rule.name});
     if (self.index.marks(node, self.v.comment)) return;
     if (try cancelled(self, node, rule.name)) return;
+    const specific = if (std.mem.eql(u8, rule.name, "opaque-check")) (try specificCheck(self, node)) orelse return else null;
     const code = header(node.text(self.source));
     const text = self.work.text;
     const start = text.used;
@@ -769,6 +770,48 @@ pub fn patternFinding(self: *File, node: ts.Node, rule_name: []const u8) !void {
     if (message.len < rule.pattern.len - "$code".len) assert.panic("expected the message to hold the pattern, got '{s}' for '{s}'; patternFinding() must copy every part of the pattern, so check its loop", .{ message, rule.pattern });
     const reported = try self.report(node, rule.name, message);
     if (reported and std.mem.eql(u8, rule.name, "precedence-trap")) self.s.diagnostics.last().?.fix = try groupingFix(self, node);
+    if (reported) if (specific) |fix| {
+        self.s.diagnostics.last().?.fix = fix;
+    };
+}
+
+/// The specific check the language offers for a yes/no check of a comparison or method, written
+/// out with its two sides, or null when it offers none, so the yes/no check is the best there is.
+fn specificCheck(self: *File, node: ts.Node) !?[]const u8 {
+    const key = self.index.within(node, self.v.opaque_key) orelse return null;
+    const left = self.index.within(node, self.v.opaque_left) orelse return null;
+    const right = self.index.within(node, self.v.opaque_right) orelse return null;
+    if (ts.ts_node_start_byte(left) >= ts.ts_node_start_byte(right)) assert.panic("{s}: the left side {f} of the check {f} starts after its right side {f}; capture @opaque.left before @opaque.right in the language's zanity.scm", .{ self.work.facts.path, left.where(), node.where(), right.where() });
+    const negated = self.index.marks(node, self.v.opaque_negated);
+    const when = key.text(self.source);
+    if (when.len == 0) assert.panic("{s}: @opaque.key matched the empty {f}; capture the operator or method name of the check {f}", .{ self.work.facts.path, key.where(), node.where() });
+    for (self.tables.specific_checks) |specific| {
+        if (!std.mem.eql(u8, specific.when, when)) continue;
+        const template = if (negated) specific.negated else specific.check;
+        if (template.len == 0) return null;
+        return try writeCheck(self, template, left.text(self.source), right.text(self.source));
+    }
+    return null;
+}
+
+/// "Write it as `<check>`", with the template's `$1` and `$2` replaced by the two sides.
+fn writeCheck(self: *File, template: []const u8, left: []const u8, right: []const u8) ![]const u8 {
+    const text = self.work.text;
+    const start = text.used;
+    _ = try text.copy("Write it as `");
+    var rest = template;
+    for (0..template.len) |_| {
+        const at = std.mem.indexOfScalar(u8, rest, '$') orelse break;
+        if (at + 1 >= rest.len or (rest[at + 1] != '1' and rest[at + 1] != '2')) assert.panic("the specific check '{s}' has a '$' not followed by 1 or 2; write the sides as $1 and $2 in languages/tables.zon", .{template});
+        _ = try text.copy(rest[0..at]);
+        _ = try text.copy(if (rest[at + 1] == '1') left else right);
+        rest = rest[at + 2 ..];
+    }
+    _ = try text.copy(rest);
+    _ = try text.copy("`, which shows both values when it fails.");
+    const fix = text.buffer[start..text.used];
+    if (fix.len < template.len) assert.panic("the fix '{s}' is shorter than its template '{s}'; writeCheck() must copy every part of the template", .{ fix, template });
+    return fix;
 }
 
 const comparisons = [_][]const u8{ "==", "===", "!=", "!==", "<", ">", "<=", ">=" };

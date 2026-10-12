@@ -223,6 +223,10 @@ const Vocabulary = struct {
     abstraction_name: ?captures.Id,
     implementation_base: ?captures.Id,
     visibility_public: ?captures.Id,
+    opaque_negated: ?captures.Id,
+    opaque_left: ?captures.Id,
+    opaque_key: ?captures.Id,
+    opaque_right: ?captures.Id,
 
     fn lookup(c: captures.Compiled) Vocabulary {
         if (c.names.len == 0) assert.panic("the query has no captures, so no rule could run; check the language's query files", .{});
@@ -263,6 +267,10 @@ const Vocabulary = struct {
             .abstraction_name = c.id("abstraction.name"),
             .implementation_base = c.id("implementation.base"),
             .visibility_public = c.id("visibility.public"),
+            .opaque_negated = c.id("opaque.negated"),
+            .opaque_left = c.id("opaque.left"),
+            .opaque_key = c.id("opaque.key"),
+            .opaque_right = c.id("opaque.right"),
         };
     }
 };

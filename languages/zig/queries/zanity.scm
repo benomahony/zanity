@@ -382,6 +382,40 @@
     member: (identifier) @_check)) @test.check
   (#any-of? @_check "expect" "expectEqual" "expectEqualStrings" "expectEqualSlices" "expectEqualDeep" "expectError" "expectApproxEqAbs" "expectApproxEqRel" "expectFmt" "expectStringStartsWith" "expectStringEndsWith"))
 
+; A yes/no check of one comparison, which fails with "TestUnexpectedResult" and hides both sides.
+((call_expression
+  function: (field_expression
+    member: (identifier) @_check)
+  arguments: (arguments
+    .
+    (binary_expression
+      left: _ @opaque.left
+      operator: _ @opaque.key
+      right: _ @opaque.right)
+    .)) @finding.opaque-check
+  (#eq? @_check "expect"))
+
+((call_expression
+  function: (field_expression
+    member: (identifier) @_check)
+  arguments: (arguments
+    .
+    (call_expression
+      function: (field_expression
+        member: (identifier) @opaque.key)
+      arguments: (arguments
+        .
+        (_) @_type
+        .
+        (_) @opaque.left
+        .
+        (_) @opaque.right
+        .))
+    .)) @finding.opaque-check
+  (#eq? @_check "expect")
+  (#eq? @opaque.key "eql")
+  (#eq? @_type "u8"))
+
 ; A test turned off with no condition: `return error.SkipZigTest;` as the test's own statement.
 ; A skip under an `if` says when the test can't run, so it is left alone.
 ((test_declaration

@@ -1,0 +1,4 @@
+rules: opaque-check
+exit: 0
+opaque_checks_zig.zig:4:9: warning [opaque-check]
+opaque_checks_zig.zig:8:9: warning [opaque-check]

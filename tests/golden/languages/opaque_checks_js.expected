@@ -1,0 +1,5 @@
+rules: opaque-check
+exit: 0
+opaque_checks_js.js:2:3: warning [opaque-check]
+opaque_checks_js.js:6:3: warning [opaque-check]
+opaque_checks_js.js:10:3: warning [opaque-check]

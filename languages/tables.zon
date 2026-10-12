@@ -1,6 +1,18 @@
 .{
     .{
         .ecosystem = "python",
+        .specific_checks = .{
+            .{ .when = "==", .check = "self.assertEqual($1, $2)", .negated = "self.assertNotEqual($1, $2)" },
+            .{ .when = "!=", .check = "self.assertNotEqual($1, $2)", .negated = "self.assertEqual($1, $2)" },
+            .{ .when = "in", .check = "self.assertIn($1, $2)", .negated = "self.assertNotIn($1, $2)" },
+            .{ .when = "not in", .check = "self.assertNotIn($1, $2)", .negated = "self.assertIn($1, $2)" },
+            .{ .when = "is", .check = "self.assertIs($1, $2)", .negated = "self.assertIsNot($1, $2)" },
+            .{ .when = "is not", .check = "self.assertIsNot($1, $2)", .negated = "self.assertIs($1, $2)" },
+            .{ .when = "<", .check = "self.assertLess($1, $2)", .negated = "self.assertGreaterEqual($1, $2)" },
+            .{ .when = "<=", .check = "self.assertLessEqual($1, $2)", .negated = "self.assertGreater($1, $2)" },
+            .{ .when = ">", .check = "self.assertGreater($1, $2)", .negated = "self.assertLessEqual($1, $2)" },
+            .{ .when = ">=", .check = "self.assertGreaterEqual($1, $2)", .negated = "self.assertLess($1, $2)" },
+        },
         .constructors_capitalised = true,
         .generic_types = .{ "dict", "list", "tuple", "set", "frozenset", "type", "Optional", "Union", "Callable", "Literal", "Annotated", "Mapping", "Sequence", "Iterable", "Iterator", "Awaitable", "Coroutine" },
         .protocol_names = .{"main"},
@@ -71,6 +83,10 @@
     },
     .{
         .ecosystem = "zig",
+        .specific_checks = .{
+            .{ .when = "==", .check = "std.testing.expectEqual($2, $1)" },
+            .{ .when = "eql", .check = "std.testing.expectEqualStrings($2, $1)" },
+        },
         .stdin_reads = .{ "std.io.getStdIn", "std.fs.File.stdin", "std.Io.File.stdin", "File.stdin" },
         .weak_hashes = .{ "std.crypto.hash.Md5.hash", "std.crypto.hash.Md5.init", "std.crypto.hash.Sha1.hash", "std.crypto.hash.Sha1.init", "Md5.hash", "Md5.init", "Sha1.hash", "Sha1.init" },
         .log_calls = .{ "std.debug.print", "std.log.debug", "std.log.info", "std.log.warn", "std.log.err", "log.debug", "log.info", "log.warn", "log.err" },
@@ -139,6 +155,15 @@
     },
     .{
         .ecosystem = "node",
+        .specific_checks = .{
+            .{ .when = "===", .check = "expect($1).toBe($2)", .negated = "expect($1).not.toBe($2)" },
+            .{ .when = "!==", .check = "expect($1).not.toBe($2)", .negated = "expect($1).toBe($2)" },
+            .{ .when = "includes", .check = "expect($1).toContain($2)", .negated = "expect($1).not.toContain($2)" },
+            .{ .when = "<", .check = "expect($1).toBeLessThan($2)", .negated = "expect($1).toBeGreaterThanOrEqual($2)" },
+            .{ .when = "<=", .check = "expect($1).toBeLessThanOrEqual($2)", .negated = "expect($1).toBeGreaterThan($2)" },
+            .{ .when = ">", .check = "expect($1).toBeGreaterThan($2)", .negated = "expect($1).toBeLessThanOrEqual($2)" },
+            .{ .when = ">=", .check = "expect($1).toBeGreaterThanOrEqual($2)", .negated = "expect($1).toBeLessThan($2)" },
+        },
         .weak_randoms = .{"Math.random"},
         .format_first_calls = .{"util.format"},
         .redirect_first_methods = .{"redirect"},
@@ -224,6 +249,9 @@
     },
     .{
         .ecosystem = "jvm",
+        .specific_checks = .{
+            .{ .when = "equals", .check = "assertEquals($2, $1)", .negated = "assertNotEquals($2, $1)" },
+        },
         .weak_randoms = .{"Math.random"},
         .format_first_calls = .{ "String.format", "System.out.printf", "System.out.format", "System.err.printf", "System.err.format" },
         .redirect_first_methods = .{"sendRedirect"},
