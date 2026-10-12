@@ -252,6 +252,28 @@ test "zanity.schema.json matches the rules and settings in the code" {
 }
 
 /// Runs zanity check on a one-file project with `environ` and `flags`.
+/// Fails unless `output` holds every text in `has` and none in `lacks`, printing each text out of
+/// place and then the output, so a failure shows what was there instead.
+fn expectOutput(output: []const u8, has: []const []const u8, lacks: []const []const u8) !void {
+    if (has.len + lacks.len == 0) assert.panic("expectOutput() was given no text to look for, so it checks nothing; pass the texts the output must have or lack", .{});
+    var misses: usize = 0;
+    for (has) |text| {
+        if (text.len == 0) assert.panic("expectOutput() was asked for empty text, which every output holds; pass the text the output must have", .{});
+        if (std.mem.indexOf(u8, output, text) != null) continue;
+        std.debug.print("\nmissing: {s}", .{text});
+        misses += 1;
+    }
+    for (lacks) |text| {
+        if (text.len == 0) assert.panic("expectOutput() was asked to rule out empty text, which every output holds; pass the text the output must lack", .{});
+        const at = std.mem.indexOf(u8, output, text) orelse continue;
+        std.debug.print("\nunexpected at byte {d}: {s}", .{ at, text });
+        misses += 1;
+    }
+    if (misses == 0) return;
+    std.debug.print("\nin:\n{s}\n", .{output});
+    return error.TestUnexpectedOutput;
+}
+
 fn checkForAgent(arena: std.mem.Allocator, io: Io, environ: *const std.process.Environ.Map, flags: []const []const u8) !std.process.RunResult {
     if (flags.len > 2) assert.panic("checkForAgent() takes at most 2 flags, got {d}; add room in argv", .{flags.len});
     const zanity = try Io.Dir.cwd().realPathFileAlloc(io, paths.zanity, arena);
@@ -269,9 +291,11 @@ test "--agent puts the totals and the next command first, then findings up to --
     const run = try checkForAgent(arena, std.testing.io, &plain, &.{ "--agent", "--limit=1" });
     try std.testing.expectEqual(std.process.Child.Term{ .exited = 1 }, run.term);
     try std.testing.expect(std.mem.startsWith(u8, run.stdout, "zanity: 2 errors, 2 warnings in 1/1 file; 1 [--fix].\nNext: `zanity check a.py --fix`"));
-    try std.testing.expect(std.mem.indexOf(u8, run.stdout, "\n\nassertion-density [error] 2 in 1 file\n") != null);
-    try std.testing.expect(std.mem.indexOf(u8, run.stdout, "\n  +1 more: --rules assertion-density --limit 0\n") != null);
-    try std.testing.expect(std.mem.indexOf(u8, run.stdout, "\nAlso, to see with --rules <name>:\n  unbounded-loop [warning] 1 in 1 file\n  assertion-message [warning] 1 in 1 file\n") != null);
+    try expectOutput(run.stdout, &.{
+        "\n\nassertion-density [error] 2 in 1 file\n",
+        "\n  +1 more: --rules assertion-density --limit 0\n",
+        "\nAlso, to see with --rules <name>:\n  unbounded-loop [warning] 1 in 1 file\n  assertion-message [warning] 1 in 1 file\n",
+    }, &.{});
 }
 
 test "under Claude Code, check speaks to the agent unless --json or --plain asks otherwise" {
@@ -299,10 +323,7 @@ test "unbounded-loop's fix names where the loop stops, leaving out breaks of inn
     try tmp.dir.writeFile(io, .{ .sub_path = "loops.py", .data = "def poll(q):\n    while True:\n        for x in q.get():\n            if x:\n                break\n        if q.empty():\n            return None\n        continue\n\n\ndef spin():\n    while True:\n        pass\n" });
     const work = try std.fs.path.join(arena, &.{ ".zig-cache", "tmp", &tmp.sub_path });
     const run = try std.process.run(arena, io, .{ .argv = &.{ zanity, "check", "--rules", "unbounded-loop", "--plain", "loops.py" }, .cwd = .{ .path = work } });
-    for ([_][]const u8{ "fix=\"It stops only at line 7 (`return None`); add a limit", "fix=\"Give it a condition, or a limit such as a maximum number of attempts: nothing in it stops it" }) |expected| {
-        if (std.mem.indexOf(u8, run.stdout, expected) == null) std.debug.print("\nmissing {s} in:\n{s}", .{ expected, run.stdout });
-        try std.testing.expect(std.mem.indexOf(u8, run.stdout, expected) != null);
-    }
+    try expectOutput(run.stdout, &.{ "fix=\"It stops only at line 7 (`return None`); add a limit", "fix=\"Give it a condition, or a limit such as a maximum number of attempts: nothing in it stops it" }, &.{});
 }
 
 test "--fix deletes a null check that the type check after it makes redundant" {
@@ -330,10 +351,7 @@ test "precedence-trap's fix shows how the code runs and the grouping it reads as
     try tmp.dir.writeFile(io, .{ .sub_path = "traps.ts", .data = "export function f(a: number, b: number, c: number, y: boolean): void {\n  if (!y == true) {}\n  if (a & b == c) {}\n  if (a == b & c) {}\n}\n" });
     const work = try std.fs.path.join(arena, &.{ ".zig-cache", "tmp", &tmp.sub_path });
     const run = try std.process.run(arena, io, .{ .argv = &.{ zanity, "check", "--rules", "precedence-trap", "--plain", "traps.ts" }, .cwd = .{ .path = work } });
-    for ([_][]const u8{ "It runs as `(!y) == true`; if you meant `!(y == true)`", "It runs as `a & (b == c)`; if you meant `(a & b) == c`", "It runs as `(a == b) & c`; if you meant `a == (b & c)`" }) |expected| {
-        if (std.mem.indexOf(u8, run.stdout, expected) == null) std.debug.print("\nmissing {s} in:\n{s}", .{ expected, run.stdout });
-        try std.testing.expect(std.mem.indexOf(u8, run.stdout, expected) != null);
-    }
+    try expectOutput(run.stdout, &.{ "It runs as `(!y) == true`; if you meant `!(y == true)`", "It runs as `a & (b == c)`; if you meant `(a & b) == c`", "It runs as `(a == b) & c`; if you meant `a == (b & c)`" }, &.{});
 }
 
 test "zanity init writes a zanity.toml that check reads, with [rules] last, and won't overwrite it unasked" {
@@ -352,7 +370,7 @@ test "zanity init writes a zanity.toml that check reads, with [rules] last, and 
     try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, first.term);
     const written = try tmp.dir.readFileAlloc(io, "zanity.toml", arena, .unlimited);
     try std.testing.expect(std.mem.startsWith(u8, written, "#:schema " ++ schema.url));
-    try std.testing.expect(std.mem.indexOf(u8, written, "exclude = [\"vendor/\"]") != null);
+    try expectOutput(written, &.{"exclude = [\"vendor/\"]"}, &.{});
     const checked = try std.process.run(arena, io, .{ .argv = &.{ zanity, "check", "." }, .cwd = .{ .path = work } });
     try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, checked.term);
     try std.testing.expectEqualStrings("zanity: checked 1 file, no issues found\n", checked.stderr);
@@ -362,7 +380,7 @@ test "zanity init writes a zanity.toml that check reads, with [rules] last, and 
     try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, forced.term);
     const full = try tmp.dir.readFileAlloc(io, "zanity.toml", arena, .unlimited);
     const table = std.mem.indexOf(u8, full, "\n[rules]\n") orelse return error.NoRulesTable;
-    try std.testing.expect(std.mem.indexOf(u8, full[table + 1 ..], "\n[") == null);
+    try expectOutput(full[table + 1 ..], &.{}, &.{"\n["});
 }
 
 test "zanity init --minimal writes only the settings, which check reads" {
@@ -477,10 +495,10 @@ test "--infer keeps every answer, so a second run asks the model nothing and rep
     const first = try project.checkInferring(arena, std.testing.io);
     const second = try project.checkInferring(arena, std.testing.io);
     try std.testing.expectEqualStrings(first.stdout, second.stdout);
-    try std.testing.expect(std.mem.indexOf(u8, first.stderr, ", 0 asked of jev-latest") == null);
-    try std.testing.expect(std.mem.indexOf(u8, second.stderr, ", 0 asked of jev-latest") != null);
+    try expectOutput(first.stderr, &.{}, &.{", 0 asked of jev-latest"});
+    try expectOutput(second.stderr, &.{", 0 asked of jev-latest"}, &.{});
     const requests = try project.tmp.dir.readFileAlloc(std.testing.io, "requests.log", arena, .unlimited);
-    try std.testing.expect(std.mem.indexOf(u8, requests, "\"authorization\": \"Bearer test\"") != null);
+    try expectOutput(requests, &.{"\"authorization\": \"Bearer test\""}, &.{});
 }
 
 test "--infer asks the System One server zanity.toml names, with only the key it names" {
@@ -494,17 +512,15 @@ test "--infer asks the System One server zanity.toml names, with only the key it
     const url = project.mock.env.get("TYPESAFE_BASE_URL") orelse assert.panic("startMock() set no TYPESAFE_BASE_URL", .{});
     try project.tmp.dir.writeFile(io, .{ .sub_path = "zanity.toml", .data = try std.fmt.allocPrint(arena, "[infer]\nurl = \"{s}\"\nmodel = \"kev-latest\"\napi_key_env = \"KEV_API_KEY\"\n", .{url}) });
     const keyless = try project.checkInferring(arena, io);
-    try std.testing.expect(std.mem.indexOf(u8, keyless.stdout, "(kev-latest is 95% sure)") != null);
+    try expectOutput(keyless.stdout, &.{"(kev-latest is 95% sure)"}, &.{});
     const requests = try project.tmp.dir.readFileAlloc(io, "requests.log", arena, .unlimited);
-    try std.testing.expect(std.mem.indexOf(u8, requests, "\"model\": \"kev-latest\"") != null);
-    try std.testing.expect(std.mem.indexOf(u8, requests, "Bearer") == null);
+    try expectOutput(requests, &.{"\"model\": \"kev-latest\""}, &.{"Bearer"});
     try project.mock.env.put("KEV_API_KEY", "local");
     try project.tmp.dir.deleteFile(io, "requests.log");
     try project.tmp.dir.writeFile(io, .{ .sub_path = "zanity.toml", .data = try std.fmt.allocPrint(arena, "[infer]\nurl = \"{s}\"\nmodel = \"kev-4b\"\napi_key_env = \"KEV_API_KEY\"\n", .{url}) });
     _ = try project.checkInferring(arena, io);
     const keyed = try project.tmp.dir.readFileAlloc(io, "requests.log", arena, .unlimited);
-    try std.testing.expect(std.mem.indexOf(u8, keyed, "\"authorization\": \"Bearer local\"") != null);
-    try std.testing.expect(std.mem.indexOf(u8, keyed, "Bearer test") == null);
+    try expectOutput(keyed, &.{"\"authorization\": \"Bearer local\""}, &.{"Bearer test"});
 }
 
 test "--infer reports what the model is sure of, for functions, tests and project files" {
@@ -515,10 +531,7 @@ test "--infer reports what the model is sure of, for functions, tests and projec
     defer project.tmp.cleanup();
     defer project.mock.child.kill(std.testing.io);
     const run = try project.checkInferring(arena, std.testing.io);
-    for ([_][]const u8{ "rule=\"misleading-error\"", "rule=\"unconstructive-error\"", "'invalid input' doesn't say", "rule=\"hollow-test\"", "rule=\"weakened-check\"", "rule=\"unscheduled-analysis\"", "rule=\"repeated-mechanics\"", "between the first two, `\\\"alpha beta\\\"` becomes `\\\"ada lovelace\\\"`" }) |expected| {
-        if (std.mem.indexOf(u8, run.stdout, expected) == null) std.debug.print("\nmissing {s} in:\n{s}", .{ expected, run.stdout });
-        try std.testing.expect(std.mem.indexOf(u8, run.stdout, expected) != null);
-    }
+    try expectOutput(run.stdout, &.{ "rule=\"misleading-error\"", "rule=\"unconstructive-error\"", "'invalid input' doesn't say", "rule=\"hollow-test\"", "rule=\"weakened-check\"", "rule=\"unscheduled-analysis\"", "rule=\"repeated-mechanics\"", "between the first two, `\\\"alpha beta\\\"` becomes `\\\"ada lovelace\\\"`" }, &.{});
 }
 
 test "--infer asks each unit only its own questions and skips what checks settled" {
@@ -535,14 +548,13 @@ test "--infer asks each unit only its own questions and skips what checks settle
     while (lines.next()) |line| {
         const fine = std.mem.indexOf(u8, line, "def fine") != null;
         const is_test = std.mem.indexOf(u8, line, "def test_") != null;
-        const errors = std.mem.indexOf(u8, line, "vague-error") != null;
-        if (fine or is_test) try std.testing.expect(!errors);
-        if (is_test) try std.testing.expect(std.mem.indexOf(u8, line, "name-behaviour-mismatch") == null);
-        if (!is_test) try std.testing.expect(std.mem.indexOf(u8, line, "hollow-test") == null);
-        if (std.mem.indexOf(u8, line, "def test_waits") != null) try std.testing.expect(std.mem.indexOf(u8, line, "flaky-test") == null);
-        if (std.mem.indexOf(u8, line, "\"=== ") != null) try std.testing.expect(std.mem.indexOf(u8, line, "\"questions\": [\"repeated-mechanics\"]") != null);
+        if (fine or is_test) try expectOutput(line, &.{}, &.{"vague-error"});
+        if (is_test) try expectOutput(line, &.{}, &.{"name-behaviour-mismatch"});
+        if (!is_test) try expectOutput(line, &.{}, &.{"hollow-test"});
+        if (std.mem.indexOf(u8, line, "def test_waits") != null) try expectOutput(line, &.{}, &.{"flaky-test"});
+        if (std.mem.indexOf(u8, line, "\"=== ") != null) try expectOutput(line, &.{"\"questions\": [\"repeated-mechanics\"]"}, &.{});
         const config_line = std.mem.indexOf(u8, line, "weakened-check") != null or std.mem.indexOf(u8, line, "unscheduled-analysis") != null;
-        if (config_line) try std.testing.expect(std.mem.indexOf(u8, line, "name-behaviour-mismatch") == null);
+        if (config_line) try expectOutput(line, &.{}, &.{"name-behaviour-mismatch"});
     }
 }
 
@@ -554,8 +566,7 @@ test "zanity.toml disables rules and excludes paths" {
     const zanity = try Io.Dir.cwd().realPathFileAlloc(io, paths.zanity, arena);
     const run = try std.process.run(arena, io, .{ .argv = &.{ zanity, "check", "--plain", "." }, .cwd = .{ .path = "tests/config/project" } });
     try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, run.term);
-    try std.testing.expect(std.mem.indexOf(u8, run.stdout, "long-parameter-list") == null);
-    try std.testing.expect(std.mem.indexOf(u8, run.stdout, "vendor/") == null);
+    try expectOutput(run.stdout, &.{}, &.{ "long-parameter-list", "vendor/" });
     try std.testing.expectEqualStrings("zanity: checked 1 file, no issues found\n", run.stderr);
 }
 
@@ -567,7 +578,7 @@ test "a mistake in zanity.toml stops the run and says where" {
     const zanity = try Io.Dir.cwd().realPathFileAlloc(io, paths.zanity, arena);
     const run = try std.process.run(arena, io, .{ .argv = &.{ zanity, "check", "--plain", "." }, .cwd = .{ .path = "tests/config/broken" } });
     try std.testing.expectEqual(std.process.Child.Term{ .exited = 2 }, run.term);
-    try std.testing.expect(std.mem.indexOf(u8, run.stderr, "zanity.toml:1: 'recursions' isn't a rule") != null);
+    try expectOutput(run.stderr, &.{"zanity.toml:1: 'recursions' isn't a rule"}, &.{});
 }
 
 /// One LSP message, framed as the protocol sends it.
@@ -608,8 +619,5 @@ test "zanity lsp publishes findings and offers their fixes and a false-positive 
     var reader = child.stdout.?.readerStreaming(io, &buffer);
     const output = try reader.interface.allocRemaining(arena, .unlimited);
     try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, try child.wait(io));
-    for ([_][]const u8{ "\"method\":\"textDocument/publishDiagnostics\"", "\"code\":\"redundant-null-check\"", "\"title\":\"zanity: fix redundant-null-check\"", "\"command\":\"zanity.flagFalsePositive\"", "\"id\":3,\"result\":null" }) |expected| {
-        if (std.mem.indexOf(u8, output, expected) == null) std.debug.print("\nmissing {s} in:\n{s}", .{ expected, output });
-        try std.testing.expect(std.mem.indexOf(u8, output, expected) != null);
-    }
+    try expectOutput(output, &.{ "\"method\":\"textDocument/publishDiagnostics\"", "\"code\":\"redundant-null-check\"", "\"title\":\"zanity: fix redundant-null-check\"", "\"command\":\"zanity.flagFalsePositive\"", "\"id\":3,\"result\":null" }, &.{});
 }
