@@ -1,0 +1,3 @@
+rules: assertion-density
+exit: 1
+matcher_checks_py.py:13:5: error [assertion-density]

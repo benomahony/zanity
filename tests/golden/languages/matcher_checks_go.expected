@@ -1,0 +1,3 @@
+rules: assertion-density
+exit: 1
+matcher_checks_go.go:19:6: error [assertion-density]

@@ -295,6 +295,20 @@
     operand: (identifier) @_package)) @test.check
   (#any-of? @_package "assert" "require"))
 
+; A check through Gomega, `Expect(x).To(Equal(y))` or `g.Expect(x).To(...)`: the matcher call
+; counts, so an `Expect` with no matcher checks nothing.
+((call_expression
+  function: (selector_expression
+    operand: (call_expression
+      function: [
+        (identifier) @_expect
+        (selector_expression
+          field: (field_identifier) @_expect)
+      ])
+    field: (field_identifier) @_check)) @test.check
+  (#any-of? @_expect "Expect" "Ω" "Eventually" "Consistently")
+  (#any-of? @_check "To" "ToNot" "NotTo" "Should" "ShouldNot"))
+
 ; A test turned off with no condition: a skip as the test body's own statement. A skip under an
 ; `if` says when the test can't run, so it is left alone.
 ((function_declaration

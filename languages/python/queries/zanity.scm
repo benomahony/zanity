@@ -420,6 +420,16 @@
   (#eq? @_self "self")
   (#any-of? @_check "assertEqual" "assertNotEqual" "assertTrue" "assertFalse" "assertIs" "assertIsNot" "assertIsNone" "assertIsNotNone" "assertIn" "assertNotIn" "assertIsInstance" "assertNotIsInstance" "assertRaises" "assertRaisesRegex" "assertAlmostEqual" "assertNotAlmostEqual" "assertGreater" "assertGreaterEqual" "assertLess" "assertLessEqual" "assertRegex" "assertNotRegex" "assertCountEqual" "assertDictEqual" "assertListEqual" "assertSetEqual" "assertTupleEqual" "assertSequenceEqual" "assertMultiLineEqual" "fail"))
 
+; A check a test makes through PyHamcrest, imported or qualified.
+((call
+  function: (identifier) @_check) @test.check
+  (#eq? @_check "assert_that"))
+
+((call
+  function: (attribute
+    attribute: (identifier) @_check)) @test.check
+  (#eq? @_check "assert_that"))
+
 ; Statements that change state shared beyond a test: a global, or the process environment.
 (global_statement) @test.shared_state
 

@@ -63,6 +63,12 @@
     (string_literal) @assertion.message))
   (#any-of? @_assert "assert" "debug_assert" "assert_eq" "assert_ne" "debug_assert_eq" "debug_assert_ne"))
 
+; A check a test makes through a matcher macro (hamcrest2, assert_matches), so a test's checks
+; can be counted.
+((macro_invocation
+  macro: (identifier) @_check) @test.check
+  (#any-of? @_check "assert_that" "assert_matches"))
+
 ((match_arm
   pattern: (match_pattern
     (tuple_struct_pattern
