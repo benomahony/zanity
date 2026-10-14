@@ -94,6 +94,13 @@ pub fn Bounded(comptime T: type) type {
             return self.buffer[self.len];
         }
 
+        /// Drops the items past the first `len`, as when a scratch list goes back to a mark.
+        pub fn truncate(self: *Self, len: usize) void {
+            if (len > self.len) assert.panic("{s}: truncating {d} items to {d}, which is more; truncate() only drops items, so pass a length taken earlier", .{ self.what, self.len, len });
+            self.len = len;
+            if (self.items().len != len) assert.panic("{s}: truncate() left {d} items, not {d}", .{ self.what, self.items().len, len });
+        }
+
         pub fn clear(self: *Self) void {
             if (self.len > self.buffer.len) assert.panic("{s}: {d} items recorded but only {d} slots exist; something set len without add()", .{ self.what, self.len, self.buffer.len });
             self.len = 0;
@@ -122,6 +129,13 @@ pub const Text = struct {
         self.used += written.len;
         if (self.used > self.buffer.len) assert.panic("Text buffer: format() left {d} bytes used out of {d}; format() must refuse to write past the buffer", .{ self.used, self.buffer.len });
         return written;
+    }
+
+    /// Frees what was written after `used` was `to`, so the bytes can be written again.
+    pub fn rewind(self: *Text, to: usize) void {
+        if (to > self.used) assert.panic("Text buffer: rewinding from {d} bytes used to {d}, which is forward; pass a value of used taken earlier", .{ self.used, to });
+        self.used = to;
+        if (self.used > self.buffer.len) assert.panic("Text buffer: rewind() left {d} bytes used out of {d}", .{ self.used, self.buffer.len });
     }
 
     pub fn copy(self: *Text, bytes: []const u8) error{LimitExceeded}![]const u8 {

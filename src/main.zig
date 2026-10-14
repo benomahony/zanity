@@ -25,6 +25,7 @@ const config = @import("config.zig");
 const starter = @import("init.zig");
 const upgrade = @import("upgrade.zig");
 const lsp = @import("lsp.zig");
+const watch = @import("watch.zig");
 const Telemetry = @import("telemetry.zig").Telemetry;
 const Facts = @import("facts.zig").Facts;
 const Finding = @import("facts.zig").Finding;
@@ -37,6 +38,7 @@ const CheckOptions = struct {
     fix: bool = false,
     infer: bool = false,
     strict: bool = false,
+    watch: bool = false,
     @"fail-on": FailOn = .@"error",
     agent: bool = false,
     limit: u32 = 10,
@@ -100,13 +102,14 @@ const app: zcli.App = .{
     .commands = &.{ zcli.command(CheckOptions, Row, .{
         .name = "check",
         .description = "Check files and directories. Exits 1 when an error-level rule fires, or with --fail-on warning when any rule does.",
-        .examples = &.{ "zanity check .", "zanity check src tests --rules unbounded-loop,long-function", "zanity check . --json", "zanity check . --fix", "zanity check . --fail-on warning", "zanity check . --strict" },
+        .examples = &.{ "zanity check .", "zanity check src tests --rules unbounded-loop,long-function", "zanity check . --json", "zanity check . --fix", "zanity check . --fail-on warning", "zanity check . --strict", "zanity check . --watch" },
         .result_title = "Findings",
         .positional = .{ .name = "paths", .metavar = "PATH", .help = "Files or directories to check.", .default = &.{"."} },
         .options = &.{
             .{ .name = "rules", .metavar = "RULES", .help = "Comma-separated rules to run instead of the defaults.", .example = "unbounded-loop,long-function" },
             .{ .name = "fix", .help = "Apply the fixes zanity can make, then report what is left." },
             .{ .name = "strict", .help = "Also run the strict rules, for what safety-critical code needs and most code doesn't, such as two assertions in every function." },
+            .{ .name = "watch", .help = "Check again each time a file it checks, or zanity.toml, changes, until Ctrl-C." },
             .{ .name = "fail-on", .metavar = "SEVERITY", .help = "Exit 1 on findings this severe or worse: error, or warning as a pre-commit hook or CI should.", .example = "warning" },
             .{ .name = "agent", .help = "Print findings for a coding agent: totals and the next command first, then each finding with its fix. On by default when CLAUDECODE is set and neither --json nor --plain is given.", .env = "ZANITY_AGENT" },
             .{ .name = "limit", .metavar = "N", .help = "With --agent, show at most N findings in all, rules first to last, and list the other rules by name; 0 shows them all.", .example = "0" },
@@ -165,6 +168,8 @@ const Workspace = struct {
     analysis: []u8,
     ignore: Ignore,
     environ: ?*const std.process.Environ.Map = null,
+    /// The command line after the program's name, which --watch reruns.
+    args: []const []const u8 = &.{},
     /// Whether the command line chose --json or --plain, which turns off agent output.
     chose_format: bool = false,
     inference: ?infer.Inference = null,
@@ -222,10 +227,12 @@ pub fn main(init: std.process.Init) !u8 {
     const ws = try Workspace.initWorkspace(std.heap.page_allocator, .{});
     ws.io = init.io;
     ws.environ = init.environ_map;
-    for (args[1..]) |arg| ws.chose_format = ws.chose_format or std.mem.eql(u8, arg, "--json") or std.mem.eql(u8, arg, "--plain");
+    const rest = args[1..];
+    ws.args = rest;
+    for (rest) |arg| ws.chose_format = ws.chose_format or std.mem.eql(u8, arg, "--json") or std.mem.eql(u8, arg, "--plain");
     var runtime = zcli.native.runtime(init, &out_writer.interface, &err_writer.interface);
     runtime.user_data = ws;
-    const code = app.run(init.gpa, args[1..], runtime);
+    const code = app.run(init.gpa, rest, runtime);
     if (@backingInt(code) > 130) assert.panic("zcli returned exit code {d}; codes above 130 collide with signals", .{@backingInt(code)});
     return @backingInt(code);
 }
@@ -241,12 +248,8 @@ fn runCheck(ctx: *zcli.Context, options: CheckOptions) ![]const Row {
     if (options.paths.len == 0) assert.panic("check ran with no paths; zcli supplies '.' when none are given", .{});
     const ws = workspaceOf(ctx);
     const agent = try speaksToAgent(ctx, ws, options.agent);
-    const settings = config.initConfig(std.heap.page_allocator, ws.io) catch |e| switch (e) {
-        error.InvalidConfig => return ctx.fail(.usage, config.problem[0..config.problem_len], "Fix that line of zanity.toml, or remove the setting to use zanity's default."),
-        else => return e,
-    };
-    if (ws.environ) |environ| ws.source_cache = store.Store.initStore(std.heap.page_allocator, ws.io, environ, ws.limits.store_bytes) catch null;
-    for (settings.excludes()) |glob| try ws.ignore.exclude(settings.dir, glob);
+    const settings = try loadSettings(ctx, ws);
+    if (options.watch) return watchCheck(ctx, ws, options.paths, settings.dir);
     ws.settings = &settings;
     defer ws.settings = null;
     var selected = if (options.rules) |list| try parseRules(ctx, ws, list) else settings.selection(options.strict);
@@ -272,6 +275,81 @@ fn runCheck(ctx: *zcli.Context, options: CheckOptions) ![]const Row {
 
 /// Whether to write for a coding agent: when --agent asks, or when one is running zanity and the
 /// command line chose no other format.
+/// Polls run at least a quarter of a second apart, so this many is decades of watching.
+const max_watch_polls = 1 << 40;
+/// The most arguments a watched command line may have, which the rerun copies.
+const max_watch_args = 256;
+
+/// Runs `zanity check` without --watch, then again each time a file it checks under `paths`, or
+/// the zanity.toml in `config_dir`, changes. Stops only when Ctrl-C ends the process.
+fn watchCheck(ctx: *zcli.Context, ws: *Workspace, paths: []const []const u8, config_dir: []const u8) ![]const Row {
+    if (paths.len == 0) assert.panic("watching no paths; zcli supplies '.' when none are given", .{});
+    if (ws.args.len >= max_watch_args) return ctx.fail(.usage, try ws.text.format("--watch takes at most {d} arguments; this command line has {d}.", .{ max_watch_args - 1, ws.args.len }), "Name a directory instead of each file in it.");
+    var exe_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const exe = exe_buffer[0 .. std.process.executablePath(ws.io, &exe_buffer) catch |e| {
+        return ctx.fail(.io, try ws.text.format("Could not find where this zanity is installed, to rerun its checks: {t}.", .{e}), "Reinstall it with install.sh, as the README describes.");
+    }];
+    var argv_buffer: [max_watch_args][]const u8 = undefined;
+    const argv = watch.rerunArgs(&argv_buffer, exe, ws.args);
+    if (argv.len > ws.args.len + 1) assert.panic("the rerun has {d} arguments from {d}; rerunArgs() only drops --watch", .{ argv.len, ws.args.len });
+    const settings_file = if (config_dir.len > 0) try ws.text.format("{s}/{s}", .{ config_dir, config.file_name }) else "";
+    const terminal = Io.File.stdout().isTty(ws.io) catch false;
+    const out = ctx.runtime.out;
+    const err = ctx.runtime.err;
+    var seen: ?u64 = null;
+    for (0..max_watch_polls) |_| {
+        const now = try snapshot(ctx, ws, paths, settings_file);
+        if (seen == now) {
+            try ws.io.sleep(watch.poll_interval, .awake);
+            continue;
+        }
+        seen = now;
+        if (terminal) try out.writer.writeAll(watch.clear_screen);
+        try out.writer.flush();
+        var child = std.process.spawn(ws.io, .{ .argv = argv }) catch |e| {
+            return ctx.fail(.io, try ws.text.format("Could not rerun {s}: {t}.", .{ exe, e }), "Reinstall it with install.sh, as the README describes.");
+        };
+        _ = try child.wait(ws.io);
+        if (!ctx.quiet) try err.writer.print("zanity: watching {d} {s} for changes; Ctrl-C stops.\n", .{ ws.checked, if (ws.checked == 1) "file" else "files" });
+        try err.writer.flush();
+    }
+    assert.panic("watched for {d} polls without being stopped; at four a second that is decades", .{max_watch_polls});
+}
+
+/// A fingerprint of the files `check` would read under `paths`, and `settings_file` when there
+/// is one. It leaves the workspace's file lists, text and ignore patterns as it found them.
+fn snapshot(ctx: *zcli.Context, ws: *Workspace, paths: []const []const u8, settings_file: []const u8) !u64 {
+    if (ws.files.len != 0) assert.panic("taking a snapshot over {d} files left from before; snapshot() must clear what it collects", .{ws.files.len});
+    if (paths.len == 0) assert.panic("taking a snapshot of no paths; zcli supplies '.' when none are given", .{});
+    const text_mark = ws.text.used;
+    const ignore_mark = ws.ignore.mark();
+    defer {
+        ws.files.clear();
+        ws.project_files.clear();
+        ws.ignore.rewind(ignore_mark);
+        ws.text.rewind(text_mark);
+    }
+    for (paths) |path| try collect(ctx, ws, path);
+    ws.checked = ws.files.len + ws.project_files.len;
+    const settings: []const []const u8 = if (settings_file.len > 0) &.{settings_file} else &.{};
+    return watch.fingerprint(ws.io, &.{ ws.files.items(), ws.project_files.items(), settings });
+}
+
+/// Reads zanity.toml, opens the cache, and applies the file's excludes to the walk.
+fn loadSettings(ctx: *zcli.Context, ws: *Workspace) !config.Config {
+    const settings = config.initConfig(std.heap.page_allocator, ws.io) catch |e| switch (e) {
+        error.InvalidConfig => return ctx.fail(.usage, config.problem[0..config.problem_len], "Fix that line of zanity.toml, or remove the setting to use zanity's default."),
+        else => return e,
+    };
+    if (ws.environ) |environ| ws.source_cache = store.Store.initStore(std.heap.page_allocator, ws.io, environ, ws.limits.store_bytes) catch null;
+    const before = ws.ignore.mark();
+    for (settings.excludes()) |glob| try ws.ignore.exclude(settings.dir, glob);
+    const after = ws.ignore.mark();
+    if (after.patterns < before.patterns + settings.excludes().len) assert.panic("{d} excludes in zanity.toml added {d} ignore patterns; exclude() adds one per pattern", .{ settings.excludes().len, after.patterns - before.patterns });
+    if (settings.rules) |chosen| if (chosen.len == 0) assert.panic("zanity.toml selected no rules; the reader must reject an empty select", .{});
+    return settings;
+}
+
 fn speaksToAgent(ctx: *zcli.Context, ws: *const Workspace, asked: bool) !bool {
     if (asked and ws.chose_format) return ctx.fail(.usage, "--agent cannot be combined with --json or --plain.", "Choose one: --agent for a coding agent to read, --json or --plain for a program to parse.");
     const agent = asked or (!ws.chose_format and agentRunning(ws));
