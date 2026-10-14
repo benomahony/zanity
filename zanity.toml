@@ -75,14 +75,14 @@ select = ["all"]
 disable = [
   # "parse-error",                     # warning, on by default. Fix the syntax error, or report the construct if the code is valid.
   # "forbidden-call",                  # warning, on by default. Call the code you need directly.
-  # "recursion",                       # warning, on by default. Rewrite it as a loop with a fixed bound.
-  # "unbounded-loop",                  # warning, on by default. Loop over a collection or cap the number of iterations.
+  # "recursion",                       # warning, on with --strict. Rewrite it as a loop with a fixed bound.
+  # "unbounded-loop",                  # warning, on with --strict. Loop over a collection or cap the number of iterations.
   # "eager-test",                      # warning, on by default. Split it into tests that each check one behaviour, named for that behaviour.
   # "long-test",                       # warning, on by default. Split it into tests that each check one behaviour, or move the setup into a helper.
   # "long-function",                   # warning, on by default. Move a self-contained step into its own function.
-  # "assertion-density",               # error, on by default. Assert conditions a bug could actually break: what it needs from its inputs and what it guarantees about its result.
-  # "assertion-message",               # warning, on by default. Add a message stating what must be true.
-  # "dynamic-allocation",              # error, on by default. Allocate what it needs up front in an init function and reuse it.
+  # "assertion-density",               # error, on with --strict. Assert conditions a bug could actually break: what it needs from its inputs and what it guarantees about its result.
+  # "assertion-message",               # warning, on with --strict. Add a message stating what must be true.
+  # "dynamic-allocation",              # error, on with --strict. Allocate what it needs up front in an init function and reuse it.
   # "assertion-side-effect",           # error, on by default. Do the work before the assertion and assert on its result.
   # "long-parameter-list",             # warning, on by default. Group related parameters into a struct or split the function.
   # "dead-parameter",                  # warning, on by default. Remove it and stop passing it, or name it with a leading underscore where the signature is fixed by an interface or a callback.
@@ -117,11 +117,11 @@ disable = [
   # "vocabulary-conflict",             # error, on by default. Make the vocabulary in zanity.toml agree with itself: one word per meaning, and none both banned and canonical.
   # "name-drift",                      # warning, on by default. Pick one spelling and use it everywhere.
   # "duplicate-name",                  # warning, on by default. Give each a name that says how it differs.
-  # "restated-type",                   # warning, off by default. Assert something about its value instead.
-  # "constant-assertion",              # error, off by default. Assert something that depends on the input.
-  # "redundant-null-check",            # warning, off by default. Remove this check.
-  # "conversion-assertion",            # information, off by default. Assert the property you need it to have.
-  # "guaranteed-length",               # information, off by default. Assert the length you actually require.
+  # "restated-type",                   # warning, on with --strict. Assert something about its value instead.
+  # "constant-assertion",              # error, on with --strict. Assert something that depends on the input.
+  # "redundant-null-check",            # warning, on with --strict. Remove this check.
+  # "conversion-assertion",            # information, on with --strict. Assert the property you need it to have.
+  # "guaranteed-length",               # information, on with --strict. Assert the length you actually require.
   # "empty-block",                     # warning, on by default. Fill in the body, delete the block, or leave a comment saying why nothing happens here.
   # "constant-condition",              # warning, on by default. Delete the branch that can't run, or test the value that actually varies.
   # "divide-by-zero",                  # error, on by default. Use the intended non-zero divisor, or validate a variable divisor before dividing.

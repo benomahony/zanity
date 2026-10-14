@@ -152,9 +152,11 @@ pub const Config = struct {
         return self.exclude[0..self.exclude_len];
     }
 
-    /// The rules to run: `rules` if given, else the defaults, without anything in `disable`.
-    pub fn selection(self: *const Config) rules.Set {
-        const chosen = self.rules orelse rules.Set.defaults();
+    /// The rules to run: `rules` if given, else the defaults, and the strict rules when `strict`,
+    /// without anything in `disable`.
+    pub fn selection(self: *const Config, strict: bool) rules.Set {
+        var chosen = self.rules orelse rules.Set.defaults();
+        if (strict) chosen.includeTier(.strict);
         var kept: rules.Set = .{};
         for (chosen.names()) |name| if (!self.disable.enabled(name)) kept.include(name);
         if (kept.len > chosen.len) assert.panic("disabling rules kept {d} of {d}, more than were chosen; selection() must copy only chosen rules, so check its loop", .{ kept.len, chosen.len });
@@ -556,7 +558,7 @@ const TomlReader = struct {
             },
             .rules, .select, .disable => {
                 var set: rules.Set = .{};
-                for (items) |name| if (!set.includeNamed(name)) return self.fail("'{s}' isn't a rule; the rules are listed in the README, 'all' names every rule, and 'zanity check --rules' takes the same names.", .{name});
+                for (items) |name| if (!set.includeNamed(name)) return self.fail("'{s}' isn't a rule; the rules are listed in the README, 'all' names every rule, 'strict' the defaults and the strict rules, and 'zanity check --rules' takes the same names.", .{name});
                 if (which != .disable and set.len == 0) return self.fail("'{s}' is empty, so nothing would run; list at least one rule, or remove it to run the defaults.", .{key});
                 if (which == .disable) config.disable = set else config.rules = set;
             },

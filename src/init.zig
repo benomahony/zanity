@@ -48,12 +48,13 @@ pub fn renderConfig(w: *std.Io.Writer, project: Project) !void {
     try w.writeAll(
         \\
         \\[rules]
-        \\# Which rules run. "all" is every rule, including those off by default; leave `select` out to
-        \\# run only the defaults. `zanity check --rules a,b` overrides it for one run.
+        \\# Which rules run. "all" is every rule, including those off by default, and "strict" the defaults
+        \\# and the strict rules; leave `select` out to run only the defaults, and add the strict rules for
+        \\# one run with `zanity check --strict`. `zanity check --rules a,b` overrides it for one run.
         \\select = ["all"]
         \\
-        \\# Rules to switch off everywhere. Every rule is listed here, with its severity, whether it is
-        \\# on by default, and how to fix what it finds; uncomment the ones you don't want.
+        \\# Rules to switch off everywhere. Every rule is listed here, with its severity, when it runs,
+        \\# and how to fix what it finds; uncomment the ones you don't want.
         \\disable = [
         \\
     );
@@ -90,7 +91,7 @@ fn renderFound(w: *std.Io.Writer, project: Project) !void {
     if (shown > project.languages.len) assert.panic("init listed {d} languages of {d}; renderFound() must list each language once", .{ shown, project.languages.len });
 }
 
-/// One commented line per rule, `#   "name",  # severity, on or off by default. advice`.
+/// One commented line per rule, `#   "name",  # severity, when it runs. advice`.
 fn renderRuleList(w: *std.Io.Writer) !void {
     var widest: usize = 0;
     for (rules.all) |rule| widest = @max(widest, rule.name.len);
@@ -98,7 +99,7 @@ fn renderRuleList(w: *std.Io.Writer) !void {
         if (rule.advice.len == 0) assert.panic("rule {s} has no advice for zanity init to show; give it an .advice in src/rules.zig", .{rule.name});
         try w.print("  # \"{s}\",", .{rule.name});
         try w.splatByteAll(' ', widest - rule.name.len + 1);
-        try w.print("# {t}, {s} by default. {s}\n", .{ rule.severity, if (rule.default) "on" else "off", rule.advice });
+        try w.print("# {t}, {s}. {s}\n", .{ rule.severity, rules.tier_descriptions.get(rule.tier), rule.advice });
     }
     if (widest == 0) assert.panic("every rule in rules.all has an empty name; give each a .name in src/rules.zig", .{});
 }

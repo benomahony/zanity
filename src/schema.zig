@@ -39,7 +39,7 @@ pub fn renderSchema(w: *std.Io.Writer) !void {
         \\          "additionalProperties": false,
         \\          "properties": {{
         \\            "select": {{
-        \\              "description": "Run only these rules instead of the defaults. \"all\" is every rule, including those off by default. --rules on the command line overrides it.",
+        \\              "description": "Run only these rules instead of the defaults. \"all\" is every rule, including those off by default, and \"strict\" the defaults and the strict rules. --rules on the command line overrides it.",
         \\              "type": "array",
         \\              "minItems": 1,
         \\              "uniqueItems": true,
@@ -204,6 +204,7 @@ fn renderDefinitions(w: *std.Io.Writer) !void {
         \\    "ruleOrAll": {
         \\      "anyOf": [
         \\        { "const": "all", "description": "Every rule, including those off by default." },
+        \\        { "const": "strict", "description": "The defaults and the strict rules, as zanity check --strict runs." },
         \\        { "$ref": "#/definitions/rule" }
         \\      ]
         \\    },
@@ -238,7 +239,6 @@ fn renderRuleNames(w: *std.Io.Writer) !void {
 }
 
 fn entry(w: *std.Io.Writer, index: usize, name: []const u8, rule: rules.Rule) !void {
-    const state = if (rule.default) "on" else "off";
     if (name.len == 0) assert.panic("writing a schema entry for {s} with an empty name; give every rule in src/rules.zig a name", .{rule.name});
     if (rule.advice.len == 0) assert.panic("rule {s} has no advice for the schema to show; give it an .advice in src/rules.zig", .{rule.name});
     try w.writeAll(if (index == 0) "        { \"const\": " else ",\n        { \"const\": ");
@@ -246,9 +246,9 @@ fn entry(w: *std.Io.Writer, index: usize, name: []const u8, rule: rules.Rule) !v
     try w.writeAll(", \"description\": ");
     var description: [512]u8 = undefined;
     const text = if (std.mem.eql(u8, name, rule.name))
-        std.fmt.bufPrint(&description, "{t}, {s} by default. {s}", .{ rule.severity, state, rule.advice }) catch rule.advice
+        std.fmt.bufPrint(&description, "{t}, {s}. {s}", .{ rule.severity, rules.tier_descriptions.get(rule.tier), rule.advice }) catch rule.advice
     else
-        std.fmt.bufPrint(&description, "The NASA code for {s}: {t}, {s} by default. {s}", .{ rule.name, rule.severity, state, rule.advice }) catch rule.advice;
+        std.fmt.bufPrint(&description, "The NASA code for {s}: {t}, {s}. {s}", .{ rule.name, rule.severity, rules.tier_descriptions.get(rule.tier), rule.advice }) catch rule.advice;
     try quoted(w, text);
     try w.writeAll(" }");
 }

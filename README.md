@@ -148,6 +148,7 @@ zanity check                                  # check the current directory
 zanity check src tests                        # check some paths
 zanity check . --rules recursion,long-function   # run only these rules
 zanity check . --rules all                    # every rule, including those off by default
+zanity check . --strict                       # also the strict rules, such as assertion density
 zanity check . --fail-on warning              # exit 1 on warnings too
 zanity check . --fix                          # apply the fixes zanity can make, then report the rest
 zanity check . --json                         # a JSON array, one object per finding
@@ -334,8 +335,8 @@ forbidden = ["discount"]
 invoice = ["bill", "statement"]
 
 [rules]
-# Run only these rules; "all" is every rule, including those off by default.
-# Leave it out to run the defaults.
+# Run only these rules; "all" is every rule, including those off by default, and "strict" the
+# defaults and the strict rules. Leave it out to run the defaults.
 select = ["recursion", "unbounded-loop", "long-function"]
 # Rules to switch off, from the selection or the defaults.
 disable = ["duplicate-name"]
@@ -369,22 +370,22 @@ Every rule runs on every language where it means something; `dynamic-allocation`
 
 ## Rules
 
-Rules marked *off* run only with `--rules all`, `select = ["all"]`, or when named.
+Rules marked *strict* hold code to what safety-critical software needs and most code doesn't, so they run only with `--strict`, `select = ["strict"]` or `select = ["all"]`, or when named. Rules marked *off* run only with `--rules all`, `select = ["all"]`, or when named.
 
 **NASA's Power of Ten**
 
 | Rule | Severity | Flags |
 |---|---|---|
-| `recursion` | warning | a function that calls itself, directly or through a cycle of calls across files |
-| `unbounded-loop` | warning | a loop with no bound, such as `while True` or `for {}` |
-| `dynamic-allocation` | error | allocation after initialization, in Zig and Rust |
+| `recursion` | warning, *strict* | a function that calls itself, directly or through a cycle of calls across files |
+| `unbounded-loop` | warning, *strict* | a loop with no bound, such as `while True` or `for {}` |
+| `dynamic-allocation` | error, *strict* | allocation after initialization, in Zig and Rust |
 | `long-function` | warning | a function with 60 or more lines of code, not counting blank and comment lines |
 | `wide-scope` | warning | a local declared in a wider block than the only one that uses it |
-| `assertion-density` | error | a function with fewer than two assertions that can catch a bug, or a test with no check that can |
-| `assertion-message` | warning | an assertion with no message |
+| `assertion-density` | error, *strict* | a function with fewer than two assertions that can catch a bug, or a test with no check that can |
+| `assertion-message` | warning, *strict* | an assertion with no message |
 | `assertion-side-effect` | error | an assertion that assigns or calls something that changes state |
 | `forbidden-call` | warning | `eval`, `exec` and other calls that run code no one can review |
-| `restated-type`, `constant-assertion`, `redundant-null-check`, `conversion-assertion`, `guaranteed-length` | *off* | assertions that cannot fail, which do not count towards density |
+| `restated-type`, `constant-assertion`, `redundant-null-check`, `conversion-assertion`, `guaranteed-length` | *strict* | assertions that cannot fail, which do not count towards density |
 
 **Structure**
 

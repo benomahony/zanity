@@ -67,7 +67,7 @@ test "a [rules] table at the end selects and disables rules, as zanity init writ
         \\]
         \\
     );
-    const chosen = c.selection();
+    const chosen = c.selection(false);
     try std.testing.expect(chosen.enabled("restated-type"));
     try std.testing.expect(chosen.enabled("recursion"));
     try std.testing.expect(!chosen.enabled("long-file"));
@@ -80,7 +80,7 @@ test "'all' enables every rule, including those off by default" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
     const c = try parsed(arena_state.allocator(), "rules = [\"all\"]\ndisable = [\"long-file\"]\n");
-    const chosen = c.selection();
+    const chosen = c.selection(false);
     try std.testing.expect(chosen.enabled("restated-type"));
     try std.testing.expect(chosen.enabled("wide-scope"));
     try std.testing.expect(!chosen.enabled("long-file"));
@@ -91,14 +91,36 @@ test "disable removes rules from the defaults" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
     const c = try parsed(arena_state.allocator(), "disable = [\"duplicate-name\", \"name-drift\"]\n");
-    const chosen = c.selection();
+    const chosen = c.selection(false);
     try std.testing.expect(!chosen.enabled("duplicate-name"));
     try std.testing.expect(!chosen.enabled("name-drift"));
-    try std.testing.expect(chosen.enabled("recursion"));
+    try std.testing.expect(chosen.enabled("long-function"));
+}
+
+test "strict adds the strict rules to the defaults, without what disable removes" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const c = try parsed(arena_state.allocator(), "disable = [\"recursion\"]\n");
+    try std.testing.expect(!c.selection(false).enabled("assertion-density"));
+    const chosen = c.selection(true);
+    try std.testing.expect(chosen.enabled("assertion-density"));
+    try std.testing.expect(chosen.enabled("long-function"));
+    try std.testing.expect(!chosen.enabled("recursion"));
+    try std.testing.expect(!chosen.enabled("misleading-error"));
+}
+
+test "select 'strict' runs the defaults and the strict rules" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const c = try parsed(arena_state.allocator(), "[rules]\nselect = [\"strict\"]\n");
+    const chosen = c.selection(false);
+    try std.testing.expect(chosen.enabled("unbounded-loop"));
+    try std.testing.expect(chosen.enabled("long-function"));
+    try std.testing.expect(!chosen.enabled("misleading-error"));
 }
 
 test "mistakes in zanity.toml name the line and what to write" {
-    try expectProblem("rules = [\"recursions\"]\n", "zanity.toml:1: 'recursions' isn't a rule; the rules are listed in the README, 'all' names every rule, and 'zanity check --rules' takes the same names.");
+    try expectProblem("rules = [\"recursions\"]\n", "zanity.toml:1: 'recursions' isn't a rule; the rules are listed in the README, 'all' names every rule, 'strict' the defaults and the strict rules, and 'zanity check --rules' takes the same names.");
     try expectProblem("\ndisabled = []\n", "zanity.toml:2: 'disabled' isn't a setting; the settings are exclude and, under [rules], select and disable, and under [infer], url, model, api_key_env, concurrency and threshold.");
     try expectProblem("[inference]\n", "zanity.toml:1: '[inference]' isn't a table zanity knows; the tables are [rules], [infer], [paths.\"<pattern>\"], [vocabulary], [domains.<name>] and [contexts.<name>].");
     try expectProblem("[contexts]\n", "zanity.toml:1: '[contexts]' needs a name, such as [contexts.billing].");
@@ -142,7 +164,7 @@ test "a [paths] section turns rules off for the files its pattern matches" {
     try std.testing.expect(c.disabledAt("tests/e2e/api/test_login.py", "network-in-test"));
     try std.testing.expect(!c.disabledAt("tests/unit/test_login.py", "network-in-test"));
     try std.testing.expect(c.disabledAt("deep/down/orders_integration.py", "database-in-test"));
-    try std.testing.expect(!c.selection().enabled("name-drift"));
+    try std.testing.expect(!c.selection(false).enabled("name-drift"));
 }
 
 test "a zanity.toml's vocabulary bans words, maps aliases and scopes them to contexts" {

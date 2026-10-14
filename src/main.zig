@@ -36,6 +36,7 @@ const CheckOptions = struct {
     rules: ?[]const u8 = null,
     fix: bool = false,
     infer: bool = false,
+    strict: bool = false,
     @"fail-on": FailOn = .@"error",
     agent: bool = false,
     limit: u32 = 10,
@@ -99,12 +100,13 @@ const app: zcli.App = .{
     .commands = &.{ zcli.command(CheckOptions, Row, .{
         .name = "check",
         .description = "Check files and directories. Exits 1 when an error-level rule fires, or with --fail-on warning when any rule does.",
-        .examples = &.{ "zanity check .", "zanity check src tests --rules unbounded-loop,long-function", "zanity check . --json", "zanity check . --fix", "zanity check . --fail-on warning" },
+        .examples = &.{ "zanity check .", "zanity check src tests --rules unbounded-loop,long-function", "zanity check . --json", "zanity check . --fix", "zanity check . --fail-on warning", "zanity check . --strict" },
         .result_title = "Findings",
         .positional = .{ .name = "paths", .metavar = "PATH", .help = "Files or directories to check.", .default = &.{"."} },
         .options = &.{
             .{ .name = "rules", .metavar = "RULES", .help = "Comma-separated rules to run instead of the defaults.", .example = "unbounded-loop,long-function" },
             .{ .name = "fix", .help = "Apply the fixes zanity can make, then report what is left." },
+            .{ .name = "strict", .help = "Also run the strict rules, for what safety-critical code needs and most code doesn't, such as two assertions in every function." },
             .{ .name = "fail-on", .metavar = "SEVERITY", .help = "Exit 1 on findings this severe or worse: error, or warning as a pre-commit hook or CI should.", .example = "warning" },
             .{ .name = "agent", .help = "Print findings for a coding agent: totals and the next command first, then each finding with its fix. On by default when CLAUDECODE is set and neither --json nor --plain is given.", .env = "ZANITY_AGENT" },
             .{ .name = "limit", .metavar = "N", .help = "With --agent, show at most N findings in all, rules first to last, and list the other rules by name; 0 shows them all.", .example = "0" },
@@ -247,7 +249,8 @@ fn runCheck(ctx: *zcli.Context, options: CheckOptions) ![]const Row {
     for (settings.excludes()) |glob| try ws.ignore.exclude(settings.dir, glob);
     ws.settings = &settings;
     defer ws.settings = null;
-    var selected = if (options.rules) |list| try parseRules(ctx, ws, list) else settings.selection();
+    var selected = if (options.rules) |list| try parseRules(ctx, ws, list) else settings.selection(options.strict);
+    if (options.rules != null and options.strict) selected.includeTier(.strict);
     if (options.infer) try connectInference(ctx, ws, &selected, options.rules == null);
     if (ws.inference) |*inference| {
         inference.concurrency = settings.concurrency orelse infer.default_concurrency;
@@ -260,7 +263,7 @@ fn runCheck(ctx: *zcli.Context, options: CheckOptions) ![]const Row {
         error.LimitExceeded => return ctx.fail(.usage, try ws.text.format("This run has more {s} than zanity is built to hold.", .{memory.exceeded}), "Check fewer files at once, or report it if the input is ordinary."),
         else => return e,
     };
-    if (counts.errors > 0 or (options.@"fail-on" == .warning and counts.warnings > 0)) ctx.status = .failure;
+    if (fails(counts, options.@"fail-on")) ctx.status = .failure;
     if (ws.rows.len != counts.errors + counts.warnings) assert.panic("{d} output rows for {d} errors and {d} warnings; runCheck() must add one row per error or warning", .{ ws.rows.len, counts.errors, counts.warnings });
     if (agent) return reportToAgent(ctx, ws, options, counts);
     if (ctx.format != .human) try report.summarise(console(ctx, ctx.runtime.err), counts);
@@ -504,6 +507,13 @@ fn console(ctx: *zcli.Context, stream: zcli.Stream) zrich.Console {
     return .{ .writer = stream.writer, .allocator = ctx.allocator, .options = stream.capabilities };
 }
 
+/// Whether `counts` holds a finding as severe as `fail_on`, or more.
+fn fails(counts: report.Counts, fail_on: FailOn) bool {
+    if (counts.flagged > counts.files) assert.panic("{d} files flagged out of {d} checked; count() must count a file at most once", .{ counts.flagged, counts.files });
+    if (counts.flagged > counts.errors + counts.warnings) assert.panic("{d} files flagged by {d} errors and {d} warnings; a file is flagged only for a finding in it", .{ counts.flagged, counts.errors, counts.warnings });
+    return counts.errors > 0 or (fail_on == .warning and counts.warnings > 0);
+}
+
 fn parseRules(ctx: *zcli.Context, ws: *Workspace, list: []const u8) !rules.Set {
     var set: rules.Set = .{};
     var it = std.mem.tokenizeScalar(u8, list, ',');
@@ -512,14 +522,14 @@ fn parseRules(ctx: *zcli.Context, ws: *Workspace, list: []const u8) !rules.Set {
         if (code.len == 0) continue;
         if (!set.includeNamed(code)) {
             const start = ws.text.used;
-            _ = try ws.text.copy("The rules are: all (every rule, including those off by default)");
+            _ = try ws.text.copy("The rules are: all (every rule, including those off by default), strict (the defaults and the strict rules)");
             for (rules.all) |r| _ = try ws.text.format(" {s}", .{r.name});
             const hint = ws.text.buffer[start..ws.text.used];
             return ctx.fail(.usage, try ws.text.format("Unknown rule '{s}'.", .{code}), hint);
         }
     }
     if (set.len == 0) return ctx.fail(.usage, "--rules needs at least one rule.", "Pass a comma-separated list, such as --rules unbounded-loop,long-function, or --rules all.");
-    if (set.len > std.mem.count(u8, list, ",") + 1 and std.mem.indexOf(u8, list, "all") == null) assert.panic("--rules '{s}' enabled {d} rules from {d} names; each name other than 'all' enables one rule, so check includeNamed()", .{ list, set.len, std.mem.count(u8, list, ",") + 1 });
+    if (set.len > std.mem.count(u8, list, ",") + 1 and std.mem.indexOf(u8, list, "all") == null and std.mem.indexOf(u8, list, "strict") == null) assert.panic("--rules '{s}' enabled {d} rules from {d} names; each name other than 'all' and 'strict' enables one rule, so check includeNamed()", .{ list, set.len, std.mem.count(u8, list, ",") + 1 });
     if (rules.find(set.names()[0]) == null) assert.panic("--rules '{s}' enabled '{s}', which is not a rule; parseRules() must add only rules that includeNamed() found", .{ list, set.names()[0] });
     return set;
 }
