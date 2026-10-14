@@ -254,7 +254,7 @@ And every test case:
 | `heavy-setup-test` | needs a lot of setup for what it checks | |
 | `unreadable-test` | doesn't let a reader tell what it checks or why | `vague-test-name` |
 | `hollow-test` | would still pass if the behaviour it names were broken | |
-| `implementation-coupled-test` | would fail after a refactor that keeps behaviour | `call-verification` |
+| `implementation-coupled-test` | would fail after a refactor that keeps behaviour | `call-verification`, `storage-read-in-test` |
 | `manual-test` | needs a person to run or judge it | `stdin-in-test`, `debug-leftover` |
 | `unfocused-test` | wouldn't say why it failed | `eager-test` |
 | `self-mocking-test` | mocks the behaviour it claims to check | |
@@ -414,8 +414,10 @@ Rules marked *off* run only with `--rules all`, `select = ["all"]`, or when name
 | `sleep-in-test` | warning | a test that waits on the clock |
 | `polling-loop` | warning | a loop in a test that polls with a sleep |
 | `nondeterministic-test` | warning | randomness or the current time in a test |
-| `test-double` | warning | a mock, stub, spy or patch that replaces real behaviour, in a test or anywhere in a test file, such as a fixture or a `@patch` decorator; not a patch of a boundary the language's tables list, such as `requests.get`, `time.monotonic` or `subprocess.run`, which is how a test is meant to isolate itself. Its fix names what a patch replaces |
+| `test-double` | warning | a mock, stub, spy or patch that replaces real behaviour, in a test or anywhere in a test file, such as a fixture or a `@patch` decorator; not a patch of a boundary the language's tables list, such as `requests.get`, `time.monotonic` or `subprocess.run`, nor a module mock of a package, such as `vi.mock("node:child_process")`, which is how a test is meant to isolate itself. A module mock of the project's own code, such as `vi.mock("./db")` or `jest.mock("@/services/x")`, is reported. Its fix names what a patch replaces |
 | `call-verification` | warning | a test that checks how a test double was called, such as `assert_called_with`, `toHaveBeenCalledWith` or `verify(mock)`, rather than what the code did |
+| `branching-double` | warning | a test double given behaviour that branches on what it is called with, such as `vi.fn((url) => url.includes("/users") ? users : orders)` or a `mockImplementation` that switches on its arguments: the fake re-implements what it replaces |
+| `storage-read-in-test` | warning | a test, or a helper in a test file, that reads the database directly to check what the code did, such as Drizzle's or Prisma's `findMany`/`findFirst`, `db.select().from(table)` or a `sql` template that SELECTs, rather than going through the code's own interface |
 | `shared-state-in-test` | warning | a test that changes process-wide state: an environment variable, the working directory, the import path, a global default or a `global` |
 | `filesystem-in-test` | warning | a test that reads or changes real files outside its own temporary directory |
 | `network-in-test` | warning | a test that makes a real network request or connection |

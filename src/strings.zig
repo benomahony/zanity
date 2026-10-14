@@ -12,6 +12,14 @@ pub fn contains(haystack: []const []const u8, needle: []const u8) bool {
     return false;
 }
 
+/// Whether `text` starts with one of `prefixes`, such as a test name with a test prefix.
+pub fn startsWithAny(text: []const u8, prefixes: []const []const u8) bool {
+    if (text.len == 0) assert.panic("asked whether an empty text starts with one of {d} prefixes; skip empty texts before calling startsWithAny()", .{prefixes.len});
+    if (prefixes.len > 16) assert.panic("checking '{s}' against {d} prefixes; more than 16 means the table in languages/tables.zon is wrong", .{ text, prefixes.len });
+    for (prefixes) |prefix| if (std.mem.startsWith(u8, text, prefix)) return true;
+    return false;
+}
+
 /// Byte order, for sorting names, paths and lines, none of which may be empty.
 pub fn lessThan(_: void, a: []const u8, b: []const u8) bool {
     if (a.len == 0) assert.panic("sorting an empty text against '{s}'; drop empty texts before sorting", .{b});

@@ -464,6 +464,35 @@
   (#eq? @_process "process")
   (#eq? @_env "env"))
 
+; A function that takes arguments, given to a test double as its behaviour, and the branches in it:
+; a stand-in that picks its answer by what it was called with re-implements what it replaces.
+[
+  (arrow_function
+    parameter: (_))
+  (arrow_function
+    parameters: (formal_parameters
+      (_)))
+  (function_expression
+    parameters: (formal_parameters
+      (_)))
+] @double.behaviour
+
+[
+  (if_statement)
+  (switch_statement)
+  (ternary_expression)
+] @double.branch
+
+; A query built with the ORM's select builder, `db.select().from(table)`, which reads rows directly.
+((call_expression
+  function: (member_expression
+    object: (call_expression
+      function: (member_expression
+        property: (property_identifier) @_select))
+    property: (property_identifier) @_from)) @storage.read
+  (#any-of? @_select "select" "selectDistinct")
+  (#eq? @_from "from"))
+
 ; A test or suite turned off: `it.skip`, `describe.skip`, `test.skip`, or the `x`-prefixed forms.
 ((call_expression
   function: (member_expression

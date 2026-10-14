@@ -227,6 +227,9 @@ const Vocabulary = struct {
     opaque_left: ?captures.Id,
     opaque_key: ?captures.Id,
     opaque_right: ?captures.Id,
+    double_behaviour: ?captures.Id,
+    double_branch: ?captures.Id,
+    storage_read: ?captures.Id,
 
     fn lookup(c: captures.Compiled) Vocabulary {
         if (c.names.len == 0) assert.panic("the query has no captures, so no rule could run; check the language's query files", .{});
@@ -271,6 +274,9 @@ const Vocabulary = struct {
             .opaque_left = c.id("opaque.left"),
             .opaque_key = c.id("opaque.key"),
             .opaque_right = c.id("opaque.right"),
+            .double_behaviour = c.id("double.behaviour"),
+            .double_branch = c.id("double.branch"),
+            .storage_read = c.id("storage.read"),
         };
     }
 };
@@ -791,6 +797,8 @@ pub const File = struct {
             try test_quality.checkTestCall(self, ctx, name);
         } else if (self.inTestFile()) {
             try test_quality.checkTestDouble(self, ctx, name);
+            try test_quality.checkBranchingDouble(self, ctx, name);
+            try test_quality.checkStorageRead(self, ctx, name);
         }
         const allocating = self.calleeIn(ctx, name, self.tables.allocating_calls) orelse (if (contains(self.tables.allocating_calls, name)) name else null);
         if (allocating) |matched| try self.checkAllocation(ctx, matched);

@@ -1,0 +1,5 @@
+rules: branching-double
+exit: 0
+branching.test.ts:2:3: warning [branching-double]
+branching.test.ts:9:51: warning [branching-double]
+branching.test.ts:15:7: warning [branching-double]

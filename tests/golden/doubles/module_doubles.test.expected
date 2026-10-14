@@ -1,0 +1,5 @@
+rules: test-double
+exit: 0
+module_doubles.test.ts:1:1: warning [test-double]
+module_doubles.test.ts:2:1: warning [test-double]
+module_doubles.test.ts:5:1: warning [test-double]

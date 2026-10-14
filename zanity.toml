@@ -106,6 +106,8 @@ disable = [
   # "nondeterministic-test",           # warning, on by default. Inject a seeded generator or a fixed value.
   # "test-double",                     # warning, on by default. Use the real object, or a fake that behaves like it.
   # "call-verification",               # warning, on by default. Assert on the result, or the state the code leaves behind; check a call only where the call is the behaviour, such as a message sent to another system.
+  # "branching-double",                # warning, on by default. Give each operation the code makes its own fake that returns one answer, such as a port with one method per call, instead of one function that routes on its arguments.
+  # "storage-read-in-test",            # warning, on by default. Check the outcome through the code's own interface, such as the query or endpoint that reads it back; read storage directly only to test the storage layer itself.
   # "broad-expected-error",            # warning, on by default. Expect the specific error type, and match its message where the type is shared, such as pytest.raises(ValueError, match=...) or #[should_panic(expected = "...")].
   # "skipped-test",                    # warning, on by default. Fix the test and turn it back on, or delete it; to skip only where it can't run, put the skip under a condition (skipif, an if around t.Skip), or use xfail(strict=True).
   # "vague-test-name",                 # warning, on by default. Name the behaviour it expects, such as test_rejects_expired_token or it("returns 404 for an unknown id").

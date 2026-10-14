@@ -7,6 +7,7 @@ const rules = @import("rules.zig");
 const captures = @import("captures.zig");
 const extract = @import("extract.zig");
 const check = @import("check.zig");
+const strings = @import("strings.zig");
 const isolation = @import("isolation.zig");
 const naming = @import("naming.zig");
 const File = check.File;
@@ -162,6 +163,8 @@ pub fn checkTestCall(self: *File, ctx: Context, name: []const u8) !void {
         _ = try self.report(ctx.node, "nondeterministic-test", try self.say("'{s}' returns a different value on every run, so this test can pass or fail by chance.", .{callee}));
     }
     try checkTestDouble(self, ctx, name);
+    try checkBranchingDouble(self, ctx, name);
+    try checkStorageRead(self, ctx, name);
     const verification = self.calleeIn(ctx, name, self.tables.verification_calls) orelse
         (if (ctx.receiver != null and contains(self.tables.verification_methods, name)) name else null);
     if (verification) |callee| {
@@ -177,6 +180,7 @@ pub fn checkTestDouble(self: *File, ctx: Context, name: []const u8) !void {
     if (name.len == 0) assert.panic("{s}: the call {f} has an empty name; capture the callee as @call.name in the language's zanity.scm", .{ self.work.facts.path, ctx.node.where() });
     const double = self.calleeIn(ctx, name, self.tables.test_doubles) orelse (if (ctx.receiver == null and contains(self.tables.test_doubles, name)) name else null);
     const callee = double orelse return;
+    if (self.calleeIn(ctx, name, self.tables.module_doubles) != null) return checkModuleDouble(self, ctx, callee);
     var buffer: [256]u8 = undefined;
     const target = patchTarget(self, ctx, &buffer);
     if (target.len > 0 and boundary(self, target)) return;
@@ -187,6 +191,78 @@ pub fn checkTestDouble(self: *File, ctx: Context, name: []const u8) !void {
         try self.say("Instead of patching with `{s}`, give the code under test a parameter to take a fake through, or let it run for real.", .{callee})
     else
         try self.say("Instead of a `{s}` with no behaviour of its own, pass in a small fake that behaves like the real thing.", .{callee});
+}
+
+/// A double of a whole module, such as `vi.mock("./mountUtils.js")`. A module of the project's
+/// own replaces code the test should run; a package's, such as `vi.mock("node:child_process")`,
+/// replaces a dependency, which is how a test isolates itself, so it isn't reported.
+fn checkModuleDouble(self: *File, ctx: Context, callee: []const u8) !void {
+    if (ctx.family != .call) assert.panic("{s}: checking {f} as a module double, but it is a {t}; call checkModuleDouble() only from checkTestDouble()", .{ self.work.facts.path, ctx.node.where(), ctx.family });
+    if (callee.len == 0) assert.panic("{s}: the module double {f} has no callee; checkTestDouble() names the double it found", .{ self.work.facts.path, ctx.node.where() });
+    const module = modulePath(self, ctx) orelse return;
+    if (!strings.startsWithAny(module, self.tables.own_module_prefixes)) return;
+    if (!try self.report(ctx.node, "test-double", try self.say("'{s}' replaces '{s}', the project's own module, so the test can pass while the real code is broken.", .{ callee, module }))) return;
+    self.s.diagnostics.last().?.fix = try self.say("Let the test run `{s}` for real; if it reaches a boundary such as a network client, give the code under test a parameter to take a fake of that boundary through instead.", .{module});
+}
+
+/// The module a module double names in its first argument, without quotes, or null when the
+/// argument isn't a plain string.
+fn modulePath(self: *File, ctx: Context) ?[]const u8 {
+    const first = ctx.arguments[0] orelse return null;
+    const text = first.text(self.source);
+    if (text.len > 1 << 20) assert.panic("{s}: a call argument of {d} bytes at {f}; arguments come from one file, which is smaller", .{ self.work.facts.path, text.len, first.where() });
+    if (text.len < 3) return null;
+    const quote = text[0];
+    if ((quote != '"' and quote != '\'' and quote != '`') or text[text.len - 1] != quote) return null;
+    const inner = text[1 .. text.len - 1];
+    if (std.mem.indexOfAny(u8, inner, "\"'`$ \n") != null) return null;
+    if (inner.len + 2 != text.len) assert.panic("{s}: the inside of '{s}' came out {d} bytes; a quoted string loses only its quotes", .{ self.work.facts.path, text, inner.len });
+    return inner;
+}
+
+/// A test double given behaviour that branches on what it is called with, such as
+/// `vi.fn((url) => url.includes("/users") ? users : orders)`: the stand-in routes requests the way
+/// the thing it replaces does, so the test checks that copy, and a fake that answers every call
+/// hides the code calling the wrong one.
+pub fn checkBranchingDouble(self: *File, ctx: Context, name: []const u8) !void {
+    if (ctx.family != .call) assert.panic("{s}: checking {f} for a branching double, but it is a {t}; call checkBranchingDouble() only from closeCall(), with a call context", .{ self.work.facts.path, ctx.node.where(), ctx.family });
+    if (name.len == 0) assert.panic("{s}: the call {f} has an empty name; capture the callee as @call.name in the language's zanity.scm", .{ self.work.facts.path, ctx.node.where() });
+    const double = self.calleeIn(ctx, name, self.tables.test_doubles) orelse
+        (if (ctx.receiver != null and contains(self.tables.double_behaviour_methods, name)) name else null);
+    const callee = double orelse return;
+    for (ctx.arguments) |maybe| {
+        const argument = maybe orelse continue;
+        if (!self.index.marks(argument, self.v.double_behaviour)) continue;
+        const branch = self.index.within(argument, self.v.double_branch) orelse continue;
+        _ = try self.report(branch, "branching-double", try self.say("The stand-in given to '{s}' picks its answer by what it is called with, at '{s}', so it re-implements what it replaces and the test checks that copy.", .{ callee, header(branch.text(self.source)) }));
+        return;
+    }
+}
+
+/// A test, or a helper in a test file, that reads the database directly to check what the code
+/// did, through an ORM, such as Drizzle's `db.query.users.findFirst()` or
+/// `db.select().from(users)`, or a raw SELECT: it checks the rows rather than what the code's
+/// interface returns, so it breaks when the schema changes but the behaviour doesn't.
+pub fn checkStorageRead(self: *File, ctx: Context, name: []const u8) !void {
+    if (ctx.family != .call) assert.panic("{s}: checking {f} for a storage read, but it is a {t}; call checkStorageRead() only from closeCall()", .{ self.work.facts.path, ctx.node.where(), ctx.family });
+    if (name.len == 0) assert.panic("{s}: the call {f} has an empty name; capture the callee as @call.name in the language's zanity.scm", .{ self.work.facts.path, ctx.node.where() });
+    const by_method = ctx.receiver != null and contains(self.tables.storage_read_methods, name);
+    const by_builder = self.index.marks(ctx.node, self.v.storage_read);
+    const by_sql = ctx.receiver == null and contains(self.tables.sql_tags, name) and selects(ctx.node.text(self.source)[name.len..]);
+    if (!by_method and !by_builder and !by_sql) return;
+    const shown = if (by_method and ctx.callee != null) ctx.callee.?.text(self.source) else header(ctx.node.text(self.source));
+    _ = try self.report(ctx.node, "storage-read-in-test", try self.say("'{s}' reads the database directly, so the test checks the rows the code left rather than what its interface returns, and breaks when the schema changes but the behaviour doesn't.", .{shown}));
+}
+
+/// Whether a raw SQL template, from its opening quote, is a SELECT.
+fn selects(template: []const u8) bool {
+    if (template.len > 1 << 20) assert.panic("a SQL template of {d} bytes; templates come from one file, which is smaller", .{template.len});
+    const open = std.mem.indexOfAny(u8, template, "`\"'") orelse return false;
+    const query = std.mem.trimStart(u8, template[open + 1 ..], " \t\r\n(");
+    const keyword = "select";
+    if (query.len <= keyword.len) return false;
+    if (query.len > template.len) assert.panic("trimming the SQL template '{s}' made it longer", .{template});
+    return std.ascii.startsWithIgnoreCase(query, keyword) and std.ascii.isWhitespace(query[keyword.len]);
 }
 
 /// Whether a test double replaces something in place, as `patch` and `monkeypatch.setattr` do,

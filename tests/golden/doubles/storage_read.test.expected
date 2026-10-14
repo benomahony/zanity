@@ -1,0 +1,7 @@
+rules: storage-read-in-test
+exit: 0
+storage_read.test.ts:3:22: warning [storage-read-in-test]
+storage_read.test.ts:4:21: warning [storage-read-in-test]
+storage_read.test.ts:5:24: warning [storage-read-in-test]
+storage_read.test.ts:6:37: warning [storage-read-in-test]
+storage_read.test.ts:14:10: warning [storage-read-in-test]

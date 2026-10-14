@@ -28,6 +28,20 @@ pub const Tables = struct {
     sleeps: []const []const u8 = &.{},
     nondeterministic: []const []const u8 = &.{},
     test_doubles: []const []const u8 = &.{},
+    /// Test doubles whose first argument names a whole module to replace, such as `vi.mock("./db")`.
+    module_doubles: []const []const u8 = &.{},
+    /// How a module path starts when it names the project's own code rather than a package, such
+    /// as `./` or a `@/` alias; a module double of anything else replaces a dependency.
+    own_module_prefixes: []const []const u8 = &.{},
+    /// Methods, on any receiver, that give a test double its behaviour as a function, such as
+    /// `mockImplementation` or sinon's `callsFake`.
+    double_behaviour_methods: []const []const u8 = &.{},
+    /// Methods, on any receiver, that read rows from a database through an ORM, such as Drizzle's
+    /// and Prisma's `findMany`.
+    storage_read_methods: []const []const u8 = &.{},
+    /// Tags for a raw SQL template, such as `sql`; a test that runs a SELECT through one reads the
+    /// database directly.
+    sql_tags: []const []const u8 = &.{},
     /// Calls that check how a test double was called, such as Mockito's `verify(mock)`.
     verification_calls: []const []const u8 = &.{},
     /// Methods, on any receiver, that check how a test double was called, such as
