@@ -90,7 +90,7 @@ zanity init
 
 It writes every setting with notes on what it does, excludes the vendored and fixture directories it finds, such as `vendor/` and `tests/fixtures/`, and ends with a `[rules]` table that turns on `select = ["all"]` and lists every rule with its severity and how to fix what it finds, ready to uncomment into `disable`. Delete or change what you don't need; `--force` replaces an existing file. `zanity init --minimal` writes the same settings with none of the notes or the rule list.
 
-Once `zanity check .` is clean, keep it that way with `--strict`, which fails on warnings as well as errors. That is what a pre-commit hook or CI should run.
+Once `zanity check .` is clean, keep it that way with `--fail-on warning`, which fails on warnings as well as errors. That is what a pre-commit hook or CI should run.
 
 When the deterministic checks pass, try `--infer` to have a language model judge your error messages too; see [Judging error messages with `--infer`](#judging-error-messages-with---infer).
 
@@ -103,7 +103,7 @@ repos:
   - repo: https://github.com/benomahony/zanity
     rev: v0.1.0  # the release you installed
     hooks:
-      - id: zanity         # zanity check . --strict
+      - id: zanity         # zanity check . --fail-on warning
       # - id: zanity-fix   # applies fixes first, then fails on anything left
 ```
 
@@ -112,7 +112,7 @@ The hook checks the whole repository rather than only the staged files, because 
 Without pre-commit, a plain git hook does the same:
 
 ```sh
-printf '#!/bin/sh\nexec zanity check . --strict\n' > .git/hooks/pre-commit
+printf '#!/bin/sh\nexec zanity check . --fail-on warning\n' > .git/hooks/pre-commit
 chmod +x .git/hooks/pre-commit
 ```
 
@@ -126,8 +126,8 @@ jobs:
       - uses: actions/checkout@v5
       - uses: benomahony/zanity@v0.1.0
         # with:
-        #   version: 0.1.0               # default: the latest release
-        #   args: check src --strict     # default: check . --strict
+        #   version: 0.1.0                   # default: the latest release
+        #   args: check src --fail-on warning  # default: check . --fail-on warning
 ```
 
 The action downloads the release binary for the runner and fails the job on any finding. To include `--infer`, store your TypeSafe key as a repository secret and pass it in:
@@ -135,7 +135,7 @@ The action downloads the release binary for the runner and fails the job on any 
 ```yaml
       - uses: benomahony/zanity@v0.1.0
         with:
-          args: check . --strict --infer
+          args: check . --fail-on warning --infer
         env:
           TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
 ```
@@ -148,7 +148,7 @@ zanity check                                  # check the current directory
 zanity check src tests                        # check some paths
 zanity check . --rules recursion,long-function   # run only these rules
 zanity check . --rules all                    # every rule, including those off by default
-zanity check . --strict                       # exit 1 on warnings too
+zanity check . --fail-on warning              # exit 1 on warnings too
 zanity check . --fix                          # apply the fixes zanity can make, then report the rest
 zanity check . --json                         # a JSON array, one object per finding
 zanity check . --plain                        # stable key=value lines for scripts
@@ -158,7 +158,7 @@ zanity lsp                                    # serve findings and fixes to an e
 zanity help check                             # every option
 ```
 
-`check` exits 0 when nothing fired, 1 when an error-level rule fired (or any rule, with `--strict`), and 2 on a usage error such as a mistake in `zanity.toml`. Findings go to stdout and the one-line summary to stderr, so output can be piped cleanly. On a terminal the report reads like a coverage report: the first ten findings, errors first, one line each, then a table of the files with the most errors and warnings and the rule that fired most in each, the rest of the files on one row, and a total. How to fix each finding is in `--agent`, `--plain` and `--json`; when zanity can make the fix itself, `--json` and `--plain` also give the edit, as `edit_start` and `edit_end` (byte offsets into the file) and `edit_text`, its replacement. A progress line shows how far a long run has got; `-q` hides it, and it never appears in piped output. `--no-color` or `NO_COLOR` turns colour off.
+`check` exits 0 when nothing fired, 1 when an error-level rule fired (or any rule, with `--fail-on warning`), and 2 on a usage error such as a mistake in `zanity.toml`. Findings go to stdout and the one-line summary to stderr, so output can be piped cleanly. On a terminal the report reads like a coverage report: the first ten findings, errors first, one line each, then a table of the files with the most errors and warnings and the rule that fired most in each, the rest of the files on one row, and a total. How to fix each finding is in `--agent`, `--plain` and `--json`; when zanity can make the fix itself, `--json` and `--plain` also give the edit, as `edit_start` and `edit_end` (byte offsets into the file) and `edit_text`, its replacement. A progress line shows how far a long run has got; `-q` hides it, and it never appears in piped output. `--no-color` or `NO_COLOR` turns colour off.
 
 `--agent` writes for a coding agent, in about 1% of the bytes of the terminal report once a run has more than a handful of findings: the totals and the command to run next, then the first findings in rule order, errors first, each as `line:column` and its own fix (or its message, without the explanation every finding of its rule shares), with `[--fix]` on those zanity can fix itself. `--limit N` sets how many findings it shows in all (10 by default, 0 for every one); the rules past them are listed by name and count, to look at with `--rules <name>`. It is on by default under Claude Code (when `CLAUDECODE` is set) unless `--json` or `--plain` is given; `ZANITY_AGENT=1` turns it on for any other agent.
 

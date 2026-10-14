@@ -357,7 +357,7 @@ pub fn renderAgent(out: *std.Io.Writer, report: AgentReport) !void {
         const scope: CheckedPaths = .{ .paths = paths };
         try out.print("; {d} [--fix].\nNext: `zanity check {f} --fix`, fix the rest", .{ fixable, scope });
     } else try out.writeAll(".\nNext: fix these");
-    try out.writeAll(", rerun with --strict. Don't silence rules.\n");
+    try out.writeAll(", rerun with --fail-on warning. Don't silence rules.\n");
     const fired = Fired.initFired(findings);
     var budget = report.limit;
     var listed = false;

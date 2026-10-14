@@ -36,10 +36,13 @@ const CheckOptions = struct {
     rules: ?[]const u8 = null,
     fix: bool = false,
     infer: bool = false,
-    strict: bool = false,
+    @"fail-on": FailOn = .@"error",
     agent: bool = false,
     limit: u32 = 10,
 };
+
+/// The least severe finding that makes `check` exit 1.
+const FailOn = enum { @"error", warning };
 
 const InitOptions = struct {
     paths: []const []const u8,
@@ -95,14 +98,14 @@ const app: zcli.App = .{
     .description = "Fast, deterministic sanity checks for code written by people and agents.",
     .commands = &.{ zcli.command(CheckOptions, Row, .{
         .name = "check",
-        .description = "Check files and directories. Exits 1 when an error-level rule fires, or with --strict when any rule does.",
-        .examples = &.{ "zanity check .", "zanity check src tests --rules unbounded-loop,long-function", "zanity check . --json", "zanity check . --fix", "zanity check . --strict" },
+        .description = "Check files and directories. Exits 1 when an error-level rule fires, or with --fail-on warning when any rule does.",
+        .examples = &.{ "zanity check .", "zanity check src tests --rules unbounded-loop,long-function", "zanity check . --json", "zanity check . --fix", "zanity check . --fail-on warning" },
         .result_title = "Findings",
         .positional = .{ .name = "paths", .metavar = "PATH", .help = "Files or directories to check.", .default = &.{"."} },
         .options = &.{
             .{ .name = "rules", .metavar = "RULES", .help = "Comma-separated rules to run instead of the defaults.", .example = "unbounded-loop,long-function" },
             .{ .name = "fix", .help = "Apply the fixes zanity can make, then report what is left." },
-            .{ .name = "strict", .help = "Exit 1 on any finding, warnings included, as a pre-commit hook or CI should." },
+            .{ .name = "fail-on", .metavar = "SEVERITY", .help = "Exit 1 on findings this severe or worse: error, or warning as a pre-commit hook or CI should.", .example = "warning" },
             .{ .name = "agent", .help = "Print findings for a coding agent: totals and the next command first, then each finding with its fix. On by default when CLAUDECODE is set and neither --json nor --plain is given.", .env = "ZANITY_AGENT" },
             .{ .name = "limit", .metavar = "N", .help = "With --agent, show at most N findings in all, rules first to last, and list the other rules by name; 0 shows them all.", .example = "0" },
             .{ .name = "infer", .help = "Also ask a decision model what no deterministic check can decide, such as whether an error message misleads: TypeSafe's Jev, which needs TYPESAFE_API_KEY, or the System One server [infer] in zanity.toml names, such as a local Kev." },
@@ -257,7 +260,7 @@ fn runCheck(ctx: *zcli.Context, options: CheckOptions) ![]const Row {
         error.LimitExceeded => return ctx.fail(.usage, try ws.text.format("This run has more {s} than zanity is built to hold.", .{memory.exceeded}), "Check fewer files at once, or report it if the input is ordinary."),
         else => return e,
     };
-    if (counts.errors > 0 or (options.strict and counts.warnings > 0)) ctx.status = .failure;
+    if (counts.errors > 0 or (options.@"fail-on" == .warning and counts.warnings > 0)) ctx.status = .failure;
     if (ws.rows.len != counts.errors + counts.warnings) assert.panic("{d} output rows for {d} errors and {d} warnings; runCheck() must add one row per error or warning", .{ ws.rows.len, counts.errors, counts.warnings });
     if (agent) return reportToAgent(ctx, ws, options, counts);
     if (ctx.format != .human) try report.summarise(console(ctx, ctx.runtime.err), counts);

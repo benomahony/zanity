@@ -7,7 +7,7 @@
 - id: zanity
   name: zanity
   description: Check the repository with the rules zanity.toml chooses; any finding, warnings included, fails the commit.
-  entry: zanity check . --strict
+  entry: zanity check . --fail-on warning
   language: system
   pass_filenames: false
   files: (\.(py|pyi|zig|go|ts|mts|cts|rs|java)|(^|/)zanity\.toml)$
@@ -15,7 +15,7 @@
 - id: zanity-fix
   name: zanity (fix)
   description: Apply the fixes zanity can make, then fail on anything left, so you can review both before committing.
-  entry: zanity check . --strict --fix
+  entry: zanity check . --fail-on warning --fix
   language: system
   pass_filenames: false
   files: (\.(py|pyi|zig|go|ts|mts|cts|rs|java)|(^|/)zanity\.toml)$

@@ -401,7 +401,7 @@ test "zanity init --minimal writes only the settings, which check reads" {
     try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, checked.term);
 }
 
-test "--strict fails a run with only warnings, which a plain run passes" {
+test "--fail-on warning fails a run with only warnings, which a plain run passes" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
     const arena = arena_state.allocator();
@@ -411,8 +411,8 @@ test "--strict fails a run with only warnings, which a plain run passes" {
     const plain = try std.process.run(arena, io, .{ .argv = &.{ zanity, "check", "-q", "--rules", "unbounded-loop", fixture } });
     try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, plain.term);
     try std.testing.expectEqualStrings("zanity: 0 errors and 1 warning in 1 of 1 file\n", plain.stderr);
-    const strict = try std.process.run(arena, io, .{ .argv = &.{ zanity, "check", "-q", "--strict", "--rules", "unbounded-loop", fixture } });
-    try std.testing.expectEqual(std.process.Child.Term{ .exited = 1 }, strict.term);
+    const failing = try std.process.run(arena, io, .{ .argv = &.{ zanity, "check", "-q", "--fail-on", "warning", "--rules", "unbounded-loop", fixture } });
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 1 }, failing.term);
 }
 
 /// `run`, when zanity exited and reported something; otherwise zanity's output, printed, and a test

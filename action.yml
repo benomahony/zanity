@@ -10,7 +10,7 @@ inputs:
     default: latest
   args:
     description: The zanity command line to run.
-    default: check . --strict
+    default: check . --fail-on warning
 
 runs:
   using: composite
