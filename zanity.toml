@@ -81,7 +81,7 @@ disable = [
   # "long-test",                       # warning, on by default. Split it into tests that each check one behaviour, or move the setup into a helper.
   # "long-function",                   # warning, on by default. Move a self-contained step into its own function.
   # "assertion-density",               # error, on with --strict. Assert conditions a bug could actually break: what it needs from its inputs and what it guarantees about its result.
-  # "assertion-message",               # warning, on with --strict. Add a message stating what must be true.
+  # "assertion-message",               # warning, on with --strict. Add a message saying what must be true and why, so whoever fixes a failure can tell whether the code or the expectation is wrong.
   # "dynamic-allocation",              # error, on with --strict. Allocate what it needs up front in an init function and reuse it.
   # "assertion-side-effect",           # error, on by default. Do the work before the assertion and assert on its result.
   # "long-parameter-list",             # warning, on by default. Group related parameters into a struct or split the function.

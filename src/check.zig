@@ -909,7 +909,7 @@ pub const File = struct {
     pub fn closeAssertion(self: *File, ctx: Context) !void {
         if (ctx.family != .assertion) assert.panic("{s}: closing {f} as an assertion, but it is a {t}; close() must dispatch each construct by its family, so check its switch", .{ self.work.facts.path, ctx.node.where(), ctx.family });
         if (ctx.message == null) {
-            if (try self.report(ctx.node, "assertion-message", try self.say("This assertion has no message, so when it fails nobody will know which invariant broke or with what values.", .{}))) {
+            if (try self.report(ctx.node, "assertion-message", try self.say("This assertion has no message, so when it fails nobody will know which invariant broke, why it must hold, or with what values.", .{}))) {
                 if (ctx.condition) |condition| try rewrite.explainAssertion(self, ctx.node, condition);
             }
         }
