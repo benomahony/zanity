@@ -357,7 +357,7 @@ pub fn renderAgent(out: *std.Io.Writer, report: AgentReport) !void {
         const scope: CheckedPaths = .{ .paths = paths };
         try out.print("; {d} [--fix].\nNext: `zanity check {f} --fix`, fix the rest", .{ fixable, scope });
     } else try out.writeAll(".\nNext: fix these");
-    try out.writeAll(", rerun with --fail-on warning. Don't silence rules.\n");
+    try out.writeAll(if (report.watching) "; saving a file checks again. Don't silence rules.\n" else ", rerun with --fail-on warning. Don't silence rules.\n");
     const fired = Fired.initFired(findings);
     var budget = report.limit;
     var listed = false;
@@ -404,7 +404,14 @@ fn brief(message: []const u8) []const u8 {
 
 /// What renderAgent() reports: the run's sorted findings and their counts, the paths it checked,
 /// and how many findings to show in all, 0 for every one; rules past that are listed by name.
-pub const AgentReport = struct { findings: []const Finding, counts: Counts, paths: []const []const u8, limit: u32 };
+pub const AgentReport = struct {
+    findings: []const Finding,
+    counts: Counts,
+    paths: []const []const u8,
+    limit: u32,
+    /// Whether `zanity check --watch` reruns this check when a file is saved.
+    watching: bool = false,
+};
 
 /// A rule that fired: its index in rules.all, its findings, and the files they are in.
 const RuleTally = struct { index: usize, total: u32, files: u32 };

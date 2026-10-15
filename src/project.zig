@@ -29,6 +29,19 @@ pub const patterns = [_][]const u8{
 /// Hidden directories that hold project files, which the walk otherwise skips.
 pub const hidden_dirs = [_][]const u8{ ".github", ".circleci", ".cargo" };
 
+/// Directories of dependencies and build output, which the walk never enters.
+const skipped_dirs = [_][]const u8{ "node_modules", "zig-out", "__pycache__", "target", "dist", "build", "venv" };
+
+/// Whether the walk leaves out a directory called `name`: dependencies, build output, and hidden
+/// directories other than those holding project files.
+pub fn skippedDir(name: []const u8) bool {
+    if (name.len == 0) assert.panic("asked whether a directory with an empty name is skipped; skip empty names before calling skippedDir()", .{});
+    if (std.mem.indexOfAny(u8, name, "/\\") != null) assert.panic("'{s}' is a path, but skippedDir() takes one directory name; pass the directory's base name", .{name});
+    if (name[0] == '.') return !strings.contains(&hidden_dirs, name);
+    for (skipped_dirs) |s| if (std.mem.eql(u8, s, name)) return true;
+    return false;
+}
+
 /// Setting text that lets a check pass when it should fail, lowercased, and what it does.
 const relaxations = [_]struct { []const u8, []const u8 }{
     .{ "continue-on-error: true", "lets this CI step fail without failing the build" },

@@ -32,14 +32,6 @@ pub const Ignore = struct {
         return .{ .patterns = self.patterns.len, .bytes = self.text.used };
     }
 
-    /// Forgets the patterns loaded since `to` was taken, such as the .gitignore files one walk read.
-    pub fn rewind(self: *Ignore, to: Mark) void {
-        if (to.patterns > self.patterns.len or to.bytes > self.text.used) assert.panic("rewinding {d} ignore patterns in {d} bytes forward to {d} in {d}; pass a mark() taken earlier", .{ self.patterns.len, self.text.used, to.patterns, to.bytes });
-        self.patterns.truncate(to.patterns);
-        self.text.rewind(to.bytes);
-        if (self.patterns.len != to.patterns) assert.panic("rewound to {d} ignore patterns but {d} remain", .{ to.patterns, self.patterns.len });
-    }
-
     pub fn initIgnore(gpa: Allocator, limits: memory.Limits) Allocator.Error!Ignore {
         if (limits.ignore_patterns == 0) assert.panic("memory.Limits.ignore_patterns is 0, so no .gitignore line could be honoured; set it above 0", .{});
         if (limits.ignore_bytes == 0) assert.panic("memory.Limits.ignore_bytes is 0, so no .gitignore file could be read; set it above 0", .{});

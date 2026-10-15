@@ -30,8 +30,6 @@ const Telemetry = @import("telemetry.zig").Telemetry;
 const Facts = @import("facts.zig").Facts;
 const Finding = @import("facts.zig").Finding;
 
-const skipped_dirs = [_][]const u8{ "node_modules", "zig-out", "__pycache__", "target", "dist", "build", "venv" };
-
 const CheckOptions = struct {
     paths: []const []const u8,
     rules: ?[]const u8 = null,
@@ -159,6 +157,8 @@ const Workspace = struct {
     files: memory.Bounded([]const u8),
     /// Build, lint, type-check and CI configuration, checked as text.
     project_files: memory.Bounded([]const u8),
+    /// The absolute path of each directory the walk entered, which --watch watches on Linux.
+    dirs: memory.Bounded([]const u8),
     /// The order checkFiles() hands files to its workers in.
     order: []batch.Sized,
     rows: memory.Bounded(Row),
@@ -167,7 +167,7 @@ const Workspace = struct {
     fixed: []u8,
     analysis: []u8,
     ignore: Ignore,
-    environ: ?*const std.process.Environ.Map = null,
+    environ: ?*std.process.Environ.Map = null,
     /// The command line after the program's name, which --watch reruns.
     args: []const []const u8 = &.{},
     /// Whether the command line chose --json or --plain, which turns off agent output.
@@ -192,6 +192,7 @@ const Workspace = struct {
             .findings = try .initBounded(gpa, limits.findings, "findings across all files"),
             .files = try .initBounded(gpa, limits.files, "files"),
             .project_files = try .initBounded(gpa, 1024, "project files"),
+            .dirs = try .initBounded(gpa, limits.files, "directories"),
             .order = try memory.reserve(gpa, batch.Sized, limits.files),
             .rows = try .initBounded(gpa, limits.findings, "findings across all files"),
             .table = try .initTableScratch(gpa, limits.files),
@@ -249,7 +250,7 @@ fn runCheck(ctx: *zcli.Context, options: CheckOptions) ![]const Row {
     const ws = workspaceOf(ctx);
     const agent = try speaksToAgent(ctx, ws, options.agent);
     const settings = try loadSettings(ctx, ws);
-    if (options.watch) return watchCheck(ctx, ws, options.paths, settings.dir);
+    if (options.watch) return watchCheck(ctx, ws, options.paths);
     ws.settings = &settings;
     defer ws.settings = null;
     var selected = if (options.rules) |list| try parseRules(ctx, ws, list) else settings.selection(options.strict);
@@ -275,64 +276,84 @@ fn runCheck(ctx: *zcli.Context, options: CheckOptions) ![]const Row {
 
 /// Whether to write for a coding agent: when --agent asks, or when one is running zanity and the
 /// command line chose no other format.
-/// Polls run at least a quarter of a second apart, so this many is decades of watching.
-const max_watch_polls = 1 << 40;
+/// Each change starts one check, so this many is far more than any session makes.
+const max_watch_runs = 1 << 40;
 /// The most arguments a watched command line may have, which the rerun copies.
 const max_watch_args = 256;
 
-/// Runs `zanity check` without --watch, then again each time a file it checks under `paths`, or
-/// the zanity.toml in `config_dir`, changes. Stops only when Ctrl-C ends the process.
-fn watchCheck(ctx: *zcli.Context, ws: *Workspace, paths: []const []const u8, config_dir: []const u8) ![]const Row {
-    if (paths.len == 0) assert.panic("watching no paths; zcli supplies '.' when none are given", .{});
-    if (ws.args.len >= max_watch_args) return ctx.fail(.usage, try ws.text.format("--watch takes at most {d} arguments; this command line has {d}.", .{ max_watch_args - 1, ws.args.len }), "Name a directory instead of each file in it.");
-    var exe_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const exe = exe_buffer[0 .. std.process.executablePath(ws.io, &exe_buffer) catch |e| {
+/// The command line, and the environment, each rerun of a watched check is started with.
+const Rerun = struct {
+    exe: [std.fs.max_path_bytes]u8,
+    exe_len: usize,
+    argv_buffer: [max_watch_args][]const u8,
+    argv: []const []const u8,
+    environ: *std.process.Environ.Map,
+};
+
+/// Finds this zanity, and gives its reruns the command line without --watch and an environment
+/// that says they are watched, so their --agent output says saving checks again.
+fn initRerun(rerun: *Rerun, ctx: *zcli.Context, ws: *Workspace) !void {
+    if (ws.args.len + 2 > max_watch_args) return ctx.fail(.usage, try ws.text.format("--watch takes at most {d} arguments; this command line has {d}.", .{ max_watch_args - 2, ws.args.len }), "Name a directory instead of each file in it.");
+    rerun.exe_len = std.process.executablePath(ws.io, &rerun.exe) catch |e| {
         return ctx.fail(.io, try ws.text.format("Could not find where this zanity is installed, to rerun its checks: {t}.", .{e}), "Reinstall it with install.sh, as the README describes.");
-    }];
-    var argv_buffer: [max_watch_args][]const u8 = undefined;
-    const argv = watch.rerunArgs(&argv_buffer, exe, ws.args);
-    if (argv.len > ws.args.len + 1) assert.panic("the rerun has {d} arguments from {d}; rerunArgs() only drops --watch", .{ argv.len, ws.args.len });
-    const settings_file = if (config_dir.len > 0) try ws.text.format("{s}/{s}", .{ config_dir, config.file_name }) else "";
+    };
+    if (rerun.exe_len == 0 or rerun.exe_len > rerun.exe.len) assert.panic("found this zanity at a path of {d} bytes in room for {d}; executablePath() returns a real path that fits", .{ rerun.exe_len, rerun.exe.len });
+    rerun.argv = watch.rerunArgs(&rerun.argv_buffer, rerun.exe[0..rerun.exe_len], ws.args);
+    if (rerun.argv.len > ws.args.len + 2) assert.panic("the rerun has {d} arguments from {d}; rerunArgs() drops --watch and adds at most --agent", .{ rerun.argv.len, ws.args.len });
+    rerun.environ = ws.environ orelse assert.panic("zanity check --watch ran without the environment; main() passes it to the workspace", .{});
+    try rerun.environ.put(watch.env_var, "1");
+}
+
+/// Runs `zanity check` without --watch, then again each time the operating system reports that a
+/// file it checks under `paths`, or zanity.toml, changed. Stops only when Ctrl-C ends the process.
+fn watchCheck(ctx: *zcli.Context, ws: *Workspace, paths: []const []const u8) ![]const Row {
+    if (paths.len == 0) assert.panic("watching no paths; zcli supplies '.' when none are given", .{});
+    if (paths.len > ws.args.len) assert.panic("watching {d} paths from a command line of {d} arguments; each path is an argument", .{ paths.len, ws.args.len });
+    var rerun: Rerun = undefined;
+    try initRerun(&rerun, ctx, ws);
+    var watcher: watch.Watcher = undefined;
+    var filter: watch.ChangeFilter = undefined;
+    var roots: [max_watch_args][]const u8 = undefined;
+    var trees: [max_watch_args][]const u8 = undefined;
+    try startWatching(ctx, ws, paths, .{ .watcher = &watcher, .filter = &filter, .roots = roots[0..paths.len], .trees = trees[0..paths.len] });
     const terminal = Io.File.stdout().isTty(ws.io) catch false;
     const out = ctx.runtime.out;
     const err = ctx.runtime.err;
-    var seen: ?u64 = null;
-    for (0..max_watch_polls) |_| {
-        const now = try snapshot(ctx, ws, paths, settings_file);
-        if (seen == now) {
-            try ws.io.sleep(watch.poll_interval, .awake);
-            continue;
-        }
-        seen = now;
+    for (0..max_watch_runs) |_| {
         if (terminal) try out.writer.writeAll(watch.clear_screen);
         try out.writer.flush();
-        var child = std.process.spawn(ws.io, .{ .argv = argv }) catch |e| {
-            return ctx.fail(.io, try ws.text.format("Could not rerun {s}: {t}.", .{ exe, e }), "Reinstall it with install.sh, as the README describes.");
+        var child = std.process.spawn(ws.io, .{ .argv = rerun.argv, .environ_map = rerun.environ }) catch |e| {
+            return ctx.fail(.io, try ws.text.format("Could not rerun {s}: {t}.", .{ rerun.argv[0], e }), "Reinstall it with install.sh, as the README describes.");
         };
         _ = try child.wait(ws.io);
-        if (!ctx.quiet) try err.writer.print("zanity: watching {d} {s} for changes; Ctrl-C stops.\n", .{ ws.checked, if (ws.checked == 1) "file" else "files" });
+        if (!ctx.quiet) try err.writer.writeAll("zanity: watching for changes; save a file to check again, Ctrl-C to stop.\n");
         try err.writer.flush();
+        watcher.wait() catch |e| return ctx.fail(.io, try ws.text.format("Lost track of changes to the files: {t}.", .{e}), "Run zanity check --watch again.");
     }
-    assert.panic("watched for {d} polls without being stopped; at four a second that is decades", .{max_watch_polls});
+    assert.panic("ran {d} checks without being stopped; no session saves that often", .{max_watch_runs});
 }
 
-/// A fingerprint of the files `check` would read under `paths`, and `settings_file` when there
-/// is one. It leaves the workspace's file lists, text and ignore patterns as it found them.
-fn snapshot(ctx: *zcli.Context, ws: *Workspace, paths: []const []const u8, settings_file: []const u8) !u64 {
-    if (ws.files.len != 0) assert.panic("taking a snapshot over {d} files left from before; snapshot() must clear what it collects", .{ws.files.len});
-    if (paths.len == 0) assert.panic("taking a snapshot of no paths; zcli supplies '.' when none are given", .{});
-    const text_mark = ws.text.used;
-    const ignore_mark = ws.ignore.mark();
-    defer {
-        ws.files.clear();
-        ws.project_files.clear();
-        ws.ignore.rewind(ignore_mark);
-        ws.text.rewind(text_mark);
-    }
+/// Where startWatching() puts the watcher and the absolute paths it watches.
+const WatchSlots = struct { watcher: *watch.Watcher, filter: *watch.ChangeFilter, roots: [][]const u8, trees: [][]const u8 };
+
+/// Walks `paths` once, to load the ignore files and find every directory, then starts the
+/// operating system's watch on them.
+fn startWatching(ctx: *zcli.Context, ws: *Workspace, paths: []const []const u8, slots: WatchSlots) !void {
+    if (slots.roots.len != paths.len or slots.trees.len != paths.len) assert.panic("room for {d} roots and {d} trees for {d} paths; give each path one of each", .{ slots.roots.len, slots.trees.len, paths.len });
     for (paths) |path| try collect(ctx, ws, path);
-    ws.checked = ws.files.len + ws.project_files.len;
-    const settings: []const []const u8 = if (settings_file.len > 0) &.{settings_file} else &.{};
-    return watch.fingerprint(ws.io, &.{ ws.files.items(), ws.project_files.items(), settings });
+    for (paths, slots.roots, slots.trees) |path, *root, *tree| {
+        var buffer: [std.fs.max_path_bytes]u8 = undefined;
+        root.* = try ws.text.copy(buffer[0..try Io.Dir.cwd().realPathFile(ws.io, path, &buffer)]);
+        const stat = try Io.Dir.cwd().statFile(ws.io, path, .{});
+        tree.* = if (stat.kind == .directory) root.* else std.fs.path.dirname(root.*) orelse root.*;
+        if (stat.kind != .directory) try ws.dirs.add(tree.*);
+    }
+    if (ws.dirs.len < paths.len) assert.panic("the walk found {d} directories for {d} paths; collect() records each directory it starts from", .{ ws.dirs.len, paths.len });
+    slots.filter.* = .{ .roots = slots.roots, .ignore = &ws.ignore };
+    slots.watcher.initWatcher(std.heap.page_allocator, ws.io, .{ .scope = slots.filter, .trees = slots.trees, .directories = ws.dirs.items() }) catch |e| switch (e) {
+        error.TooManyWatches => return ctx.fail(.io, try ws.text.format("The system ran out of watches for the {d} directories here.", .{ws.dirs.len}), "Raise fs.inotify.max_user_watches, or watch fewer paths."),
+        else => return ctx.fail(.io, try ws.text.format("This system can't report file changes to zanity: {t}.", .{e}), "Run zanity check without --watch, or report it with your operating system's name."),
+    };
 }
 
 /// Reads zanity.toml, opens the cache, and applies the file's excludes to the walk.
@@ -364,7 +385,7 @@ fn reportToAgent(ctx: *zcli.Context, ws: *Workspace, options: CheckOptions, coun
     if (paths.len == 0) assert.panic("reporting to an agent with no checked paths to name; zcli supplies '.' when none are given", .{});
     if (ws.findings.len != counts.errors + counts.warnings) assert.panic("{d} findings for {d} errors and {d} warnings; count the findings being reported", .{ ws.findings.len, counts.errors, counts.warnings });
     const out = ctx.runtime.out;
-    try report.renderAgent(out.writer, .{ .findings = ws.findings.items(), .counts = counts, .paths = paths, .limit = options.limit });
+    try report.renderAgent(out.writer, .{ .findings = ws.findings.items(), .counts = counts, .paths = paths, .limit = options.limit, .watching = watching(ws) });
     if (ws.cache_hits > 0) {
         const err = ctx.runtime.err;
         try err.writer.print("zanity: reused cached deterministic analysis for {d} of {d} source files; query {s}'s source_analyses table for the cached facts and findings.\n", .{ ws.cache_hits, ws.checked, ws.source_cache.?.path });
@@ -374,6 +395,15 @@ fn reportToAgent(ctx: *zcli.Context, ws: *Workspace, options: CheckOptions, coun
 }
 
 /// Whether a coding agent is running zanity, by the variable it sets in its commands' environment.
+/// Whether this check is a rerun of `zanity check --watch`, which saving a file starts again.
+fn watching(ws: *const Workspace) bool {
+    const environ = ws.environ orelse return false;
+    const value = environ.get(watch.env_var) orelse return false;
+    if (value.len > 1) assert.panic("{s} is '{s}'; zanity check --watch sets it to 1, so it was set by hand", .{ watch.env_var, value });
+    if (ws.args.len == 0) assert.panic("a rerun of zanity check --watch with no arguments; the watcher passes check and its options", .{});
+    return std.mem.eql(u8, value, "1");
+}
+
 fn agentRunning(ws: *const Workspace) bool {
     if (ws.chose_format) assert.panic("asked whether an agent runs zanity after the command line chose a format; speaksToAgent() checks chose_format first", .{});
     const environ = ws.environ orelse return false;
@@ -932,6 +962,7 @@ fn collect(ctx: *zcli.Context, ws: *Workspace, path: []const u8) !void {
     const root = root_buffer[0..try dir.realPath(ws.io, &root_buffer)];
     try ws.ignore.loadAncestors(ws.io, root);
     try ws.ignore.loadFile(ws.io, root, ".gitignore");
+    try ws.dirs.add(try ws.text.copy(root));
     var walker = try dir.walkSelectively(ctx.allocator);
     defer walker.deinit();
     var absolute_buffer: [std.fs.max_path_bytes]u8 = undefined;
@@ -939,8 +970,9 @@ fn collect(ctx: *zcli.Context, ws: *Workspace, path: []const u8) !void {
         const entry = try walker.next(ws.io) orelse break;
         const absolute = std.fmt.bufPrint(&absolute_buffer, "{s}/{s}", .{ root, entry.path }) catch continue;
         switch (entry.kind) {
-            .directory => if (!skipped(entry.basename) and !ws.ignore.ignored(absolute, .directory)) {
+            .directory => if (!project.skippedDir(entry.basename) and !ws.ignore.ignored(absolute, .directory)) {
                 try ws.ignore.loadFile(ws.io, absolute, ".gitignore");
+                try ws.dirs.add(try ws.text.copy(absolute));
                 try walker.enter(ws.io, entry);
             },
             .file => if (!ws.ignore.ignored(absolute, .file)) try addFile(ws, path, entry),
@@ -964,14 +996,6 @@ fn addFile(ws: *Workspace, path: []const u8, entry: Io.Dir.Walker.Entry) !void {
         try ws.text.format("{s}{s}{s}", .{ path, if (std.mem.endsWith(u8, path, "/")) "" else "/", entry.path });
     if (joined.len < entry.path.len) assert.panic("joined '{s}' under '{s}' into the shorter '{s}'; addFile() must keep the whole path", .{ entry.path, path, joined });
     if (source) try ws.files.add(joined) else try ws.project_files.add(joined);
-}
-
-fn skipped(name: []const u8) bool {
-    if (name.len == 0) assert.panic("asked whether a directory with an empty name is skipped; skip empty names before calling skipped()", .{});
-    if (std.mem.indexOfScalar(u8, name, '/') != null) assert.panic("'{s}' is a path, but skipped() takes one directory name; pass the directory's base name", .{name});
-    if (name[0] == '.') return !strings.contains(&project.hidden_dirs, name);
-    for (skipped_dirs) |s| if (std.mem.eql(u8, s, name)) return true;
-    return false;
 }
 
 test "a fix is written only over the bytes it was made against" {
