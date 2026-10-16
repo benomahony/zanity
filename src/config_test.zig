@@ -122,10 +122,8 @@ test "select 'strict' runs the defaults and the strict rules" {
 test "mistakes in zanity.toml name the line and what to write" {
     try expectProblem("rules = [\"recursions\"]\n", "zanity.toml:1: 'recursions' isn't a rule; the rules are listed in the README, 'all' names every rule, 'strict' the defaults and the strict rules, and 'zanity check --rules' takes the same names.");
     try expectProblem("\ndisabled = []\n", "zanity.toml:2: 'disabled' isn't a setting; the settings are exclude and, under [rules], select and disable, and under [infer], url, model, api_key_env, concurrency and threshold.");
-    try expectProblem("[inference]\n", "zanity.toml:1: '[inference]' isn't a table zanity knows; the tables are [rules], [infer], [paths.\"<pattern>\"], [vocabulary], [domains.<name>] and [contexts.<name>].");
-    try expectProblem("[contexts]\n", "zanity.toml:1: '[contexts]' needs a name, such as [contexts.billing].");
-    try expectProblem("[vocabulary.words]\n", "zanity.toml:1: '[vocabulary.words]' isn't a table zanity knows; the only one inside [vocabulary] is synonyms.");
-    try expectProblem("[contexts.billing]\ninclude = [\"\"]\n", "zanity.toml:2: an include pattern of [billing] is empty; name the files it covers.");
+    try expectProblem("[inference]\n", "zanity.toml:1: '[inference]' isn't a table zanity knows; the tables are [rules], [infer] and [paths.\"<pattern>\"].");
+    try expectProblem("[contexts.billing]\n", "zanity.toml:1: '[contexts]' has moved to ddd.yaml, where each domain or context lists its paths and terms; see the README.");
     try expectProblem("[paths]\n", "zanity.toml:1: '[paths]' needs a pattern for the files it covers, such as [paths.\"tests/**\"].");
     try expectProblem("[paths.\"\"]\n", "zanity.toml:1: a [paths] pattern is empty; name the files it covers, such as \"tests/**\".");
     try expectProblem("[paths.\"tests/\"]\nrules = [\"recursion\"]\n", "zanity.toml:2: 'rules' isn't a [paths] setting; the only one is disable.");
@@ -165,33 +163,4 @@ test "a [paths] section turns rules off for the files its pattern matches" {
     try std.testing.expect(!c.disabledAt("tests/unit/test_login.py", "network-in-test"));
     try std.testing.expect(c.disabledAt("deep/down/orders_integration.py", "database-in-test"));
     try std.testing.expect(!c.selection(false).enabled("name-drift"));
-}
-
-test "a zanity.toml's vocabulary bans words, maps aliases and scopes them to contexts" {
-    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena_state.deinit();
-    const c = try parsed(arena_state.allocator(),
-        \\[vocabulary]
-        \\forbidden = ["util"]
-        \\
-        \\[vocabulary.synonyms]
-        \\customer = ["client", "user"]
-        \\
-        \\[contexts.billing]
-        \\include = ["src/billing/**"]
-        \\forbidden = ["discount"]
-        \\
-        \\[contexts.billing.synonyms]
-        \\invoice = ["bill"]
-        \\
-    );
-    const terms = c.vocabulary();
-    try std.testing.expectEqual(@as(usize, 5), terms.len);
-    try std.testing.expectEqualStrings("util", terms[0].word);
-    try std.testing.expectEqualStrings("", terms[0].canonical);
-    try std.testing.expectEqualStrings("customer", terms[2].canonical);
-    try std.testing.expectEqual(@as(u8, 1), terms[4].scope);
-    try std.testing.expectEqual(@as(usize, 1), c.scopes_len);
-    try std.testing.expectEqualStrings("billing", c.scopes[0].name);
-    try std.testing.expect(c.scopes[0].context);
 }

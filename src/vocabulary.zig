@@ -1,4 +1,4 @@
-//! The project's own words, from zanity.toml: names that use a banned word or an alias of the
+//! The project's own words, from ddd.yaml: names that use a banned word or an alias of the
 //! word the project settled on, tests filed in a different domain from the code they test, and
 //! vocabularies that contradict themselves.
 const std = @import("std");
@@ -6,6 +6,7 @@ const assert = @import("assert.zig");
 const memory = @import("memory.zig");
 const rules = @import("rules.zig");
 const config_module = @import("config.zig");
+const ddd = @import("ddd.zig");
 const naming = @import("naming.zig");
 const facts_module = @import("facts.zig");
 const Config = config_module.Config;
@@ -22,7 +23,7 @@ const max_words = 16;
 /// here can tell bounded contexts apart.
 pub fn assignScopes(anchor: Anchor, facts: *Facts) void {
     const settings = anchor.config;
-    if (settings.dir.len == 0) assert.panic("assigning scopes with no zanity.toml; anchorOf() returns null without one", .{});
+    if (settings.dir.len == 0) assert.panic("assigning scopes with no zanity.toml or ddd.yaml; anchorOf() returns null without one", .{});
     const scopes = settings.domainsAndContexts();
     if (scopes.len == 0) return;
     var buffer: [std.fs.max_path_bytes]u8 = undefined;
@@ -52,7 +53,7 @@ pub fn checkVocabulary(anchor: Anchor, facts: *Facts, enabled: rules.Set, findin
 /// How strongly `term` applies to the definition: 0 when it doesn't, 1 for the whole project,
 /// 2 for its domain and 3 for its context, so the most specific word wins.
 fn reach(settings: *const Config, term: Term, scope: []const u8) u8 {
-    if (term.word.len == 0) assert.panic("weighing an empty vocabulary word; TomlReader must reject an empty term, so check where it adds terms", .{});
+    if (term.word.len == 0) assert.panic("weighing an empty vocabulary word; the ddd.yaml reader must reject an empty word, so check addTerm()", .{});
     if (term.scope == 0) return 1;
     if (term.scope > settings.scopes_len) assert.panic("a term belongs to scope {d} of {d}; the reader numbers scopes from 1", .{ term.scope, settings.scopes_len });
     const owner = settings.scopes[term.scope - 1];
@@ -85,7 +86,7 @@ fn checkName(run: Run, d: Definition) error{LimitExceeded}!void {
         const term = best orelse continue;
         if (term.canonical.len == 0) {
             const where = if (term.scope == 0) "" else anchor.config.scopes[term.scope - 1].name;
-            if (enabled.enabled("forbidden-term")) try findings.add(.{ .path = d.path, .line = d.line, .column = d.column, .rule = "forbidden-term", .message = try text.format("'{s}' uses '{s}', a word zanity.toml bans{s}{s}, so the name says less than it should.", .{ d.name, word, if (where.len > 0) " in " else "", where }) });
+            if (enabled.enabled("forbidden-term")) try findings.add(.{ .path = d.path, .line = d.line, .column = d.column, .rule = "forbidden-term", .message = try text.format("'{s}' uses '{s}', a word ddd.yaml bans{s}{s}, so the name says less than it should.", .{ d.name, word, if (where.len > 0) " in " else "", where }) });
             continue;
         }
         if (!enabled.enabled("non-canonical-term")) continue;
@@ -123,7 +124,7 @@ fn conflicts(run: Run) error{LimitExceeded}!void {
     const findings = run.findings;
     const before = findings.len;
     var buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const path = try text.copy(anchor.configPath(&buffer));
+    const path = try text.copy(anchor.configPath(ddd.glossary_file, &buffer));
     const settings = anchor.config;
     const terms = settings.vocabulary();
     for (terms, 0..) |a, i| for (terms[i + 1 ..]) |b| {
@@ -147,7 +148,7 @@ fn conflicts(run: Run) error{LimitExceeded}!void {
 /// How alike two names are, from 0 to 1: one less the share of the longer that must change,
 /// counting edits ignoring case.
 fn similarity(a: []const u8, b: []const u8) f64 {
-    if (a.len == 0 or b.len == 0) assert.panic("comparing '{s}' with '{s}', and one is empty; TomlReader must reject an empty domain or context name, so check where it reads table headers", .{ a, b });
+    if (a.len == 0 or b.len == 0) assert.panic("comparing '{s}' with '{s}', and one is empty; the ddd.yaml reader must reject a context with paths and no name, so check addScope()", .{ a, b });
     if (a.len > 64 or b.len > 64) return if (std.ascii.eqlIgnoreCase(a, b)) 1 else 0;
     var row: [65]usize = undefined;
     for (0..b.len + 1) |j| row[j] = j;

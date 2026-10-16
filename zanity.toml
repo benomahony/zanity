@@ -49,21 +49,8 @@ disable = ["filesystem-in-test"]
 [paths."src/catalogue_test.zig"]
 disable = ["filesystem-in-test"]
 
-# The project's words for things. Names that use a banned word, or an alias of a word the
-# project settled on, are reported. Domains and contexts carry their own words; a context
-# applies after a domain, and a definition can share its name with one in another context.
-# [vocabulary]
-# forbidden = ["util", "manager"]
-#
-# [vocabulary.synonyms]
-# customer = ["client", "user"]
-#
-# [contexts.billing]
-# include = ["src/billing/**"]
-# forbidden = ["discount"]
-#
-# [contexts.billing.synonyms]
-# invoice = ["bill", "statement"]
+# The project's words for things, and the domains and contexts they belong to, go in
+# ddd.yaml beside this file, in the shape of a Contextive glossary; see the README.
 
 [rules]
 # Which rules run. "all" is every rule, including those off by default; leave `select` out to
@@ -112,9 +99,9 @@ disable = [
   # "skipped-test",                    # warning, on by default. Fix the test and turn it back on, or delete it; to skip only where it can't run, put the skip under a condition (skipif, an if around t.Skip), or use xfail(strict=True).
   # "vague-test-name",                 # warning, on by default. Name the behaviour it expects, such as test_rejects_expired_token or it("returns 404 for an unknown id").
   # "forbidden-term",                  # warning, on by default. Rename it to say what it is or does, without the banned word.
-  # "non-canonical-term",              # warning, on by default. Rename it with the project's word, as zanity.toml's synonyms give it.
+  # "non-canonical-term",              # warning, on by default. Rename it with the project's word, as ddd.yaml's terms give it.
   # "misplaced-test",                  # warning, on by default. Move the test next to the code it tests, or move the code to the domain the test is in.
-  # "vocabulary-conflict",             # error, on by default. Make the vocabulary in zanity.toml agree with itself: one word per meaning, and none both banned and canonical.
+  # "vocabulary-conflict",             # error, on by default. Make the vocabulary in ddd.yaml agree with itself: one word per meaning, and none both banned and canonical.
   # "name-drift",                      # warning, on by default. Pick one spelling and use it everywhere.
   # "duplicate-name",                  # warning, on by default. Give each a name that says how it differs.
   # "restated-type",                   # warning, on with --strict. Assert something about its value instead.

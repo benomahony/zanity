@@ -1,0 +1,15 @@
+contexts:
+  - name: Shared
+    forbidden: [order]
+    terms:
+      - name: order
+        aliases: [purchase]
+      - name: customer
+        aliases: [client]
+  - name: billing
+    paths: [billing/**]
+    terms:
+      - name: account
+        aliases: [client]
+  - name: biling
+    paths: [old/**]

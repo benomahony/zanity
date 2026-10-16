@@ -242,7 +242,7 @@ fn runCheck(ctx: *zcli.Context, options: CheckOptions) ![]const Row {
     const ws = workspaceOf(ctx);
     const agent = try speaksToAgent(ctx, ws, options.agent);
     const settings = config.initConfig(std.heap.page_allocator, ws.io) catch |e| switch (e) {
-        error.InvalidConfig => return ctx.fail(.usage, config.problem[0..config.problem_len], "Fix that line of zanity.toml, or remove the setting to use zanity's default."),
+        error.InvalidConfig => return ctx.fail(.usage, config.problem[0..config.problem_len], "Fix that line of the file, or remove the setting to use zanity's default."),
         else => return e,
     };
     if (ws.environ) |environ| ws.source_cache = store.Store.initStore(std.heap.page_allocator, ws.io, environ, ws.limits.store_bytes) catch null;

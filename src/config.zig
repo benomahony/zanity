@@ -16,30 +16,20 @@
 //!     [paths."src/*_test.zig"]                 # gitignore syntax, relative to this file
 //!     disable = ["process-in-test"]            # these rules don't report here
 //!
-//!     [vocabulary]                             # the project's words for things
-//!     forbidden = ["util", "manager"]          # never in a name
-//!
-//!     [vocabulary.synonyms]                    # the canonical word = the words it replaces
-//!     customer = ["client", "user"]
-//!
-//!     [contexts.billing]                       # also [domains.<name>]; contexts apply after
-//!     include = ["src/billing/**"]             # domains, so a context's words win
-//!     forbidden = ["discount"]
-//!
-//!     [contexts.billing.synonyms]
-//!     invoice = ["bill", "statement"]
+//! The project's words for things live beside it in ddd.yaml, which ddd.zig reads.
 const std = @import("std");
 const assert = @import("assert.zig");
 const Allocator = std.mem.Allocator;
 const Io = std.Io;
 const rules = @import("rules.zig");
 const ignore = @import("ignore.zig");
+const ddd = @import("ddd.zig");
 
 pub const file_name = "zanity.toml";
 pub const max_excludes = 256;
 pub const max_concurrency = 64;
 pub const max_path_sections = 32;
-const max_file_bytes = 1 << 20;
+pub const max_file_bytes = 1 << 20;
 pub const max_terms = 512;
 pub const max_scopes = 32;
 pub const max_scope_globs = 16;
@@ -50,7 +40,8 @@ pub const max_directional = 32;
 /// index of the domain or context it belongs to.
 pub const Term = struct { scope: u8, word: []const u8, canonical: []const u8 = "", line: u32 };
 
-/// A `[domains.<name>]` or `[contexts.<name>]` table: a part of the code with its own words.
+/// A context of ddd.yaml with paths: a part of the code with its own words. `context` is false
+/// for a domain, whose words a context's words override.
 pub const Scope = struct {
     name: []const u8,
     context: bool,
@@ -59,8 +50,8 @@ pub const Scope = struct {
     include_len: usize = 0,
 
     pub fn globs(self: *const Scope) []const []const u8 {
-        if (self.include_len > max_scope_globs) assert.panic("[{s}] has {d} include patterns in room for {d}; TomlReader must refuse the pattern past max_scope_globs, so check where it adds include patterns", .{ self.name, self.include_len, max_scope_globs });
-        if (self.name.len == 0) assert.panic("a domain or context has no name; TomlReader must reject an empty table name such as [domains.\"\"], so check where it reads table headers", .{});
+        if (self.include_len > max_scope_globs) assert.panic("the context '{s}' has {d} paths in room for {d}; the ddd.yaml reader must refuse the path past max_scope_globs, so check where it reads paths", .{ self.name, self.include_len, max_scope_globs });
+        if (self.name.len == 0) assert.panic("a context with paths has no name; the ddd.yaml reader must reject it, so check addScope()", .{});
         return self.include[0..self.include_len];
     }
 };
@@ -98,13 +89,13 @@ pub const Config = struct {
     directional_len: usize = 0,
 
     pub fn vocabulary(self: *const Config) []const Term {
-        if (self.terms_len > max_terms) assert.panic("{d} vocabulary terms in room for {d}; TomlReader must refuse the term past max_terms, so check where it adds terms", .{ self.terms_len, max_terms });
-        if (self.scopes_len > max_scopes) assert.panic("{d} domains and contexts in room for {d}; TomlReader must refuse the table past max_scopes, so check where it adds domains and contexts", .{ self.scopes_len, max_scopes });
+        if (self.terms_len > max_terms) assert.panic("{d} vocabulary terms in room for {d}; the ddd.yaml reader must refuse the term past max_terms, so check where it adds terms", .{ self.terms_len, max_terms });
+        if (self.scopes_len > max_scopes) assert.panic("{d} domains and contexts in room for {d}; the ddd.yaml reader must refuse the context past max_scopes, so check addScope()", .{ self.scopes_len, max_scopes });
         return self.terms[0..self.terms_len];
     }
 
     pub fn domainsAndContexts(self: *const Config) []const Scope {
-        if (self.scopes_len > max_scopes) assert.panic("{d} domains and contexts in room for {d}; TomlReader must refuse the table past max_scopes, so check where it adds domains and contexts", .{ self.scopes_len, max_scopes });
+        if (self.scopes_len > max_scopes) assert.panic("{d} domains and contexts in room for {d}; the ddd.yaml reader must refuse the context past max_scopes, so check addScope()", .{ self.scopes_len, max_scopes });
         if (self.scopes_len > 0 and self.dir.len == 0) assert.panic("{d} domains and contexts with no directory to anchor their patterns; initConfig() must set dir", .{self.scopes_len});
         return self.scopes[0..self.scopes_len];
     }
@@ -188,20 +179,20 @@ pub const Anchor = struct {
         return joined;
     }
 
-    /// The config file, as a path from the working directory.
-    pub fn configPath(self: Anchor, buffer: []u8) []const u8 {
-        if (self.config.dir.len == 0) assert.panic("asking where zanity.toml is when none was found; check config.dir first", .{});
+    /// The file called `name` in the config's folder, as a path from the working directory.
+    pub fn configPath(self: Anchor, name: []const u8, buffer: []u8) []const u8 {
+        if (self.config.dir.len == 0) assert.panic("asking where {s} is when no config was found; check config.dir first", .{name});
         var used: usize = 0;
         var parts = std.mem.tokenizeScalar(u8, self.below, '/');
         while (parts.next()) |_| {
-            if (used + 3 > buffer.len) return file_name;
+            if (used + 3 > buffer.len) return name;
             @memcpy(buffer[used..][0..3], "../");
             used += 3;
         }
-        if (used + file_name.len > buffer.len) return file_name;
-        @memcpy(buffer[used..][0..file_name.len], file_name);
+        if (used + name.len > buffer.len) return name;
+        @memcpy(buffer[used..][0..name.len], name);
         if (used % 3 != 0) assert.panic("wrote {d} bytes of '../' steps; each step is 3 bytes", .{used});
-        return buffer[0 .. used + file_name.len];
+        return buffer[0 .. used + name.len];
     }
 };
 
@@ -225,18 +216,22 @@ pub var problem_len: usize = 0;
 
 pub const Error = error{InvalidConfig};
 
-/// Finds and reads the nearest `zanity.toml` at or above the current directory, stopping at
-/// the repository root. No file means an empty config.
+/// Finds and reads the nearest folder holding `zanity.toml` or `ddd.yaml`, or both, at or above
+/// the current directory, stopping at the repository root. No file means an empty config.
 pub fn initConfig(gpa: Allocator, io: Io) !Config {
-    const start = try Io.Dir.cwd().realPathFileAlloc(io, ".", gpa);
+    const cwd = Io.Dir.cwd();
+    const start = try cwd.realPathFileAlloc(io, ".", gpa);
     if (!std.fs.path.isAbsolute(start)) assert.panic("looking for {s} from '{s}', which is relative; pass the real path", .{ file_name, start });
     var dir: ?[]const u8 = start;
     for (0..64) |_| {
         const d = dir orelse break;
         const path = try std.fs.path.join(gpa, &.{ d, file_name });
-        const bytes = Io.Dir.cwd().readFileAlloc(io, path, gpa, .limited(max_file_bytes)) catch null;
-        if (bytes) |found| {
-            var config = try parseConfig(found);
+        const bytes = cwd.readFileAlloc(io, path, gpa, .limited(max_file_bytes)) catch null;
+        const glossary_path = try std.fs.path.join(gpa, &.{ d, ddd.glossary_file });
+        const glossary = cwd.readFileAlloc(io, glossary_path, gpa, .limited(max_file_bytes)) catch null;
+        if (bytes != null or glossary != null) {
+            var config: Config = if (bytes) |found| try parseConfig(found) else .{};
+            if (glossary) |found| try ddd.parseGlossary(found, &config);
             config.dir = d;
             return config;
         }
@@ -271,37 +266,45 @@ pub fn parseConfig(bytes: []u8) Error!Config {
     return config;
 }
 
-const Table = enum { root, rules, infer, paths, vocabulary, synonyms, scope };
+const Table = enum { root, rules, infer, paths };
 
 const max_items = max_excludes;
 
-const TomlReader = struct {
+/// Reads zanity.toml, and lends its reading of lines, strings and keys to the ddd.yaml reader.
+pub const TomlReader = struct {
     bytes: []u8,
     at: usize = 0,
+    /// The file being read, for the problems reported in it.
+    file: []const u8 = file_name,
     table: Table = .root,
     items: [max_items][]const u8 = undefined,
     /// The pattern of a `[paths."<glob>"]` header, until its section is added.
     pending_glob: []const u8 = "",
-    /// The vocabulary table being read: 0 for [vocabulary], else one more than a scope's index.
-    scope: u8 = 0,
 
-    fn line(self: *const TomlReader) u32 {
+    pub fn line(self: *const TomlReader) u32 {
         if (self.at > self.bytes.len) assert.panic("counting the line of byte {d} in a {d}-byte file; nothing may move self.at past the end, so check the last place that advanced it", .{ self.at, self.bytes.len });
         const counted = std.mem.count(u8, self.bytes[0..self.at], "\n") + 1;
         if (counted > self.bytes.len + 1) assert.panic("counted {d} lines in {d} bytes, more lines than bytes plus one; count only the newlines before self.at", .{ counted, self.bytes.len });
         return @intCast(counted);
     }
 
-    fn fail(self: *const TomlReader, comptime fmt: []const u8, args: anytype) Error {
+    pub fn fail(self: *const TomlReader, comptime fmt: []const u8, args: anytype) Error {
         if (self.at > self.bytes.len) assert.panic("reporting a problem at byte {d} of a {d}-byte file; fail() must be called with the reader inside the file", .{ self.at, self.bytes.len });
-        const written = std.fmt.bufPrint(&problem, "{s}:{d}: " ++ fmt, .{ file_name, self.line() } ++ args) catch problem[0..];
+        if (self.file.len == 0) assert.panic("reporting a problem in a file with no name; set the reader's file to the name of the file it reads", .{});
+        return self.failAt(self.line(), fmt, args);
+    }
+
+    /// Reports a problem on `at_line`, a line already read, such as where a list item began.
+    pub fn failAt(self: *const TomlReader, at_line: u32, comptime fmt: []const u8, args: anytype) Error {
+        if (at_line == 0 or at_line > self.line()) assert.panic("reporting a problem on line {d} while reading line {d}; pass a line already read, counting from 1", .{ at_line, self.line() });
+        const written = std.fmt.bufPrint(&problem, "{s}:{d}: " ++ fmt, .{ self.file, at_line } ++ args) catch problem[0..];
         problem_len = written.len;
-        if (problem_len <= file_name.len) assert.panic("described a config problem as '{s}', with no detail; give the fail() call a description of what is wrong", .{problem[0..problem_len]});
+        if (problem_len <= self.file.len) assert.panic("described a config problem as '{s}', with no detail; give the fail() call a description of what is wrong", .{problem[0..problem_len]});
         return error.InvalidConfig;
     }
 
     /// The byte at the reading position, or null at the end of the file.
-    fn peek(self: *const TomlReader) ?u8 {
+    pub fn peek(self: *const TomlReader) ?u8 {
         if (self.at > self.bytes.len) assert.panic("reading at byte {d} of a {d}-byte file; nothing may move self.at past the end", .{ self.at, self.bytes.len });
         if (self.at == self.bytes.len) return null;
         const c = self.bytes[self.at];
@@ -310,7 +313,7 @@ const TomlReader = struct {
     }
 
     /// Skips spaces and tabs, staying on the line.
-    fn skipSpaces(self: *TomlReader) void {
+    pub fn skipSpaces(self: *TomlReader) void {
         const start = self.at;
         while (self.peek()) |c| {
             if (c != ' ' and c != '\t') break;
@@ -321,7 +324,7 @@ const TomlReader = struct {
     }
 
     /// Skips spaces, newlines and comments between entries and list items.
-    fn skipBlank(self: *TomlReader) void {
+    pub fn skipBlank(self: *TomlReader) void {
         const start = self.at;
         for (0..self.bytes.len + 1) |_| {
             if (self.at == self.bytes.len) break;
@@ -336,7 +339,7 @@ const TomlReader = struct {
     }
 
     /// Skips spaces and tabs, then requires the rest of the line to be empty or a comment.
-    fn endLine(self: *TomlReader) Error!void {
+    pub fn endLine(self: *TomlReader) Error!void {
         const start = self.at;
         self.skipSpaces();
         if (self.peek() == '#') self.at = std.mem.indexOfScalarPos(u8, self.bytes, self.at, '\n') orelse self.bytes.len;
@@ -371,9 +374,7 @@ const TomlReader = struct {
         self.at += 1;
         const name = self.readKey() orelse return self.fail("expected a table name after '['; write [infer] or [paths.\"<pattern>\"].", .{});
         if (std.mem.eql(u8, name, "vocabulary") or std.mem.eql(u8, name, "domains") or std.mem.eql(u8, name, "contexts")) {
-            try self.readVocabularyHeader(config, name);
-            if (self.at <= start) assert.panic("reading a vocabulary header at byte {d} consumed nothing", .{start});
-            return;
+            return self.fail("'[{s}]' has moved to ddd.yaml, where each domain or context lists its paths and terms; see the README.", .{name});
         }
         if (std.mem.eql(u8, name, "paths")) {
             if (self.peek() != '.') return self.fail("'[paths]' needs a pattern for the files it covers, such as [paths.\"tests/**\"].", .{});
@@ -384,85 +385,12 @@ const TomlReader = struct {
         if (self.peek() != ']') return self.fail("expected ']' after '[{s}'; close the table name with ']'.", .{name});
         self.at += 1;
         self.table = std.meta.stringToEnum(Table, name) orelse .root;
-        if (self.table == .root or self.table == .vocabulary) return self.fail("'[{s}]' isn't a table zanity knows; the tables are [rules], [infer], [paths.\"<pattern>\"], [vocabulary], [domains.<name>] and [contexts.<name>].", .{name});
+        if (self.table == .root) return self.fail("'[{s}]' isn't a table zanity knows; the tables are [rules], [infer] and [paths.\"<pattern>\"].", .{name});
         if (self.table == .paths) try self.readPathSection(config);
         if (self.at <= start) assert.panic("reading a table header at byte {d} consumed nothing; readHeader() must consume at least the '[' it starts at", .{start});
     }
 
-    /// `[vocabulary]`, `[vocabulary.synonyms]`, `[domains.<name>]`, `[contexts.<name>]`, or either
-    /// of those with `.synonyms`; a domain or context is added when its own table starts.
-    fn readVocabularyHeader(self: *TomlReader, config: *Config, kind: []const u8) Error!void {
-        if (kind.len == 0) assert.panic("reading a vocabulary table with no kind; readHeader() passes vocabulary, domains or contexts", .{});
-        const start = self.at;
-        self.scope = 0;
-        if (!std.mem.eql(u8, kind, "vocabulary")) {
-            const header_line = self.line();
-            if (self.peek() != '.') return self.fail("'[{s}]' needs a name, such as [{s}.billing].", .{ kind, kind });
-            self.at += 1;
-            const name = (if (self.peek() == '"') try self.readString(kind) else self.readKey()) orelse return self.fail("expected a name after '[{s}.', such as [{s}.billing].", .{ kind, kind });
-            self.scope = try self.scopeNamed(config, .{ .name = name, .context = std.mem.eql(u8, kind, "contexts"), .line = header_line });
-        }
-        self.table = if (self.scope == 0) .vocabulary else .scope;
-        if (self.peek() == '.') {
-            self.at += 1;
-            const part = self.readKey() orelse "";
-            if (!std.mem.eql(u8, part, "synonyms")) return self.fail("'[{s}.{s}]' isn't a table zanity knows; the only one inside [{s}] is synonyms.", .{ kind, part, kind });
-            self.table = .synonyms;
-        }
-        if (self.peek() != ']') return self.fail("expected ']' after the [{s}] table's name; close it with ']'.", .{kind});
-        self.at += 1;
-        if (self.at <= start) assert.panic("reading the [{s}] header consumed nothing; it must consume at least the ']'", .{kind});
-    }
-
-    /// The scope number of the domain or context called `name`, adding it when it is new.
-    fn scopeNamed(self: *TomlReader, config: *Config, wanted: Scope) Error!u8 {
-        if (wanted.name.len == 0) return self.fail("a domain or context name is empty; give it a name, such as [contexts.billing].", .{});
-        if (wanted.line == 0) assert.panic("the [{s}] table has no line; line() counts from 1", .{wanted.name});
-        for (config.scopes[0..config.scopes_len], 0..) |scope, i| {
-            if (std.mem.eql(u8, scope.name, wanted.name) and scope.context == wanted.context) return @intCast(i + 1);
-        }
-        if (config.scopes_len == max_scopes) return self.fail("there are more than {d} domains and contexts; merge the ones that share their words.", .{max_scopes});
-        config.scopes[config.scopes_len] = wanted;
-        config.scopes_len += 1;
-        if (config.scopes_len > max_scopes) assert.panic("{d} scopes in room for {d}; scopeNamed() must refuse more", .{ config.scopes_len, max_scopes });
-        return @intCast(config.scopes_len);
-    }
-
-    fn addTerm(self: *TomlReader, config: *Config, term: Term) Error!void {
-        if (term.scope > config.scopes_len) assert.panic("a term for scope {d} of {d}; scopeNamed() numbers each scope before its terms", .{ term.scope, config.scopes_len });
-        if (term.word.len == 0) return self.fail("a vocabulary word is empty; remove it or write the word.", .{});
-        if (config.terms_len == max_terms) return self.fail("the vocabulary has more than {d} words; keep the ones that matter most.", .{max_terms});
-        config.terms[config.terms_len] = term;
-        config.terms_len += 1;
-        if (config.terms_len > max_terms) assert.panic("{d} terms in room for {d}; addTerm() must refuse more", .{ config.terms_len, max_terms });
-    }
-
-    /// A setting in [vocabulary], a domain or context, or one of their synonyms tables.
-    fn readVocabularySetting(self: *TomlReader, config: *Config, key: []const u8) Error!void {
-        if (key.len == 0) assert.panic("a vocabulary setting with no name at byte {d}; readEntry() reads a key first", .{self.at});
-        const at_line = self.line();
-        if (self.table == .scope and self.scope == 0) assert.panic("reading '{s}' in a domain or context table without one; readVocabularyHeader() sets the scope", .{key});
-        const items = try self.readStrings(key);
-        if (self.table == .synonyms) {
-            for (items) |alias| try self.addTerm(config, .{ .scope = self.scope, .word = alias, .canonical = key, .line = at_line });
-            return;
-        }
-        if (std.mem.eql(u8, key, "forbidden")) {
-            for (items) |word| try self.addTerm(config, .{ .scope = self.scope, .word = word, .line = at_line });
-        } else if (self.table == .vocabulary and std.mem.eql(u8, key, "directional")) {
-            if (items.len > max_directional) return self.fail("'directional' has more than {d} words; keep the ones names use.", .{max_directional});
-            @memcpy(config.directional[0..items.len], items);
-            config.directional_len = items.len;
-        } else if (self.table == .scope and std.mem.eql(u8, key, "include")) {
-            const scope = &config.scopes[self.scope - 1];
-            if (items.len > max_scope_globs) return self.fail("[{s}] has more than {d} include patterns; use broader ones.", .{ scope.name, max_scope_globs });
-            for (items) |glob| if (glob.len == 0) return self.fail("an include pattern of [{s}] is empty; name the files it covers.", .{scope.name});
-            @memcpy(scope.include[0..items.len], items);
-            scope.include_len = items.len;
-        } else return self.fail("'{s}' isn't a setting here; [vocabulary] takes forbidden and directional, a domain or context takes include and forbidden, and a synonyms table takes canonical = [aliases].", .{key});
-    }
-
-    fn readKey(self: *TomlReader) ?[]const u8 {
+    pub fn readKey(self: *TomlReader) ?[]const u8 {
         const start = self.at;
         while (self.at < self.bytes.len) : (self.at += 1) {
             const c = self.bytes[self.at];
@@ -547,7 +475,6 @@ const TomlReader = struct {
         if (key.len == 0) assert.panic("setting a key with no name at byte {d}; readEntry() must read a key before calling readSetting()", .{self.at});
         if (self.table == .paths) return self.readPathSetting(config, key);
         if (self.table == .infer) return self.readInferSetting(config, key);
-        if (self.table == .vocabulary or self.table == .synonyms or self.table == .scope) return self.readVocabularySetting(config, key);
         const which = try self.settingNamed(key);
         const items = try self.readStrings(key);
         switch (which) {
@@ -631,7 +558,7 @@ const TomlReader = struct {
         return self.fail("'{s}' opens a list that is never closed with ']'; add ']' after its last item.", .{key});
     }
 
-    fn readString(self: *TomlReader, key: []const u8) Error![]const u8 {
+    pub fn readString(self: *TomlReader, key: []const u8) Error![]const u8 {
         if (self.at >= self.bytes.len) assert.panic("reading a string for '{s}' at byte {d} of {d}; call readString() only inside the file", .{ key, self.at, self.bytes.len });
         const quote = self.bytes[self.at];
         if (quote != '"' and quote != '\'') return self.fail("items in '{s}' must be quoted strings, such as \"recursion\".", .{key});

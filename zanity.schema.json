@@ -102,40 +102,9 @@
           }
         }
       }
-    },
-    "vocabulary": {
-      "description": "The project's words for things: names using a banned word, or an alias of the word the project settled on, are reported.",
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "forbidden": { "$ref": "#/definitions/words", "description": "Words no name may use, such as [\"util\", \"manager\"]." },
-        "directional": { "$ref": "#/definitions/words", "description": "Words that give a name a direction, so us_to_uk and uk_to_us aren't name drift.", "maxItems": 32 },
-        "synonyms": { "$ref": "#/definitions/synonyms" }
-      }
-    },
-    "domains": { "$ref": "#/definitions/scopes", "description": "Parts of the code with words of their own, such as [domains.commerce]; contexts apply after them." },
-    "contexts": { "$ref": "#/definitions/scopes", "description": "Bounded contexts with words of their own, such as [contexts.billing]; they apply after domains, and each may define its own Customer." }
+    }
   },
   "definitions": {
-    "words": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
-    "synonyms": {
-      "description": "The canonical word = the aliases it replaces, such as customer = [\"client\", \"user\"].",
-      "type": "object",
-      "additionalProperties": { "$ref": "#/definitions/words" }
-    },
-    "scopes": {
-      "type": "object",
-      "maxProperties": 32,
-      "additionalProperties": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "include": { "$ref": "#/definitions/words", "description": "The files it covers, in .gitignore syntax, relative to this file.", "maxItems": 16 },
-          "forbidden": { "$ref": "#/definitions/words", "description": "Words no name in it may use." },
-          "synonyms": { "$ref": "#/definitions/synonyms" }
-        }
-      }
-    },
     "ruleOrAll": {
       "anyOf": [
         { "const": "all", "description": "Every rule, including those off by default." },
@@ -191,9 +160,9 @@
         { "const": "skipped-test", "description": "warning, on by default. Fix the test and turn it back on, or delete it; to skip only where it can't run, put the skip under a condition (skipif, an if around t.Skip), or use xfail(strict=True)." },
         { "const": "vague-test-name", "description": "warning, on by default. Name the behaviour it expects, such as test_rejects_expired_token or it(\"returns 404 for an unknown id\")." },
         { "const": "forbidden-term", "description": "warning, on by default. Rename it to say what it is or does, without the banned word." },
-        { "const": "non-canonical-term", "description": "warning, on by default. Rename it with the project's word, as zanity.toml's synonyms give it." },
+        { "const": "non-canonical-term", "description": "warning, on by default. Rename it with the project's word, as ddd.yaml's terms give it." },
         { "const": "misplaced-test", "description": "warning, on by default. Move the test next to the code it tests, or move the code to the domain the test is in." },
-        { "const": "vocabulary-conflict", "description": "error, on by default. Make the vocabulary in zanity.toml agree with itself: one word per meaning, and none both banned and canonical." },
+        { "const": "vocabulary-conflict", "description": "error, on by default. Make the vocabulary in ddd.yaml agree with itself: one word per meaning, and none both banned and canonical." },
         { "const": "name-drift", "description": "warning, on by default. Pick one spelling and use it everywhere." },
         { "const": "duplicate-name", "description": "warning, on by default. Give each a name that says how it differs." },
         { "const": "restated-type", "description": "warning, on with --strict. Assert something about its value instead." },

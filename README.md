@@ -314,26 +314,6 @@ threshold = 0.9
 [paths."tests/e2e/"]
 disable = ["process-in-test", "network-in-test"]
 
-# The project's words for things: names using a banned word, or an alias of the word the
-# project settled on, are reported, with the name respelled.
-[vocabulary]
-forbidden = ["util", "manager"]
-# Words that give a name a direction, so us_to_uk and uk_to_us aren't name drift.
-directional = ["to", "from"]
-
-[vocabulary.synonyms]
-customer = ["client", "user"]
-
-# Parts of the code with words of their own: [domains.<name>] and [contexts.<name>] take
-# include (.gitignore patterns), forbidden and a synonyms table. A context applies after a
-# domain, and the same name may be defined once in each context.
-[contexts.billing]
-include = ["src/billing/**"]
-forbidden = ["discount"]
-
-[contexts.billing.synonyms]
-invoice = ["bill", "statement"]
-
 [rules]
 # Run only these rules; "all" is every rule, including those off by default, and "strict" the
 # defaults and the strict rules. Leave it out to run the defaults.
@@ -343,6 +323,38 @@ disable = ["duplicate-name"]
 ```
 
 `--rules` on the command line overrides `[rules]`. Files written before the `[rules]` table, with `rules` and `disable` at the top, still work. A mistake in the file stops the run with exit code 2 and names the line and what to write instead, for example `zanity.toml:1: 'recursions' isn't a rule; ...`.
+
+### The project's words: `ddd.yaml`
+
+The project's ubiquitous language lives in `ddd.yaml`, beside `zanity.toml` or on its own: zanity reads the nearest folder holding either. It has the shape of a [Contextive](https://github.com/dev-cycles/contextive) glossary, so the same file gives your editor hover definitions and gives zanity a vocabulary to check names against. There is no settled standard for a machine-readable glossary; Contextive's is the nearest thing in use, and [Context Mapper](https://contextmapper.org)'s CML is the fuller model if you need context maps.
+
+```yaml
+# Words that give a name a direction, so us_to_uk and uk_to_us aren't name drift.
+directional: [to, from]
+contexts:
+  # A context with no paths holds the words of the whole project.
+  - name: Shared
+    # Words no name may use.
+    forbidden: [util, manager]
+    terms:
+      # Names using an alias are reported, with the name respelled with the term.
+      - name: customer
+        definition: Someone who buys from us.
+        aliases: [client, user]
+  - name: Billing
+    # context (the default) or domain; a context's words win over a domain's, and the same
+    # name may be defined once in each context.
+    kind: context
+    # The files it covers, in .gitignore syntax, relative to this file.
+    paths: ["src/billing/**"]
+    forbidden: [discount]
+    terms:
+      - name: invoice
+        definition: What a customer is asked to pay.
+        aliases: [bill, statement]
+```
+
+`kind`, `forbidden` and `directional` are zanity's additions; Contextive's own keys, such as `definition`, `examples`, `domainVisionStatement` and `meta`, are read past. A term whose name is several words, such as `Purchase Order`, stays in the glossary but can't be one word of a name, so zanity doesn't check its aliases. Quote a path that starts with `*`, as YAML reads a bare `*` as an alias.
 
 ## Suppressing a finding
 
@@ -437,7 +449,7 @@ Rules marked *strict* hold code to what safety-critical software needs and most 
 |---|---|---|
 | `name-drift` | warning | one concept spelled several ways, such as `order_total` and `total_order`; not the same words written by convention, such as a class `FallbackModel` and its instance `fallback_model`, or a private `_now` beside `now`. Its fix names the spelling most definitions use |
 | `duplicate-name` | warning | the same name defined more than once in one language and one domain or context, where another file could use either: not methods, nested functions, tests, or names private to their module |
-| `forbidden-term` | warning | a name using a word `[vocabulary]` or its domain or context bans |
+| `forbidden-term` | warning | a name using a word `ddd.yaml` bans for the project or for its domain or context |
 | `non-canonical-term` | warning | a name using an alias where the project has settled on another word, with the name respelled |
 | `misplaced-test` | warning | a test in one domain or context whose subject lives in exactly one other |
 | `vocabulary-conflict` | error | a vocabulary that contradicts itself: a word both banned and canonical, an alias mapped two ways, or two domains or contexts with nearly the same name |
