@@ -15,6 +15,7 @@ CONTENT = REPO / "docs" / "content"
 SECTION = CONTENT / "comparison"
 OVERVIEW = SECTION / "index.smd"
 PERFORMANCE = SECTION / "performance.smd"
+INTROS = {"nouls": "Which of nouls' questions for a model zanity also asks."}
 LINKS = {
     "nasa-lsp": "https://github.com/benomahony/nasa-lsp",
     "testdesiderata": "https://github.com/benomahony/testdesiderata",
@@ -159,7 +160,16 @@ def tally(name: str, mine: list[dict]) -> dict:
     gaps = [r["rule"] for r in mine if r["old_fires"] is not False and not r["zanity_fires"]]
     assert mine, f"{name} has no scored rules; rerun parity.py or add its results"
     assert name in BY_NAME, f"{name} is not a tool in tools.py; add it to TOOLS before rendering it"
-    return {"name": name, "rules": len(mine), "whole": len(valid), "part": sum(bool(r["zanity_fires"]) for r in valid), "gaps": gaps, "unit": "rules"}
+    return {"name": name, "rules": len(mine), "whole": len(valid), "part": sum(bool(r["zanity_fires"]) for r in valid), "of": len(mine), "gaps": gaps, "unit": "rules", "caption": "rules matched"}
+
+
+def findings(data: dict) -> dict:
+    """bonsai's tally by finding: of everything it reports in its own fixtures, how much zanity reports on the same lines."""
+    scored = [s for report in data["languages"].values() for s in report["recall"].values()]
+    assert scored, "results.json has no bonsai findings; rerun parity.py"
+    found = tally("bonsai", language_rows(data)) | {"part": sum(s["matched"] for s in scored), "of": sum(s["old"] for s in scored), "unit": "findings", "caption": "findings matched"}
+    assert found["part"] <= found["of"], f"zanity matched {found['part']} of bonsai's {found['of']} findings; fix recall's matching"
+    return found
 
 
 def measured(data: dict, key: str = "corpus") -> list[Tool]:
@@ -172,11 +182,13 @@ def measured(data: dict, key: str = "corpus") -> list[Tool]:
 
 def tallies(data: dict) -> list[dict]:
     """Each tool's tally; nouls last, by its named questions."""
-    out = [tally(tool.name, [r for r in data["fixtures"] if r["tool"] == tool.name] or language_rows(data)) for tool in measured(data)]
-    questions = data["inference"]["questions"]
+    out = [tally(tool.name, mine) if (mine := [r for r in data["fixtures"] if r["tool"] == tool.name]) else findings(data) for tool in measured(data)]
+    inference = data["inference"]
+    questions = inference["questions"]
     count = len(questions)
+    asked = count + inference["catalogue"]
     gaps = [q["rule"] for q in questions if not q["present"]]
-    out.append({"name": "nouls", "rules": count + data["inference"]["catalogue"], "whole": count, "part": count - len(gaps), "gaps": gaps, "unit": "questions"})
+    out.append({"name": "nouls", "rules": asked, "whole": count, "part": count - len(gaps), "of": asked, "gaps": gaps, "unit": "questions", "caption": "questions zanity also asks"})
     assert len(out) == len(measured(data)) + 1, f"a tally per tool and one for nouls, not {len(out)}; add every configured tool's results"
     assert all(t["whole"] for t in out), f"every tool must fire on its own fixture, but these do not: {[t['name'] for t in out if not t['whole']]}; fix their fixtures or adapters"
     return out
@@ -185,10 +197,10 @@ def tallies(data: dict) -> list[dict]:
 def summary(data: dict) -> list[str]:
     rows = []
     for t in tallies(data):
-        name, part, whole = t["name"], t["part"], t["whole"]
+        name, part, whole, of = t["name"], t["part"], t["whole"], t["of"]
         link = f"[{name}]($link.page('comparison/{name}'))"
         fixtures = "–" if t["unit"] == "questions" else str(whole)
-        rows.append([link, str(t["rules"]), fixtures, score(part, whole, f"{part}/{whole} {t['unit']}"), codes(t["gaps"])])
+        rows.append([link, str(t["rules"]), fixtures, score(part, of, f"{part}/{of} {t['unit']}"), codes(t["gaps"])])
     assert rows, "no tool was tallied; add tools to tools.py and rerun parity.py"
     assert data["fixtures"], "no fixtures were scored; run parity.py without skipping scores"
     return table(["Tool", "Rules", "Fixtures it fires on", "zanity fires on", "zanity misses"], rows)
@@ -198,12 +210,12 @@ def scoreboard(data: dict) -> list[str]:
     """A card per tool: the share of its rules zanity matches, as a number and a bar."""
     cards = []
     for t in tallies(data):
-        part, whole = t["part"], t["whole"]
+        part, of = t["part"], t["of"]
         cards.append(
-            f'<a href="{t["name"]}/" class="card {"pass" if part == whole else "partial"}"><div class="card-name">{t["name"]}</div>'
-            f'<div class="card-score">{part}<span>/{whole}</span></div>'
-            f'<div class="card-bar"><span style="width:{100 * part / whole:.0f}%"></span></div>'
-            f'<div class="card-unit">{t["unit"]} matched</div></a>'
+            f'<a href="{t["name"]}/" class="card {"pass" if part == of else "partial"}"><div class="card-name">{t["name"]}</div>'
+            f'<div class="card-score">{part}<span>/{of}</span></div>'
+            f'<div class="card-bar"><span style="width:{100 * part / of:.0f}%"></span></div>'
+            f'<div class="card-unit">{t["caption"]}</div></a>'
         )
     assert cards, "no tool was tallied"
     assert len(cards) == len(measured(data)) + 1, f"a card per tool and one for nouls, not {len(cards)}"
@@ -269,7 +281,7 @@ def inference(data: dict) -> list[str]:
     assert families >= detected, f"{detected} detected families can't outnumber the {families} in the catalogue"
     ran = "" if found["key"] else "`TYPESAFE_API_KEY` was not set, so neither nouls nor `zanity check --infer` ran; this compares the questions. "
     return [
-        f"nouls asks a model {len(rows)} named questions and one question per error-catalogue family, {families} in all. {ran}The list comes from nouls' own config loader.",
+        f"nouls asks a model {len(rows)} named questions and one question per error-catalogue family, {families} in all. {ran}The list comes from nouls' own config loader. A match means zanity asks a question for the same problem, not that both answer it the same way.",
         "",
         *table(["nouls question", "zanity --infer question", "In zanity"], rows),
         f"Of nouls' {families} catalogue questions, {detected} ({pct(detected, families)}) are about a family a deterministic zanity rule detects, so zanity answers them without a model. zanity asks no question per family.",
@@ -380,7 +392,7 @@ def render_overview(data: dict) -> str:
         "",
         "# Summary",
         "",
-        "Each rule has a small fixture written to trigger it. A fixture counts only if the old tool fires on it. Green: zanity matches every rule. Amber: some. Red: none.",
+        "Each rule has a small fixture written to trigger it, and counts as matched when the tool fires on its fixture and zanity does too; a rule with no fixture counts as a miss. bonsai is scored by its findings in its own fixtures, and nouls by the questions it asks a model. Green: zanity matches all of them. Amber: some. Red: none.",
         "",
         *scoreboard(data),
         *summary(data),
@@ -395,7 +407,7 @@ def render_performance(data: dict) -> str:
     assert data["cli"], "results.json has no command-line timings; rerun parity.py without --skip-bench"
     assert data["lsp"], "results.json has no editor timings; rerun parity.py without --skip-bench"
     return document([
-        *front("Performance", "Command-line, editor and watch-mode speed and memory beside the tools zanity replaces.", 0),
+        *front("Performance", "Command-line, editor and watch-mode speed and memory beside the other linters.", 0),
         *generated(data),
         "# Command line",
         "",
@@ -425,8 +437,8 @@ def render_tool(data: dict, name: str) -> str:
     external = LINKS[name]
     source = f"[{name}]({external})" if external else name
     body = [
-        *front(name, f"Rule-by-rule evidence for zanity's coverage of {name}.", len(names) - names.index(name)),
-        f"This page compares zanity with {source} on the same source files.",
+        *front(name, INTROS.get(name, f"Rule-by-rule evidence for zanity's coverage of {name}."), len(names) - names.index(name)),
+        f"This page compares zanity with {source} on the same source files." if name in BY_NAME else f"This page compares the questions {source} and zanity ask a model.",
         *generated(data),
     ]
     if name == "nouls":
