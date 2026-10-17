@@ -1,6 +1,6 @@
 {
   "when": "2026-10-17",
-  "commit": "6225eeb",
+  "commit": "9e60d85",
   "runs": 5,
   "fixtures": [
     {
@@ -984,7 +984,7 @@
         },
         "empty-handler": {
           "old": 1,
-          "matched": 0
+          "matched": 1
         },
         "extractable-chunk": {
           "old": 2,
@@ -1045,8 +1045,8 @@
           "matched": 0
         },
         "swallowed-error": {
-          "zanity": 2,
-          "matched": 0
+          "zanity": 3,
+          "matched": 1
         }
       }
     },
@@ -1103,7 +1103,7 @@
           "matched": 2
         },
         "swallowed-error": {
-          "zanity": 1,
+          "zanity": 2,
           "matched": 0
         }
       }
@@ -1169,7 +1169,7 @@
           "matched": 0
         },
         "swallowed-error": {
-          "zanity": 1,
+          "zanity": 2,
           "matched": 0
         }
       }
@@ -1221,6 +1221,10 @@
         "structural-twins": {
           "zanity": 2,
           "matched": 0
+        },
+        "swallowed-error": {
+          "zanity": 1,
+          "matched": 0
         }
       }
     },
@@ -1240,7 +1244,7 @@
         },
         "empty-handler": {
           "old": 1,
-          "matched": 0
+          "matched": 1
         },
         "long-function": {
           "old": 2,
@@ -1283,6 +1287,10 @@
         "structural-twins": {
           "zanity": 2,
           "matched": 0
+        },
+        "swallowed-error": {
+          "zanity": 1,
+          "matched": 1
         }
       }
     },
@@ -1298,7 +1306,7 @@
         },
         "empty-handler": {
           "old": 1,
-          "matched": 0
+          "matched": 1
         },
         "long-parameter-list": {
           "old": 2,
@@ -1331,8 +1339,8 @@
           "matched": 0
         },
         "swallowed-error": {
-          "zanity": 1,
-          "matched": 0
+          "zanity": 2,
+          "matched": 1
         }
       }
     }
@@ -1525,7 +1533,7 @@
     "bonsai": {
       "recall": {
         "dead-parameter": {
-          "old": 319,
+          "old": 318,
           "matched": 44
         },
         "dead-symbol": {
