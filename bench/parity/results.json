@@ -1,6 +1,6 @@
 {
   "when": "2026-10-17",
-  "commit": "9e60d85",
+  "commit": "c11e148",
   "runs": 5,
   "fixtures": [
     {
@@ -1008,7 +1008,7 @@
         },
         "single-impl-abstraction": {
           "old": 1,
-          "matched": 0
+          "matched": 1
         }
       },
       "agreement": {
@@ -1533,7 +1533,7 @@
     "bonsai": {
       "recall": {
         "dead-parameter": {
-          "old": 318,
+          "old": 316,
           "matched": 44
         },
         "dead-symbol": {
@@ -1566,7 +1566,7 @@
         },
         "single-impl-abstraction": {
           "old": 15,
-          "matched": 0
+          "matched": 1
         }
       },
       "agreement": {

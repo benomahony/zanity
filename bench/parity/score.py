@@ -77,6 +77,14 @@ def near(old: dict, new: dict) -> bool:
     return old["path"] == new["path"] and old["line"] - 1 <= new["line"] <= old.get("end", old["line"]) + 1
 
 
+def matches(tool: Tool, rule: str, old: dict, new: dict) -> bool:
+    """Whether zanity's finding answers the old one: on its lines, or for a rule in the tool's
+    same_file, anywhere in its file."""
+    assert rule in tool.rules, f"{rule} is not one of {tool.name}'s rules"
+    assert tool.same_file <= set(tool.rules), f"{tool.name}'s same_file names {sorted(tool.same_file - set(tool.rules))}, which it doesn't map"
+    return near(old, new) or (rule in tool.same_file and old["path"] == new["path"])
+
+
 def inside(unit: Path, found: list[dict]) -> list[dict]:
     """The findings in a fixture file, or anywhere in a fixture project."""
     assert unit.is_absolute(), f"{unit} must be absolute to compare with absolute finding paths"
@@ -109,7 +117,7 @@ def fixture_row(tool: Tool, unit: Path, runs: Runs) -> dict:
     targets = tool.rules[rule]
     fired, answered = having(inside(unit, runs.old), [rule]), having(inside(unit, runs.new), targets)
     # A vocabulary problem sits in each tool's own config file, so no line can match.
-    same_line = None if rule.startswith("config:") else any(near(o, n) for o in fired for n in answered)
+    same_line = None if rule.startswith("config:") else any(matches(tool, rule, o, n) for o in fired for n in answered)
     others = {f["rule"] for f in inside(unit, runs.everything)}
     assert targets, f"{tool.name} {rule} has a fixture but maps to no zanity rule; map it in tools.py"
     assert unit.is_relative_to(HERE), f"{unit} must sit under {HERE}"
@@ -166,7 +174,7 @@ def recall(tool: Tool, old: list[dict], new: list[dict]) -> dict[str, dict]:
     for rule, targets in tool.rules.items():
         fired, answered = having(old, [rule]), having(new, targets)
         if fired:
-            out[rule] = {"old": len(fired), "matched": sum(any(near(o, n) for n in answered) for o in fired)}
+            out[rule] = {"old": len(fired), "matched": sum(any(matches(tool, rule, o, n) for n in answered) for o in fired)}
     overcounted = {rule: s for rule, s in out.items() if s["matched"] > s["old"]}
     assert not overcounted, f"a finding matches at most once, but {overcounted} matched more than were found"
     assert set(out) <= set(tool.rules), f"recall scored {sorted(set(out) - set(tool.rules))}, which {tool.name} doesn't map"

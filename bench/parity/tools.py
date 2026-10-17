@@ -25,6 +25,9 @@ class Tool:
     notes: dict[str, str] = field(default_factory=dict)
     # Whether the adapter takes project directories rather than files.
     projects: bool = False
+    # Old rules whose findings sit on a different part of the same problem from zanity's, so a
+    # finding anywhere in the same file matches.
+    same_file: set[str] = field(default_factory=set)
 
     @property
     def python(self) -> Path:
@@ -192,8 +195,15 @@ TOOLS = [
             "single-impl-abstraction": ["single-impl-abstraction"],
             "structural-twins": ["structural-twins"],
         },
-        notes={"long-function": "bonsai flags 30 lines; zanity flags 60, as Power of Ten says"},
+        notes={
+            "long-function": "bonsai flags 30 lines; zanity flags 60, as Power of Ten says",
+            "extractable-chunk": "bonsai searches functions over 30 lines and takes blocks that return early; zanity searches functions past its 60-line limit, for blocks that can move out unchanged",
+            "single-impl-abstraction": "bonsai reports the one implementation; zanity reports the abstraction, which is what to remove",
+            "passthrough-wrapper": "bonsai also flags functions that change what they pass on, take no parameters, or are methods an override replaces; zanity reports only functions that forward their own parameters unchanged",
+            "duplicated-expression": "bonsai also flags the same text in separate loops, where each loop binds a different value; zanity reports only an expression it could compute once",
+        },
         projects=True,
+        same_file={"single-impl-abstraction"},
     ),
 ]
 BY_NAME = {tool.name: tool for tool in TOOLS}

@@ -217,10 +217,10 @@ def languages(data: dict) -> list[str]:
         for language in LANGUAGES:
             found = data["languages"][language]["recall"].get(rule)
             cells.append(score(found["matched"], found["old"]) if found else badge("–", "none"))
-        rows.append([f"`{rule}`", *cells])
+        rows.append([f"`{rule}`", *cells, tool.notes.get(rule, "")])
     assert len(rows) == len(tool.rules), "a row per bonsai smell"
     assert set(data["languages"]) == set(LANGUAGES), "every language was scored"
-    return table(["Smell", *LANGUAGES], rows, right=len(LANGUAGES))
+    return table(["Smell", *LANGUAGES, "Note"], rows)
 
 
 def corpus(data: dict) -> list[str]:
