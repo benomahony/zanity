@@ -154,6 +154,7 @@
         { "const": "NASA02", "description": "The NASA code for unbounded-loop: warning, on with --strict. Loop over a collection or cap the number of iterations." },
         { "const": "eager-test", "description": "warning, on by default. Split it into tests that each check one behaviour, named for that behaviour." },
         { "const": "long-test", "description": "warning, on by default. Split it into tests that each check one behaviour, or move the setup into a helper." },
+        { "const": "undocumented-test", "description": "warning, on by default. Say which behaviour it checks and why it needs this many steps, in a docstring or a comment above it." },
         { "const": "long-function", "description": "warning, on by default. Move a self-contained step into its own function." },
         { "const": "NASA04", "description": "The NASA code for long-function: warning, on by default. Move a self-contained step into its own function." },
         { "const": "assertion-density", "description": "error, on with --strict. Assert conditions a bug could actually break: what it needs from its inputs and what it guarantees about its result." },

@@ -412,6 +412,7 @@ Rules marked *strict* hold code to what safety-critical software needs and most 
 | Rule | Severity | Flags |
 |---|---|---|
 | `long-test` | warning | a test with 50 or more lines of code, not counting blank and comment lines |
+| `undocumented-test` | warning | a test with 20 or more lines of code and no docstring, comment or sentence for a name saying which behaviour it checks |
 | `eager-test` | warning | a test that makes more than 10 checks, counting assertions and test-framework checks such as `expect` and `assertEquals` |
 | `sleep-in-test` | warning | a test that waits on the clock |
 | `polling-loop` | warning | a loop in a test that polls with a sleep |

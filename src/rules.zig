@@ -57,6 +57,7 @@ pub const all = [_]Rule{
     .{ .name = "unbounded-loop", .alias = "NASA02", .advice = "Loop over a collection or cap the number of iterations.", .severity = .warning, .tier = .strict, .needs = &.{ "loop.outer", "loop.condition", "loop.iterable", "literal.true" }, .catalogue = &.{"CWE-835"} },
     .{ .name = "eager-test", .advice = "Split it into tests that each check one behaviour, named for that behaviour.", .severity = .warning, .tier = .default, .needs = &.{ "function.outer", "function.name" } },
     .{ .name = "long-test", .advice = "Split it into tests that each check one behaviour, or move the setup into a helper.", .severity = .warning, .tier = .default, .needs = &.{ "function.outer", "function.name" } },
+    .{ .name = "undocumented-test", .advice = "Say which behaviour it checks and why it needs this many steps, in a docstring or a comment above it.", .severity = .warning, .tier = .default, .needs = &.{ "function.outer", "function.name", "assertion.outer", "test.check" } },
     .{ .name = "long-function", .alias = "NASA04", .advice = "Move a self-contained step into its own function.", .severity = .warning, .tier = .default, .needs = &.{ "function.outer", "function.name" } },
     .{ .name = "assertion-density", .alias = "NASA05", .advice = "Assert conditions a bug could actually break: what it needs from its inputs and what it guarantees about its result.", .severity = .@"error", .tier = .strict, .needs = &.{ "function.outer", "function.name", "assertion.outer" } },
     .{ .name = "assertion-message", .alias = "NASA05-A", .advice = "Add a message saying what must be true and why, so whoever fixes a failure can tell whether the code or the expectation is wrong.", .severity = .warning, .tier = .strict, .needs = &.{ "assertion.outer", "assertion.message" } },
@@ -317,6 +318,8 @@ pub const Set = struct {
 pub const max_function_lines = 60;
 /// A test is read to learn one behaviour, so it gets less room than a function.
 pub const max_test_lines = 50;
+/// A test this long takes reading to follow, so it should say what it checks.
+pub const max_undocumented_test_lines = 20;
 /// Past this many checks, a failing test no longer says which behaviour broke.
 pub const max_test_checks = 10;
 pub const min_asserts_per_function = 2;

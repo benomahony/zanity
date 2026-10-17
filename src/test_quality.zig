@@ -88,10 +88,70 @@ pub fn checkTestLength(self: *File, ctx: Context, at: ts.Node, shown: []const u8
     if (shown.len == 0) assert.panic("{s}: measuring an unnamed test {f}; pass its name or first line", .{ self.work.facts.path, ctx.node.where() });
     if (ctx.family != .@"test" and !ctx.is_test) assert.panic("{s}: measuring {f} as a test, but it is neither a test construct nor test-named", .{ self.work.facts.path, ctx.node.where() });
     const lines = self.codeLinesIn(ctx.span);
+    // A test that checks nothing, such as one that only imports others, has no behaviour to describe.
+    const checks = lines >= rules.max_undocumented_test_lines and ctx.checks > 0;
+    if (checks and !documented(self, ctx)) try reportUndocumented(self, at, shown, lines);
     if (lines < rules.max_test_lines) return;
     if (!try self.report(at, "long-test", try self.say("'{s}' has {d} lines of code; tests must have fewer than {d}.", .{ shown, lines, rules.max_test_lines }))) return;
     const fix = try longTestFix(self, ctx);
     if (fix.len > 0) self.s.diagnostics.last().?.fix = fix;
+}
+
+fn reportUndocumented(self: *File, at: ts.Node, shown: []const u8, lines: u32) !void {
+    if (lines < rules.max_undocumented_test_lines) assert.panic("{s}: '{s}' has {d} lines, under the {d} that need a docstring", .{ self.work.facts.path, shown, lines, rules.max_undocumented_test_lines });
+    if (shown.len == 0) assert.panic("{s}: reporting an unnamed test at {f}; pass its name or first line", .{ self.work.facts.path, at.where() });
+    if (!try self.report(at, "undocumented-test", try self.say("'{s}' has {d} lines of code and nothing saying which behaviour it checks.", .{ shown, lines }))) return;
+    self.s.diagnostics.last().?.fix = try self.say("{s} '{s}' saying which behaviour it checks.", .{ self.tables.test_doc, shown });
+}
+
+/// Whether the test tells a reader what it checks: a name written as a sentence, as in
+/// `test "..."` or `it("...")`; a comment on the lines just above it, past its attributes and
+/// decorators; a comment between its header and its body; or a docstring opening its body.
+fn documented(self: *File, ctx: Context) bool {
+    const source = self.source;
+    if (ctx.name) |name| if (sentence(name.text(source))) return true;
+    const in_comment = self.s.in_comment[0..source.len];
+    const start = ts.ts_node_start_byte(ctx.node);
+    if (start > source.len) assert.panic("{s}: {f} starts at byte {d} of {d}", .{ self.work.facts.path, ctx.node.where(), start, source.len });
+    var end = std.mem.lastIndexOfScalar(u8, source[0..start], '\n');
+    for (0..max_attribute_lines) |_| {
+        const stop = end orelse break;
+        const begin = if (std.mem.lastIndexOfScalar(u8, source[0..stop], '\n')) |newline| newline + 1 else 0;
+        if (commentLine(source[begin..stop], in_comment[begin..stop])) return true;
+        const line = std.mem.trimStart(u8, source[begin..stop], " \t");
+        if (!std.mem.startsWith(u8, line, "@") and !std.mem.startsWith(u8, line, "#[")) break;
+        end = if (begin == 0) null else begin - 1;
+    }
+    const inner = ctx.inner orelse return false;
+    const body = ts.ts_node_start_byte(inner);
+    if (body < start) assert.panic("{s}: the body of {f} starts at byte {d}, before the test at {d}", .{ self.work.facts.path, ctx.node.where(), body, start });
+    if (std.mem.indexOfScalar(bool, in_comment[start..body], true) != null) return true;
+    const opening = std.mem.trimStart(u8, inner.text(source), " \t\r\n");
+    return opening.len > 0 and (opening[0] == '"' or opening[0] == '\'');
+}
+
+/// Whether a test's name is a string literal of several words, which says what it checks.
+fn sentence(name: []const u8) bool {
+    if (name.len == 0) assert.panic("a test's name node has no text; the @name capture matched an empty node", .{});
+    const quoted = std.mem.indexOfScalar(u8, "\"'`", name[0]) != null;
+    if (quoted and (name.len < 2 or name[name.len - 1] != name[0])) assert.panic("the test name {s} opens with a quote it doesn't close with", .{name});
+    return quoted and std.mem.indexOfScalar(u8, name, ' ') != null;
+}
+
+/// Lines of attributes, decorators or annotations to look past for a comment above a test.
+const max_attribute_lines = 8;
+
+/// Whether a line holds a comment and nothing else.
+fn commentLine(line: []const u8, in_comment: []const bool) bool {
+    if (line.len != in_comment.len) assert.panic("a {d}-byte line came with {d} comment flags; slice both from the same range", .{ line.len, in_comment.len });
+    if (std.mem.indexOfScalar(u8, line, '\n') != null) assert.panic("'{s}' spans more than one line; pass the bytes between two newlines", .{line});
+    var commented = false;
+    for (line, in_comment) |c, flag| {
+        if (std.ascii.isWhitespace(c)) continue;
+        if (!flag) return false;
+        commented = true;
+    }
+    return commented;
 }
 
 /// A long test's fix: move the setup out when most of it comes before the first check, or split it

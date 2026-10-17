@@ -51,6 +51,7 @@
         .assertion_value = "$name={$name!r}",
         .assertion_braces_doubled = true,
         .line_comment = "#",
+        .test_doc = "Open with a docstring in",
         .protocol_affix = "__",
         .private_prefixes = "_",
         .forbidden_calls = .{ "eval", "exec", "compile", "globals", "locals", "__import__", "setattr", "getattr" },

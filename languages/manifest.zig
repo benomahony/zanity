@@ -186,6 +186,8 @@ pub const Tables = struct {
     assertion_braces_doubled: bool = false,
     /// What starts a comment that runs to the end of the line; fixes leave TODOs with it.
     line_comment: []const u8 = "",
+    /// Where a test says which behaviour it checks, as the start of a sentence naming the test.
+    test_doc: []const u8 = "Add a comment above",
     /// An affix that marks names the language's protocol defines, such as Python's `__name__`.
     protocol_affix: []const u8 = "",
     /// Prefix bytes that mark a name private by convention, such as `_` in Python.
