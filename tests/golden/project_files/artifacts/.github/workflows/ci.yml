@@ -7,3 +7,6 @@ jobs:
       - run: curl -fsSL https://example.invalid/install.sh | sh
       - uses: owner/action@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb # v1.2.3
       - uses: owner/action@v1 # aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+permissions:
+  id-token: write
+  pull-requests: read

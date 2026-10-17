@@ -386,6 +386,7 @@ fn isLiteralSecret(value: []const u8) bool {
     const references = [_][]const u8{ "secretkeyref", "secrets.", "vault" };
     for (references) |reference| if (std.mem.indexOf(u8, value, reference) != null) return false;
     for (rules.secret_placeholders) |placeholder| if (std.mem.eql(u8, value, placeholder)) return false;
+    for (rules.access_levels) |level| if (std.mem.eql(u8, value, level)) return false;
     return std.mem.indexOfScalar(u8, rules.secret_masks, value[0]) == null or std.mem.indexOfNone(u8, value, value[0..1]) != null;
 }
 
