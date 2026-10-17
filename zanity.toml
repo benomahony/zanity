@@ -15,6 +15,7 @@ exclude = [
   "tests/config/",
   "tests/fix/",
   "tests/golden/",
+  "bench/parity/fixtures/",
   "tests/infer/calibration/",
   "tests/infer/project/",
 ]

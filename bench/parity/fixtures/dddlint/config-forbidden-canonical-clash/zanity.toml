@@ -1,0 +1,5 @@
+[vocabulary]
+forbidden = ["customer"]
+
+[vocabulary.synonyms]
+customer = ["client"]

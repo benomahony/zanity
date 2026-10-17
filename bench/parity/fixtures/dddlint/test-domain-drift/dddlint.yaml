@@ -1,0 +1,5 @@
+domains:
+  - name: billing
+    include: ['**/billing/**']
+  - name: shipping
+    include: ['**/shipping/**']

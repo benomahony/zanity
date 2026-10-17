@@ -1,0 +1,1914 @@
+{
+  "when": "2026-10-17",
+  "commit": "06f4cb8",
+  "runs": 5,
+  "fixtures": [
+    {
+      "tool": "nasa-lsp",
+      "rule": "NASA01-A",
+      "zanity": [
+        "forbidden-call"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "dead-symbol"
+      ],
+      "note": "zanity reports getattr and setattr only when the attribute name is not a literal"
+    },
+    {
+      "tool": "nasa-lsp",
+      "rule": "NASA01-B",
+      "zanity": [
+        "recursion"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [],
+      "note": ""
+    },
+    {
+      "tool": "nasa-lsp",
+      "rule": "NASA02",
+      "zanity": [
+        "unbounded-loop"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-density",
+        "dead-symbol",
+        "redundant-null-check",
+        "restated-type",
+        "unconstructive-error",
+        "vague-error"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "nasa-lsp",
+      "rule": "NASA04",
+      "zanity": [
+        "long-function"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "dead-symbol",
+        "vague-error"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "nasa-lsp",
+      "rule": "NASA05-A",
+      "zanity": [
+        "assertion-message"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "dead-symbol",
+        "duplicate-name",
+        "vague-error"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "nasa-lsp",
+      "rule": "NASA05-M1",
+      "zanity": [
+        "restated-type"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-density",
+        "dead-symbol",
+        "vague-error"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "nasa-lsp",
+      "rule": "NASA05-M2",
+      "zanity": [
+        "constant-assertion"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-density",
+        "dead-symbol",
+        "vague-error"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "nasa-lsp",
+      "rule": "NASA05-M3",
+      "zanity": [
+        "redundant-null-check"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-density",
+        "dead-symbol",
+        "vague-error"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "nasa-lsp",
+      "rule": "NASA05-M4",
+      "zanity": [
+        "conversion-assertion"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-density",
+        "dead-symbol",
+        "vague-error"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "nasa-lsp",
+      "rule": "NASA05-M5",
+      "zanity": [
+        "guaranteed-length"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-density",
+        "dead-symbol",
+        "vague-error"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "nasa-lsp",
+      "rule": "NASA05",
+      "zanity": [
+        "assertion-density"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "dead-symbol",
+        "duplicate-name"
+      ],
+      "note": "zanity doesn't count assertions that restate a type or can never fail"
+    },
+    {
+      "tool": "testdesiderata",
+      "rule": "AUT001",
+      "zanity": [
+        "stdin-in-test"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-message"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "testdesiderata",
+      "rule": "AUT002",
+      "zanity": [
+        "debug-leftover"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-message"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "testdesiderata",
+      "rule": "BHV001",
+      "zanity": [
+        "test-double"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-message"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "testdesiderata",
+      "rule": "BHV002",
+      "zanity": [
+        "test-double"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-message"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "testdesiderata",
+      "rule": "BHV003",
+      "zanity": [
+        "test-double"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-message"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "testdesiderata",
+      "rule": "BHV004",
+      "zanity": [
+        "test-double"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-message"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "testdesiderata",
+      "rule": "CMP001",
+      "zanity": [
+        "eager-test"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "vague-error"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "testdesiderata",
+      "rule": "CMP002",
+      "zanity": [
+        "long-test"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-message"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "testdesiderata",
+      "rule": "DET001",
+      "zanity": [
+        "nondeterministic-test"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-message",
+        "weak-random"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "testdesiderata",
+      "rule": "DET002",
+      "zanity": [
+        "nondeterministic-test"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-message"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "testdesiderata",
+      "rule": "DET003",
+      "zanity": [
+        "nondeterministic-test"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-message"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "testdesiderata",
+      "rule": "DET004",
+      "zanity": [
+        "nondeterministic-test"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-message"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "testdesiderata",
+      "rule": "DET005",
+      "zanity": [
+        "nondeterministic-test"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-message"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "testdesiderata",
+      "rule": "DET006",
+      "zanity": [
+        "nondeterministic-test"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-message"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "testdesiderata",
+      "rule": "FST001",
+      "zanity": [
+        "sleep-in-test"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-message"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "testdesiderata",
+      "rule": "FST002",
+      "zanity": [
+        "polling-loop"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-message",
+        "sleep-in-test"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "testdesiderata",
+      "rule": "ISO001",
+      "zanity": [
+        "shared-state-in-test"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-message"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "testdesiderata",
+      "rule": "ISO002",
+      "zanity": [
+        "shared-state-in-test"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-density",
+        "assertion-message",
+        "constant-assertion"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "testdesiderata",
+      "rule": "ISO003",
+      "zanity": [
+        "filesystem-in-test"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-message"
+      ],
+      "note": "zanity reports reads and writes of real paths, not of the test's own temporary directory"
+    },
+    {
+      "tool": "testdesiderata",
+      "rule": "ISO004",
+      "zanity": [
+        "network-in-test"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-message"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "testdesiderata",
+      "rule": "ISO005",
+      "zanity": [
+        "database-in-test"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-message"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "testdesiderata",
+      "rule": "ISO006",
+      "zanity": [
+        "unmanaged-temp-in-test"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-message"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "testdesiderata",
+      "rule": "ISO007",
+      "zanity": [
+        "filesystem-in-test"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-message"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "testdesiderata",
+      "rule": "ISO008",
+      "zanity": [
+        "process-in-test"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-message"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "testdesiderata",
+      "rule": "PRD001",
+      "zanity": [
+        "skipped-test"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-message"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "testdesiderata",
+      "rule": "PRD002",
+      "zanity": [
+        "skipped-test"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-message"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "testdesiderata",
+      "rule": "PRD003",
+      "zanity": [
+        "skipped-test"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-message"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "testdesiderata",
+      "rule": "RDL001",
+      "zanity": [
+        "vague-test-name"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-message"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "testdesiderata",
+      "rule": "RDL002",
+      "zanity": [
+        "long-test",
+        "unreadable-test"
+      ],
+      "old_fires": true,
+      "zanity_fires": false,
+      "same_line": false,
+      "others": [
+        "assertion-message"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "testdesiderata",
+      "rule": "SPC001",
+      "zanity": [
+        "generic-catch"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-message"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "testdesiderata",
+      "rule": "SPC002",
+      "zanity": [
+        "assertion-message"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [],
+      "note": ""
+    },
+    {
+      "tool": "testdesiderata",
+      "rule": "SPC003",
+      "zanity": [
+        "broad-expected-error"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-density"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "testdesiderata",
+      "rule": "STR001",
+      "zanity": [
+        "call-verification"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-density"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "testdesiderata",
+      "rule": "STR002",
+      "zanity": [
+        "call-verification"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-density"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "testdesiderata",
+      "rule": "STR003",
+      "zanity": [
+        "call-verification"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-density"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "testdesiderata",
+      "rule": "STR004",
+      "zanity": [
+        "call-verification"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-density"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "testdesiderata",
+      "rule": "STR005",
+      "zanity": [
+        "call-verification"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-density"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "testdesiderata",
+      "rule": "STR006",
+      "zanity": [
+        "call-verification"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-density"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "testdesiderata",
+      "rule": "FST003",
+      "zanity": [
+        "slow-test"
+      ],
+      "old_fires": null,
+      "zanity_fires": null,
+      "same_line": null,
+      "others": [],
+      "note": "No fixture: it reads test durations from a JUnit report, not the source. zanity asks slow-test with --infer, and reads no JUnit timings"
+    },
+    {
+      "tool": "mockbuster",
+      "rule": "mock-instantiation",
+      "zanity": [
+        "test-double"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-message"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "mockbuster",
+      "rule": "mocker-fixture",
+      "zanity": [
+        "test-double"
+      ],
+      "old_fires": true,
+      "zanity_fires": false,
+      "same_line": false,
+      "others": [
+        "assertion-message"
+      ],
+      "note": "zanity reports the double where it is made, such as mocker.patch, not the parameter"
+    },
+    {
+      "tool": "mockbuster",
+      "rule": "monkeypatch-fixture",
+      "zanity": [
+        "test-double"
+      ],
+      "old_fires": true,
+      "zanity_fires": false,
+      "same_line": false,
+      "others": [
+        "assertion-message"
+      ],
+      "note": "zanity reports monkeypatch.setattr, which replaces behaviour, not setenv or the parameter"
+    },
+    {
+      "tool": "mockbuster",
+      "rule": "patch-call",
+      "zanity": [
+        "test-double"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-message"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "mockbuster",
+      "rule": "patch-context",
+      "zanity": [
+        "test-double"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-message"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "mockbuster",
+      "rule": "patch-decorator",
+      "zanity": [
+        "test-double"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-message"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "dddlint",
+      "rule": "alias",
+      "zanity": [
+        "non-canonical-term"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-density",
+        "dead-symbol"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "dddlint",
+      "rule": "alias:module",
+      "zanity": [
+        "non-canonical-term"
+      ],
+      "old_fires": true,
+      "zanity_fires": false,
+      "same_line": false,
+      "others": [
+        "assertion-density",
+        "dead-symbol"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "dddlint",
+      "rule": "config:alias-conflict",
+      "zanity": [
+        "vocabulary-conflict"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": null,
+      "others": [],
+      "note": ""
+    },
+    {
+      "tool": "dddlint",
+      "rule": "config:duplicate-name",
+      "zanity": [
+        "vocabulary-conflict"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": null,
+      "others": [],
+      "note": ""
+    },
+    {
+      "tool": "dddlint",
+      "rule": "config:forbidden-canonical-clash",
+      "zanity": [
+        "vocabulary-conflict"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": null,
+      "others": [],
+      "note": ""
+    },
+    {
+      "tool": "dddlint",
+      "rule": "drift",
+      "zanity": [
+        "name-drift"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-density",
+        "dead-symbol"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "dddlint",
+      "rule": "duplicate",
+      "zanity": [
+        "duplicate-name"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-density",
+        "dead-symbol"
+      ],
+      "note": "zanity reports only names another file can use, and not methods of different classes"
+    },
+    {
+      "tool": "dddlint",
+      "rule": "forbidden",
+      "zanity": [
+        "forbidden-term"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-density",
+        "dead-symbol"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "dddlint",
+      "rule": "forbidden:module",
+      "zanity": [
+        "forbidden-term"
+      ],
+      "old_fires": true,
+      "zanity_fires": false,
+      "same_line": false,
+      "others": [
+        "assertion-density",
+        "dead-symbol"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "dddlint",
+      "rule": "test-domain-drift",
+      "zanity": [
+        "misplaced-test"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-density",
+        "assertion-message"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "dddlint",
+      "rule": "near-synonym",
+      "zanity": [],
+      "old_fires": null,
+      "zanity_fires": null,
+      "same_line": null,
+      "others": [],
+      "note": "No fixture: it comes from an embedding model in `dddlint map`, not from lint. zanity has no embedding features yet"
+    },
+    {
+      "tool": "dddlint",
+      "rule": "context-outlier",
+      "zanity": [],
+      "old_fires": null,
+      "zanity_fires": null,
+      "same_line": null,
+      "others": [],
+      "note": "No fixture: it comes from an embedding model in `dddlint map`, not from lint. zanity has no embedding features yet"
+    }
+  ],
+  "languages": {
+    "python": {
+      "recall": {
+        "dead-parameter": {
+          "old": 9,
+          "matched": 3
+        },
+        "dead-symbol": {
+          "old": 23,
+          "matched": 23
+        },
+        "duplicated-expression": {
+          "old": 2,
+          "matched": 2
+        },
+        "empty-handler": {
+          "old": 1,
+          "matched": 0
+        },
+        "extractable-chunk": {
+          "old": 2,
+          "matched": 0
+        },
+        "long-function": {
+          "old": 2,
+          "matched": 0
+        },
+        "long-parameter-list": {
+          "old": 4,
+          "matched": 4
+        },
+        "message-chains": {
+          "old": 1,
+          "matched": 1
+        },
+        "passthrough-wrapper": {
+          "old": 4,
+          "matched": 2
+        },
+        "single-impl-abstraction": {
+          "old": 1,
+          "matched": 0
+        }
+      },
+      "agreement": {
+        "dead-parameter": {
+          "zanity": 3,
+          "matched": 3
+        },
+        "dead-symbol": {
+          "zanity": 25,
+          "matched": 23
+        },
+        "duplicated-expression": {
+          "zanity": 1,
+          "matched": 1
+        },
+        "long-parameter-list": {
+          "zanity": 4,
+          "matched": 4
+        },
+        "message-chain": {
+          "zanity": 1,
+          "matched": 1
+        },
+        "passthrough-wrapper": {
+          "zanity": 2,
+          "matched": 2
+        },
+        "single-impl-abstraction": {
+          "zanity": 1,
+          "matched": 0
+        },
+        "structural-twins": {
+          "zanity": 2,
+          "matched": 0
+        },
+        "swallowed-error": {
+          "zanity": 2,
+          "matched": 0
+        }
+      }
+    },
+    "javascript": {
+      "recall": {
+        "dead-parameter": {
+          "old": 4,
+          "matched": 3
+        },
+        "dead-symbol": {
+          "old": 20,
+          "matched": 19
+        },
+        "duplicated-expression": {
+          "old": 2,
+          "matched": 2
+        },
+        "long-parameter-list": {
+          "old": 2,
+          "matched": 2
+        },
+        "message-chains": {
+          "old": 1,
+          "matched": 1
+        },
+        "passthrough-wrapper": {
+          "old": 4,
+          "matched": 2
+        }
+      },
+      "agreement": {
+        "dead-parameter": {
+          "zanity": 3,
+          "matched": 3
+        },
+        "dead-symbol": {
+          "zanity": 19,
+          "matched": 19
+        },
+        "duplicated-expression": {
+          "zanity": 1,
+          "matched": 1
+        },
+        "long-parameter-list": {
+          "zanity": 2,
+          "matched": 2
+        },
+        "message-chain": {
+          "zanity": 1,
+          "matched": 1
+        },
+        "passthrough-wrapper": {
+          "zanity": 2,
+          "matched": 2
+        },
+        "swallowed-error": {
+          "zanity": 1,
+          "matched": 0
+        }
+      }
+    },
+    "typescript": {
+      "recall": {
+        "dead-parameter": {
+          "old": 21,
+          "matched": 6
+        },
+        "dead-symbol": {
+          "old": 30,
+          "matched": 22
+        },
+        "duplicated-expression": {
+          "old": 1,
+          "matched": 0
+        },
+        "long-function": {
+          "old": 2,
+          "matched": 0
+        },
+        "long-parameter-list": {
+          "old": 2,
+          "matched": 2
+        },
+        "message-chains": {
+          "old": 1,
+          "matched": 1
+        },
+        "passthrough-wrapper": {
+          "old": 3,
+          "matched": 2
+        }
+      },
+      "agreement": {
+        "dead-parameter": {
+          "zanity": 4,
+          "matched": 4
+        },
+        "dead-symbol": {
+          "zanity": 20,
+          "matched": 20
+        },
+        "long-parameter-list": {
+          "zanity": 2,
+          "matched": 2
+        },
+        "message-chain": {
+          "zanity": 1,
+          "matched": 1
+        },
+        "passthrough-wrapper": {
+          "zanity": 2,
+          "matched": 2
+        },
+        "single-impl-abstraction": {
+          "zanity": 1,
+          "matched": 0
+        },
+        "structural-twins": {
+          "zanity": 2,
+          "matched": 0
+        },
+        "swallowed-error": {
+          "zanity": 1,
+          "matched": 0
+        }
+      }
+    },
+    "go": {
+      "recall": {
+        "dead-parameter": {
+          "old": 15,
+          "matched": 10
+        },
+        "dead-symbol": {
+          "old": 21,
+          "matched": 18
+        },
+        "duplicated-expression": {
+          "old": 1,
+          "matched": 1
+        },
+        "long-parameter-list": {
+          "old": 3,
+          "matched": 3
+        }
+      },
+      "agreement": {
+        "dead-parameter": {
+          "zanity": 9,
+          "matched": 9
+        },
+        "dead-symbol": {
+          "zanity": 18,
+          "matched": 18
+        },
+        "duplicated-expression": {
+          "zanity": 1,
+          "matched": 1
+        },
+        "long-parameter-list": {
+          "zanity": 3,
+          "matched": 3
+        },
+        "message-chain": {
+          "zanity": 1,
+          "matched": 0
+        },
+        "passthrough-wrapper": {
+          "zanity": 2,
+          "matched": 0
+        },
+        "structural-twins": {
+          "zanity": 2,
+          "matched": 0
+        }
+      }
+    },
+    "rust": {
+      "recall": {
+        "dead-parameter": {
+          "old": 12,
+          "matched": 7
+        },
+        "dead-symbol": {
+          "old": 20,
+          "matched": 14
+        },
+        "duplicated-expression": {
+          "old": 1,
+          "matched": 1
+        },
+        "empty-handler": {
+          "old": 1,
+          "matched": 0
+        },
+        "long-function": {
+          "old": 2,
+          "matched": 0
+        },
+        "long-parameter-list": {
+          "old": 2,
+          "matched": 2
+        }
+      },
+      "agreement": {
+        "dead-parameter": {
+          "zanity": 6,
+          "matched": 6
+        },
+        "dead-symbol": {
+          "zanity": 18,
+          "matched": 14
+        },
+        "duplicated-expression": {
+          "zanity": 1,
+          "matched": 1
+        },
+        "long-parameter-list": {
+          "zanity": 2,
+          "matched": 2
+        },
+        "message-chain": {
+          "zanity": 1,
+          "matched": 0
+        },
+        "passthrough-wrapper": {
+          "zanity": 2,
+          "matched": 0
+        },
+        "single-impl-abstraction": {
+          "zanity": 1,
+          "matched": 0
+        },
+        "structural-twins": {
+          "zanity": 2,
+          "matched": 0
+        }
+      }
+    },
+    "java": {
+      "recall": {
+        "dead-parameter": {
+          "old": 8,
+          "matched": 4
+        },
+        "dead-symbol": {
+          "old": 31,
+          "matched": 18
+        },
+        "empty-handler": {
+          "old": 1,
+          "matched": 0
+        },
+        "long-parameter-list": {
+          "old": 2,
+          "matched": 2
+        }
+      },
+      "agreement": {
+        "dead-parameter": {
+          "zanity": 4,
+          "matched": 4
+        },
+        "dead-symbol": {
+          "zanity": 15,
+          "matched": 15
+        },
+        "long-parameter-list": {
+          "zanity": 2,
+          "matched": 2
+        },
+        "passthrough-wrapper": {
+          "zanity": 2,
+          "matched": 0
+        },
+        "single-impl-abstraction": {
+          "zanity": 1,
+          "matched": 0
+        },
+        "structural-twins": {
+          "zanity": 2,
+          "matched": 0
+        },
+        "swallowed-error": {
+          "zanity": 1,
+          "matched": 0
+        }
+      }
+    }
+  },
+  "corpus_stats": {
+    "files": 162,
+    "lines": 58654
+  },
+  "corpus": {
+    "nasa-lsp": {
+      "recall": {
+        "NASA01-A": {
+          "old": 82,
+          "matched": 19
+        },
+        "NASA01-B": {
+          "old": 7,
+          "matched": 5
+        },
+        "NASA02": {
+          "old": 16,
+          "matched": 16
+        },
+        "NASA04": {
+          "old": 72,
+          "matched": 55
+        },
+        "NASA05": {
+          "old": 1742,
+          "matched": 1519
+        },
+        "NASA05-A": {
+          "old": 1026,
+          "matched": 1026
+        },
+        "NASA05-M1": {
+          "old": 3,
+          "matched": 3
+        },
+        "NASA05-M3": {
+          "old": 4,
+          "matched": 4
+        }
+      },
+      "agreement": {
+        "assertion-density": {
+          "zanity": 1519,
+          "matched": 1519
+        },
+        "assertion-message": {
+          "zanity": 1026,
+          "matched": 1026
+        },
+        "forbidden-call": {
+          "zanity": 19,
+          "matched": 19
+        },
+        "long-function": {
+          "zanity": 55,
+          "matched": 55
+        },
+        "recursion": {
+          "zanity": 8,
+          "matched": 5
+        },
+        "redundant-null-check": {
+          "zanity": 4,
+          "matched": 4
+        },
+        "restated-type": {
+          "zanity": 3,
+          "matched": 3
+        },
+        "unbounded-loop": {
+          "zanity": 16,
+          "matched": 16
+        }
+      }
+    },
+    "testdesiderata": {
+      "recall": {
+        "DET001": {
+          "old": 35,
+          "matched": 35
+        },
+        "ISO003": {
+          "old": 64,
+          "matched": 6
+        },
+        "ISO006": {
+          "old": 2,
+          "matched": 2
+        },
+        "ISO008": {
+          "old": 5,
+          "matched": 5
+        },
+        "RDL002": {
+          "old": 3,
+          "matched": 0
+        },
+        "SPC001": {
+          "old": 2,
+          "matched": 2
+        },
+        "SPC002": {
+          "old": 16,
+          "matched": 16
+        }
+      },
+      "agreement": {
+        "assertion-message": {
+          "zanity": 1026,
+          "matched": 29
+        },
+        "filesystem-in-test": {
+          "zanity": 6,
+          "matched": 6
+        },
+        "generic-catch": {
+          "zanity": 44,
+          "matched": 2
+        },
+        "nondeterministic-test": {
+          "zanity": 35,
+          "matched": 35
+        },
+        "process-in-test": {
+          "zanity": 5,
+          "matched": 5
+        },
+        "swallowed-error": {
+          "zanity": 25,
+          "matched": 0
+        },
+        "test-double": {
+          "zanity": 16,
+          "matched": 0
+        },
+        "unmanaged-temp-in-test": {
+          "zanity": 2,
+          "matched": 2
+        },
+        "vague-test-name": {
+          "zanity": 4,
+          "matched": 0
+        }
+      }
+    },
+    "mockbuster": {
+      "recall": {
+        "monkeypatch-fixture": {
+          "old": 14,
+          "matched": 0
+        }
+      },
+      "agreement": {
+        "test-double": {
+          "zanity": 16,
+          "matched": 0
+        }
+      }
+    },
+    "dddlint": {
+      "recall": {
+        "duplicate": {
+          "old": 555,
+          "matched": 24
+        },
+        "drift": {
+          "old": 34,
+          "matched": 1
+        }
+      },
+      "agreement": {
+        "duplicate-name": {
+          "zanity": 24,
+          "matched": 24
+        },
+        "name-drift": {
+          "zanity": 2,
+          "matched": 1
+        }
+      }
+    },
+    "bonsai": {
+      "recall": {
+        "dead-parameter": {
+          "old": 317,
+          "matched": 44
+        },
+        "dead-symbol": {
+          "old": 314,
+          "matched": 37
+        },
+        "duplicated-expression": {
+          "old": 508,
+          "matched": 40
+        },
+        "empty-handler": {
+          "old": 282,
+          "matched": 0
+        },
+        "extractable-chunk": {
+          "old": 66,
+          "matched": 3
+        },
+        "long-function": {
+          "old": 236,
+          "matched": 55
+        },
+        "long-parameter-list": {
+          "old": 450,
+          "matched": 64
+        },
+        "passthrough-wrapper": {
+          "old": 67,
+          "matched": 0
+        },
+        "single-impl-abstraction": {
+          "old": 15,
+          "matched": 0
+        }
+      },
+      "agreement": {
+        "dead-parameter": {
+          "zanity": 44,
+          "matched": 44
+        },
+        "dead-symbol": {
+          "zanity": 33,
+          "matched": 33
+        },
+        "duplicated-expression": {
+          "zanity": 22,
+          "matched": 22
+        },
+        "extractable-block": {
+          "zanity": 10,
+          "matched": 3
+        },
+        "long-function": {
+          "zanity": 55,
+          "matched": 55
+        },
+        "long-parameter-list": {
+          "zanity": 67,
+          "matched": 64
+        },
+        "message-chain": {
+          "zanity": 4,
+          "matched": 0
+        },
+        "single-impl-abstraction": {
+          "zanity": 2,
+          "matched": 0
+        },
+        "structural-twins": {
+          "zanity": 28,
+          "matched": 0
+        },
+        "swallowed-error": {
+          "zanity": 25,
+          "matched": 0
+        }
+      }
+    }
+  },
+  "inference": {
+    "key": false,
+    "questions": [
+      {
+        "rule": "boundary_error",
+        "zanity": "boundary-error",
+        "present": true
+      },
+      {
+        "rule": "check_then_act",
+        "zanity": "check-then-act",
+        "present": true
+      },
+      {
+        "rule": "cryptic_error",
+        "zanity": "cryptic-error",
+        "present": true
+      },
+      {
+        "rule": "docstring_drift",
+        "zanity": "comment-drift",
+        "present": true
+      },
+      {
+        "rule": "fixture_hides_behaviour",
+        "zanity": "",
+        "present": false
+      },
+      {
+        "rule": "fixture_leaks_state",
+        "zanity": "",
+        "present": false
+      },
+      {
+        "rule": "misleading_error",
+        "zanity": "misleading-error",
+        "present": true
+      },
+      {
+        "rule": "missing_authorisation",
+        "zanity": "missing-authorisation",
+        "present": true
+      },
+      {
+        "rule": "mixed_abstraction",
+        "zanity": "mixed-abstraction",
+        "present": true
+      },
+      {
+        "rule": "name_behaviour_mismatch",
+        "zanity": "name-behaviour-mismatch",
+        "present": true
+      },
+      {
+        "rule": "non_idempotent_retry",
+        "zanity": "non-idempotent-retry",
+        "present": true
+      },
+      {
+        "rule": "partial_failure",
+        "zanity": "partial-failure",
+        "present": true
+      },
+      {
+        "rule": "query_with_side_effect",
+        "zanity": "query-with-side-effect",
+        "present": true
+      },
+      {
+        "rule": "relaxed_warnings",
+        "zanity": "weakened-check",
+        "present": true
+      },
+      {
+        "rule": "test_hard_to_write",
+        "zanity": "heavy-setup-test",
+        "present": true
+      },
+      {
+        "rule": "test_nondeterministic",
+        "zanity": "flaky-test",
+        "present": true
+      },
+      {
+        "rule": "test_not_automated",
+        "zanity": "manual-test",
+        "present": true
+      },
+      {
+        "rule": "test_not_behavioural",
+        "zanity": "hollow-test",
+        "present": true
+      },
+      {
+        "rule": "test_not_composable",
+        "zanity": "combinatorial-test",
+        "present": true
+      },
+      {
+        "rule": "test_not_inspiring",
+        "zanity": "trivial-test",
+        "present": true
+      },
+      {
+        "rule": "test_not_isolated",
+        "zanity": "order-dependent-test",
+        "present": true
+      },
+      {
+        "rule": "test_not_predictive",
+        "zanity": "self-mocking-test",
+        "present": true
+      },
+      {
+        "rule": "test_not_specific",
+        "zanity": "unfocused-test",
+        "present": true
+      },
+      {
+        "rule": "test_slow",
+        "zanity": "slow-test",
+        "present": true
+      },
+      {
+        "rule": "test_structure_sensitive",
+        "zanity": "implementation-coupled-test",
+        "present": true
+      },
+      {
+        "rule": "test_unreadable",
+        "zanity": "unreadable-test",
+        "present": true
+      },
+      {
+        "rule": "unconstructive_error",
+        "zanity": "unconstructive-error",
+        "present": true
+      },
+      {
+        "rule": "unit_mismatch",
+        "zanity": "unit-mismatch",
+        "present": true
+      },
+      {
+        "rule": "unscheduled_static_analysis",
+        "zanity": "unscheduled-analysis",
+        "present": true
+      },
+      {
+        "rule": "vague_error",
+        "zanity": "vague-error",
+        "present": true
+      }
+    ],
+    "catalogue": 475,
+    "unknown": 0,
+    "deterministic": 103,
+    "detected_by": {
+      "parameter-file-path": 7,
+      "hardcoded-secret": 7,
+      "plaintext-config-secret": 6,
+      "parameter-allocation-size": 3,
+      "weak-random": 3,
+      "forbidden-call": 3,
+      "default-credential": 2,
+      "default-password": 2,
+      "secret-in-log": 2,
+      "privileged-container": 2,
+      "world-writable-permission": 2,
+      "weak-hash": 2,
+      "swallowed-error": 2,
+      "untrusted-search-path": 2,
+      "download-execution": 2,
+      "constant-condition": 2,
+      "identity-comparison": 2,
+      "xml-entity-expansion": 2,
+      "parameter-xpath-expression": 2,
+      "shell-command": 2,
+      "parameter-raw-html": 2,
+      "unrestricted-framing": 1,
+      "duplicated-expression": 1,
+      "passthrough-wrapper": 1,
+      "structural-twins": 1,
+      "long-parameter-list": 1,
+      "empty-block": 1,
+      "float-equality": 1,
+      "long-file": 1,
+      "complex-function": 1,
+      "deep-nesting": 1,
+      "wide-scope": 1,
+      "parameter-log-message": 1,
+      "constant-cbc-iv": 1,
+      "nested-regex-quantifier": 1,
+      "parameter-format-string": 1,
+      "missing-integer-radix": 1,
+      "tls-verification-disabled": 1,
+      "authentication-lockout-disabled": 1,
+      "cleartext-http": 1,
+      "constant-aead-nonce": 1,
+      "constant-random-seed": 1,
+      "divide-by-zero": 1,
+      "null-catch": 1,
+      "generic-catch": 1,
+      "generic-throw": 1,
+      "obsolete-call": 1,
+      "missing-default": 1,
+      "discarded-comparison": 1,
+      "switch-fallthrough": 1,
+      "debug-leftover": 1,
+      "unsafe-deserialization": 1,
+      "weak-password-length": 1,
+      "cleartext-credential-url": 1,
+      "public-storage": 1,
+      "dead-symbol": 1,
+      "unreachable-code": 1,
+      "missing-super-clone": 1,
+      "equals-without-hashcode": 1,
+      "hashcode-without-equals": 1,
+      "return-in-finally": 1,
+      "explicit-finalizer": 1,
+      "parameter-redirect-target": 1,
+      "session-expiry-disabled": 1,
+      "precedence-trap": 1,
+      "unbounded-loop": 1,
+      "sql-built-from-strings": 1,
+      "parameter-ldap-filter": 1,
+      "parameter-expression-language": 1,
+      "parameter-network-target": 1,
+      "parameter-header-value": 1,
+      "parse-error": 1,
+      "mutable-artifact-reference": 1,
+      "constant-assertion": 1,
+      "conversion-assertion": 1,
+      "guaranteed-length": 1,
+      "redundant-null-check": 1,
+      "restated-type": 1,
+      "test-double": 1,
+      "relaxed-check": 1
+    }
+  },
+  "cli": {
+    "nasa-lsp": {
+      "mean": 0.9951734834,
+      "stddev": 0.017063547007924004,
+      "min": 0.9827915
+    },
+    "testdesiderata": {
+      "mean": 1.3729349916,
+      "stddev": 0.03492156091112424,
+      "min": 1.336717333
+    },
+    "mockbuster": {
+      "mean": 0.4557971916,
+      "stddev": 0.007407460512896124,
+      "min": 0.44791420800000004
+    },
+    "dddlint": {
+      "mean": 0.754637475,
+      "stddev": 0.009942559877640755,
+      "min": 0.7416517920000001
+    },
+    "bonsai": {
+      "mean": 23.3323920332,
+      "stddev": 0.32419768433956186,
+      "min": 23.016678542
+    },
+    "zanity, mapped rules, cold": {
+      "mean": 0.217309383,
+      "stddev": 0.004738535814779861,
+      "min": 0.21002325000000002
+    },
+    "zanity, mapped rules, warm": {
+      "mean": 0.157453375,
+      "stddev": 0.01264726342132487,
+      "min": 0.142682417
+    },
+    "zanity, all rules, cold": {
+      "mean": 0.21274545000000003,
+      "stddev": 0.005469682431995659,
+      "min": 0.20480008300000002
+    },
+    "zanity, all rules, warm": {
+      "mean": 0.14270605860000002,
+      "stddev": 0.002663790409740188,
+      "min": 0.141083709
+    }
+  },
+  "lsp": {
+    "nasa-lsp": {
+      "first": 0.29652299999725074,
+      "save": 0.06411279199528508,
+      "diagnostics": 132
+    },
+    "dddlint": {
+      "first": 0.4091195829969365,
+      "save": 0.04779758400400169,
+      "diagnostics": 14
+    },
+    "bonsai": {
+      "first": 2.0008907500014175,
+      "save": 1.5956919169984758,
+      "diagnostics": 195
+    },
+    "zanity": {
+      "first": 0.13884745800169185,
+      "save": 0.1699434170004679,
+      "diagnostics": 72
+    }
+  },
+  "lsp_lines": 2698
+}
