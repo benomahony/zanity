@@ -184,9 +184,10 @@ def lsp_once(command: list[str], workspace: Path, env: dict[str, str] | None) ->
         proc.wait()
 
 
-def watch_once(zanity: Zanity, workspace: Path) -> tuple[float, float, int]:
+def watch_once(zanity: Zanity, workspace: Path) -> tuple[float, float, int, int]:
     """Seconds from starting `zanity check --watch` to its first findings, then from a save to
-    fresh ones, and how many findings it gave; each check prints one JSON line."""
+    fresh ones, how many findings it gave, and resident memory; each check prints one JSON
+    line."""
     path = workspace / LSP_FILE.name
     assert path.is_file(), f"{path} is missing; bench_lsp copies it into the workspace first"
     assert zanity.binary.is_file(), f"{zanity.binary} is missing; run `zig build`"
@@ -199,11 +200,12 @@ def watch_once(zanity: Zanity, workspace: Path) -> tuple[float, float, int]:
         opened = time.perf_counter() - started
         # Let the watcher settle, so the save below is the change it answers.
         time.sleep(1.0)
+        memory = resident(proc.pid)
         saved = time.perf_counter()
         path.write_text(text + "\n")
         line = proc.stdout.readline()
         assert line, f"zanity check --watch exited with {proc.poll()} instead of checking again"
-        return opened, time.perf_counter() - saved, len(first)
+        return opened, time.perf_counter() - saved, len(first), memory
     finally:
         path.write_text(text)
         proc.kill()
@@ -231,7 +233,7 @@ def bench_lsp(zanity: Zanity, runs: int) -> dict[str, dict]:
             continue
         out[name] = {"first": statistics.median(s[0] for s in samples), "save": statistics.median(s[1] for s in samples), "diagnostics": samples[0][2], "memory": statistics.median(s[3] for s in samples)}
     samples = [watch_once(zanity, workspace) for _ in range(runs)]
-    out["zanity check --watch"] = {"first": statistics.median(s[0] for s in samples), "save": statistics.median(s[1] for s in samples), "diagnostics": samples[0][2]}
+    out["zanity check --watch"] = {"first": statistics.median(s[0] for s in samples), "save": statistics.median(s[1] for s in samples), "diagnostics": samples[0][2], "memory": statistics.median(s[3] for s in samples)}
     assert set(servers) <= set(out), f"timed {sorted(out)}, but not every one of {sorted(servers)}"
     assert "error" not in out["zanity"], f"zanity's language server failed: {out['zanity']}"
     return out

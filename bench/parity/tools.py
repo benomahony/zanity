@@ -197,6 +197,7 @@ TOOLS = [
         },
         notes={
             "long-function": "bonsai flags 30 lines; zanity flags 60, as Power of Ten says",
+            "dead-symbol": "bonsai also flags exported or public members and types still named by signatures or implementations; zanity leaves externally reachable and structurally referenced code alone",
             "dead-parameter": "bonsai also flags method parameters an interface or override fixes, empty stubs, TypeScript parameter properties, and parameters inside function types; zanity leaves those alone",
             "extractable-chunk": "bonsai searches functions over 30 lines and takes blocks that return early; zanity searches functions past its 60-line limit, for blocks that can move out unchanged",
             "single-impl-abstraction": "bonsai reports the one implementation; zanity reports the abstraction, which is what to remove",

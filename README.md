@@ -513,7 +513,9 @@ zig build test-integration  # the built zanity on the golden fixtures, --fix, th
 zig build test --fuzz=100K  # fuzz the checker with arbitrary bytes in every language
 ```
 
-`git config core.hooksPath .githooks` turns on the repository's hooks. `pre-commit` runs the same format check as CI. `pre-push` refuses to test a dirty or different checkout, then runs the complete CI gate: formatting, unit and integration tests, zanity's strict self-check, every release build, and the generated catalogue check.
+`git config core.hooksPath .githooks` turns on the repository's hooks. `pre-commit` runs the same format check as CI. `pre-push` refuses to test a dirty or different checkout, then runs the complete CI gate: formatting, unit and integration tests, zanity's strict self-check, every release build, the generated catalogue check, and the feature-parity ratchet.
+
+`python3 bench/parity/ratchet.py` protects every covered comparison fixture, inference question, and language/rule match count in `bench/parity/results.json`. After the full parity benchmark improves coverage, run it with `--write` and commit the raised `bench/parity/floors.json`; it refuses to write over a regression.
 
 Zig does not prune `.zig-cache`; run `./scripts/zig-cache` when its old content is no longer worth keeping. The pre-push hook warns above 10 GB without deleting anything. Set `ZANITY_ZIG_CACHE_WARN_MB` to choose a different warning threshold.
 

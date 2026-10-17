@@ -329,7 +329,7 @@ def lsp_speed(data: dict) -> list[str]:
     return [
         "## As language servers, and watching",
         "",
-        f"rich's `console.py`, {data['lsp_lines']:,} lines, alone in a workspace; the median of {data['runs']}. First: from starting the server to diagnostics for the opened file. Save: from a change and save to fresh diagnostics. Memory: what the server held with the file open; an editor runs every server at once, so the others' memory adds up. `zanity check --watch` re-checks on the system's file events, outside any editor, by running a fresh check for each change, so it holds no memory between checks to compare. nouls' server needs `TYPESAFE_API_KEY` and did not run.",
+        f"rich's `console.py`, {data['lsp_lines']:,} lines, alone in a workspace; the median of {data['runs']}. First: from starting the server to diagnostics for the opened file. Save: from a change and save to fresh diagnostics. Memory: what the process held with the file open; an editor runs every language server at once, so the others' memory adds up. `zanity check --watch` listens to the system's file events outside any editor and keeps its workspace and parsed-file cache alive between checks. nouls' server needs `TYPESAFE_API_KEY` and did not run.",
         "",
         *chart(rows("first", seconds), "Start to first diagnostics, shorter is better"),
         *chart(rows("save", seconds), "Save to fresh diagnostics, shorter is better"),

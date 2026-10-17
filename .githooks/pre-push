@@ -30,4 +30,6 @@ zig build release
 uv run --with 'PyYAML==6.0.3' python catalogue/sync.py
 python3 catalogue/triage.py
 git diff --exit-code -- catalogue
+python3 -m unittest bench.parity.test_ratchet
+python3 bench/parity/ratchet.py
 ./scripts/zig-cache --check
