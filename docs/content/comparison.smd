@@ -1,5 +1,5 @@
 ---
-.title = "Against the tools it replaces",
+.title = "Comparisons",
 .description = "What zanity finds that the linters it consolidates find, and how fast.",
 .date = .date("2026-10-17T00:00:02"),
 .layout = "page.shtml",
