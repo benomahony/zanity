@@ -1,0 +1,55 @@
+name: Docs
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      # The introduction and rules pages come from README.md; a README change must regenerate them.
+      - name: Check the pages match README.md
+        run: |
+          python3 docs/sync.py
+          git diff --exit-code docs/content
+
+      - name: Install Zine
+        run: |
+          version=$(sed -n 's/.*\.zine_version[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' docs/zine.ziggy)
+          curl -sSfL "https://github.com/kristoff-it/zine/releases/download/v$version/x86_64-linux-musl.tar.xz" | tar -xJ -C /usr/local/bin zine
+
+      - name: Build the site
+        working-directory: docs
+        run: zine release
+
+      - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3.0.1
+        with:
+          path: docs/public
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5.0.0
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5

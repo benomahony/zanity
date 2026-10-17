@@ -1,0 +1,16 @@
+<extend template="base.shtml">
+<head id="head">
+</head>
+<main id="main">
+	<article>
+		<img class="hero-logo" src="$site.asset('zanity_logo.png').link()" alt="zanity">
+		<p class="lede" :text="$page.description"></p>
+		<div class="content" :html="$page.content()"></div>
+		<footer class="pager">
+			<a class="next" href="$site.page('rules').link()">
+				<small>Next</small>
+				<span>Rules</span>
+			</a>
+		</footer>
+	</article>
+</main>

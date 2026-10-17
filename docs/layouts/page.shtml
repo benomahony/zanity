@@ -1,0 +1,25 @@
+<extend template="base.shtml">
+<head id="head">
+</head>
+<main id="main">
+	<article>
+		<h1 :text="$page.title"></h1>
+		<p class="lede" :text="$page.description"></p>
+		<div class="content" :html="$page.content()"></div>
+		<footer class="pager">
+			<!-- Pages are ordered newest first, so the newer page reads before this one. -->
+			<ctx :if="$page.nextPage?()">
+				<a class="prev" href="$if.link()">
+					<small>Previous</small>
+					<span :text="$if.title"></span>
+				</a>
+			</ctx>
+			<ctx :if="$page.prevPage?()">
+				<a class="next" href="$if.link()">
+					<small>Next</small>
+					<span :text="$if.title"></span>
+				</a>
+			</ctx>
+		</footer>
+	</article>
+</main>
