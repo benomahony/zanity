@@ -92,7 +92,7 @@ It writes every setting with notes on what it does, excludes the vendored and fi
 
 Once `zanity check .` is clean, keep it that way with `--fail-on warning`, which fails on warnings as well as errors. That is what a pre-commit hook or CI should run.
 
-When the deterministic checks pass, try `--infer` to have a language model judge your error messages too; see [Judging error messages with `--infer`](#judging-error-messages-with---infer).
+When the deterministic checks pass, try `--infer` to have a language model judge your error messages too; see [Judging what structure can't settle with `--infer`](#judging-what-structure-cant-settle-with---infer).
 
 ### Pre-commit
 
