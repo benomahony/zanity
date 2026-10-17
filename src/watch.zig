@@ -1,9 +1,9 @@
 //! `zanity check --watch`: waits for the operating system to report that a file `check` reads has
-//! changed, then reruns the check. macOS reports changes through FSEvents, which watches a whole
+//! changed, then runs the check again. macOS reports changes through FSEvents, which watches a whole
 //! tree and is loaded when --watch starts, so building zanity needs no framework; Linux through
 //! inotify, one watch on each directory the walk enters; Windows through
-//! NtNotifyChangeDirectoryFileEx over the whole tree. Each rerun is a fresh `zanity check`, so
-//! nothing a run holds carries over, and the cache keeps a rerun to the files that changed.
+//! NtNotifyChangeDirectoryFileEx over the whole tree. The checker stays resident between ordinary
+//! runs, and the cache keeps deterministic analysis to the files that changed.
 const std = @import("std");
 const builtin = @import("builtin");
 const assert = @import("assert.zig");
@@ -123,6 +123,33 @@ pub const Watcher = switch (builtin.os.tag) {
 
 pub const Error = error{ WatchUnavailable, TooManyWatches, LimitExceeded } || Io.Cancelable;
 
+/// Watch defaults to agent output unless the command chose a format or explicitly turned it off.
+pub fn agentOutput(args: []const []const u8, chose_format: bool, asked: bool) bool {
+    if (asked and chose_format) assert.panic("agent output was requested with a machine format; speaksToAgent() must reject that first", .{});
+    if (args.len == 0) assert.panic("choosing watch output from no command arguments; main() passes the check command", .{});
+    for (args) |arg| if (std.mem.eql(u8, arg, "--agent=false")) return false;
+    return asked or !chose_format;
+}
+
+/// Writes rows during a resident watch run in the same two machine formats zcli uses.
+pub fn renderRows(comptime Row: type, out: *std.Io.Writer, json: bool, rows: []const Row) !void {
+    const fields = .{ "path", "line", "column", "severity", "rule", "message", "fix", "edit_start", "edit_end", "edit_text" };
+    if (@typeInfo(Row) != .@"struct") assert.panic("rendering watched rows of {s}; output rows must be structs", .{@typeName(Row)});
+    if (@typeInfo(Row).@"struct".field_names.len != fields.len) assert.panic("rendering {d} fields with names for {d}; keep watch rows in step with the command row", .{ @typeInfo(Row).@"struct".field_names.len, fields.len });
+    if (json) {
+        try std.json.Stringify.value(rows, .{}, out);
+        return out.writeByte('\n');
+    }
+    for (rows) |row| {
+        inline for (fields, 0..) |field, i| {
+            if (i != 0) try out.writeByte('\t');
+            try out.writeAll(field ++ "=");
+            try std.json.Stringify.value(@field(row, field), .{}, out);
+        }
+        try out.writeByte('\n');
+    }
+}
+
 /// What a watcher is told to watch: `trees`, the directories holding the paths `check` was given,
 /// and `directories`, every directory the walk entered, for systems that watch one at a time.
 pub const Targets = struct {
@@ -162,7 +189,7 @@ const FsEvents = struct {
     };
     const utf8: u32 = 0x8000100;
     /// Seconds FSEvents gathers changes for before reporting them, so one save is one rerun.
-    const latency = 0.05;
+    const latency = 0.02;
     /// More changes in one report than any save makes; FSEvents asks for a rescan long before.
     const max_batch = 1 << 24;
     /// FSEvents allows a few thousand watched trees; zanity is given far fewer paths than this.
@@ -378,6 +405,25 @@ test "a rerun keeps the output the command line chose" {
     var out: [8][]const u8 = undefined;
     const argv = rerunArgs(&out, "/bin/zanity", &.{ "check", "--watch", "--json" });
     try std.testing.expectEqualDeep(@as([]const []const u8, &.{ "/bin/zanity", "check", "--json" }), argv);
+}
+
+test "a resident watch defaults to agent output unless the command chooses otherwise" {
+    try std.testing.expect(agentOutput(&.{ "check", ".", "--watch" }, false, false));
+    try std.testing.expect(!agentOutput(&.{ "check", ".", "--watch", "--agent=false" }, false, true));
+    try std.testing.expect(!agentOutput(&.{ "check", ".", "--watch", "--json" }, true, false));
+}
+
+test "resident watch rows use zcli's JSON and plain formats" {
+    const TestRow = struct { path: []const u8, line: u32, column: u32, severity: []const u8, rule: []const u8, message: []const u8, fix: []const u8, edit_start: ?u32, edit_end: ?u32, edit_text: ?[]const u8 };
+    const rows = [_]TestRow{.{ .path = "a.py", .line = 2, .column = 3, .severity = "warning", .rule = "example", .message = "found", .fix = "fix it", .edit_start = null, .edit_end = null, .edit_text = null }};
+    var buffer: [1024]u8 = undefined;
+    var out: std.Io.Writer = .fixed(&buffer);
+    try renderRows(TestRow, &out, true, &rows);
+    try std.testing.expectEqualStrings("[{\"path\":\"a.py\",\"line\":2,\"column\":3,\"severity\":\"warning\",\"rule\":\"example\",\"message\":\"found\",\"fix\":\"fix it\",\"edit_start\":null,\"edit_end\":null,\"edit_text\":null}]\n", out.buffered());
+    out = .fixed(&buffer);
+    try renderRows(TestRow, &out, false, &rows);
+    try std.testing.expect(std.mem.startsWith(u8, out.buffered(), "path=\"a.py\"\tline=2\tcolumn=3\tseverity=\"warning\""));
+    try std.testing.expect(std.mem.endsWith(u8, out.buffered(), "\tedit_start=null\tedit_end=null\tedit_text=null\n"));
 }
 
 test "only files check reads, outside skipped and ignored directories, are worth a rerun" {

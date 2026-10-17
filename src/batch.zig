@@ -45,7 +45,7 @@ pub const Worker = struct {
     fn startFile(self: *Worker, path: []const u8, name: []const u8, collect_units: bool) void {
         if (path.len == 0 or name.len == 0) assert.panic("starting a worker on path '{s}' in language '{s}'; both must be known before checking", .{ path, name });
         self.text.used = 0;
-        inline for (.{ "definitions", "functions", "calls", "units", "references", "shapes", "abstractions", "implemented" }) |field| @field(self.facts, field).clear();
+        self.facts.reset();
         self.facts.path = path;
         self.facts.language = name;
         self.facts.collect_units = collect_units;

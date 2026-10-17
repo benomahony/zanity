@@ -176,6 +176,9 @@ const Workspace = struct {
     source_cache: ?store.Store = null,
     cache_hits: usize = 0,
     checkers: [language.count]?check.Checker = @splat(null),
+    checker_rules: rules.Set = .{},
+    workers: [batch.max_workers]?*batch.Worker = @splat(null),
+    worker_view: [batch.max_workers]*batch.Worker = undefined,
     checked: usize = 0,
     io: Io = undefined,
 
@@ -208,12 +211,44 @@ const Workspace = struct {
     /// Compiles the queries of each language the run will check, and only those.
     fn initCheckers(ws: *Workspace, gpa: Allocator, selected: rules.Set) !void {
         if (selected.len == 0) assert.panic("compiling checkers with no rules selected; runCheck always selects at least one", .{});
+        if (!ws.checker_rules.same(selected)) {
+            ws.checkers = @splat(null);
+            ws.checker_rules = selected;
+        }
         for (ws.files.items()) |path| {
             const adapter = language.forPath(path) orelse continue;
             const slot = &ws.checkers[language.indexOf(adapter)];
             if (slot.* == null) slot.* = try check.Checker.initChecker(gpa, try language.load(adapter), selected);
         }
         if (ws.checkers.len != adapters.all.len) assert.panic("{d} checker slots for {d} languages; initCheckers() must make one slot per adapter in adapters.all", .{ ws.checkers.len, adapters.all.len });
+    }
+
+    /// Workers are expensive, so watched checks keep one per core and reuse their buffers.
+    fn checkWorkers(ws: *Workspace, gpa: Allocator, files: usize) ![]const *batch.Worker {
+        if (files == 0) assert.panic("making workers to check no files; checkFiles() returns early when there are none", .{});
+        const cores = std.Thread.getCpuCount() catch 1;
+        const count = @max(1, @min(cores, files, batch.max_workers));
+        if (count > files) assert.panic("using {d} workers for {d} files; no worker should be idle", .{ count, files });
+        for (0..count) |i| {
+            if (ws.workers[i] == null) ws.workers[i] = try .initWorker(gpa, ws.limits);
+            ws.worker_view[i] = ws.workers[i].?;
+        }
+        return ws.worker_view[0..count];
+    }
+
+    /// Starts another check without reallocating its large, fixed-capacity buffers.
+    fn resetCheck(ws: *Workspace) void {
+        ws.text.used = 0;
+        ws.facts.reset();
+        ws.naming.reset();
+        inline for (.{ "findings", "files", "project_files", "dirs", "rows" }) |field| @field(ws, field).clear();
+        ws.ignore.reset();
+        ws.settings = null;
+        ws.live = null;
+        ws.checked = 0;
+        ws.cache_hits = 0;
+        if (ws.files.len != 0 or ws.findings.len != 0 or ws.text.used != 0) assert.panic("reset workspace kept {d} files, {d} findings and {d} bytes; resetCheck() must empty the run", .{ ws.files.len, ws.findings.len, ws.text.used });
+        if (ws.settings != null or ws.live != null) assert.panic("reset workspace kept settings={d} or progress={d}; both must be 0 between checks", .{ @intFromBool(ws.settings != null), @intFromBool(ws.live != null) });
     }
 };
 
@@ -249,8 +284,8 @@ fn runCheck(ctx: *zcli.Context, options: CheckOptions) ![]const Row {
     if (options.paths.len == 0) assert.panic("check ran with no paths; zcli supplies '.' when none are given", .{});
     const ws = workspaceOf(ctx);
     const agent = try speaksToAgent(ctx, ws, options.agent);
-    const settings = try loadSettings(ctx, ws);
-    if (options.watch) return watchCheck(ctx, ws, options.paths);
+    const settings = try loadSettings(ctx, ws, std.heap.page_allocator);
+    if (options.watch) return watchCheck(ctx, ws, options, agent);
     ws.settings = &settings;
     defer ws.settings = null;
     var selected = if (options.rules) |list| try parseRules(ctx, ws, list) else settings.selection(options.strict);
@@ -306,7 +341,7 @@ fn initRerun(rerun: *Rerun, ctx: *zcli.Context, ws: *Workspace) !void {
 
 /// Runs `zanity check` without --watch, then again each time the operating system reports that a
 /// file it checks under `paths`, or zanity.toml, changed. Stops only when Ctrl-C ends the process.
-fn watchCheck(ctx: *zcli.Context, ws: *Workspace, paths: []const []const u8) ![]const Row {
+fn spawnedWatchCheck(ctx: *zcli.Context, ws: *Workspace, paths: []const []const u8) ![]const Row {
     if (paths.len == 0) assert.panic("watching no paths; zcli supplies '.' when none are given", .{});
     if (paths.len > ws.args.len) assert.panic("watching {d} paths from a command line of {d} arguments; each path is an argument", .{ paths.len, ws.args.len });
     var rerun: Rerun = undefined;
@@ -333,6 +368,79 @@ fn watchCheck(ctx: *zcli.Context, ws: *Workspace, paths: []const []const u8) ![]
     assert.panic("ran {d} checks without being stopped; no session saves that often", .{max_watch_runs});
 }
 
+/// Keeps the expensive checker, workers and cache resident. Whole-workspace facts are rebuilt so
+/// cross-file rules remain correct; unchanged source analysis comes from the cache.
+fn watchCheck(ctx: *zcli.Context, ws: *Workspace, options: CheckOptions, asked_for_agent: bool) ![]const Row {
+    const paths = options.paths;
+    if (options.infer or options.fix) return spawnedWatchCheck(ctx, ws, paths);
+    if (paths.len == 0) assert.panic("watching no paths; zcli supplies '.' when none are given", .{});
+    if (paths.len > ws.args.len) assert.panic("watching {d} paths from a command line of {d} arguments; each path is an argument", .{ paths.len, ws.args.len });
+    var watcher: watch.Watcher = undefined;
+    var filter: watch.ChangeFilter = undefined;
+    var roots: [max_watch_args][]const u8 = undefined;
+    var trees: [max_watch_args][]const u8 = undefined;
+    try startWatching(ctx, ws, paths, .{ .watcher = &watcher, .filter = &filter, .roots = roots[0..paths.len], .trees = trees[0..paths.len] });
+    const checks = try Workspace.initWorkspace(std.heap.page_allocator, ws.limits);
+    checks.io = ws.io;
+    checks.environ = ws.environ;
+    checks.args = ws.args;
+    checks.chose_format = ws.chose_format;
+    if (checks.environ == null) assert.panic("zanity check --watch ran without the environment; main() passes it to the workspace", .{});
+    var settings_arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer settings_arena.deinit();
+    const terminal = Io.File.stdout().isTty(ws.io) catch false;
+    const out = ctx.runtime.out;
+    const err = ctx.runtime.err;
+    const agent = watch.agentOutput(ws.args, ws.chose_format, asked_for_agent);
+    for (0..max_watch_runs) |_| {
+        _ = settings_arena.reset(.retain_capacity);
+        checks.resetCheck();
+        ctx.status = .success;
+        ctx.failure = null;
+        if (terminal) try out.writer.writeAll(watch.clear_screen);
+        const settings = try loadSettings(ctx, checks, settings_arena.allocator());
+        checks.settings = &settings;
+        var selected = if (options.rules) |list| try parseRules(ctx, checks, list) else settings.selection(options.strict);
+        if (options.rules != null and options.strict) selected.includeTier(.strict);
+        var live = Live.initLive(console(ctx, err), checks.io, !ctx.quiet);
+        checks.live = &live;
+        const counts = checkPaths(ctx, checks, options, selected) catch |e| switch (e) {
+            error.LimitExceeded => return ctx.fail(.usage, try checks.text.format("This run has more {s} than zanity is built to hold.", .{memory.exceeded}), "Check fewer files at once, or report it if the input is ordinary."),
+            else => return e,
+        };
+        if (fails(counts, options.@"fail-on")) ctx.status = .failure;
+        try renderWatched(ctx, checks, .{ .options = options, .counts = counts, .agent = agent });
+        try out.writer.flush();
+        if (!ctx.quiet) try err.writer.writeAll("zanity: watching for changes; save a file to check again, Ctrl-C to stop.\n");
+        try err.writer.flush();
+        watcher.wait() catch |e| return ctx.fail(.io, try checks.text.format("Lost track of changes to the files: {t}.", .{e}), "Run zanity check --watch again.");
+    }
+    assert.panic("ran {d} checks without being stopped; no session saves that often", .{max_watch_runs});
+}
+
+const WatchOutput = struct { options: CheckOptions, counts: report.Counts, agent: bool };
+
+fn renderWatched(ctx: *zcli.Context, ws: *Workspace, output: WatchOutput) !void {
+    const options = output.options;
+    const counts = output.counts;
+    if (options.paths.len == 0) assert.panic("rendering a watched check with no paths; zcli supplies '.' when none are given", .{});
+    if (ws.rows.len != counts.errors + counts.warnings) assert.panic("rendering {d} watched rows for {d} errors and {d} warnings; checkPaths makes one row per finding", .{ ws.rows.len, counts.errors, counts.warnings });
+    const out = ctx.runtime.out;
+    const err = ctx.runtime.err;
+    if (output.agent) {
+        try report.renderAgent(out.writer, .{ .findings = ws.findings.items(), .counts = counts, .paths = options.paths, .limit = options.limit, .watching = true });
+        if (ws.cache_hits > 0) try err.writer.print("zanity: reused cached deterministic analysis for {d} of {d} source files; query {s}'s source_analyses table for the cached facts and findings.\n", .{ ws.cache_hits, ws.checked, ws.source_cache.?.path });
+        return;
+    }
+    if (ctx.format == .human) {
+        try report.render(.{ .console = console(ctx, out), .scratch = &ws.table, .text = &ws.text }, ws.findings.items());
+        try report.summarise(console(ctx, err), counts);
+        return;
+    }
+    try report.summarise(console(ctx, err), counts);
+    try watch.renderRows(Row, out.writer, ctx.format == .json, ws.rows.items());
+}
+
 /// Where startWatching() puts the watcher and the absolute paths it watches.
 const WatchSlots = struct { watcher: *watch.Watcher, filter: *watch.ChangeFilter, roots: [][]const u8, trees: [][]const u8 };
 
@@ -357,12 +465,14 @@ fn startWatching(ctx: *zcli.Context, ws: *Workspace, paths: []const []const u8, 
 }
 
 /// Reads zanity.toml, opens the cache, and applies the file's excludes to the walk.
-fn loadSettings(ctx: *zcli.Context, ws: *Workspace) !config.Config {
-    const settings = config.initConfig(std.heap.page_allocator, ws.io) catch |e| switch (e) {
+fn loadSettings(ctx: *zcli.Context, ws: *Workspace, gpa: Allocator) !config.Config {
+    const settings = config.initConfig(gpa, ws.io) catch |e| switch (e) {
         error.InvalidConfig => return ctx.fail(.usage, config.problem[0..config.problem_len], "Fix that line of zanity.toml, or remove the setting to use zanity's default."),
         else => return e,
     };
-    if (ws.environ) |environ| ws.source_cache = store.Store.initStore(std.heap.page_allocator, ws.io, environ, ws.limits.store_bytes) catch null;
+    if (ws.environ) |environ| {
+        if (ws.source_cache == null) ws.source_cache = store.Store.initStore(std.heap.page_allocator, ws.io, environ, ws.limits.store_bytes) catch null;
+    }
     const before = ws.ignore.mark();
     for (settings.excludes()) |glob| try ws.ignore.exclude(settings.dir, glob);
     const after = ws.ignore.mark();
@@ -702,7 +812,7 @@ fn checkFiles(ctx: *zcli.Context, ws: *Workspace, selected: rules.Set) !void {
             .cache_buffer = ws.analysis,
             .live = ws.live,
         };
-        if (try run.run(try batch.initWorkers(std.heap.page_allocator, ws.limits, ws.files.len))) |failure| {
+        if (try run.run(try ws.checkWorkers(std.heap.page_allocator, ws.files.len))) |failure| {
             const path = ws.files.items()[failure.index];
             if (failure.unreadable) return ctx.fail(.io, try ws.text.format("Could not read {s}: {t}.", .{ path, failure.err }), "Check the file exists and is readable.");
             memory.exceeded = failure.exceeded;
@@ -963,7 +1073,7 @@ fn collect(ctx: *zcli.Context, ws: *Workspace, path: []const u8) !void {
     try ws.ignore.loadAncestors(ws.io, root);
     try ws.ignore.loadFile(ws.io, root, ".gitignore");
     try ws.dirs.add(try ws.text.copy(root));
-    var walker = try dir.walkSelectively(ctx.allocator);
+    var walker = try dir.walkSelectively(std.heap.page_allocator);
     defer walker.deinit();
     var absolute_buffer: [std.fs.max_path_bytes]u8 = undefined;
     for (0..ws.limits.files * 2) |_| {

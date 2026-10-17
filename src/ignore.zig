@@ -42,6 +42,14 @@ pub const Ignore = struct {
         };
     }
 
+    /// For a new walk that reuses this allocation.
+    pub fn reset(self: *Ignore) void {
+        self.patterns.clear();
+        self.text.used = 0;
+        if (self.patterns.len != 0 or self.text.used != 0) assert.panic("resetting ignores left {d} patterns and {d} bytes; reset() must empty both", .{ self.patterns.len, self.text.used });
+        if (self.file.len == 0) assert.panic("resetting ignores lost the file buffer; reset() retains every allocation", .{});
+    }
+
     /// Loads the ignore files that apply above `root`, an absolute directory:
     /// every ancestor's `.gitignore` up to the repository root and its `.git/info/exclude`.
     pub fn loadAncestors(self: *Ignore, io: Io, root: []const u8) !void {

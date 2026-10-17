@@ -54,6 +54,13 @@ pub const ConceptScratch = struct {
             .words = try .initText(gpa, limits.text_bytes),
         };
     }
+
+    /// Restores configuration that may differ between watched checks.
+    pub fn reset(self: *ConceptScratch) void {
+        self.directional = &default_directional;
+        if (self.directional.len != default_directional.len) assert.panic("reset naming to {d} directional words, expected the {d} defaults", .{ self.directional.len, default_directional.len });
+        if (self.words.buffer.len == 0) assert.panic("reset naming lost its word buffer; reset() retains every allocation", .{});
+    }
 };
 
 pub fn crossCheck(s: *ConceptScratch, facts: *Facts, enabled: rules.Set, findings: *memory.Bounded(Finding)) error{LimitExceeded}!void {

@@ -148,6 +148,16 @@ pub const Facts = struct {
         };
     }
 
+    /// Empties one run's facts while retaining their allocations.
+    pub fn reset(self: *Facts) void {
+        inline for (.{ "definitions", "functions", "calls", "units", "references", "shapes", "abstractions", "implemented" }) |field| @field(self, field).clear();
+        self.path = "";
+        self.language = "";
+        self.collect_units = false;
+        if (self.definitions.len != 0 or self.units.len != 0) assert.panic("reset facts left {d} definitions and {d} units; reset() must empty every collection", .{ self.definitions.len, self.units.len });
+        if (self.path.len != 0 or self.language.len != 0) assert.panic("reset facts kept path '{s}' or language '{s}'; both belong to one file", .{ self.path, self.language });
+    }
+
     /// Where a definition is and whether code outside its module can use it.
     pub const Place = struct { at: [2]u32, public: bool, member: bool = false, importable: bool = false, unmarked: []const u8 = "" };
 
