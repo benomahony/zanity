@@ -289,30 +289,17 @@ Each tool on the whole corpus, 58,654 lines, beside zanity running only the rule
 
 ## Memory
 
-The most memory each run held, from the kernel's accounting of the process.
+The most memory each run held, from the kernel's accounting of the process. One zanity run covers every rule, where the same coverage takes all five tools: run side by side, as in a pre-commit hook, they hold 715 MB at once.
 
 ```=html
 <figure class="chart"><figcaption>Peak memory checking the corpus, smaller is better</figcaption>
-<div class="duel"><div class="duel-head">nasa-lsp <span class="badge fail">zanity 1.7× larger</span></div>
-<div class="chart-row other"><span class="chart-label">nasa-lsp</span><span class="chart-track"><span class="chart-bar" style="width:48.7%"></span><span class="chart-value">62 MB</span></span></div>
-<div class="chart-row zanity"><span class="chart-label">zanity</span><span class="chart-track"><span class="chart-bar" style="width:85.0%"></span><span class="chart-value">108 MB</span></span></div>
-</div>
-<div class="duel"><div class="duel-head">testdesiderata <span class="badge fail">zanity 3.1× larger</span></div>
-<div class="chart-row other"><span class="chart-label">testdesiderata</span><span class="chart-track"><span class="chart-bar" style="width:27.3%"></span><span class="chart-value">34 MB</span></span></div>
-<div class="chart-row zanity"><span class="chart-label">zanity</span><span class="chart-track"><span class="chart-bar" style="width:85.0%"></span><span class="chart-value">106 MB</span></span></div>
-</div>
-<div class="duel"><div class="duel-head">mockbuster <span class="badge fail">zanity 3.2× larger</span></div>
-<div class="chart-row other"><span class="chart-label">mockbuster</span><span class="chart-track"><span class="chart-bar" style="width:26.5%"></span><span class="chart-value">32 MB</span></span></div>
-<div class="chart-row zanity"><span class="chart-label">zanity</span><span class="chart-track"><span class="chart-bar" style="width:85.0%"></span><span class="chart-value">103 MB</span></span></div>
-</div>
-<div class="duel"><div class="duel-head">dddlint <span class="badge fail">zanity 1.4× larger</span></div>
-<div class="chart-row other"><span class="chart-label">dddlint</span><span class="chart-track"><span class="chart-bar" style="width:61.1%"></span><span class="chart-value">75 MB</span></span></div>
-<div class="chart-row zanity"><span class="chart-label">zanity</span><span class="chart-track"><span class="chart-bar" style="width:85.0%"></span><span class="chart-value">104 MB</span></span></div>
-</div>
-<div class="duel"><div class="duel-head">bonsai <span class="badge pass">zanity 4.5× smaller</span></div>
-<div class="chart-row other"><span class="chart-label">bonsai</span><span class="chart-track"><span class="chart-bar" style="width:85.0%"></span><span class="chart-value">512 MB</span></span></div>
-<div class="chart-row zanity"><span class="chart-label">zanity</span><span class="chart-track"><span class="chart-bar" style="width:18.8%"></span><span class="chart-value">113 MB</span></span></div>
-</div>
+<div class="chart-row other"><span class="chart-label">nasa-lsp</span><span class="chart-track"><span class="chart-bar" style="width:7.4%"></span><span class="chart-value">62 MB</span></span></div>
+<div class="chart-row other"><span class="chart-label">testdesiderata</span><span class="chart-track"><span class="chart-bar" style="width:4.0%"></span><span class="chart-value">34 MB</span></span></div>
+<div class="chart-row other"><span class="chart-label">mockbuster</span><span class="chart-track"><span class="chart-bar" style="width:3.8%"></span><span class="chart-value">32 MB</span></span></div>
+<div class="chart-row other"><span class="chart-label">dddlint</span><span class="chart-track"><span class="chart-bar" style="width:8.9%"></span><span class="chart-value">75 MB</span></span></div>
+<div class="chart-row other"><span class="chart-label">bonsai</span><span class="chart-track"><span class="chart-bar" style="width:60.9%"></span><span class="chart-value">512 MB</span></span></div>
+<div class="chart-row other"><span class="chart-label">all five at once</span><span class="chart-track"><span class="chart-bar" style="width:85.0%"></span><span class="chart-value">715 MB</span></span></div>
+<div class="chart-row zanity"><span class="chart-label">zanity, cold</span><span class="chart-track"><span class="chart-bar" style="width:13.9%"></span><span class="chart-value">117 MB</span></span></div>
 </figure>
 ```
 
@@ -340,7 +327,7 @@ The tools ran through the same adapters as above. Cold zanity starts each run wi
 
 ## As language servers
 
-rich's `console.py`, 2,698 lines, alone in a workspace; the median of 5. First: from starting the server to diagnostics for the opened file. Save: from a change and save to fresh diagnostics. Memory: what the server held with the file open. nouls' server needs `TYPESAFE_API_KEY` and did not run.
+rich's `console.py`, 2,698 lines, alone in a workspace; the median of 5. First: from starting the server to diagnostics for the opened file. Save: from a change and save to fresh diagnostics. Memory: what the server held with the file open; an editor runs every server at once, so the others' memory adds up. nouls' server needs `TYPESAFE_API_KEY` and did not run.
 
 ```=html
 <figure class="chart"><figcaption>Start to first diagnostics, shorter is better</figcaption>
@@ -362,10 +349,11 @@ rich's `console.py`, 2,698 lines, alone in a workspace; the median of 5. First: 
 
 ```=html
 <figure class="chart"><figcaption>Memory with the file open, smaller is better</figcaption>
-<div class="chart-row other"><span class="chart-label">nasa-lsp</span><span class="chart-track"><span class="chart-bar" style="width:24.4%"></span><span class="chart-value">61 MB</span></span></div>
-<div class="chart-row other"><span class="chart-label">dddlint</span><span class="chart-track"><span class="chart-bar" style="width:33.3%"></span><span class="chart-value">83 MB</span></span></div>
-<div class="chart-row other"><span class="chart-label">bonsai</span><span class="chart-track"><span class="chart-bar" style="width:85.0%"></span><span class="chart-value">212 MB</span></span></div>
-<div class="chart-row zanity"><span class="chart-label">zanity</span><span class="chart-track"><span class="chart-bar" style="width:14.6%"></span><span class="chart-value">36 MB</span></span></div>
+<div class="chart-row other"><span class="chart-label">nasa-lsp</span><span class="chart-track"><span class="chart-bar" style="width:14.5%"></span><span class="chart-value">61 MB</span></span></div>
+<div class="chart-row other"><span class="chart-label">dddlint</span><span class="chart-track"><span class="chart-bar" style="width:19.8%"></span><span class="chart-value">83 MB</span></span></div>
+<div class="chart-row other"><span class="chart-label">bonsai</span><span class="chart-track"><span class="chart-bar" style="width:50.6%"></span><span class="chart-value">212 MB</span></span></div>
+<div class="chart-row other"><span class="chart-label">all of them at once</span><span class="chart-track"><span class="chart-bar" style="width:85.0%"></span><span class="chart-value">356 MB</span></span></div>
+<div class="chart-row zanity"><span class="chart-label">zanity</span><span class="chart-track"><span class="chart-bar" style="width:8.7%"></span><span class="chart-value">36 MB</span></span></div>
 </figure>
 ```
 

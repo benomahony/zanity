@@ -275,6 +275,8 @@ def cli_speed(data: dict) -> list[str]:
     rows.append(["the five tools, one after another", sequence, "", "", "", f"{old / base:.1f}×"])
     pairs = [(tool.name, cli[tool.name], cli[f"zanity, {tool.name} rules, cold"]) for tool in TOOLS]
     slow = max(pairs, key=lambda pair: pair[1]["mean"])
+    together = sum(t["memory"] for _, t, _ in pairs)
+    memory = cli["zanity, all rules, cold"]["memory"]
     assert base > 0, f"zanity's time is the baseline, so it can't be {base} s"
     assert all("memory" in r for r in cli.values()), f"results.json has no memory for {[n for n, r in cli.items() if 'memory' not in r]}; run parity.py again"
     return [
@@ -292,9 +294,9 @@ def cli_speed(data: dict) -> list[str]:
         *chart([("five tools in a row", old, sequence, False), ("zanity, cold", base, seconds(base), True), ("zanity, warm", warm, seconds(warm), True)], "Every rule at once, shorter is better"),
         "## Memory",
         "",
-        "The most memory each run held, from the kernel's accounting of the process.",
+        f"The most memory each run held, from the kernel's accounting of the process. One zanity run covers every rule, where the same coverage takes all five tools: run side by side, as in a pre-commit hook, they hold {megabytes(together)} at once.",
         "",
-        *duel([(name, t["memory"], z["memory"]) for name, t, z in pairs], megabytes, ("smaller", "larger"), "Peak memory checking the corpus, smaller is better"),
+        *chart([*((name, t["memory"], megabytes(t["memory"]), False) for name, t, _ in pairs), ("all five at once", together, megabytes(together), False), ("zanity, cold", memory, megabytes(memory), True)], "Peak memory checking the corpus, smaller is better"),
         "## Every command",
         "",
         "The tools ran through the same adapters as above. Cold zanity starts each run with an empty cache; warm reuses the last run's.",
@@ -320,14 +322,17 @@ def lsp_speed(data: dict) -> list[str]:
         table_rows.append([name, seconds(r["first"]), seconds(r["save"]), megabytes(r["memory"]), str(r["diagnostics"])])
     assert any(name == "zanity" for name, _ in timed), f"zanity's language server wasn't timed; results.json has {sorted(servers)}"
     assert timed, f"no language server was timed; each failed: {servers}"
+    assert timed[-1][0] == "zanity", f"zanity's server is timed last, so its bar ends each chart, not {timed[-1][0]}"
+    others = sum(r["memory"] for name, r in timed if name != "zanity")
+    held = rows("memory", megabytes)
     return [
         "## As language servers",
         "",
-        f"rich's `console.py`, {data['lsp_lines']:,} lines, alone in a workspace; the median of {data['runs']}. First: from starting the server to diagnostics for the opened file. Save: from a change and save to fresh diagnostics. Memory: what the server held with the file open. nouls' server needs `TYPESAFE_API_KEY` and did not run.",
+        f"rich's `console.py`, {data['lsp_lines']:,} lines, alone in a workspace; the median of {data['runs']}. First: from starting the server to diagnostics for the opened file. Save: from a change and save to fresh diagnostics. Memory: what the server held with the file open; an editor runs every server at once, so the others' memory adds up. nouls' server needs `TYPESAFE_API_KEY` and did not run.",
         "",
         *chart(rows("first", seconds), "Start to first diagnostics, shorter is better"),
         *chart(rows("save", seconds), "Save to fresh diagnostics, shorter is better"),
-        *chart(rows("memory", megabytes), "Memory with the file open, smaller is better"),
+        *chart([*held[:-1], ("all of them at once", others, megabytes(others), False), held[-1]], "Memory with the file open, smaller is better"),
         *table(["Server", "First", "Save", "Memory", "Diagnostics"], table_rows, right=4),
     ]
 
