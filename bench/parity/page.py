@@ -162,9 +162,10 @@ def tally(name: str, mine: list[dict]) -> dict:
     return {"name": name, "rules": len(mine), "whole": len(valid), "part": sum(bool(r["zanity_fires"]) for r in valid), "gaps": gaps, "unit": "rules"}
 
 
-def measured(data: dict) -> list[Tool]:
-    """The tools results.json has scored, so a tool added to tools.py appears once parity.py has run it."""
-    tools = [tool for tool in TOOLS if tool.name in data["corpus"]]
+def measured(data: dict, key: str = "corpus") -> list[Tool]:
+    """The tools results.json has scored, or timed with key "cli", so a tool added to tools.py appears once parity.py has run it."""
+    assert key in data, f"results.json has no {key!r}; run parity.py"
+    tools = [tool for tool in TOOLS if tool.name in data[key]]
     assert tools, "results.json scored none of the tools in tools.py; run parity.py"
     return tools
 
@@ -281,7 +282,7 @@ def cli_speed(data: dict) -> list[str]:
     base = cli["zanity, all rules, cold"]["mean"]
     warm = cli["zanity, all rules, warm"]["mean"]
     rows = [[name, seconds(r["mean"]), seconds(r["stddev"]), seconds(r["min"]), megabytes(r["memory"]), f"{r['mean'] / base:.1f}×"] for name, r in cli.items()]
-    pairs = [(tool.name, cli[tool.name], cli[f"zanity, {tool.name} rules, cold"]) for tool in measured(data) if tool.name in cli]
+    pairs = [(tool.name, cli[tool.name], cli[f"zanity, {tool.name} rules, cold"]) for tool in measured(data, "cli")]
     means = [(name, t["mean"], z["mean"]) for name, t, z in pairs]
     fast = min(means, key=lambda mean: mean[1])
     quick = [(name, theirs / ours) for name, theirs, ours in means if name != "bonsai"]

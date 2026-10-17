@@ -1,3 +1,4 @@
+import copy
 import json
 import sys
 import unittest
@@ -21,7 +22,7 @@ class ComparisonPagesTest(unittest.TestCase):
 
     def test_a_tool_not_yet_measured_is_left_out(self) -> None:
         name = page.TOOLS[-1].name
-        data = json.loads(page.RESULTS.read_text())
+        data = copy.deepcopy(DATA)
         data["corpus"].pop(name, None)
         data["fixtures"] = [r for r in data["fixtures"] if r["tool"] != name]
         data["cli"] = {k: v for k, v in data["cli"].items() if name not in k}
