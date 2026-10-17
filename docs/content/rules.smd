@@ -150,6 +150,8 @@ What the schema says of the rules described above only by name, or not yet.
 | `unfocused-test` | warning, on by default | Split it up, or assert only on the parts that matter. |
 | `self-mocking-test` | warning, on by default | Exercise the real code, and mock only its external dependencies. |
 | `trivial-test` | warning, on by default | Test the risky behaviour and edge cases, and make the name match what is verified. |
+| `fixture-leaks-state` | warning, on by default | Restore the state in teardown, or give each test a temporary copy of it. |
+| `fixture-hides-behaviour` | warning, on by default | Use the real implementation, and stub only external dependencies. |
 | `repeated-mechanics` | information, on by default | Write the shared steps once as a builder, helper or table of cases named in the domain's words, so each one says only what differs. |
 | `mutable-artifact-reference` | warning, on by default | Pin the artifact by immutable digest or commit, and let an update tool propose reviewed changes. |
 | `download-execution` | error, on by default | Download a versioned artifact, verify its published digest or signature, then execute the verified local file. |

@@ -984,7 +984,13 @@ pub const File = struct {
         }
         if (self.work.facts.collect_units and !self.index.marks(ctx.node, self.v.test_outer)) {
             const at = ts.ts_node_start_point(name_node);
-            try self.work.facts.unit(name, ctx.span.text(self.source), .{ .kind = if (ctx.is_test) .@"test" else .function, .reports_error = ctx.has_message, .at = .{ at.row, at.column, last } });
+            const kind: facts_module.UnitKind = if (ctx.is_test) .@"test" else if (self.inTestFile()) .fixture else .function;
+            var span = ctx.span;
+            if (kind == .fixture) if (self.parentOf(span)) |parent| {
+                const starts_before = ts.ts_node_start_byte(parent) < ts.ts_node_start_byte(span);
+                if (starts_before and ts.ts_node_end_byte(parent) == ts.ts_node_end_byte(span)) span = parent;
+            };
+            try self.work.facts.unit(name, span.text(self.source), .{ .kind = kind, .reports_error = ctx.has_message, .at = .{ at.row, at.column, last } });
         }
     }
 

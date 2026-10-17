@@ -239,8 +239,8 @@ QUESTIONS = {
     "test_not_specific": "unfocused-test",
     "test_not_predictive": "self-mocking-test",
     "test_not_inspiring": "trivial-test",
-    "fixture_leaks_state": "",
-    "fixture_hides_behaviour": "",
+    "fixture_leaks_state": "fixture-leaks-state",
+    "fixture_hides_behaviour": "fixture-hides-behaviour",
 }
 
 

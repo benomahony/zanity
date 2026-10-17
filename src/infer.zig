@@ -267,7 +267,7 @@ pub const Inference = struct {
         var writer: Io.Writer = .fixed(self.json.buffer[start..]);
         var json: std.json.Stringify = .{ .writer = &writer };
         const written = switch (unit.kind) {
-            .function, .@"test" => json.write(.{ .language = unit.language, .function = unit.source }),
+            .function, .fixture, .@"test" => json.write(.{ .language = unit.language, .function = unit.source }),
             .setting => json.write(.{ .file = unit.path, .line = unit.source }),
             .project => json.write(.{ .files = unit.source }),
             .cluster => json.write(.{ .language = unit.language, .repeated = unit.source }),
@@ -301,12 +301,16 @@ fn present(environ: *const std.process.Environ.Map, name: []const u8) ?[]const u
 }
 
 /// Whether a question about `asks` applies to the unit: the error-message questions to functions
-/// that report errors, the function questions to every function, and the test questions to tests.
+/// that report errors, the function questions to production functions and test support, the
+/// fixture questions to non-test functions in test files, and the test questions to tests.
 fn asked(asks: rules.Asks, unit: *const Unit) bool {
     if (unit.name.len == 0) assert.panic("{s}: a unit has no name; facts.unit() records the function's or test's name", .{unit.path});
+    const fixture = unit.kind == .fixture;
+    const function = unit.kind == .function or fixture;
     const applies = switch (asks) {
-        .errors => unit.kind == .function and unit.reports_error,
-        .function => unit.kind == .function,
+        .errors => function and unit.reports_error,
+        .function => function,
+        .fixture => fixture,
         .@"test" => unit.kind == .@"test",
         .setting => unit.kind == .setting,
         .project => unit.kind == .project,

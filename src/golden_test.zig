@@ -467,9 +467,13 @@ fn startMock(arena: std.mem.Allocator, io: Io, dir: []const u8) !MockTypeSafe {
 /// and a pyproject.toml with a weakened check.
 fn writeInferProject(arena: std.mem.Allocator, io: Io, scratch: Io.Dir) !void {
     const service = try Io.Dir.cwd().readFileAlloc(io, "tests/infer/project/service.py", arena, .unlimited);
+    const support = try Io.Dir.cwd().readFileAlloc(io, "tests/infer/project/test_support.py", arena, .unlimited);
     if (service.len == 0) assert.panic("tests/infer/project/service.py is empty; restore it from git", .{});
+    if (support.len == 0) assert.panic("tests/infer/project/test_support.py is empty; restore it from git", .{});
     if (std.mem.indexOf(u8, service, "# judge: ") == null) assert.panic("tests/infer/project/service.py marks no rule with '# judge: <rule>', so the mock would answer no to everything; restore the markers", .{});
+    if (std.mem.indexOf(u8, support, "# judge: fixture-") == null) assert.panic("tests/infer/project/test_support.py marks no fixture rule, so the mock would answer no to both fixture questions; restore the markers", .{});
     try scratch.writeFile(io, .{ .sub_path = "service.py", .data = service });
+    try scratch.writeFile(io, .{ .sub_path = "test_support.py", .data = support });
     try scratch.writeFile(io, .{ .sub_path = "tsconfig.json", .data = "{\n  \"compilerOptions\": {\n    \"strict\": true\n  }\n}\n" });
     try scratch.writeFile(io, .{ .sub_path = "all_test.zig", .data = "test {\n    _ = @import(\"service_test.zig\");\n}\n" });
     try scratch.writeFile(io, .{ .sub_path = "pyproject.toml", .data = "[tool.ruff]\nline-length = 200  # judge: weakened-check\n# judge: unscheduled-analysis\n" });
@@ -540,7 +544,7 @@ test "--infer asks the System One server zanity.toml names, with only the key it
     try expectOutput(keyed, &.{"\"authorization\": \"Bearer local\""}, &.{"Bearer test"});
 }
 
-test "--infer reports what the model is sure of, for functions, tests and project files" {
+test "--infer reports what the model is sure of, for functions, fixtures, tests and project files" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
     const arena = arena_state.allocator();
@@ -548,7 +552,7 @@ test "--infer reports what the model is sure of, for functions, tests and projec
     defer project.tmp.cleanup();
     defer project.mock.child.kill(std.testing.io);
     const run = try project.checkInferring(arena, std.testing.io);
-    try expectOutput(run.stdout, &.{ "rule=\"misleading-error\"", "rule=\"unconstructive-error\"", "'invalid input' doesn't say", "rule=\"hollow-test\"", "rule=\"weakened-check\"", "rule=\"unscheduled-analysis\"", "rule=\"repeated-mechanics\"", "between the first two, `\\\"alpha beta\\\"` becomes `\\\"ada lovelace\\\"`" }, &.{});
+    try expectOutput(run.stdout, &.{ "rule=\"misleading-error\"", "rule=\"unconstructive-error\"", "'invalid input' doesn't say", "rule=\"hollow-test\"", "rule=\"fixture-leaks-state\"", "rule=\"fixture-hides-behaviour\"", "rule=\"weakened-check\"", "rule=\"unscheduled-analysis\"", "rule=\"repeated-mechanics\"", "between the first two, `\\\"alpha beta\\\"` becomes `\\\"ada lovelace\\\"`" }, &.{});
 }
 
 test "--infer asks each unit only its own questions and skips what checks settled" {
@@ -560,14 +564,17 @@ test "--infer asks each unit only its own questions and skips what checks settle
     defer project.mock.child.kill(std.testing.io);
     _ = try project.checkInferring(arena, std.testing.io);
     const requests = try project.tmp.dir.readFileAlloc(std.testing.io, "requests.log", arena, .unlimited);
-    try std.testing.expectEqual(@as(usize, 15), std.mem.count(u8, requests, "\n"));
+    try std.testing.expectEqual(@as(usize, 16), std.mem.count(u8, requests, "\n"));
     var lines = std.mem.tokenizeScalar(u8, requests, '\n');
     while (lines.next()) |line| {
         const fine = std.mem.indexOf(u8, line, "def fine") != null;
         const is_test = std.mem.indexOf(u8, line, "def test_") != null;
+        const is_fixture = std.mem.indexOf(u8, line, "@pytest.fixture") != null;
         if (fine or is_test) try expectOutput(line, &.{}, &.{"vague-error"});
         if (is_test) try expectOutput(line, &.{}, &.{"name-behaviour-mismatch"});
         if (!is_test) try expectOutput(line, &.{}, &.{"hollow-test"});
+        if (is_fixture) try expectOutput(line, &.{ "fixture-leaks-state", "fixture-hides-behaviour", "name-behaviour-mismatch" }, &.{"hollow-test"});
+        if (!is_fixture) try expectOutput(line, &.{}, &.{ "fixture-leaks-state", "fixture-hides-behaviour" });
         if (std.mem.indexOf(u8, line, "def test_waits") != null) try expectOutput(line, &.{}, &.{"flaky-test"});
         if (std.mem.indexOf(u8, line, "\"=== ") != null) try expectOutput(line, &.{"\"questions\": [\"repeated-mechanics\"]"}, &.{});
         const config_line = std.mem.indexOf(u8, line, "weakened-check") != null or std.mem.indexOf(u8, line, "unscheduled-analysis") != null;
