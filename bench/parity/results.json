@@ -1,6 +1,6 @@
 {
   "when": "2026-10-17",
-  "commit": "f5d2b14",
+  "commit": "70eec96",
   "runs": 5,
   "fixtures": [
     {
@@ -827,8 +827,8 @@
         "non-canonical-term"
       ],
       "old_fires": true,
-      "zanity_fires": false,
-      "same_line": false,
+      "zanity_fires": true,
+      "same_line": true,
       "others": [
         "assertion-density",
         "dead-symbol"
@@ -923,8 +923,8 @@
         "forbidden-term"
       ],
       "old_fires": true,
-      "zanity_fires": false,
-      "same_line": false,
+      "zanity_fires": true,
+      "same_line": true,
       "others": [
         "assertion-density",
         "dead-symbol"
@@ -1521,7 +1521,7 @@
     "bonsai": {
       "recall": {
         "dead-parameter": {
-          "old": 319,
+          "old": 316,
           "matched": 44
         },
         "dead-symbol": {
