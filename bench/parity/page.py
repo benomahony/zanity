@@ -38,8 +38,8 @@ def mark(value: bool | None) -> str:
 
 def score(part: int, whole: int, text: str = "") -> str:
     """part of whole in a badge: green when all of it, red when none, amber between."""
-    assert 0 <= part <= whole, f"{part} of {whole} is not a share of it"
-    assert whole or not part, f"{part} of nothing"
+    assert 0 <= part <= whole, f"{part} of {whole} is not a share of it; fix the benchmark counts"
+    assert whole or not part, f"{part} of nothing; fix the benchmark counts so a match has a measured total"
     kind = "none" if not whole else "pass" if part == whole else "fail" if not part else "partial"
     return badge(text or f"{part}/{whole}", kind)
 
@@ -65,8 +65,8 @@ Row = tuple[str, float, str, bool]
 def bar(row: Row, most: float) -> str:
     """One chart row: a bar as long as its value is against most, with the text at its end."""
     label, value, text, zanity = row
-    assert 0 <= value <= most, f"{value} is outside the chart's 0 to {most}"
-    assert most > 0, f"a chart scaled to {most} has no length"
+    assert 0 <= value <= most, f"{value} is outside the chart's 0 to {most}; fix the benchmark value or chart maximum"
+    assert most > 0, f"a chart scaled to {most} has no length; pass the largest positive benchmark value"
     width = max(85 * value / most, 0.6)
     side = "zanity" if zanity else "other"
     return (
@@ -86,8 +86,8 @@ def chart(rows: list[Row], caption: str) -> list[str]:
 
 def verdict(theirs: float, ours: float, words: tuple[str, str]) -> str:
     """How many times better or worse zanity's figure is, in a badge, as HTML."""
-    assert theirs > 0, f"the other tool's figure is {theirs}, so there is nothing to compare"
-    assert ours > 0, f"zanity's figure is {ours}, so there is nothing to compare"
+    assert theirs > 0, f"the other tool's figure is {theirs}, so there is nothing to compare; rerun its benchmark"
+    assert ours > 0, f"zanity's figure is {ours}, so there is nothing to compare; rerun zanity's benchmark"
     better, worse = words
     if theirs >= ours:
         return f'<span class="badge pass">zanity {theirs / ours:.1f}× {better}</span>'
@@ -111,8 +111,8 @@ def duel(groups: list[tuple[str, float, float]], show, words: tuple[str, str], c
 
 
 def pct(part: int, whole: int) -> str:
-    assert part >= 0, f"a count is never negative, but got {part} of {whole}"
-    assert part <= whole or whole == 0, f"{part} of {whole} can't be more than all of it"
+    assert part >= 0, f"a count is never negative, but got {part} of {whole}; fix the benchmark counts"
+    assert part <= whole or whole == 0, f"{part} of {whole} can't be more than all of it; fix the benchmark counts"
     return f"{100 * part / whole:.0f}%" if whole else "–"
 
 
@@ -154,8 +154,8 @@ def tally(name: str, mine: list[dict]) -> dict:
     """One tool's rules, the fixtures it fires on, how many zanity matches, and what it misses."""
     valid = [r for r in mine if r["old_fires"]]
     gaps = [r["rule"] for r in mine if r["old_fires"] is not False and not r["zanity_fires"]]
-    assert mine, f"{name} has no scored rules"
-    assert name in BY_NAME, f"{name} is not a tool in tools.py"
+    assert mine, f"{name} has no scored rules; rerun parity.py or add its results"
+    assert name in BY_NAME, f"{name} is not a tool in tools.py; add it to TOOLS before rendering it"
     return {"name": name, "rules": len(mine), "whole": len(valid), "part": sum(bool(r["zanity_fires"]) for r in valid), "gaps": gaps, "unit": "rules"}
 
 
@@ -166,8 +166,8 @@ def tallies(data: dict) -> list[dict]:
     count = len(questions)
     gaps = [q["rule"] for q in questions if not q["present"]]
     out.append({"name": "nouls", "rules": count + data["inference"]["catalogue"], "whole": count, "part": count - len(gaps), "gaps": gaps, "unit": "questions"})
-    assert len(out) == len(TOOLS) + 1, f"a tally per tool and one for nouls, not {len(out)}"
-    assert all(t["whole"] for t in out), f"every tool fires on a fixture of its own, but not {[t['name'] for t in out if not t['whole']]}"
+    assert len(out) == len(TOOLS) + 1, f"a tally per tool and one for nouls, not {len(out)}; add every configured tool's results"
+    assert all(t["whole"] for t in out), f"every tool must fire on its own fixture, but these do not: {[t['name'] for t in out if not t['whole']]}; fix their fixtures or adapters"
     return out
 
 
@@ -178,8 +178,8 @@ def summary(data: dict) -> list[str]:
         link = f"[{name}](/comparison-{name}/)"
         fixtures = "–" if t["unit"] == "questions" else str(whole)
         rows.append([link, str(t["rules"]), fixtures, score(part, whole, f"{part}/{whole} {t['unit']}"), codes(t["gaps"])])
-    assert rows, "no tool was tallied"
-    assert data["fixtures"], "no fixtures were scored"
+    assert rows, "no tool was tallied; add tools to tools.py and rerun parity.py"
+    assert data["fixtures"], "no fixtures were scored; run parity.py without skipping scores"
     return table(["Tool", "Rules", "Fixtures it fires on", "zanity fires on", "zanity misses"], rows)
 
 
@@ -234,8 +234,8 @@ def corpus(data: dict, only: str | None = None) -> list[str]:
         for rule, s in scored["agreement"].items():
             matched, found = s["matched"], s["zanity"]
             agreement_rows.append([tool.name, f"`{rule}`", str(found), str(matched), pct(matched, found)])
-    assert recall_rows, "no old tool found anything in the corpus"
-    assert agreement_rows, "zanity found nothing in the corpus"
+    assert recall_rows, "no old tool found anything in the corpus; fix the corpus or tool adapters and rerun parity.py"
+    assert agreement_rows, "zanity found nothing in the corpus; fix the corpus or rule mappings and rerun parity.py"
     return [
         "## Recall",
         "",
@@ -353,9 +353,9 @@ def generated(data: dict) -> list[str]:
 
 def document(lines: list[str]) -> str:
     """One generated document, with exactly one newline at EOF."""
-    assert lines, "a generated document cannot be empty"
+    assert lines, "a generated document cannot be empty; pass the page's frontmatter and body"
     rendered = "\n".join(lines).rstrip() + "\n"
-    assert rendered and not rendered.endswith("\n\n"), f"document must end with exactly one newline, got {rendered[-2:]!r}"
+    assert rendered and not rendered.endswith("\n\n"), f"document must end with exactly one newline, got {rendered[-2:]!r}; strip trailing blank lines in document()"
     return rendered
 
 
@@ -399,8 +399,8 @@ def render_overview(data: dict) -> str:
 
 
 def render_tool(data: dict, name: str) -> str:
-    assert name in {t["name"] for t in tallies(data)}, f"{name} has no comparison tally"
-    assert name in LINKS, f"{name} has no source link entry"
+    assert name in {t["name"] for t in tallies(data)}, f"{name} has no comparison tally; add its scored results before rendering the page"
+    assert name in LINKS, f"{name} has no source link entry; add it to LINKS in page.py"
     external = LINKS[name]
     source = f"[{name}]({external})" if external else name
     body = [
@@ -439,9 +439,9 @@ def render_tool(data: dict, name: str) -> str:
 
 def pages(data: dict) -> dict[Path, str]:
     names = [t["name"] for t in tallies(data)]
-    assert len(names) == len(set(names)), f"comparison tool names must be unique, not {names}"
+    assert len(names) == len(set(names)), f"comparison tool names must be unique, not {names}; remove or rename the duplicate in tools.py"
     rendered = {OVERVIEW: render_overview(data), **{CONTENT / f"comparison-{name}.smd": render_tool(data, name) for name in names}}
-    assert len(rendered) == len(names) + 1, f"wrote {len(rendered)} pages for {len(names)} tools and one overview"
+    assert len(rendered) == len(names) + 1, f"wrote {len(rendered)} pages for {len(names)} tools and one overview; add the missing tool page in pages()"
     return rendered
 
 

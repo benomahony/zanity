@@ -44,8 +44,8 @@ def snapshot(data: dict) -> dict:
 
 
 def regressions(current: dict, floors: dict) -> list[str]:
-    assert set(current) == {"fixtures", "inference_questions", "language_recall"}, f"unexpected current coverage fields: {sorted(current)}"
-    assert set(floors) == set(current), f"floor fields {sorted(floors)} do not match current fields {sorted(current)}"
+    assert set(current) == {"fixtures", "inference_questions", "language_recall"}, f"unexpected current coverage fields: {sorted(current)}; update coverage() and the floor schema together"
+    assert set(floors) == set(current), f"floor fields {sorted(floors)} do not match current fields {sorted(current)}; regenerate the floor with --write"
     errors = []
     for field, label in (("fixtures", "covered fixture"), ("inference_questions", "inference question")):
         missing = sorted(set(floors[field]) - set(current[field]))
@@ -69,8 +69,8 @@ def regressions(current: dict, floors: dict) -> list[str]:
 
 
 def additions(current: dict, floors: dict) -> list[str]:
-    assert set(current) == {"fixtures", "inference_questions", "language_recall"}, f"unexpected current coverage fields: {sorted(current)}"
-    assert set(floors) == set(current), f"floor fields {sorted(floors)} do not match current fields {sorted(current)}"
+    assert set(current) == {"fixtures", "inference_questions", "language_recall"}, f"unexpected current coverage fields: {sorted(current)}; update coverage() and the floor schema together"
+    assert set(floors) == set(current), f"floor fields {sorted(floors)} do not match current fields {sorted(current)}; regenerate the floor with --write"
     gains = []
     for field, label in (("fixtures", "covered fixture"), ("inference_questions", "inference question")):
         added = sorted(set(current[field]) - set(floors[field]))

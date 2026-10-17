@@ -76,46 +76,46 @@ class Session:
 
     def send(self, message: dict) -> None:
         body = json.dumps({"jsonrpc": "2.0", **message}).encode()
-        assert self.proc.stdin, "the server's stdin is a pipe"
-        assert self.proc.poll() is None, f"the server exited with {self.proc.returncode}"
+        assert self.proc.stdin, "the server's stdin is not a pipe; start it with stdin=subprocess.PIPE"
+        assert self.proc.poll() is None, f"the server exited with {self.proc.returncode}; inspect its stderr and fix the server command"
         self.proc.stdin.write(f"Content-Length: {len(body)}\r\n\r\n".encode() + body)
         self.proc.stdin.flush()
 
     def notify(self, method: str, params: dict) -> None:
-        assert "/" in method or method in {"initialized", "exit"}, f"{method!r} isn't an LSP notification"
-        assert self.proc.poll() is None, f"the server exited with {self.proc.returncode} before {method}"
+        assert "/" in method or method in {"initialized", "exit"}, f"{method!r} isn't an LSP notification; pass a protocol method such as textDocument/didOpen"
+        assert self.proc.poll() is None, f"the server exited with {self.proc.returncode} before {method}; inspect its stderr and fix the server command"
         self.send({"method": method, "params": params})
 
     def request(self, method: str, params: dict) -> int:
-        assert method, "a request needs a method"
-        assert self.next_id >= 0, f"request ids count up from 1, but the last was {self.next_id}"
+        assert method, "a request needs a method; pass the LSP method name"
+        assert self.next_id >= 0, f"request ids count up from 1, but the last was {self.next_id}; start a new Session at id 0"
         self.next_id += 1
         self.send({"id": self.next_id, "method": method, "params": params})
         return self.next_id
 
     def read(self) -> dict:
-        assert self.proc.stdout, "the server's stdout is a pipe"
+        assert self.proc.stdout, "the server's stdout is not a pipe; start it with stdout=subprocess.PIPE"
         header = b""
         for _ in range(64):
             line = self.proc.stdout.readline()
-            assert line, "the server closed its output"
+            assert line, "the server closed its output; inspect its stderr and fix the server command"
             if line.strip() == b"":
                 break
             header += line
         length = int(header.lower().split(b"content-length:")[1].split(b"\r\n")[0])
-        assert length > 0, f"every message has a body, but the header said {length}: {header!r}"
+        assert length > 0, f"every message has a body, but the header said {length}: {header!r}; fix the server's Content-Length header"
         body = b""
         # An unbuffered pipe hands back what has arrived so far, so read until the body is whole.
         while len(body) < length:
             chunk = self.proc.stdout.read(length - len(body))
-            assert chunk, f"the server closed its output {len(body)} bytes into a {length}-byte message"
+            assert chunk, f"the server closed its output {len(body)} bytes into a {length}-byte message; inspect its stderr and fix its Content-Length"
             body += chunk
         return json.loads(body)
 
     def wait(self, accept) -> dict:
         """Read until a message accept() takes, answering the server's own requests."""
-        assert callable(accept), f"accept must be a function of a message, not {accept!r}"
-        assert self.proc.poll() is None, f"the server exited with {self.proc.returncode} before answering"
+        assert callable(accept), f"accept must be a function of a message, not {accept!r}; pass a predicate"
+        assert self.proc.poll() is None, f"the server exited with {self.proc.returncode} before answering; inspect its stderr and fix the server command"
         deadline = time.perf_counter() + DEADLINE
         while time.perf_counter() < deadline:
             message = self.read()
@@ -123,7 +123,7 @@ class Session:
                 return message
             if "id" in message and "method" in message:
                 self.send({"id": message["id"], "result": None})
-        raise TimeoutError(f"no answer within {DEADLINE} s")
+        raise TimeoutError(f"no answer within {DEADLINE} s; inspect the server trace or increase DEADLINE")
 
     def drain(self, quiet: float) -> int:
         """Read whatever the server sends until it has been quiet for `quiet` seconds, so a
@@ -147,8 +147,8 @@ def diagnostics_for(uri: str):
 def resident(pid: int) -> int:
     """The memory, in bytes, process pid holds now."""
     out = subprocess.run(["ps", "-o", "rss=", "-p", str(pid)], capture_output=True, text=True, check=True)
-    assert out.stdout.strip().isdigit(), f"ps gave {out.stdout!r} for the resident size of {pid}"
-    assert pid > 0, f"{pid} is not a process id"
+    assert out.stdout.strip().isdigit(), f"ps gave {out.stdout!r} for the resident size of {pid}; check that the process is still running"
+    assert pid > 0, f"{pid} is not a process id; pass the running server's positive pid"
     return int(out.stdout) * 1024
 
 
@@ -234,6 +234,6 @@ def bench_lsp(zanity: Zanity, runs: int) -> dict[str, dict]:
         out[name] = {"first": statistics.median(s[0] for s in samples), "save": statistics.median(s[1] for s in samples), "diagnostics": samples[0][2], "memory": statistics.median(s[3] for s in samples)}
     samples = [watch_once(zanity, workspace) for _ in range(runs)]
     out["zanity check --watch"] = {"first": statistics.median(s[0] for s in samples), "save": statistics.median(s[1] for s in samples), "diagnostics": samples[0][2], "memory": statistics.median(s[3] for s in samples)}
-    assert set(servers) <= set(out), f"timed {sorted(out)}, but not every one of {sorted(servers)}"
-    assert "error" not in out["zanity"], f"zanity's language server failed: {out['zanity']}"
+    assert set(servers) <= set(out), f"timed {sorted(out)}, but not every one of {sorted(servers)}; fix the missing server command and rerun"
+    assert "error" not in out["zanity"], f"zanity's language server failed: {out['zanity']}; inspect its error and fix the LSP benchmark"
     return out

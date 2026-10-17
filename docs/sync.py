@@ -37,8 +37,8 @@ def heading(line: str) -> str:
     the site too."""
     hashes, _, title = line.partition(" ")
     slug = re.sub(r"[^a-z0-9 -]", "", title.lower()).replace(" ", "-")
-    assert set(hashes) == {"#"}, f"{line!r} is not a Markdown heading"
-    assert slug, f"the heading {line!r} has no letters or digits to make an id from"
+    assert set(hashes) == {"#"}, f"{line!r} is not a Markdown heading; pass a line beginning with one or more # characters"
+    assert slug, f"the heading {line!r} has no letters or digits to make an id from; add a word or number"
     return f"{hashes} [{title}]($heading.id('{slug}'))"
 
 

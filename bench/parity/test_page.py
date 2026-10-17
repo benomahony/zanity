@@ -40,6 +40,10 @@ class ComparisonPagesTest(unittest.TestCase):
                 self.assertTrue(content.endswith("\n"))
                 self.assertFalse(content.endswith("\n\n"))
 
+    def test_invalid_benchmark_result_says_what_to_change(self) -> None:
+        with self.assertRaisesRegex(AssertionError, "fix the benchmark counts"):
+            page.score(2, 1)
+
 
 if __name__ == "__main__":
     unittest.main()

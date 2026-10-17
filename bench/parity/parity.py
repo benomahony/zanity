@@ -39,13 +39,13 @@ def arguments() -> argparse.Namespace:
 def scores(zanity: Zanity) -> dict:
     rules = zanity_rules()
     unknown = sorted({t for tool in TOOLS for t in tool.targets} - set(rules))
-    assert not unknown, f"tools.py maps to {unknown}, which zanity doesn't have"
+    assert not unknown, f"tools.py maps to {unknown}, which zanity doesn't have; correct those rule names in tools.py"
     data = {"fixtures": [row for tool in TOOLS if tool.name != "bonsai" for row in score_fixtures(tool, zanity)]}
     data["languages"] = score_languages(zanity)
     data["corpus_stats"] = build_corpus()
     data["corpus"] = score_corpus(zanity)
     data["inference"] = score_inference(rules)
-    assert data["fixtures"], "no fixtures were scored"
+    assert data["fixtures"], "no fixtures were scored; add fixtures or fix their adapters before rerunning"
     return data
 
 

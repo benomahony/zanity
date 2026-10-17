@@ -43,12 +43,12 @@ class Zanity:
         """zanity's findings for everything under cwd, from only these rules."""
         args = [str(self.binary), "check", "--json", "--quiet", "--rules", ",".join(sorted(set(rules))), "."]
         out = subprocess.run(args, cwd=cwd, env=self.env(), capture_output=True, text=True, check=False)
-        assert out.returncode <= 1, f"zanity failed in {cwd}:\n{out.stderr}"
+        assert out.returncode <= 1, f"zanity failed in {cwd}:\n{out.stderr}\nFix that error, then rerun parity.py"
         found = json.loads(out.stdout or "[]")
         for f in found:
             f["path"] = str((cwd / f["path"]).resolve())
         unplaced = [f for f in found if f["line"] < 1]
-        assert not unplaced, f"zanity reports lines from 1, but gave {unplaced[:3]}"
+        assert not unplaced, f"zanity reports lines from 1, but gave {unplaced[:3]}; fix the reported locations in zanity"
         return found
 
 
@@ -147,8 +147,8 @@ def unfixtured_rows(tool: Tool) -> list[dict]:
         }
         for rule, why in tool.unfixtured.items()
     ]
-    assert len(rows) == len(tool.unfixtured), "one row per unfixtured rule"
-    assert all(r["rule"] in tool.rules for r in rows), f"{tool.name} lists an unfixtured rule it doesn't map"
+    assert len(rows) == len(tool.unfixtured), "one row per unfixtured rule; add or remove the mismatched unfixtured entry"
+    assert all(r["rule"] in tool.rules for r in rows), f"{tool.name} lists an unfixtured rule it doesn't map; add its mapping in tools.py"
     return rows
 
 
@@ -176,8 +176,8 @@ def recall(tool: Tool, old: list[dict], new: list[dict]) -> dict[str, dict]:
         if fired:
             out[rule] = {"old": len(fired), "matched": sum(any(matches(tool, rule, o, n) for n in answered) for o in fired)}
     overcounted = {rule: s for rule, s in out.items() if s["matched"] > s["old"]}
-    assert not overcounted, f"a finding matches at most once, but {overcounted} matched more than were found"
-    assert set(out) <= set(tool.rules), f"recall scored {sorted(set(out) - set(tool.rules))}, which {tool.name} doesn't map"
+    assert not overcounted, f"a finding matches at most once, but {overcounted} matched more than were found; fix recall's matching loop"
+    assert set(out) <= set(tool.rules), f"recall scored {sorted(set(out) - set(tool.rules))}, which {tool.name} doesn't map; add or remove those mappings in tools.py"
     return out
 
 
@@ -191,8 +191,8 @@ def agreement(tool: Tool, old: list[dict], new: list[dict]) -> dict[str, dict]:
         if answered:
             out[target] = {"zanity": len(answered), "matched": sum(any(near(o, n) for o in fired) for n in answered)}
     overcounted = {rule: s for rule, s in out.items() if s["matched"] > s["zanity"]}
-    assert not overcounted, f"a finding matches at most once, but {overcounted} matched more than were found"
-    assert set(out) <= set(tool.targets), f"agreement scored {sorted(set(out) - set(tool.targets))}, which {tool.name} doesn't map to"
+    assert not overcounted, f"a finding matches at most once, but {overcounted} matched more than were found; fix agreement's matching loop"
+    assert set(out) <= set(tool.targets), f"agreement scored {sorted(set(out) - set(tool.targets))}, which {tool.name} doesn't map to; correct its targets in tools.py"
     return out
 
 

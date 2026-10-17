@@ -31,7 +31,7 @@ class Tool:
 
     @property
     def python(self) -> Path:
-        assert self.name, "a tool needs a name to find its checkout"
+        assert self.name, "a tool needs a name to find its checkout; set a non-empty name in TOOLS"
         assert SOURCES.is_dir(), f"{SOURCES} holds the old tools' checkouts; set ZANITY_PARITY_SOURCES to where they are"
         return SOURCES / self.name / ".venv" / "bin" / "python"
 

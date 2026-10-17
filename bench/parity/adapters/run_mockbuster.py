@@ -18,8 +18,8 @@ KINDS = [
 
 def kind(message: str) -> str:
     """The kind of double a message reports; an unknown one surfaces as a rule the mapping lacks."""
-    assert message, "mockbuster reported a finding with no message"
-    assert len(KINDS) == len({name for _, name in KINDS}), f"KINDS names a kind twice: {KINDS}"
+    assert message, "mockbuster reported a finding with no message; update its adapter for the installed output format"
+    assert len(KINDS) == len({name for _, name in KINDS}), f"KINDS names a kind twice: {KINDS}; remove or rename the duplicate mapping"
     return next((name for pattern, name in KINDS if re.search(pattern, message)), "unknown:" + message[:40])
 
 
