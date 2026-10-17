@@ -112,6 +112,7 @@ fn checkProjectFile(run: ProjectRun, path: []const u8, source: []const u8) !void
     while (lines.next()) |raw| : (row += 1) {
         const line = std.mem.trim(u8, raw, " \t\r");
         if (line.len == 0 or line[0] == '#' or std.mem.startsWith(u8, line, "//")) continue;
+        if (onlyContradicted(line)) continue;
         const column: u32 = @intCast(std.mem.indexOfNone(u8, raw, " \t") orelse 0);
         var lower: [512]u8 = undefined;
         const kept = @min(line.len, lower.len);
@@ -130,6 +131,42 @@ fn checkProjectFile(run: ProjectRun, path: []const u8, source: []const u8) !void
         try facts.unit(name, line, .{ .kind = .setting, .reports_error = false, .at = .{ row, column, row } });
     }
     if (row == 0 and source.len > 0) assert.panic("{s}: read {d} bytes as no lines; splitting on newlines always gives at least one", .{ path, source.len });
+}
+
+/// Whether every rule code the setting names, before any comment, is one that bans what zanity
+/// requires, so the line turns off a check zanity's rules contradict and weakens nothing.
+fn onlyContradicted(line: []const u8) bool {
+    if (line.len == 0) assert.panic("checking an empty setting for rule codes; checkProjectFile() skips blank lines", .{});
+    const setting = line[0 .. std.mem.indexOfScalar(u8, line, '#') orelse line.len];
+    var named: u32 = 0;
+    var i: usize = 0;
+    while (i < setting.len) {
+        const start = i;
+        while (i < setting.len and std.ascii.isAlphanumeric(setting[i])) i += 1;
+        const word = setting[start..i];
+        if (i == start) i += 1;
+        if (!ruleCode(word)) continue;
+        if (!strings.contains(&rules.contradicted_codes, word)) return false;
+        named += 1;
+    }
+    if (i < setting.len) assert.panic("reading '{s}' for rule codes stopped at byte {d}", .{ setting, i });
+    if (named > setting.len / 2) assert.panic("counted {d} rule codes in the {d}-byte '{s}'; each takes at least two bytes", .{ named, setting.len, setting });
+    return named > 0;
+}
+
+/// Whether `word` reads as a linter's rule code: capitals then digits, as in `S101` or `E501`.
+fn ruleCode(word: []const u8) bool {
+    if (std.mem.indexOfNone(u8, word, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789") != null) assert.panic("'{s}' is not one word; onlyContradicted() splits at every other byte", .{word});
+    const letters = std.mem.indexOfNone(u8, word, "ABCDEFGHIJKLMNOPQRSTUVWXYZ") orelse return false;
+    if (letters > word.len) assert.panic("found {d} capitals in the {d}-byte '{s}'", .{ letters, word.len, word });
+    return letters > 0 and letters < word.len and std.mem.indexOfNone(u8, word[letters..], "0123456789") == null;
+}
+
+test "a setting that only turns off rules banning what zanity requires weakens nothing" {
+    try std.testing.expect(onlyContradicted("ignore = [\"S101\"]  # assertion-density needs asserts"));
+    try std.testing.expect(onlyContradicted("\"tests/*\" = [\"S101\", \"B101\"]"));
+    try std.testing.expect(!onlyContradicted("ignore = [\"S101\", \"E501\"]"));
+    try std.testing.expect(!onlyContradicted("line-length = 200"));
 }
 
 /// Findings whose evidence is a checked-in build, dependency, CI or infrastructure artifact.

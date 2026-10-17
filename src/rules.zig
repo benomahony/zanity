@@ -361,6 +361,11 @@ pub const entry_points = [_][]const u8{ "main", "app", "cli", "setup", "teardown
 pub const secret_names = [_][]const u8{ "password", "passwd", "secret", "token", "apikey", "privatekey", "accesskey", "credentials" };
 pub const secret_placeholders = [_][]const u8{ "not-set", "not_set", "dummy", "placeholder", "changeme", "change-me", "xxx" };
 pub const secret_masks = "*xX#.";
+/// Other linters' rules that ban what zanity's own rules require, such as ruff's and bandit's ban
+/// on `assert`, which assertion-density contradicts: turning one off follows zanity, so it isn't a
+/// weakened check.
+pub const contradicted_codes = [_][]const u8{ "S101", "B101" };
+
 /// Values that grant access rather than hold a credential, as in a GitHub workflow's
 /// `id-token: write`, so a setting named for a token that takes one stores no secret.
 pub const access_levels = [_][]const u8{ "read", "write", "none", "read-all", "write-all" };
