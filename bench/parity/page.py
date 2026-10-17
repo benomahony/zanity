@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 
 from score import LANGUAGES
-from tools import BY_NAME, HERE, REPO, TOOLS
+from tools import BY_NAME, HERE, REPO, TOOLS, Tool
 
 RESULTS = HERE / "results.json"
 CONTENT = REPO / "docs" / "content"
@@ -21,6 +21,7 @@ LINKS = {
     "mockbuster": "https://github.com/benomahony/mockbuster",
     "dddlint": "https://github.com/benomahony/dddlint",
     "bonsai": "",
+    "lizard": "https://github.com/terryyin/lizard",
     "nouls": "https://github.com/benomahony/nouls",
 }
 
@@ -161,14 +162,22 @@ def tally(name: str, mine: list[dict]) -> dict:
     return {"name": name, "rules": len(mine), "whole": len(valid), "part": sum(bool(r["zanity_fires"]) for r in valid), "gaps": gaps, "unit": "rules"}
 
 
+def measured(data: dict, key: str = "corpus") -> list[Tool]:
+    """The tools results.json has scored, or timed with key "cli", so a tool added to tools.py appears once parity.py has run it."""
+    assert key in data, f"results.json has no {key!r}; run parity.py"
+    tools = [tool for tool in TOOLS if tool.name in data[key]]
+    assert tools, "results.json scored none of the tools in tools.py; run parity.py"
+    return tools
+
+
 def tallies(data: dict) -> list[dict]:
     """Each tool's tally; nouls last, by its named questions."""
-    out = [tally(tool.name, [r for r in data["fixtures"] if r["tool"] == tool.name] or language_rows(data)) for tool in TOOLS]
+    out = [tally(tool.name, [r for r in data["fixtures"] if r["tool"] == tool.name] or language_rows(data)) for tool in measured(data)]
     questions = data["inference"]["questions"]
     count = len(questions)
     gaps = [q["rule"] for q in questions if not q["present"]]
     out.append({"name": "nouls", "rules": count + data["inference"]["catalogue"], "whole": count, "part": count - len(gaps), "gaps": gaps, "unit": "questions"})
-    assert len(out) == len(TOOLS) + 1, f"a tally per tool and one for nouls, not {len(out)}; add every configured tool's results"
+    assert len(out) == len(measured(data)) + 1, f"a tally per tool and one for nouls, not {len(out)}; add every configured tool's results"
     assert all(t["whole"] for t in out), f"every tool must fire on its own fixture, but these do not: {[t['name'] for t in out if not t['whole']]}; fix their fixtures or adapters"
     return out
 
@@ -197,7 +206,7 @@ def scoreboard(data: dict) -> list[str]:
             f'<div class="card-unit">{t["unit"]} matched</div></a>'
         )
     assert cards, "no tool was tallied"
-    assert len(cards) == len(TOOLS) + 1, f"a card per tool and one for nouls, not {len(cards)}"
+    assert len(cards) == len(measured(data)) + 1, f"a card per tool and one for nouls, not {len(cards)}"
     return raw(['<div class="scoreboard">', *cards, "</div>"])
 
 
@@ -227,7 +236,7 @@ def languages(data: dict) -> list[str]:
 
 def corpus(data: dict, only: str | None = None) -> list[str]:
     recall_rows, agreement_rows = [], []
-    selected = [BY_NAME[only]] if only else TOOLS
+    selected = [BY_NAME[only]] if only else measured(data)
     for tool in selected:
         scored = data["corpus"][tool.name]
         for rule, s in scored["recall"].items():
@@ -273,7 +282,7 @@ def cli_speed(data: dict) -> list[str]:
     base = cli["zanity, all rules, cold"]["mean"]
     warm = cli["zanity, all rules, warm"]["mean"]
     rows = [[name, seconds(r["mean"]), seconds(r["stddev"]), seconds(r["min"]), megabytes(r["memory"]), f"{r['mean'] / base:.1f}×"] for name, r in cli.items()]
-    pairs = [(tool.name, cli[tool.name], cli[f"zanity, {tool.name} rules, cold"]) for tool in TOOLS]
+    pairs = [(tool.name, cli[tool.name], cli[f"zanity, {tool.name} rules, cold"]) for tool in measured(data, "cli")]
     means = [(name, t["mean"], z["mean"]) for name, t, z in pairs]
     fast = min(means, key=lambda mean: mean[1])
     quick = [(name, theirs / ours) for name, theirs, ours in means if name != "bonsai"]
@@ -398,7 +407,7 @@ def render_performance(data: dict) -> str:
         *lsp_speed(data),
         "# [Rerun]($heading.id('rerun'))",
         "",
-        "The harness needs checkouts of the tools beside zanity's (or `ZANITY_PARITY_SOURCES` naming their parent), each synced with `uv sync`, and hyperfine.",
+        "The harness needs checkouts of the tools beside zanity's (or `ZANITY_PARITY_SOURCES` naming their parent), each synced with `uv sync` (Lizard has no `pyproject.toml`, so `uv venv && uv pip install -e .` in its checkout), and hyperfine.",
         "",
         "```sh",
         "zig build",

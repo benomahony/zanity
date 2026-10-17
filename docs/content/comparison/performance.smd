@@ -142,7 +142,7 @@ rich's `console.py`, 2,698 lines, alone in a workspace; the median of 5. First: 
 
 # [Rerun]($heading.id('rerun'))
 
-The harness needs checkouts of the tools beside zanity's (or `ZANITY_PARITY_SOURCES` naming their parent), each synced with `uv sync`, and hyperfine.
+The harness needs checkouts of the tools beside zanity's (or `ZANITY_PARITY_SOURCES` naming their parent), each synced with `uv sync` (Lizard has no `pyproject.toml`, so `uv venv && uv pip install -e .` in its checkout), and hyperfine.
 
 ```sh
 zig build
