@@ -18,7 +18,12 @@
 				<ul>
 					<li><a href="$site.page('').link()">Introduction</a></li>
 					<li><a href="$site.page('rules').link()">Rules</a></li>
-					<li><a href="$site.page('comparison').link()">Against the tools it replaces</a></li>
+					<li>
+						<a href="$site.page('comparison').link()">Comparisons</a>
+						<ul :loop="$site.page('comparison').subpages()">
+							<li><a href="$loop.it.link()" :text="$loop.it.title"></a></li>
+						</ul>
+					</li>
 				</ul>
 				<div class="external">
 					<a href="https://github.com/benomahony/zanity">Source</a>

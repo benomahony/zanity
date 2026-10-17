@@ -12,8 +12,9 @@ from tools import BY_NAME, HERE, REPO, TOOLS
 
 RESULTS = HERE / "results.json"
 CONTENT = REPO / "docs" / "content"
-OVERVIEW = CONTENT / "comparison.smd"
-PERFORMANCE = CONTENT / "comparison-performance.smd"
+SECTION = CONTENT / "comparison"
+OVERVIEW = SECTION / "index.smd"
+PERFORMANCE = SECTION / "performance.smd"
 LINKS = {
     "nasa-lsp": "https://github.com/benomahony/nasa-lsp",
     "testdesiderata": "https://github.com/benomahony/testdesiderata",
@@ -176,7 +177,7 @@ def summary(data: dict) -> list[str]:
     rows = []
     for t in tallies(data):
         name, part, whole = t["name"], t["part"], t["whole"]
-        link = f"[{name}](/comparison-{name}/)"
+        link = f"[{name}]($link.page('comparison/{name}'))"
         fixtures = "–" if t["unit"] == "questions" else str(whole)
         rows.append([link, str(t["rules"]), fixtures, score(part, whole, f"{part}/{whole} {t['unit']}"), codes(t["gaps"])])
     assert rows, "no tool was tallied; add tools to tools.py and rerun parity.py"
@@ -190,7 +191,7 @@ def scoreboard(data: dict) -> list[str]:
     for t in tallies(data):
         part, whole = t["part"], t["whole"]
         cards.append(
-            f'<a href="../comparison-{t["name"]}/" class="card {"pass" if part == whole else "partial"}"><div class="card-name">{t["name"]}</div>'
+            f'<a href="{t["name"]}/" class="card {"pass" if part == whole else "partial"}"><div class="card-name">{t["name"]}</div>'
             f'<div class="card-score">{part}<span>/{whole}</span></div>'
             f'<div class="card-bar"><span style="width:{100 * part / whole:.0f}%"></span></div>'
             f'<div class="card-unit">{t["unit"]} matched</div></a>'
@@ -340,10 +341,10 @@ def lsp_speed(data: dict) -> list[str]:
     ]
 
 
-def front(title: str, description: str) -> list[str]:
+def front(title: str, description: str, newer: int = 2) -> list[str]:
     assert title, "a comparison page needs a title"
     assert description, "a comparison page needs a description"
-    return ['---', f'.title = "{title}",', f'.description = "{description}",', '.date = .date("2026-10-17T00:00:02"),', '.layout = "page.shtml",', '---', ""]
+    return ['---', f'.title = "{title}",', f'.description = "{description}",', f'.date = .date("2026-10-17T00:00:{newer:02}"),', '.layout = "page.shtml",', '---', ""]
 
 
 def generated(data: dict) -> list[str]:
@@ -364,8 +365,8 @@ def render_overview(data: dict) -> str:
     assert data["fixtures"], "results.json has no fixtures; run parity.py"
     assert data["inference"]["questions"], "results.json has no inference questions; fix the nouls adapter and rerun parity.py"
     return document([
-        *front("Against the tools it replaces", "What zanity finds that the linters it consolidates find, and how fast."),
-        "zanity replaces six linters. Start here, then open a tool for its rule-by-rule and real-code evidence.",
+        *front("Comparisons", f"Rule-by-rule coverage and speed beside {len(tallies(data))} other linters."),
+        "Each card links to that tool's evidence.",
         *generated(data),
         "",
         "# Summary",
@@ -376,7 +377,7 @@ def render_overview(data: dict) -> str:
         *summary(data),
         "# Evidence",
         "",
-        "Each tool page has its fixture results, recall and agreement on real code. [Performance](/comparison-performance/) has command-line, editor and watch-mode timings.",
+        "Each tool page has its fixture results, recall and agreement on real code. [Performance]($link.page('comparison/performance')) has command-line, editor and watch-mode timings.",
         "",
     ])
 
@@ -385,9 +386,7 @@ def render_performance(data: dict) -> str:
     assert data["cli"], "results.json has no command-line timings; rerun parity.py without --skip-bench"
     assert data["lsp"], "results.json has no editor timings; rerun parity.py without --skip-bench"
     return document([
-        *front("zanity performance", "Command-line, editor and watch-mode speed and memory beside the tools zanity replaces."),
-        "# [All comparisons](/comparison/)",
-        "",
+        *front("Performance", "Command-line, editor and watch-mode speed and memory beside the tools zanity replaces.", 0),
         *generated(data),
         "# Command line",
         "",
@@ -411,14 +410,13 @@ def render_performance(data: dict) -> str:
 
 
 def render_tool(data: dict, name: str) -> str:
-    assert name in {t["name"] for t in tallies(data)}, f"{name} has no comparison tally; add its scored results before rendering the page"
+    names = [t["name"] for t in tallies(data)]
+    assert name in names, f"{name} has no comparison tally; add its scored results before rendering the page"
     assert name in LINKS, f"{name} has no source link entry; add it to LINKS in page.py"
     external = LINKS[name]
     source = f"[{name}]({external})" if external else name
     body = [
-        *front(f"zanity and {name}", f"Rule-by-rule evidence for zanity's coverage of {name}."),
-        "# [All comparisons](/comparison/)",
-        "",
+        *front(name, f"Rule-by-rule evidence for zanity's coverage of {name}.", len(names) - names.index(name)),
         f"This page compares zanity with {source} on the same source files.",
         *generated(data),
     ]
@@ -452,16 +450,16 @@ def render_tool(data: dict, name: str) -> str:
 def pages(data: dict) -> dict[Path, str]:
     names = [t["name"] for t in tallies(data)]
     assert len(names) == len(set(names)), f"comparison tool names must be unique, not {names}; remove or rename the duplicate in tools.py"
-    rendered = {OVERVIEW: render_overview(data), PERFORMANCE: render_performance(data), **{CONTENT / f"comparison-{name}.smd": render_tool(data, name) for name in names}}
+    rendered = {OVERVIEW: render_overview(data), PERFORMANCE: render_performance(data), **{SECTION / f"{name}.smd": render_tool(data, name) for name in names}}
     assert len(rendered) == len(names) + 2, f"wrote {len(rendered)} pages for {len(names)} tools, performance and one overview; add the missing comparison page in pages()"
     return rendered
 
 
 def main() -> None:
     assert RESULTS.is_file(), f"{RESULTS} is missing; run bench/parity/parity.py first"
-    assert CONTENT.is_dir(), f"{CONTENT} is missing; the docs live in docs/"
+    assert SECTION.is_dir(), f"{SECTION} is missing; the comparison pages live in docs/content/comparison/"
     written = pages(json.loads(RESULTS.read_text()))
-    existing = {OVERVIEW, *CONTENT.glob("comparison-*.smd")}
+    existing = set(SECTION.glob("*.smd"))
     assert existing <= set(written), f"stale comparison pages: {sorted(str(path) for path in existing - set(written))}"
     for path, content in written.items():
         path.write_text(content)

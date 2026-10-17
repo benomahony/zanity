@@ -67,4 +67,4 @@ jobs:
           python3 -m unittest bench.parity.test_page bench.parity.test_ratchet
           python3 bench/parity/ratchet.py
           python3 bench/parity/page.py
-          git diff --exit-code -- docs/content/comparison*.smd || { echo "::error::Comparison pages are stale. Run: python3 bench/parity/page.py"; exit 1; }
+          git diff --exit-code -- docs/content/comparison || { echo "::error::Comparison pages are stale. Run: python3 bench/parity/page.py"; exit 1; }
