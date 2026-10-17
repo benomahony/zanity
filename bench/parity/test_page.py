@@ -19,6 +19,16 @@ class ComparisonPagesTest(unittest.TestCase):
         self.assertEqual(len(rendered), len(names) + 2)
         self.assertEqual(set(page.SECTION.glob("*.smd")), expected)
 
+    def test_a_tool_not_yet_measured_is_left_out(self) -> None:
+        name = page.TOOLS[-1].name
+        data = json.loads(page.RESULTS.read_text())
+        data["corpus"].pop(name, None)
+        data["fixtures"] = [r for r in data["fixtures"] if r["tool"] != name]
+        data["cli"] = {k: v for k, v in data["cli"].items() if name not in k}
+        rendered = page.pages(data)
+        self.assertNotIn(page.SECTION / f"{name}.smd", rendered)
+        self.assertNotIn(name, page.render_performance(data))
+
     def test_overview_links_to_every_tool_page(self) -> None:
         overview = page.render_overview(DATA)
         names = [t["name"] for t in page.tallies(DATA)]
