@@ -207,6 +207,26 @@ TOOLS = [
         projects=True,
         same_file={"single-impl-abstraction"},
     ),
+    Tool(
+        "lizard",
+        "run_lizard.py",
+        {
+            "cyclomatic_complexity": ["complex-function"],
+            "cognitive_complexity": ["complex-function", "deep-nesting"],
+            "max_nesting_depth": ["deep-nesting"],
+            "max_nested_structures": ["deep-nesting"],
+            "length": ["long-function"],
+            "nloc": ["long-function"],
+            "parameter_count": ["long-parameter-list"],
+        },
+        unfixtured={"nloc": "its default limit is a million lines of code"},
+        notes={
+            "cognitive_complexity": "zanity has no cognitive complexity; it reports the nesting that drives the score",
+            "max_nested_structures": "Lizard warns at four nested structures and counts each elif as one more; zanity flags code nested deeper than four",
+            "length": "Lizard warns past 1,000 lines; zanity flags 60 lines of code, as Power of Ten says",
+            "parameter_count": "Lizard warns past 100 parameters; zanity flags more than four",
+        },
+    ),
 ]
 BY_NAME = {tool.name: tool for tool in TOOLS}
 
@@ -255,6 +275,7 @@ def expected_rule(tool: Tool, unit: Path) -> str:
         "testdesiderata": stem.upper(),
         "mockbuster": stem.replace("_", "-"),
         "dddlint": unit.name.replace("config-", "config:", 1).replace("-module", ":module"),
+        "lizard": unit.stem,
     }
     return names[tool.name]
 

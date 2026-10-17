@@ -21,6 +21,7 @@ LINKS = {
     "mockbuster": "https://github.com/benomahony/mockbuster",
     "dddlint": "https://github.com/benomahony/dddlint",
     "bonsai": "",
+    "lizard": "https://github.com/terryyin/lizard",
     "nouls": "https://github.com/benomahony/nouls",
 }
 
@@ -398,7 +399,7 @@ def render_performance(data: dict) -> str:
         *lsp_speed(data),
         "# [Rerun]($heading.id('rerun'))",
         "",
-        "The harness needs checkouts of the tools beside zanity's (or `ZANITY_PARITY_SOURCES` naming their parent), each synced with `uv sync`, and hyperfine.",
+        "The harness needs checkouts of the tools beside zanity's (or `ZANITY_PARITY_SOURCES` naming their parent), each synced with `uv sync` (Lizard has no `pyproject.toml`, so `uv venv && uv pip install -e .` in its checkout), and hyperfine.",
         "",
         "```sh",
         "zig build",
