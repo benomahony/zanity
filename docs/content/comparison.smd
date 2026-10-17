@@ -113,7 +113,7 @@ bonsai's own fixtures, in place: its findings, and how many of them zanity repor
 
 | Smell | python | javascript | typescript | go | rust | java | Note |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `dead-parameter` | [3/9]($text.attrs('badge','partial')) | [3/4]($text.attrs('badge','partial')) | [6/21]($text.attrs('badge','partial')) | [10/15]($text.attrs('badge','partial')) | [7/12]($text.attrs('badge','partial')) | [4/8]($text.attrs('badge','partial')) |  |
+| `dead-parameter` | [3/9]($text.attrs('badge','partial')) | [3/4]($text.attrs('badge','partial')) | [6/21]($text.attrs('badge','partial')) | [10/15]($text.attrs('badge','partial')) | [7/12]($text.attrs('badge','partial')) | [4/8]($text.attrs('badge','partial')) | bonsai also flags method parameters an interface or override fixes, empty stubs, TypeScript parameter properties, and parameters inside function types; zanity leaves those alone |
 | `dead-symbol` | [23/23]($text.attrs('badge','pass')) | [19/20]($text.attrs('badge','partial')) | [22/30]($text.attrs('badge','partial')) | [18/21]($text.attrs('badge','partial')) | [14/20]($text.attrs('badge','partial')) | [18/31]($text.attrs('badge','partial')) |  |
 | `duplicated-expression` | [2/2]($text.attrs('badge','pass')) | [2/2]($text.attrs('badge','pass')) | [0/1]($text.attrs('badge','fail')) | [1/1]($text.attrs('badge','pass')) | [1/1]($text.attrs('badge','pass')) | [–]($text.attrs('badge','none')) | bonsai also flags the same text in separate loops, where each loop binds a different value; zanity reports only an expression it could compute once |
 | `empty-handler` | [1/1]($text.attrs('badge','pass')) | [–]($text.attrs('badge','none')) | [–]($text.attrs('badge','none')) | [–]($text.attrs('badge','none')) | [1/1]($text.attrs('badge','pass')) | [1/1]($text.attrs('badge','pass')) |  |
@@ -153,7 +153,7 @@ Of each tool's findings, how many zanity reports on the same lines with a mapped
 | mockbuster | `monkeypatch-fixture` | `test-double` | zanity reports monkeypatch.setattr, which replaces behaviour, not setenv or the parameter | 14 | 0 | [0%]($text.attrs('badge','fail')) |
 | dddlint | `duplicate` | `duplicate-name` | zanity reports only names another file can use, and not methods of different classes | 555 | 24 | [4%]($text.attrs('badge','partial')) |
 | dddlint | `drift` | `name-drift` |  | 34 | 1 | [3%]($text.attrs('badge','partial')) |
-| bonsai | `dead-parameter` | `dead-parameter` |  | 316 | 44 | [14%]($text.attrs('badge','partial')) |
+| bonsai | `dead-parameter` | `dead-parameter` | bonsai also flags method parameters an interface or override fixes, empty stubs, TypeScript parameter properties, and parameters inside function types; zanity leaves those alone | 316 | 44 | [14%]($text.attrs('badge','partial')) |
 | bonsai | `dead-symbol` | `dead-symbol` |  | 314 | 37 | [12%]($text.attrs('badge','partial')) |
 | bonsai | `duplicated-expression` | `duplicated-expression` | bonsai also flags the same text in separate loops, where each loop binds a different value; zanity reports only an expression it could compute once | 508 | 40 | [8%]($text.attrs('badge','partial')) |
 | bonsai | `empty-handler` | `swallowed-error`, `empty-block` |  | 282 | 0 | [0%]($text.attrs('badge','fail')) |

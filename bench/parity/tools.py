@@ -197,6 +197,7 @@ TOOLS = [
         },
         notes={
             "long-function": "bonsai flags 30 lines; zanity flags 60, as Power of Ten says",
+            "dead-parameter": "bonsai also flags method parameters an interface or override fixes, empty stubs, TypeScript parameter properties, and parameters inside function types; zanity leaves those alone",
             "extractable-chunk": "bonsai searches functions over 30 lines and takes blocks that return early; zanity searches functions past its 60-line limit, for blocks that can move out unchanged",
             "single-impl-abstraction": "bonsai reports the one implementation; zanity reports the abstraction, which is what to remove",
             "passthrough-wrapper": "bonsai also flags functions that change what they pass on, take no parameters, or are methods an override replaces; zanity reports only functions that forward their own parameters unchanged",
