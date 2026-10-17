@@ -20,14 +20,8 @@
 					<li><a href="$site.page('rules').link()">Rules</a></li>
 					<li>
 						<a href="$site.page('comparison').link()">Comparisons</a>
-						<ul>
-							<li><a href="$site.page('comparison-nasa-lsp').link()">nasa-lsp</a></li>
-							<li><a href="$site.page('comparison-testdesiderata').link()">testdesiderata</a></li>
-							<li><a href="$site.page('comparison-mockbuster').link()">mockbuster</a></li>
-							<li><a href="$site.page('comparison-dddlint').link()">dddlint</a></li>
-							<li><a href="$site.page('comparison-bonsai').link()">bonsai</a></li>
-							<li><a href="$site.page('comparison-nouls').link()">nouls</a></li>
-							<li><a href="$site.page('comparison-performance').link()">performance</a></li>
+						<ul :loop="$site.page('comparison').subpages()">
+							<li><a href="$loop.it.link()" :text="$loop.it.title"></a></li>
 						</ul>
 					</li>
 				</ul>

@@ -1,7 +1,7 @@
 ---
-.title = "zanity and nasa-lsp",
+.title = "nasa-lsp",
 .description = "Rule-by-rule evidence for zanity's coverage of nasa-lsp.",
-.date = .date("2026-10-17T00:00:02"),
+.date = .date("2026-10-17T00:00:06"),
 .layout = "page.shtml",
 ---
 

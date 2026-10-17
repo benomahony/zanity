@@ -1,7 +1,7 @@
 ---
-.title = "zanity performance",
+.title = "Performance",
 .description = "Command-line, editor and watch-mode speed and memory beside the tools zanity replaces.",
-.date = .date("2026-10-17T00:00:02"),
+.date = .date("2026-10-17T00:00:00"),
 .layout = "page.shtml",
 ---
 

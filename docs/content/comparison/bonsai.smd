@@ -1,5 +1,5 @@
 ---
-.title = "zanity and bonsai",
+.title = "bonsai",
 .description = "Rule-by-rule evidence for zanity's coverage of bonsai.",
 .date = .date("2026-10-17T00:00:02"),
 .layout = "page.shtml",
