@@ -245,8 +245,8 @@ On an M3 Max whose endpoint security slows every file open by a binary Apple did
 
 ```=html
 <div class="headline">
-<div><strong>136×</strong> faster than running the five tools: 179 ms against 24.33 s, on every rule at once, from an empty cache.</div>
-<div><strong>124×</strong> faster than the slowest, bonsai, on its own rules.</div>
+<div><strong>2.3×</strong> faster on every rule, from an empty cache, than the fastest tool, mockbuster, on its own 6: 179 ms against 413 ms.</div>
+<div><strong>2.5–7.1×</strong> faster than nasa-lsp, testdesiderata, mockbuster, dddlint, each on its own rules; bonsai, which rebuilds its index on every run, is 124× slower.</div>
 </div>
 ```
 
@@ -280,10 +280,13 @@ Each tool on the whole corpus, 58,654 lines, beside zanity running only the rule
 ```
 
 ```=html
-<figure class="chart"><figcaption>Every rule at once, shorter is better</figcaption>
-<div class="chart-row other"><span class="chart-label">five tools in a row</span><span class="chart-track"><span class="chart-bar" style="width:85.0%"></span><span class="chart-value">24.33 s</span></span></div>
-<div class="chart-row zanity"><span class="chart-label">zanity, cold</span><span class="chart-track"><span class="chart-bar" style="width:0.6%"></span><span class="chart-value">179 ms</span></span></div>
-<div class="chart-row zanity"><span class="chart-label">zanity, warm</span><span class="chart-track"><span class="chart-bar" style="width:0.6%"></span><span class="chart-value">141 ms</span></span></div>
+<figure class="chart"><figcaption>Each tool on its own rules beside zanity on all of them, shorter is better; bonsai, off this scale, is above</figcaption>
+<div class="chart-row other"><span class="chart-label">nasa-lsp</span><span class="chart-track"><span class="chart-bar" style="width:60.7%"></span><span class="chart-value">879 ms</span></span></div>
+<div class="chart-row other"><span class="chart-label">testdesiderata</span><span class="chart-track"><span class="chart-bar" style="width:85.0%"></span><span class="chart-value">1.23 s</span></span></div>
+<div class="chart-row other"><span class="chart-label">mockbuster</span><span class="chart-track"><span class="chart-bar" style="width:28.6%"></span><span class="chart-value">413 ms</span></span></div>
+<div class="chart-row other"><span class="chart-label">dddlint</span><span class="chart-track"><span class="chart-bar" style="width:49.1%"></span><span class="chart-value">710 ms</span></span></div>
+<div class="chart-row zanity"><span class="chart-label">zanity, every rule, cold</span><span class="chart-track"><span class="chart-bar" style="width:12.3%"></span><span class="chart-value">179 ms</span></span></div>
+<div class="chart-row zanity"><span class="chart-label">zanity, every rule, warm</span><span class="chart-track"><span class="chart-bar" style="width:9.7%"></span><span class="chart-value">141 ms</span></span></div>
 </figure>
 ```
 
@@ -323,7 +326,6 @@ The tools ran through the same adapters as above. Cold zanity starts each run wi
 | zanity, mapped rules, warm | 133 ms | 5 ms | 127 ms | 68 MB | 0.7× |
 | zanity, all rules, cold | 179 ms | 2 ms | 177 ms | 117 MB | 1.0× |
 | zanity, all rules, warm | 141 ms | 19 ms | 131 ms | 68 MB | 0.8× |
-| the five tools, one after another | 24.33 s |  |  |  | 136.2× |
 
 ## As language servers
 

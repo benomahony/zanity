@@ -269,12 +269,12 @@ def cli_speed(data: dict) -> list[str]:
     cli = data["cli"]
     base = cli["zanity, all rules, cold"]["mean"]
     warm = cli["zanity, all rules, warm"]["mean"]
-    old = sum(cli[tool.name]["mean"] for tool in TOOLS)
-    sequence = seconds(old)
     rows = [[name, seconds(r["mean"]), seconds(r["stddev"]), seconds(r["min"]), megabytes(r["memory"]), f"{r['mean'] / base:.1f}×"] for name, r in cli.items()]
-    rows.append(["the five tools, one after another", sequence, "", "", "", f"{old / base:.1f}×"])
     pairs = [(tool.name, cli[tool.name], cli[f"zanity, {tool.name} rules, cold"]) for tool in TOOLS]
-    slow = max(pairs, key=lambda pair: pair[1]["mean"])
+    means = [(name, t["mean"], z["mean"]) for name, t, z in pairs]
+    fast = min(means, key=lambda mean: mean[1])
+    quick = [(name, theirs / ours) for name, theirs, ours in means if name != "bonsai"]
+    ratios = [ratio for _, ratio in quick]
     together = sum(t["memory"] for _, t, _ in pairs)
     memory = cli["zanity, all rules, cold"]["memory"]
     assert base > 0, f"zanity's time is the baseline, so it can't be {base} s"
@@ -282,16 +282,16 @@ def cli_speed(data: dict) -> list[str]:
     return [
         *raw([
             '<div class="headline">',
-            f'<div><strong>{old / base:.0f}×</strong> faster than running the five tools: {seconds(base)} against {sequence}, on every rule at once, from an empty cache.</div>',
-            f'<div><strong>{slow[1]["mean"] / slow[2]["mean"]:.0f}×</strong> faster than the slowest, {slow[0]}, on its own rules.</div>',
+            f'<div><strong>{fast[1] / base:.1f}×</strong> faster on every rule, from an empty cache, than the fastest tool, {fast[0]}, on its own {len(BY_NAME[fast[0]].rules)}: {seconds(base)} against {seconds(fast[1])}.</div>',
+            f'<div><strong>{min(ratios):.1f}–{max(ratios):.1f}×</strong> faster than {", ".join(name for name, _ in quick)}, each on its own rules; bonsai, which rebuilds its index on every run, is {cli["bonsai"]["mean"] / cli["zanity, bonsai rules, cold"]["mean"]:.0f}× slower.</div>',
             "</div>",
         ]),
         "## Head to head",
         "",
         f"Each tool on the whole corpus, {data['corpus_stats']['lines']:,} lines, beside zanity running only the rules that answer that tool's, from an empty cache. Each pair has its own scale. The mean of {data['runs']} runs after a warm-up, with [hyperfine](https://github.com/sharkdp/hyperfine).",
         "",
-        *duel([(name, t["mean"], z["mean"]) for name, t, z in pairs], seconds, ("faster", "slower"), "Time to check the corpus, shorter is better"),
-        *chart([("five tools in a row", old, sequence, False), ("zanity, cold", base, seconds(base), True), ("zanity, warm", warm, seconds(warm), True)], "Every rule at once, shorter is better"),
+        *duel(means, seconds, ("faster", "slower"), "Time to check the corpus, shorter is better"),
+        *chart([*((name, theirs, seconds(theirs), False) for name, theirs, _ in means if name != "bonsai"), ("zanity, every rule, cold", base, seconds(base), True), ("zanity, every rule, warm", warm, seconds(warm), True)], "Each tool on its own rules beside zanity on all of them, shorter is better; bonsai, off this scale, is above"),
         "## Memory",
         "",
         f"The most memory each run held, from the kernel's accounting of the process. One zanity run covers every rule, where the same coverage takes all five tools: run side by side, as in a pre-commit hook, they hold {megabytes(together)} at once.",
