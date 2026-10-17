@@ -115,7 +115,7 @@ TOOLS = [
             "PRD002": ["skipped-test"],
             "PRD003": ["skipped-test"],
             "RDL001": ["vague-test-name"],
-            "RDL002": ["long-test", "unreadable-test"],
+            "RDL002": ["undocumented-test"],
             "SPC001": ["generic-catch", "swallowed-error"],
             "SPC002": ["opaque-check", "assertion-message"],
             "SPC003": ["broad-expected-error"],

@@ -1,6 +1,6 @@
 {
   "when": "2026-10-17",
-  "commit": "70eec96",
+  "commit": "df0941d",
   "runs": 5,
   "fixtures": [
     {
@@ -282,7 +282,8 @@
       "zanity_fires": true,
       "same_line": true,
       "others": [
-        "assertion-message"
+        "assertion-message",
+        "undocumented-test"
       ],
       "note": ""
     },
@@ -574,12 +575,11 @@
       "tool": "testdesiderata",
       "rule": "RDL002",
       "zanity": [
-        "long-test",
-        "unreadable-test"
+        "undocumented-test"
       ],
       "old_fires": true,
-      "zanity_fires": false,
-      "same_line": false,
+      "zanity_fires": true,
+      "same_line": true,
       "others": [
         "assertion-message"
       ],
@@ -1432,7 +1432,7 @@
         },
         "RDL002": {
           "old": 3,
-          "matched": 0
+          "matched": 3
         },
         "SPC001": {
           "old": 2,
@@ -1471,6 +1471,10 @@
         "test-double": {
           "zanity": 16,
           "matched": 0
+        },
+        "undocumented-test": {
+          "zanity": 6,
+          "matched": 3
         },
         "unmanaged-temp-in-test": {
           "zanity": 2,
@@ -1521,7 +1525,7 @@
     "bonsai": {
       "recall": {
         "dead-parameter": {
-          "old": 316,
+          "old": 317,
           "matched": 44
         },
         "dead-symbol": {
