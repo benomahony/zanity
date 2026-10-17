@@ -364,8 +364,8 @@ def render_overview(data: dict) -> str:
     assert data["fixtures"], "results.json has no fixtures; run parity.py"
     assert data["inference"]["questions"], "results.json has no inference questions; fix the nouls adapter and rerun parity.py"
     return document([
-        *front("Comparisons", "What zanity finds that the linters it consolidates find, and how fast."),
-        "zanity replaces six linters. Start here, then open a tool for its rule-by-rule and real-code evidence.",
+        *front("Comparisons", "Rule-by-rule coverage and speed beside six other linters."),
+        "Each card links to that tool's evidence.",
         *generated(data),
         "",
         "# Summary",
