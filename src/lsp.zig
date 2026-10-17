@@ -117,21 +117,21 @@ const Results = struct {
         self.text.used = 0;
         self.entries.clear();
         self.files.clear();
-        if (self.files.len != 0) assert.panic("cleared results still hold {d} files", .{self.files.len});
-        if (self.text.used != 0) assert.panic("cleared results still hold {d} bytes of text", .{self.text.used});
+        if (self.files.len != 0) assert.panic("cleared results still hold {d} files; fix Results.clear() to empty files", .{self.files.len});
+        if (self.text.used != 0) assert.panic("cleared results still hold {d} bytes of text; fix Results.clear() to reset text", .{self.text.used});
     }
 
     fn find(self: *const Results, path: []const u8) ?*CheckedFile {
-        if (path.len == 0) assert.panic("looking up the findings of a file with an empty path", .{});
+        if (path.len == 0) assert.panic("looking up the findings of a file with an empty path; pass the checked file's path", .{});
         for (self.files.items()) |*file| if (std.mem.eql(u8, file.path, path)) return file;
-        if (self.files.len > self.files.capacity()) assert.panic("{d} files in room for {d}", .{ self.files.len, self.files.capacity() });
+        if (self.files.len > self.files.capacity()) assert.panic("{d} files in room for {d}; fix Results.add() to enforce the bound", .{ self.files.len, self.files.capacity() });
         return null;
     }
 
     fn entriesOf(self: *const Results, file: *const CheckedFile) []Entry {
         const all = self.entries.items();
-        if (file.first + file.count > all.len) assert.panic("{s}: its findings run to entry {d} of {d}", .{ file.path, file.first + file.count, all.len });
-        if (file.first > all.len) assert.panic("{s}: its findings start at entry {d} of {d}", .{ file.path, file.first, all.len });
+        if (file.first + file.count > all.len) assert.panic("{s}: its findings run to entry {d} of {d}; fix Results.add() to record the file's actual range", .{ file.path, file.first + file.count, all.len });
+        if (file.first > all.len) assert.panic("{s}: its findings start at entry {d} of {d}; fix Results.add() to record the file's actual start", .{ file.path, file.first, all.len });
         return all[file.first..][0..file.count];
     }
 
@@ -168,8 +168,8 @@ const Scratch = struct {
             .edits = try .initBounded(gpa, limits.findings, "edits fix-all makes in one file"),
             .diagnostics = try .initBounded(gpa, limits.findings, "findings fix-all fixes in one file"),
         };
-        if (scratch.parse.end_index != 0) assert.panic("new scratch memory has {d} bytes in use", .{scratch.parse.end_index});
-        if (scratch.text.used != 0) assert.panic("new scratch text has {d} bytes in use", .{scratch.text.used});
+        if (scratch.parse.end_index != 0) assert.panic("new scratch memory has {d} bytes in use; fix initScratch() to return unused parse memory", .{scratch.parse.end_index});
+        if (scratch.text.used != 0) assert.panic("new scratch text has {d} bytes in use; fix initScratch() to return empty text", .{scratch.text.used});
         return scratch;
     }
 
@@ -177,8 +177,8 @@ const Scratch = struct {
         self.parse.reset();
         self.text.used = 0;
         inline for (.{ "actions", "targets", "fixes", "edits", "diagnostics" }) |name| @field(self, name).clear();
-        if (self.parse.end_index != 0) assert.panic("scratch memory has {d} bytes in use after clear()", .{self.parse.end_index});
-        if (self.actions.len != 0) assert.panic("scratch holds {d} code actions after clear()", .{self.actions.len});
+        if (self.parse.end_index != 0) assert.panic("scratch memory has {d} bytes in use after clear(); fix Scratch.clear() to reset the parser", .{self.parse.end_index});
+        if (self.actions.len != 0) assert.panic("scratch holds {d} code actions after clear(); fix Scratch.clear() to empty every bounded list", .{self.actions.len});
     }
 };
 
@@ -248,7 +248,7 @@ pub const LanguageServer = struct {
             self.handle(method, id, member(parsed, "params") orelse no_value) catch |e| try self.reportFailure(method, id, e);
             try self.flushTelemetry();
         }
-        assert.panic("handled {d} messages without the editor exiting; no editor session sends that many", .{max_messages});
+        assert.panic("handled {d} messages without the editor exiting; raise max_messages if a real editor session needs more", .{max_messages});
     }
 
     fn handle(self: *LanguageServer, method: []const u8, request: ?json.Value, params: json.Value) !void {
@@ -272,10 +272,10 @@ pub const LanguageServer = struct {
 
     /// Tells the editor a message could not be handled, and goes on to the next.
     fn reportFailure(self: *LanguageServer, method: []const u8, id: ?json.Value, e: anyerror) !void {
-        if (method.len == 0) assert.panic("reporting a failure of a message with no method", .{});
+        if (method.len == 0) assert.panic("reporting a failure of a message with no method; pass the method from handle()", .{});
         const message = try self.scratch.text.format("zanity could not handle {s}: {t}{s}{s}.", .{ method, e, if (e == error.LimitExceeded) ", as it ran out of room for " else "", if (e == error.LimitExceeded) memory.exceeded else "" });
         if (id) |request| try self.sendError(request, -32603, message) else try self.show(1, message);
-        if (message.len < method.len) assert.panic("the failure of {s} was reported as '{s}'", .{ method, message });
+        if (message.len < method.len) assert.panic("the failure of {s} was reported as '{s}'; fix reportFailure() to include the method and error", .{ method, message });
     }
 
     fn initialize(self: *LanguageServer, id: json.Value, params: json.Value) !void {
@@ -296,7 +296,7 @@ pub const LanguageServer = struct {
 
     /// The workspace root the editor names, as a path; the working directory when it names none.
     fn rootOf(self: *LanguageServer, params: json.Value) ![]const u8 {
-        if (self.current.files.len != 0) assert.panic("choosing the workspace root after a check of {d} files", .{self.current.files.len});
+        if (self.current.files.len != 0) assert.panic("choosing the workspace root after a check of {d} files; call rootOf() only during initialize", .{self.current.files.len});
         const folders = member(params, "workspaceFolders") orelse no_value;
         const listed: []const json.Value = if (folders == .array) folders.array.items else &.{};
         const first = if (listed.len > 0) listed[0] else no_value;
@@ -305,7 +305,7 @@ pub const LanguageServer = struct {
         const root = if (named) |path| path else self.root_buffer[0..try Io.Dir.cwd().realPath(self.io, &self.root_buffer)];
         if (root.len > self.root_buffer.len) return error.NameTooLong;
         @memmove(self.root_buffer[0..root.len], root);
-        if (root.len == 0) assert.panic("the editor named an empty workspace root", .{});
+        if (root.len == 0) assert.panic("the editor named an empty workspace root; fall back to the working directory in rootOf()", .{});
         return self.root_buffer[0..root.len];
     }
 
@@ -427,17 +427,17 @@ pub const LanguageServer = struct {
     }
 
     fn isDirty(self: *const LanguageServer, path: []const u8) bool {
-        if (path.len == 0) assert.panic("asked whether a file with an empty path is edited", .{});
+        if (path.len == 0) assert.panic("asked whether a file with an empty path is edited; pass a CheckedFile.path", .{});
         const key = pathKey(path);
         for (self.dirty.items()) |dirty| if (dirty == key) return true;
-        if (self.dirty.len > self.dirty.capacity()) assert.panic("{d} edited files in room for {d}", .{ self.dirty.len, self.dirty.capacity() });
+        if (self.dirty.len > self.dirty.capacity()) assert.panic("{d} edited files in room for {d}; fix markDirty() to enforce the bound", .{ self.dirty.len, self.dirty.capacity() });
         return false;
     }
 
     fn publish(self: *LanguageServer, uri: []const u8, entries: []const Entry) !void {
-        if (uri.len == 0) assert.panic("publishing {d} diagnostics under an empty URI", .{entries.len});
+        if (uri.len == 0) assert.panic("publishing {d} diagnostics under an empty URI; pass the CheckedFile.uri recorded by add()", .{entries.len});
         try self.notify("textDocument/publishDiagnostics", .{ .uri = uri, .diagnostics = Diagnostics{ .entries = entries } });
-        if (self.outbox.len == 0) assert.panic("published with no room to write messages", .{});
+        if (self.outbox.len == 0) assert.panic("published with no room to write messages; reserve message_bytes in initLanguageServer()", .{});
     }
 
     /// Offers a quick fix and a false-positive flag for each finding on the requested lines, and
@@ -543,24 +543,24 @@ pub const LanguageServer = struct {
 
     /// Keeps the flag in the store, and says where it went.
     fn keepFlag(self: *LanguageServer, target: Target, code: []const u8) []const u8 {
-        if (target.path.len == 0) assert.panic("keeping a flag of {s} with no path", .{target.rule});
+        if (target.path.len == 0) assert.panic("keeping a flag of {s} with no path; pass the finding's file path", .{target.rule});
         const s = self.services.store orelse return "it is hidden for this session only, as zanity's store could not be opened";
         s.keepFalsePositive(.{ .path = target.path, .line = target.line, .column = target.column, .rule = target.rule, .message = target.message, .code = code, .version = self.services.version }) catch |e| {
             return self.scratch.text.format("it is hidden for this session only, as {s} would not keep it: {t}", .{ s.path, e }) catch "it is hidden for this session only";
         };
-        if (s.path.len == 0) assert.panic("kept a flag in a store with no path", .{});
+        if (s.path.len == 0) assert.panic("kept a flag in a store with no path; fix initStore() to retain its database path", .{});
         return self.scratch.text.format("kept in {s}'s false_positives table", .{s.path}) catch "kept in zanity's store";
     }
 
     /// Records a span when telemetry is on, turning telemetry off if its memory runs out.
     fn trace(self: *LanguageServer, name: []const u8, started: Io.Timestamp, attributes: []const Attribute) !void {
-        if (name.len == 0) assert.panic("tracing a span with no name", .{});
+        if (name.len == 0) assert.panic("tracing a span with no name; pass the operation being traced", .{});
         const t = self.services.telemetry orelse return;
         t.record(name, started, attributes) catch |e| {
             self.services.telemetry = null;
             try self.show(2, try self.scratch.text.format("zanity could not record the span {s}: {t}. Telemetry is off for this session.", .{ name, e }));
         };
-        if (self.services.telemetry) |on| if (!on.pending()) assert.panic("recorded the span {s} but none is pending", .{name});
+        if (self.services.telemetry) |on| if (!on.pending()) assert.panic("recorded the span {s} but none is pending; fix Telemetry.record() to queue it", .{name});
     }
 
     /// Sends the pending spans, and says once if the collector cannot be reached.
@@ -581,21 +581,21 @@ pub const LanguageServer = struct {
     }
 
     fn notify(self: *LanguageServer, method: []const u8, params: anytype) !void {
-        if (method.len == 0) assert.panic("sending a notification with no method", .{});
+        if (method.len == 0) assert.panic("sending a notification with no method; pass the LSP method name", .{});
         try self.send(.{ .jsonrpc = "2.0", .method = method, .params = params });
-        if (self.outbox.len == 0) assert.panic("sent {s} with no room to write messages", .{method});
+        if (self.outbox.len == 0) assert.panic("sent {s} with no room to write messages; reserve message_bytes in initLanguageServer()", .{method});
     }
 
     fn sendError(self: *LanguageServer, id: json.Value, code: i32, message: []const u8) !void {
-        if (code >= 0) assert.panic("sending the error code {d}; JSON-RPC error codes are negative", .{code});
-        if (message.len == 0) assert.panic("sending the error {d} with no message", .{code});
+        if (code >= 0) assert.panic("sending the error code {d}; pass a negative JSON-RPC error code", .{code});
+        if (message.len == 0) assert.panic("sending the error {d} with no message; describe what the editor request must change", .{code});
         try self.send(.{ .jsonrpc = "2.0", .id = id, .@"error" = .{ .code = code, .message = message } });
     }
 
     /// Shows the editor a message: 1 an error, 2 a warning, 3 information.
     fn show(self: *LanguageServer, kind: u8, message: []const u8) !void {
-        if (kind == 0 or kind > 4) assert.panic("showing a message of type {d}; LSP defines 1 to 4", .{kind});
-        if (message.len == 0) assert.panic("showing an empty message of type {d}", .{kind});
+        if (kind == 0 or kind > 4) assert.panic("showing a message of type {d}; pass an LSP message type from 1 to 4", .{kind});
+        if (message.len == 0) assert.panic("showing an empty message of type {d}; pass the problem and its next step", .{kind});
         try self.notify("window/showMessage", .{ .type = kind, .message = message });
     }
 
@@ -609,8 +609,8 @@ pub const LanguageServer = struct {
         try self.out.print("Content-Length: {d}\r\n\r\n", .{bytes.len});
         try self.out.writeAll(bytes);
         try self.out.flush();
-        if (bytes.len < 2) assert.panic("sent a {d}-byte message; json.Stringify writes at least the braces of an object", .{bytes.len});
-        if (bytes.len > self.outbox.len) assert.panic("sent {d} bytes from a {d}-byte outbox", .{ bytes.len, self.outbox.len });
+        if (bytes.len < 2) assert.panic("sent a {d}-byte message; fix send() to serialize a JSON object", .{bytes.len});
+        if (bytes.len > self.outbox.len) assert.panic("sent {d} bytes from a {d}-byte outbox; fix send() to keep serialization inside the outbox", .{ bytes.len, self.outbox.len });
     }
 };
 
@@ -619,11 +619,11 @@ const Diagnostics = struct {
     entries: []const Entry,
 
     pub fn jsonStringify(self: Diagnostics, jw: anytype) !void {
-        if (self.entries.len > 1 << 18) assert.panic("writing {d} diagnostics for one file, more than one check holds", .{self.entries.len});
+        if (self.entries.len > 1 << 18) assert.panic("writing {d} diagnostics for one file, more than one check holds; enforce the findings limit before serializing", .{self.entries.len});
         try jw.beginArray();
         for (self.entries) |entry| try jw.write(entry.diagnostic);
         try jw.endArray();
-        if (self.entries.len > 0 and self.entries[0].diagnostic.code.len == 0) assert.panic("wrote {d} diagnostics, the first of them with no rule", .{self.entries.len});
+        if (self.entries.len > 0 and self.entries[0].diagnostic.code.len == 0) assert.panic("wrote {d} diagnostics, the first of them with no rule; set each diagnostic's code from its finding", .{self.entries.len});
     }
 };
 
@@ -661,9 +661,9 @@ fn editsFirst(_: void, a: Entry, b: Entry) bool {
 }
 
 fn isBefore(a: Position, b: Position) bool {
-    if (a.line > 1 << 30 or b.line > 1 << 30) assert.panic("comparing positions on lines {d} and {d}, past any file zanity reads", .{ a.line, b.line });
+    if (a.line > 1 << 30 or b.line > 1 << 30) assert.panic("comparing positions on lines {d} and {d}, past any file zanity reads; validate positions before calling isBefore()", .{ a.line, b.line });
     const earlier = a.line < b.line or (a.line == b.line and a.character < b.character);
-    if (earlier and a.line > b.line) assert.panic("line {d} counted as before line {d}", .{ a.line, b.line });
+    if (earlier and a.line > b.line) assert.panic("line {d} counted as before line {d}; fix isBefore() to compare lines before characters", .{ a.line, b.line });
     return earlier;
 }
 
@@ -701,15 +701,15 @@ const pathKey = nameHash;
 fn lineOf(source: []const u8, line: u32) []const u8 {
     const start = lineStart(source, line);
     const end = std.mem.indexOfScalarPos(u8, source, start, '\n') orelse source.len;
-    if (end < start) assert.panic("line {d} ends at byte {d}, before it starts at {d}", .{ line, end, start });
-    if (std.mem.indexOfScalar(u8, source[start..end], '\n') != null) assert.panic("line {d} holds a newline", .{line});
+    if (end < start) assert.panic("line {d} ends at byte {d}, before it starts at {d}; fix lineStart() or the end search", .{ line, end, start });
+    if (std.mem.indexOfScalar(u8, source[start..end], '\n') != null) assert.panic("line {d} holds a newline; fix lineOf() to stop before it", .{line});
     return source[start..end];
 }
 
 /// Whether a code action request's `only` list, when it has one, asks for `kind`. A listed kind
 /// covers the kinds under it, so `source` covers `source.fixAll.zanity`.
 fn wants(only: ?json.Value, kind: []const u8) bool {
-    if (kind.len == 0) assert.panic("asked whether the editor wants an empty kind of code action", .{});
+    if (kind.len == 0) assert.panic("asked whether the editor wants an empty kind of code action; pass the requested action kind", .{});
     const list = switch (only orelse return true) {
         .array => |a| a.items,
         else => return true,
@@ -719,7 +719,7 @@ fn wants(only: ?json.Value, kind: []const u8) bool {
         if (std.mem.eql(u8, asked, kind)) return true;
         if (asked.len < kind.len and std.mem.startsWith(u8, kind, asked) and kind[asked.len] == '.') return true;
     }
-    if (list.len > 1 << 10) assert.panic("the editor asked for {d} kinds of code action", .{list.len});
+    if (list.len > 1 << 10) assert.panic("the editor asked for {d} kinds of code action; cap or reject the request's only list", .{list.len});
     return false;
 }
 
@@ -754,19 +754,19 @@ fn lineStart(source: []const u8, line: u32) usize {
         const newline = std.mem.indexOfScalarPos(u8, source, offset, '\n') orelse return source.len;
         offset = newline + 1;
     }
-    if (offset > source.len) assert.panic("line {d} starts at byte {d} of a {d}-byte file", .{ line, offset, source.len });
-    if (offset > 0 and source[offset - 1] != '\n') assert.panic("line {d} starts at byte {d}, which does not follow a newline", .{ line, offset });
+    if (offset > source.len) assert.panic("line {d} starts at byte {d} of a {d}-byte file; fix lineStart() to stop at EOF", .{ line, offset, source.len });
+    if (offset > 0 and source[offset - 1] != '\n') assert.panic("line {d} starts at byte {d}, which does not follow a newline; fix lineStart() to advance past newlines only", .{ line, offset });
     return offset;
 }
 
 /// The LSP position of byte `offset`, counting characters in bytes or in UTF-16 code units.
 pub fn position(source: []const u8, offset: usize, utf8: bool) Position {
-    if (offset > source.len) assert.panic("byte {d} is past the end of a {d}-byte file", .{ offset, source.len });
+    if (offset > source.len) assert.panic("byte {d} is past the end of a {d}-byte file; clamp or validate the offset before position()", .{ offset, source.len });
     const line_start = if (std.mem.lastIndexOfScalar(u8, source[0..offset], '\n')) |n| n + 1 else 0;
     const line: u32 = @intCast(std.mem.count(u8, source[0..line_start], "\n"));
     const prefix = source[line_start..offset];
     const character = if (utf8) prefix.len else std.unicode.calcUtf16LeLen(prefix) catch prefix.len;
-    if (character > prefix.len) assert.panic("{d} bytes counted as {d} characters; no encoding has more characters than bytes", .{ prefix.len, character });
+    if (character > prefix.len) assert.panic("{d} bytes counted as {d} characters; fix position()'s UTF-16 conversion", .{ prefix.len, character });
     return .{ .line = line, .character = @intCast(character) };
 }
 
@@ -795,11 +795,11 @@ pub fn readMessage(in: *Io.Reader, inbox: []u8) !?[]u8 {
 fn offersUtf8(params: json.Value) bool {
     const encodings = member(member(member(params, "capabilities"), "general"), "positionEncodings") orelse return false;
     const offered: []const json.Value = if (encodings == .array) encodings.array.items else &.{};
-    if (offered.len > 1 << 20) assert.panic("the editor offered {d} position encodings", .{offered.len});
+    if (offered.len > 1 << 20) assert.panic("the editor offered {d} position encodings; cap or reject the initialize list", .{offered.len});
     const utf8 = for (offered) |e| {
         if (std.mem.eql(u8, stringOf(e) orelse continue, "utf-8")) break true;
     } else false;
-    if (utf8 and offered.len == 0) assert.panic("chose UTF-8 positions though the editor offered no encodings", .{});
+    if (utf8 and offered.len == 0) assert.panic("chose UTF-8 positions though the editor offered no encodings; fix offersUtf8() to choose only from the list", .{});
     return utf8;
 }
 
@@ -837,11 +837,11 @@ pub fn uriOf(text: *memory.Text, path: []const u8) ![]const u8 {
 }
 
 fn member(value: ?json.Value, name: []const u8) ?json.Value {
-    if (name.len == 0) assert.panic("looking up an empty member name", .{});
+    if (name.len == 0) assert.panic("looking up an empty member name; pass the JSON property to read", .{});
     const v = value orelse return null;
     if (v != .object) return null;
     const found = v.object.get(name);
-    if (found != null and v.object.count() == 0) assert.panic("found {s} in an empty object", .{name});
+    if (found != null and v.object.count() == 0) assert.panic("found {s} in an empty object; fix member() or the JSON object implementation", .{name});
     return found;
 }
 
@@ -849,8 +849,8 @@ fn stringOf(value: ?json.Value) ?[]const u8 {
     const v = value orelse return null;
     if (v != .string) return null;
     const string = v.string;
-    if (string.len > 1 << 28) assert.panic("a {d}-byte string in one message, past what a message holds", .{string.len});
-    if (string.len > 0 and @intFromPtr(string.ptr) == 0) assert.panic("a {d}-byte string at address 0", .{string.len});
+    if (string.len > 1 << 28) assert.panic("a {d}-byte string in one message, past what a message holds; enforce the message limit before stringOf()", .{string.len});
+    if (string.len > 0 and @intFromPtr(string.ptr) == 0) assert.panic("a {d}-byte string at address 0; fix the parsed JSON string storage", .{string.len});
     return string;
 }
 

@@ -114,7 +114,7 @@ fn checkName(run: Run, d: Named) error{LimitExceeded}!void {
 
 /// The vocabulary term for `word` that applies most specifically in `scope`, if any does.
 fn strongest(settings: *const Config, word: []const u8, scope: []const u8) ?Term {
-    if (word.len == 0) assert.panic("looking up an empty word; naming.Words never yields one", .{});
+    if (word.len == 0) assert.panic("looking up an empty word; fix naming.Words to skip empty tokens", .{});
     var best: ?Term = null;
     var best_reach: u8 = 0;
     for (settings.vocabulary()) |t| {
@@ -125,7 +125,7 @@ fn strongest(settings: *const Config, word: []const u8, scope: []const u8) ?Term
             best_reach = r;
         }
     }
-    if (best != null and best_reach == 0) assert.panic("'{s}' matched a term that doesn't reach scope '{s}'", .{ word, scope });
+    if (best != null and best_reach == 0) assert.panic("'{s}' matched a term that doesn't reach scope '{s}'; fix strongest() to keep only positive reach", .{ word, scope });
     return best;
 }
 

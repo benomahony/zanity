@@ -84,8 +84,8 @@ pub const Telemetry = struct {
 
     /// Whether spans are waiting for the next flush.
     pub fn pending(self: *const Telemetry) bool {
-        if (self.spans.len > max_spans) assert.panic("{d} spans pending in room for {d}", .{ self.spans.len, max_spans });
-        if (self.spans.len == 0 and self.values.len != 0) assert.panic("{d} attributes pending with no span to own them", .{self.values.len});
+        if (self.spans.len > max_spans) assert.panic("{d} spans pending in room for {d}; fix Telemetry.record() to enforce the bound", .{ self.spans.len, max_spans });
+        if (self.spans.len == 0 and self.values.len != 0) assert.panic("{d} attributes pending with no span to own them; clear them with their span", .{self.values.len});
         return self.spans.len > 0;
     }
 
@@ -140,8 +140,8 @@ pub const Telemetry = struct {
         self.spans.clear();
         self.values.clear();
         self.text.used = 0;
-        if (self.pending()) assert.panic("{d} spans still pending after clear()", .{self.spans.len});
-        if (self.text.used != 0) assert.panic("telemetry text holds {d} bytes after clear()", .{self.text.used});
+        if (self.pending()) assert.panic("{d} spans still pending after clear(); fix Telemetry.clear() to empty spans and values", .{self.spans.len});
+        if (self.text.used != 0) assert.panic("telemetry text holds {d} bytes after clear(); fix Telemetry.clear() to reset text", .{self.text.used});
     }
 
     /// The pending spans as one OTLP `ExportTraceServiceRequest`.
@@ -160,7 +160,7 @@ pub const Telemetry = struct {
             memory.exceeded = "bytes of one telemetry export";
             return error.LimitExceeded;
         };
-        if (out.buffered().len < self.spans.len) assert.panic("encoded {d} spans in {d} bytes", .{ self.spans.len, out.buffered().len });
+        if (out.buffered().len < self.spans.len) assert.panic("encoded {d} spans in {d} bytes; fix encode() to serialize every pending span", .{ self.spans.len, out.buffered().len });
         return out.buffered();
     }
 };
@@ -187,8 +187,8 @@ pub fn initHeaders(gpa: Allocator, text: []const u8) ![]const std.http.Header {
         headers[count] = .{ .name = try gpa.dupe(u8, name), .value = std.Uri.percentDecodeInPlace(try gpa.dupe(u8, std.mem.trim(u8, pair[equals + 1 ..], " "))) };
         count += 1;
     } else if (pairs.next() != null) return error.TooManyHeaders;
-    if (count > max_headers) assert.panic("parsed {d} headers; at most {d} are read", .{ count, max_headers });
-    if (count > std.mem.count(u8, text, "=")) assert.panic("parsed {d} headers from {d} '=' signs; each header needs one", .{ count, std.mem.count(u8, text, "=") });
+    if (count > max_headers) assert.panic("parsed {d} headers; at most {d} are read; fix initHeaders() to stop at the limit", .{ count, max_headers });
+    if (count > std.mem.count(u8, text, "=")) assert.panic("parsed {d} headers from {d} '=' signs; fix initHeaders() to require one per header", .{ count, std.mem.count(u8, text, "=") });
     return headers[0..count];
 }
 

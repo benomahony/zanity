@@ -604,14 +604,14 @@ fn renderInit(ctx: *zcli.Context, rows: []const InitRow) !void {
 
 fn runUpgrade(ctx: *zcli.Context, options: UpgradeOptions) ![]const UpgradeRow {
     const rows = try upgradeTo(ctx, options, true);
-    if (std.mem.eql(u8, rows[0].status, "available")) assert.panic("zanity upgrade left release {s} available instead of installing it", .{rows[0].to});
+    if (std.mem.eql(u8, rows[0].status, "available")) assert.panic("zanity upgrade left release {s} available instead of installing it; call upgradeTo() with install enabled", .{rows[0].to});
     if (rows.len != 1) assert.panic("zanity upgrade reported {d} executables; upgradeTo() replaces exactly one", .{rows.len});
     return rows;
 }
 
 fn previewUpgrade(ctx: *zcli.Context, options: UpgradeOptions) ![]const UpgradeRow {
     const rows = try upgradeTo(ctx, options, false);
-    if (std.mem.eql(u8, rows[0].status, "upgraded")) assert.panic("zanity upgrade --dry-run installed release {s}", .{rows[0].to});
+    if (std.mem.eql(u8, rows[0].status, "upgraded")) assert.panic("zanity upgrade --dry-run installed release {s}; call upgradeTo() with install disabled", .{rows[0].to});
     if (rows.len != 1) assert.panic("zanity upgrade --dry-run reported {d} executables; upgradeTo() previews exactly one", .{rows.len});
     return rows;
 }

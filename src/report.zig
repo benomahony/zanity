@@ -141,7 +141,7 @@ fn choosePreview(findings: []const Finding) Preview {
         preview.where = @max(preview.where, f.path.len + 1 + locationWidth(f));
         preview.rule = @max(preview.rule, f.rule.len);
     }
-    if (preview.where < "a:1:1".len or preview.rule == 0) assert.panic("the preview's columns came out {d} and {d} wide; a location is at least 'a:1:1' and every finding names its rule", .{ preview.where, preview.rule });
+    if (preview.where < "a:1:1".len or preview.rule == 0) assert.panic("the preview's columns came out {d} and {d} wide; fix choosePreview() to measure every selected location and rule", .{ preview.where, preview.rule });
     if (preview.len > preview_findings) assert.panic("picked {d} findings to show, past the {d} the preview holds; the loops stop at preview_findings", .{ preview.len, preview_findings });
     return preview;
 }

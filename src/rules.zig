@@ -310,8 +310,8 @@ pub const Set = struct {
     }
 
     pub fn same(self: *const Set, other: Set) bool {
-        if (self.len > all.len) assert.panic("the first rule set holds {d} rules but only {d} exist", .{ self.len, all.len });
-        if (other.len > all.len) assert.panic("the second rule set holds {d} rules but only {d} exist", .{ other.len, all.len });
+        if (self.len > all.len) assert.panic("the first rule set holds {d} rules but only {d} exist; fix Set.include() to enforce the bound", .{ self.len, all.len });
+        if (other.len > all.len) assert.panic("the second rule set holds {d} rules but only {d} exist; fix Set.include() to enforce the bound", .{ other.len, all.len });
         if (self.len != other.len) return false;
         for (self.names(), other.names()) |a, b| if (!std.mem.eql(u8, a, b)) return false;
         return true;

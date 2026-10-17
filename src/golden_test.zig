@@ -607,9 +607,9 @@ test "a mistake in zanity.toml stops the run and says where" {
 
 /// One LSP message, framed as the protocol sends it.
 fn frame(arena: std.mem.Allocator, body: []const u8) ![]const u8 {
-    if (body.len == 0 or body[0] != '{') assert.panic("framing '{s}', which is not a JSON object", .{body});
+    if (body.len == 0 or body[0] != '{') assert.panic("framing '{s}', which is not a JSON object; pass an LSP request object", .{body});
     const framed = try std.fmt.allocPrint(arena, "Content-Length: {d}\r\n\r\n{s}", .{ body.len, body });
-    if (!std.mem.endsWith(u8, framed, body)) assert.panic("the frame of '{s}' does not end with it", .{body});
+    if (!std.mem.endsWith(u8, framed, body)) assert.panic("the frame of '{s}' does not end with it; fix frame() to append the body after its header", .{body});
     return framed;
 }
 

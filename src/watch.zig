@@ -223,19 +223,19 @@ const FsEvents = struct {
     /// Returns once a relevant change has been reported, taking every report that came with it.
     pub fn wait(self: *FsEvents) Error!void {
         const waited = dispatch.semaphore_wait(self.semaphore, .FOREVER);
-        if (waited != 0) assert.panic("waiting forever on the watch semaphore returned {d}, a timeout, which FOREVER never gives", .{waited});
+        if (waited != 0) assert.panic("waiting forever on the watch semaphore returned {d}; fix the dispatch timeout or handle its error", .{waited});
         var drained: usize = 0;
         for (0..max_waits) |_| {
             if (dispatch.semaphore_wait(self.semaphore, .NOW) != 0) break;
             drained += 1;
         }
-        if (drained == max_waits) assert.panic("took {d} change reports at once; the stream reports one batch every {d} seconds", .{ drained, latency });
+        if (drained == max_waits) assert.panic("took {d} change reports at once; raise max_waits or coalesce them in changed()", .{drained});
     }
 
     fn changed(_: StreamRef, info: ?*anyopaque, count: usize, paths: *anyopaque, flags: [*]const EventFlags, _: [*]const EventId) callconv(.c) void {
         const self: *FsEvents = @ptrCast(@alignCast(info orelse assert.panic("FSEvents reported {d} changes with no context; initWatcher() passes the watcher as the stream's info", .{count})));
-        if (count == 0) assert.panic("FSEvents called back with no changes; it calls only to report some", .{});
-        if (count > max_batch) assert.panic("FSEvents reported {d} changes in one batch; it coalesces past {d} into a rescan", .{ count, max_batch });
+        if (count == 0) assert.panic("FSEvents called back with no changes; ignore empty callbacks or fix the stream flags", .{});
+        if (count > max_batch) assert.panic("FSEvents reported {d} changes in one batch; raise max_batch or request a rescan past {d}", .{ count, max_batch });
         const names: [*]const [*:0]const u8 = @ptrCast(@alignCast(paths));
         for (names[0..count], flags[0..count]) |name, flag| {
             if (flag.history_done) continue;

@@ -337,8 +337,8 @@ fn authenticationPolicy(lower: []const u8) ?PolicyFinding {
 }
 
 fn disabledAuthenticationPolicy(key: []const u8) ?PolicyFinding {
-    if (key.len == 0) assert.panic("classifying an empty disabled authentication setting; authenticationPolicy parsed a key", .{});
-    if (std.mem.indexOfAny(u8, key, "\r\n") != null) assert.panic("classifying a multiline authentication key; project settings have one line", .{});
+    if (key.len == 0) assert.panic("classifying an empty disabled authentication setting; fix authenticationPolicy() to pass its parsed key", .{});
+    if (std.mem.indexOfAny(u8, key, "\r\n") != null) assert.panic("classifying a multiline authentication key; split the project file into single settings first", .{});
     if (std.mem.indexOf(u8, key, "csrf") != null) return .{ .rule = "csrf-protection-disabled", .problem = "explicitly disables cross-site request forgery protection" };
     const expiry = std.mem.indexOf(u8, key, "timeout") != null or std.mem.indexOf(u8, key, "expiry") != null or std.mem.indexOf(u8, key, "expiration") != null;
     if (std.mem.indexOf(u8, key, "session") != null and expiry) return .{ .rule = "session-expiry-disabled", .problem = "lets authenticated sessions remain valid without a time limit" };
