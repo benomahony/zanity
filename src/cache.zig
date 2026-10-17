@@ -19,7 +19,7 @@ const memory = @import("memory.zig");
 const rules = @import("rules.zig");
 const store = @import("store.zig");
 
-const cache_format = "source-analysis-1";
+const cache_format = "source-analysis-2";
 
 /// The source code that produces local findings and facts. Its compile-time digest makes a rebuilt
 /// zanity miss old rows automatically when checker logic, name tables or parser revisions change.
@@ -82,7 +82,7 @@ pub const Snapshot = struct {
     functions: []const Function,
     calls: []const Edge,
     units: []const Unit,
-    references: []u64,
+    references: []facts_module.Reference,
     shapes: []const Shape,
     abstractions: []const Definition,
     implemented: []const u64,
@@ -253,13 +253,7 @@ fn commitFacts(snapshot: Snapshot, run: Replay) error{LimitExceeded}!void {
         .unmarked = try run.text.copy(abstraction.unmarked),
     });
     for (snapshot.implemented) |hash| try facts.implemented.add(hash);
-    std.mem.sort(u64, snapshot.references, {}, std.sort.asc(u64));
-    var previous: ?u64 = null;
-    for (snapshot.references) |hash| {
-        if (previous == hash) continue;
-        previous = hash;
-        try facts.references.add(hash);
-    }
+    try facts.addReferences(snapshot.references);
     for (snapshot.units) |unit| try facts.units.add(.{ .kind = unit.kind, .reports_error = unit.reports_error, .path = run.path, .language = run.language, .name = try run.text.copy(unit.name), .line = unit.line, .column = unit.column, .end_line = unit.end_line, .source = try run.text.copy(unit.source), .fix = try run.text.copy(unit.fix) });
     if (facts.functions.len != first + snapshot.functions.len) assert.panic("replayed {d} functions from a cache row holding {d}; commitFacts must add each once", .{ facts.functions.len - first, snapshot.functions.len });
 }
@@ -287,8 +281,8 @@ test "a cached analysis replays local findings and cross-file facts" {
     try source_facts.define("answer", "function", .{ .at = .{ 2, 4 }, .public = true, .unmarked = "answer" });
     const function = try source_facts.function("answer", .{ 2, 4 }, false);
     try source_facts.call(function, "helper", .functions);
-    try source_facts.references.add(7);
-    try source_facts.references.add(7);
+    try source_facts.references.add(.{ .name = 7 });
+    try source_facts.references.add(.{ .name = 7 });
     const checker = try check.Checker.initChecker(arena, loaded, rules.Set.defaults());
     const context: AnalysisContext = .{ .language = loaded.adapter.name, .query = loaded.adapter.query, .revision = loaded.adapter.revision, .enabled = checker.enabled, .collect_units = false };
     const diagnostic: Diagnostic = .{ .line = 2, .column = 4, .rule = "long-function", .message = "too long" };

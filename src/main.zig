@@ -24,6 +24,7 @@ const Live = @import("live.zig").Live;
 const config = @import("config.zig");
 const starter = @import("init.zig");
 const upgrade = @import("upgrade.zig");
+const edits = @import("edits.zig");
 const lsp = @import("lsp.zig");
 const watch = @import("watch.zig");
 const Telemetry = @import("telemetry.zig").Telemetry;
@@ -152,6 +153,7 @@ const Workspace = struct {
     text: memory.Text,
     facts: Facts,
     naming: naming.ConceptScratch,
+    liveness: structure.LiveScratch,
     graph: graph.CycleScratch,
     findings: memory.Bounded(Finding),
     files: memory.Bounded([]const u8),
@@ -191,6 +193,7 @@ const Workspace = struct {
             .text = try .initText(gpa, limits.text_bytes),
             .facts = undefined,
             .naming = try .initNamingScratch(gpa, limits),
+            .liveness = try .initLiveScratch(gpa, limits),
             .graph = try .initGraphScratch(gpa, limits),
             .findings = try .initBounded(gpa, limits.findings, "findings across all files"),
             .files = try .initBounded(gpa, limits.files, "files"),
@@ -831,7 +834,7 @@ fn checkFiles(ctx: *zcli.Context, ws: *Workspace, selected: rules.Set) !void {
     if (anchor) |a| try vocabulary.checkVocabulary(.{ .anchor = a, .text = ws.facts.text, .enabled = selected, .findings = &ws.findings }, &ws.facts, ws.files.items());
     if (selected.enabled("recursion")) try graph.recursion(&ws.graph, &ws.facts, &ws.findings);
     const sources: structure.Sources = .{ .io = ws.io, .mine = ws.source, .theirs = ws.fixed };
-    try structure.checkStructure(&ws.facts, selected, &ws.findings, sources);
+    try structure.checkStructure(&ws.facts, selected, &ws.findings, .{ .sources = sources, .live = &ws.liveness });
     if (ws.facts.collect_units and selected.enabled("repeated-mechanics")) try structure.clusterUnits(&ws.facts, sources);
     if (ws.checked > ws.files.len) assert.panic("checked {d} files out of {d} collected; count a file as checked only once per file collected", .{ ws.checked, ws.files.len });
 }
@@ -959,42 +962,12 @@ fn fixFile(ctx: *zcli.Context, ws: *Workspace, findings: []Finding) !usize {
     const source = Io.Dir.cwd().readFile(ws.io, path, ws.source) catch |e| {
         return ctx.fail(.io, try ws.text.format("Could not read {s} to fix it: {t}.", .{ path, e }), "Check the file is still there and readable.");
     };
-    const spliced = try applyEdits(source, findings, ws.fixed);
+    const spliced = try edits.applyEdits(source, findings, ws.fixed);
     try replaceFile(ctx, ws, .{ .path = path, .read = source, .fixed = spliced.bytes });
-    shiftLines(source, findings);
+    edits.shiftLines(source, findings);
     const applied = spliced.applied;
     if (applied == 0) assert.panic("expected at least one edit to apply to {s}, got none; fixFiles() must call fixFile() only for a file with an edit", .{path});
     return applied;
-}
-
-/// Writes `source` into `out` with each edit that doesn't overlap an earlier one applied, marking
-/// those findings fixed.
-fn applyEdits(source: []const u8, findings: []Finding, out: []u8) error{LimitExceeded}!struct { bytes: []const u8, applied: usize } {
-    var used: usize = 0;
-    var cursor: usize = 0;
-    var applied: usize = 0;
-    for (findings) |*f| {
-        const edit = f.edit orelse continue;
-        if (edit.start < cursor or edit.end > source.len) continue;
-        const kept = source[cursor..edit.start];
-        if (used + kept.len + edit.replacement.len > out.len) break;
-        @memcpy(out[used..][0..kept.len], kept);
-        @memcpy(out[used + kept.len ..][0..edit.replacement.len], edit.replacement);
-        used += kept.len + edit.replacement.len;
-        cursor = edit.end;
-        f.fixed = true;
-        applied += 1;
-    }
-    const rest = source[cursor..];
-    if (used + rest.len > out.len) {
-        memory.exceeded = "bytes in one fixed file";
-        return error.LimitExceeded;
-    }
-    @memcpy(out[used..][0..rest.len], rest);
-    used += rest.len;
-    if (cursor > source.len) assert.panic("applied edits up to byte {d} of a {d}-byte file; skip an edit that ends past the file", .{ cursor, source.len });
-    if (applied > findings.len) assert.panic("applied {d} edits from {d} findings; each finding has at most one edit", .{ applied, findings.len });
-    return .{ .bytes = out[0..used], .applied = applied };
 }
 
 /// A file to fix: its path, the bytes the fixes were made against, and the fixed bytes.
@@ -1037,22 +1010,6 @@ fn unchanged(io: Io, path: []const u8, expected: []const u8) !bool {
         if (n < chunk.len) return offset == expected.len;
     }
     assert.panic("read {d} bytes of {s} in chunks without reaching its end; the loop must allow one chunk past {d} bytes", .{ offset, path, expected.len });
-}
-
-/// Moves the findings that stay in a fixed file past the lines its edits added or removed.
-fn shiftLines(source: []const u8, findings: []Finding) void {
-    if (!(findings.len > 0)) assert.panic("expected findings to shift, got none for {d} bytes; call shiftLines() only for a file with findings", .{source.len});
-    var delta: i64 = 0;
-    for (findings) |*f| {
-        if (f.fixed) {
-            const edit = f.edit orelse unreachable;
-            const removed = std.mem.count(u8, source[edit.start..edit.end], "\n");
-            delta += @as(i64, @intCast(std.mem.count(u8, edit.replacement, "\n"))) - @as(i64, @intCast(removed));
-            continue;
-        }
-        f.line = @intCast(@as(i64, f.line) + delta);
-    }
-    if (delta < -@as(i64, @intCast(source.len))) assert.panic("expected edits to remove at most the file's {d} bytes of lines, got {d} lines; shiftLines() must count newlines only inside each edit's span", .{ source.len, delta });
 }
 
 /// Adds the checkable files under `path`, skipping what git ignores. A file named directly is always checked.

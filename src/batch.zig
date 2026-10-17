@@ -232,14 +232,7 @@ pub const Batch = struct {
             try facts.abstractions.add(kept);
         }
         for (recorded.implemented.items()) |hash| try facts.implemented.add(hash);
-        const references = recorded.references.items();
-        std.mem.sort(u64, references, {}, std.sort.asc(u64));
-        var previous: ?u64 = null;
-        for (references) |hash| {
-            if (previous == hash) continue;
-            previous = hash;
-            try facts.references.add(hash);
-        }
+        try facts.addReferences(recorded.references.items());
         for (recorded.units.items()) |u| {
             var kept = u;
             kept.name = try worker.retain(self.text, u.name);

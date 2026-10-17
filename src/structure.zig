@@ -13,6 +13,7 @@ const Finding = facts_module.Finding;
 const Shape = facts_module.Shape;
 const Definition = facts_module.Definition;
 const nameHash = facts_module.nameHash;
+const Reference = facts_module.Reference;
 const twins_module = @import("twins.zig");
 const Io = std.Io;
 
@@ -20,11 +21,33 @@ const Io = std.Io;
 /// buffers of the largest file size. Null leaves twins with only the rule's advice.
 pub const Sources = struct { io: Io, mine: []u8, theirs: []u8 };
 
-pub fn checkStructure(facts: *Facts, enabled: rules.Set, findings: *memory.Bounded(Finding), sources: ?Sources) error{LimitExceeded}!void {
+/// What the structure checks work in beyond the facts: files to re-read for twins, and memory
+/// reserved for tracing which names are reachable.
+pub const Scratch = struct { sources: ?Sources = null, live: ?*LiveScratch = null };
+
+/// Memory dead-symbol traces reachability in, reserved up front for the most definitions a run holds.
+pub const LiveScratch = struct {
+    candidates: []u64,
+    others: []u64,
+    alive: []bool,
+
+    pub fn initLiveScratch(gpa: std.mem.Allocator, limits: memory.Limits) std.mem.Allocator.Error!LiveScratch {
+        if (limits.definitions == 0) assert.panic("memory.Limits.definitions is 0, so dead-symbol has no room for any name", .{});
+        const live: LiveScratch = .{
+            .candidates = try memory.reserve(gpa, u64, limits.definitions),
+            .others = try memory.reserve(gpa, u64, limits.definitions),
+            .alive = try memory.reserve(gpa, bool, limits.definitions),
+        };
+        if (live.alive.len != live.candidates.len) assert.panic("reserved {d} flags for {d} names", .{ live.alive.len, live.candidates.len });
+        return live;
+    }
+};
+
+pub fn checkStructure(facts: *Facts, enabled: rules.Set, findings: *memory.Bounded(Finding), scratch: Scratch) error{LimitExceeded}!void {
     if (enabled.len == 0) assert.panic("cross-file structure checks ran with no rules enabled; runCheck always enables at least one", .{});
     const before = findings.len;
-    if (enabled.enabled("structural-twins")) try twins(facts, findings, sources);
-    if (enabled.enabled("dead-symbol")) try deadSymbols(facts, findings);
+    if (enabled.enabled("structural-twins")) try twins(facts, findings, scratch.sources);
+    if (enabled.enabled("dead-symbol")) try deadSymbols(facts, findings, scratch.live);
     if (enabled.enabled("single-impl-abstraction")) try singleImplementations(facts, findings);
     if (findings.len < before) assert.panic("cross-file structure checks dropped findings from {d} to {d}; they may only add", .{ before, findings.len });
 }
@@ -174,25 +197,126 @@ fn bodyOf(io: Io, path: []const u8, shape: Shape, buffer: []u8) ?twins_module.Bo
 
 /// Reports each function, method, class or type that nothing anywhere refers to by name, unless
 /// code outside the module can use it, or a language or framework calls it by convention.
-fn deadSymbols(facts: *Facts, findings: *memory.Bounded(Finding)) error{LimitExceeded}!void {
+fn deadSymbols(facts: *Facts, findings: *memory.Bounded(Finding), scratch: ?*LiveScratch) error{LimitExceeded}!void {
     const before = findings.len;
     const references = facts.references.items();
-    std.mem.sort(u64, references, {}, std.sort.asc(u64));
+    std.mem.sort(Reference, references, {}, Reference.before);
+    var live = Liveness.initLiveness(facts.definitions.items(), scratch);
+    live.propagate(references);
     for (facts.definitions.items()) |d| {
         if (d.public or !candidate(d)) continue;
         const hash = nameHash(d.name);
-        const at = firstAtLeast(references, hash);
-        if (at < references.len and references[at] == hash) continue;
-        try findings.add(.{
-            .path = d.path,
-            .line = d.line,
-            .column = d.column,
-            .rule = "dead-symbol",
-            .message = try facts.text.format("'{s}' is a {s} that nothing refers to, so it is code to read and maintain that never runs.", .{ d.name, d.kind }),
-        });
+        const mentioned = mentions(references, hash);
+        const dead = if (live.index(hash)) |i| !live.alive[i] else !mentioned;
+        if (!dead) continue;
+        const message = if (mentioned)
+            try facts.text.format("'{s}' is a {s} that only unused code, or '{s}' itself, refers to, so it is code to read and maintain that never runs.", .{ d.name, d.kind, d.name })
+        else
+            try facts.text.format("'{s}' is a {s} that nothing refers to, so it is code to read and maintain that never runs.", .{ d.name, d.kind });
+        try findings.add(.{ .path = d.path, .line = d.line, .column = d.column, .rule = "dead-symbol", .message = message });
     }
-    if (references.len > 1 and references[0] > references[references.len - 1]) assert.panic("the {d} references were not sorted before searching them; deadSymbols() must sort them first", .{references.len});
+    if (references.len > 1 and Reference.before({}, references[references.len - 1], references[0])) assert.panic("the {d} references were not sorted before searching them; deadSymbols() must sort them first", .{references.len});
     if (findings.len - before > facts.definitions.len) assert.panic("dead-symbol reported {d} findings for {d} definitions; each definition can be reported once", .{ findings.len - before, facts.definitions.len });
+}
+
+/// Whether reachability decides if `d` is dead: a candidate no other file can import. Code another
+/// file, or another project, may import counts as reachable, so a library's unused-looking API
+/// doesn't make dead everything it uses.
+fn traced(d: Definition) bool {
+    if (d.name.len == 0) assert.panic("{s}:{d}: a definition has no name", .{ d.path, d.line + 1 });
+    if (d.public and !d.importable and d.unmarked.len == 0 and d.kind.len == 0) assert.panic("{s}: '{s}' has no kind", .{ d.path, d.name });
+    return !d.public and !d.importable and candidate(d);
+}
+
+/// Whether any reference names `hash`; `sorted` is ordered by name.
+fn mentions(sorted: []const Reference, hash: u64) bool {
+    var low: usize = 0;
+    var high: usize = sorted.len;
+    while (low < high) {
+        const middle = low + (high - low) / 2;
+        if (sorted[middle].name < hash) low = middle + 1 else high = middle;
+    }
+    if (low > sorted.len) assert.panic("searched {d} references and landed at {d}, past the end", .{ sorted.len, low });
+    if (low > 0 and sorted[low - 1].name >= hash) assert.panic("the reference before position {d} is not below the name sought; sort the references by name first", .{low});
+    return low < sorted.len and sorted[low].name == hash;
+}
+
+/// Which names only traced definitions have are reachable: referred to from module-level
+/// code, or from inside a definition that is itself reachable, other than from themselves.
+const Liveness = struct {
+    names: []u64,
+    alive: []bool,
+
+    /// Traces nothing without scratch, so each name is then dead only when nothing mentions it.
+    fn initLiveness(definitions: []const Definition, scratch: ?*LiveScratch) Liveness {
+        const live = scratch orelse return .{ .names = &.{}, .alive = &.{} };
+        if (live.candidates.len < definitions.len) assert.panic("room for {d} names, but the run holds {d} definitions; LiveScratch is sized from memory.Limits.definitions", .{ live.candidates.len, definitions.len });
+        const all = live.candidates;
+        const count = hashesOf(definitions, all, true);
+        std.mem.sort(u64, all[0..count], {}, std.sort.asc(u64));
+        // A name another definition shares, such as an importable one, can't be told apart by
+        // hash, so only names traced definitions alone have are traced.
+        const shared = live.others[0..hashesOf(definitions, live.others, false)];
+        std.mem.sort(u64, shared, {}, std.sort.asc(u64));
+        var kept: usize = 0;
+        for (all[0..count]) |hash| {
+            if (kept > 0 and all[kept - 1] == hash) continue;
+            const at = firstAtLeast(shared, hash);
+            if (at < shared.len and shared[at] == hash) continue;
+            all[kept] = hash;
+            kept += 1;
+        }
+        @memset(live.alive[0..kept], false);
+        if (kept > count) assert.panic("kept {d} names from {d} candidates", .{ kept, count });
+        return .{ .names = all[0..kept], .alive = live.alive[0..kept] };
+    }
+
+    fn index(self: *const Liveness, hash: u64) ?usize {
+        if (self.alive.len != self.names.len) assert.panic("{d} names with {d} flags", .{ self.names.len, self.alive.len });
+        const at = firstAtLeast(self.names, hash);
+        if (at > self.names.len) assert.panic("looked up a name at {d} of {d}", .{ at, self.names.len });
+        return if (at < self.names.len and self.names[at] == hash) at else null;
+    }
+
+    /// Whether a reference from inside `holder` keeps what it names alive: module-level code,
+    /// and anything not traced here, always does.
+    fn holds(self: *const Liveness, holder: u64) bool {
+        if (self.alive.len != self.names.len) assert.panic("{d} names with {d} flags", .{ self.names.len, self.alive.len });
+        if (holder == 0) return true;
+        const i = self.index(holder) orelse return true;
+        if (i >= self.alive.len) assert.panic("holder {d} indexed past {d} flags", .{ i, self.alive.len });
+        return self.alive[i];
+    }
+
+    fn propagate(self: *Liveness, references: []const Reference) void {
+        if (self.alive.len != self.names.len) assert.panic("{d} names with {d} flags", .{ self.names.len, self.alive.len });
+        if (references.len > 1 and Reference.before({}, references[references.len - 1], references[0])) assert.panic("propagating over {d} unsorted references; sort them by name first", .{references.len});
+        for (0..self.names.len + 1) |_| {
+            var changed = false;
+            for (references) |r| {
+                const i = self.index(r.name) orelse continue;
+                if (self.alive[i] or r.holder == r.name or !self.holds(r.holder)) continue;
+                self.alive[i] = true;
+                changed = true;
+            }
+            if (!changed) return;
+        }
+        assert.panic("liveness of {d} names was still changing after {d} passes; each pass marks at least one more", .{ self.names.len, self.names.len + 1 });
+    }
+};
+
+/// The name hashes of the definitions reachability is traced for, or of all the others, into
+/// `out`; returns how many.
+fn hashesOf(definitions: []const Definition, out: []u64, traced_ones: bool) usize {
+    if (out.len < definitions.len) assert.panic("room for {d} hashes from {d} definitions", .{ out.len, definitions.len });
+    var count: usize = 0;
+    for (definitions) |d| {
+        if (traced(d) != traced_ones) continue;
+        out[count] = nameHash(d.name);
+        count += 1;
+    }
+    if (count > definitions.len) assert.panic("wrote {d} hashes from {d} definitions", .{ count, definitions.len });
+    return count;
 }
 
 /// Where the first hash at least `hash` sits in `sorted`, or its length when there is none.

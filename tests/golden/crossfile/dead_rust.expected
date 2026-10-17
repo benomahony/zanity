@@ -1,0 +1,5 @@
+rules: dead-symbol
+exit: 0
+main.rs:1:8: warning [dead-symbol]
+main.rs:5:8: warning [dead-symbol]
+main.rs:9:4: warning [dead-symbol]
