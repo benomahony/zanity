@@ -3,9 +3,11 @@
 import json
 import os
 import select
+import shlex
 import shutil
 import statistics
 import subprocess
+import sys
 import tempfile
 import time
 from dataclasses import dataclass
@@ -33,19 +35,35 @@ def hyperfine(commands: dict[str, list[str]], runs: int) -> dict[str, dict]:
     return {r["command"]: {"mean": r["mean"], "stddev": r["stddev"] or 0.0, "min": r["min"]} for r in results}
 
 
+def peak_memory(command: str, prepare: str) -> int:
+    """The most memory, in bytes, one run of command held, after running prepare."""
+    assert command, "measuring the memory of no command"
+    assert sys.platform in {"darwin", "linux"}, f"ru_maxrss has no known unit on {sys.platform}"
+    if prepare:
+        subprocess.run(shlex.split(prepare), check=True)
+    # env execs the command in its own process, so the child's usage is the command's.
+    proc = subprocess.Popen(shlex.split(command), cwd=CORPUS, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    usage = os.wait4(proc.pid, 0)[2]
+    return usage.ru_maxrss * (1 if sys.platform == "darwin" else 1024)
+
+
 def bench_cli(zanity: Zanity, runs: int) -> dict[str, dict]:
-    """Each old tool on the corpus, through the adapter that calls its library; zanity with the
-    rules mapped to them and with every rule, from an empty cache and a warm one."""
+    """Each old tool on the corpus, through the adapter that calls its library; zanity with each
+    tool's rules, with the rules mapped to all of them and with every rule, from an empty cache
+    and a warm one; and the peak memory of each."""
     commands = {tool.name: (" ".join(tool.command([CORPUS])), "") for tool in TOOLS}
-    mapped = ",".join(sorted({target for tool in TOOLS for target in tool.targets}))
     cold, warm = (Path(tempfile.mkdtemp(prefix=f"parity-{kind}-")) / "store.db" for kind in ("cold", "warm"))
+    check = f"env ZANITY_STORE={cold} {zanity.binary} check --json --quiet --rules"
+    for tool in TOOLS:
+        commands[f"zanity, {tool.name} rules, cold"] = (f"{check} {','.join(tool.targets)} .", f"rm -f {cold}")
+    mapped = ",".join(sorted({target for tool in TOOLS for target in tool.targets}))
     for label, rules in (("mapped rules", mapped), ("all rules", "all")):
-        check = f"{zanity.binary} check --json --quiet --rules {rules} ."
-        commands[f"zanity, {label}, cold"] = (f"env ZANITY_STORE={cold} {check}", f"rm -f {cold}")
-        commands[f"zanity, {label}, warm"] = (f"env ZANITY_STORE={warm} {check}", "")
-    assert len(commands) == len(TOOLS) + 4, "four zanity runs beside the old tools"
+        commands[f"zanity, {label}, cold"] = (f"{check} {rules} .", f"rm -f {cold}")
+        commands[f"zanity, {label}, warm"] = (f"{check.replace(str(cold), str(warm))} {rules} .", "")
+    assert len(commands) == 2 * len(TOOLS) + 4, "zanity per tool and four more zanity runs beside the old tools"
     assert CORPUS.is_dir(), "build the corpus before timing it"
-    return hyperfine(commands, runs)
+    times = hyperfine(commands, runs)
+    return {name: times[name] | {"memory": peak_memory(*commands[name])} for name in commands}
 
 
 @dataclass
@@ -126,9 +144,18 @@ def diagnostics_for(uri: str):
     return lambda m: m.get("method") == "textDocument/publishDiagnostics" and m["params"]["uri"] == uri
 
 
-def lsp_once(command: list[str], workspace: Path, env: dict[str, str] | None) -> tuple[float, float, int]:
+def resident(pid: int) -> int:
+    """The memory, in bytes, process pid holds now."""
+    out = subprocess.run(["ps", "-o", "rss=", "-p", str(pid)], capture_output=True, text=True, check=True)
+    assert out.stdout.strip().isdigit(), f"ps gave {out.stdout!r} for the resident size of {pid}"
+    assert pid > 0, f"{pid} is not a process id"
+    return int(out.stdout) * 1024
+
+
+def lsp_once(command: list[str], workspace: Path, env: dict[str, str] | None) -> tuple[float, float, int, int]:
     """Seconds from starting the server to diagnostics for the opened file, then from a change
-    and save to fresh ones, and how many diagnostics it gave."""
+    and save to fresh ones, how many diagnostics it gave, and the memory it held with the file
+    open."""
     path = workspace / LSP_FILE.name
     assert path.is_file(), f"{path} is missing; bench_lsp copies it into the workspace first"
     assert command and Path(command[0]).is_file(), f"{command[0]} is missing; run `uv sync` in that tool's checkout"
@@ -144,12 +171,13 @@ def lsp_once(command: list[str], workspace: Path, env: dict[str, str] | None) ->
         first = session.wait(diagnostics_for(uri))["params"]["diagnostics"]
         opened = time.perf_counter() - session.started
         session.drain(1.0)
+        memory = resident(proc.pid)
         saved = time.perf_counter()
         path.write_text(text + "\n")
         session.notify("textDocument/didChange", {"textDocument": {"uri": uri, "version": 2}, "contentChanges": [{"text": text + "\n"}]})
         session.notify("textDocument/didSave", {"textDocument": {"uri": uri}})
         session.wait(diagnostics_for(uri))
-        return opened, time.perf_counter() - saved, len(first)
+        return opened, time.perf_counter() - saved, len(first), memory
     finally:
         path.write_text(text)
         proc.kill()
@@ -157,7 +185,7 @@ def lsp_once(command: list[str], workspace: Path, env: dict[str, str] | None) ->
 
 
 def bench_lsp(zanity: Zanity, runs: int) -> dict[str, dict]:
-    """Median time to first diagnostics and to diagnostics after a save, per server."""
+    """Median time to first diagnostics and to diagnostics after a save, and memory, per server."""
     workspace = Path(tempfile.mkdtemp(prefix="parity-lsp-"))
     shutil.copy(LSP_FILE, workspace / LSP_FILE.name)
     (workspace / "dddlint.yaml").write_text("forbidden: []\n")
@@ -175,7 +203,7 @@ def bench_lsp(zanity: Zanity, runs: int) -> dict[str, dict]:
         except (TimeoutError, AssertionError) as error:
             out[name] = {"error": str(error)}
             continue
-        out[name] = {"first": statistics.median(s[0] for s in samples), "save": statistics.median(s[1] for s in samples), "diagnostics": samples[0][2]}
+        out[name] = {"first": statistics.median(s[0] for s in samples), "save": statistics.median(s[1] for s in samples), "diagnostics": samples[0][2], "memory": statistics.median(s[3] for s in samples)}
     assert set(out) == set(servers), "every server timed or its failure recorded"
     assert "error" not in out["zanity"], f"zanity's language server failed: {out['zanity']}"
     return out

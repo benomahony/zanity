@@ -3,6 +3,7 @@
 Usage: python3 bench/parity/page.py
 """
 
+import html
 import json
 from pathlib import Path
 
@@ -21,10 +22,91 @@ LINKS = {
 }
 
 
+def badge(text: str, kind: str) -> str:
+    """text in a coloured badge: pass, partial, fail or none."""
+    assert kind in {"pass", "partial", "fail", "none"}, f"no badge style called {kind!r}"
+    assert "]" not in text, f"a ] in {text!r} would end the badge early"
+    return f"[{text}]($text.attrs('badge','{kind}'))"
+
+
 def mark(value: bool | None) -> str:
     assert value in (True, False, None), f"mark takes a yes, a no or nothing, not {value!r}"
     assert not isinstance(value, int) or isinstance(value, bool), f"mark got the number {value}; pass a bool"
-    return {True: "yes", False: "**no**", None: "–"}[value]
+    return {True: badge("✓ yes", "pass"), False: badge("✗ no", "fail"), None: badge("– n/a", "none")}[value]
+
+
+def score(part: int, whole: int, text: str = "") -> str:
+    """part of whole in a badge: green when all of it, red when none, amber between."""
+    assert 0 <= part <= whole, f"{part} of {whole} is not a share of it"
+    assert whole or not part, f"{part} of nothing"
+    kind = "none" if not whole else "pass" if part == whole else "fail" if not part else "partial"
+    return badge(text or f"{part}/{whole}", kind)
+
+
+def megabytes(value: float) -> str:
+    assert value > 0, f"a process holds some memory, not {value} bytes"
+    assert value < 1 << 40, f"{value} bytes is not a plausible peak; check the units"
+    return f"{value / (1 << 20):.0f} MB"
+
+
+def raw(lines: list[str]) -> list[str]:
+    """lines of HTML, passed through Zine as they are."""
+    assert lines, f"a raw block needs some HTML, but got {lines!r}"
+    fences = [line for line in lines if line.startswith("```")]
+    assert not fences, f"the fences {fences} inside the HTML would end the block"
+    return ["```=html", *lines, "```", ""]
+
+
+# A chart row: label, value, the value as text, and whether it is zanity's.
+Row = tuple[str, float, str, bool]
+
+
+def bar(row: Row, most: float) -> str:
+    """One chart row: a bar as long as its value is against most, with the text at its end."""
+    label, value, text, zanity = row
+    assert 0 <= value <= most, f"{value} is outside the chart's 0 to {most}"
+    assert most > 0, f"a chart scaled to {most} has no length"
+    width = max(85 * value / most, 0.6)
+    side = "zanity" if zanity else "other"
+    return (
+        f'<div class="chart-row {side}"><span class="chart-label">{html.escape(label)}</span>'
+        f'<span class="chart-track"><span class="chart-bar" style="width:{width:.1f}%"></span>'
+        f'<span class="chart-value">{html.escape(text)}</span></span></div>'
+    )
+
+
+def chart(rows: list[Row], caption: str) -> list[str]:
+    """Bars for rows, all on one scale."""
+    assert rows, f"the chart {caption!r} has no rows"
+    assert caption, "a chart needs a caption saying what it measures"
+    most = max(row[1] for row in rows)
+    return raw([f'<figure class="chart"><figcaption>{html.escape(caption)}</figcaption>', *(bar(row, most) for row in rows), "</figure>"])
+
+
+def verdict(theirs: float, ours: float, words: tuple[str, str]) -> str:
+    """How many times better or worse zanity's figure is, in a badge, as HTML."""
+    assert theirs > 0, f"the other tool's figure is {theirs}, so there is nothing to compare"
+    assert ours > 0, f"zanity's figure is {ours}, so there is nothing to compare"
+    better, worse = words
+    if theirs >= ours:
+        return f'<span class="badge pass">zanity {theirs / ours:.1f}× {better}</span>'
+    return f'<span class="badge fail">zanity {ours / theirs:.1f}× {worse}</span>'
+
+
+def duel(groups: list[tuple[str, float, float]], show, words: tuple[str, str], caption: str) -> list[str]:
+    """Each tool beside zanity, one pair of bars per tool, each pair on its own scale."""
+    assert groups, f"the chart {caption!r} has no tools"
+    assert callable(show), f"show formats a value for the chart, not {show!r}"
+    body = []
+    for name, theirs, ours in groups:
+        most = max(theirs, ours)
+        body += [
+            f'<div class="duel"><div class="duel-head">{html.escape(name)} {verdict(theirs, ours, words)}</div>',
+            bar((name, theirs, show(theirs), False), most),
+            bar(("zanity", ours, show(ours), True), most),
+            "</div>",
+        ]
+    return raw([f'<figure class="chart"><figcaption>{html.escape(caption)}</figcaption>', *body, "</figure>"])
 
 
 def pct(part: int, whole: int) -> str:
@@ -67,21 +149,53 @@ def language_rows(data: dict) -> list[dict]:
     return rows
 
 
+def tally(name: str, mine: list[dict]) -> dict:
+    """One tool's rules, the fixtures it fires on, how many zanity matches, and what it misses."""
+    valid = [r for r in mine if r["old_fires"]]
+    gaps = [r["rule"] for r in mine if r["old_fires"] is not False and not r["zanity_fires"]]
+    assert mine, f"{name} has no scored rules"
+    assert name in BY_NAME, f"{name} is not a tool in tools.py"
+    return {"name": name, "rules": len(mine), "whole": len(valid), "part": sum(bool(r["zanity_fires"]) for r in valid), "gaps": gaps, "unit": "rules"}
+
+
+def tallies(data: dict) -> list[dict]:
+    """Each tool's tally; nouls last, by its named questions."""
+    out = [tally(tool.name, [r for r in data["fixtures"] if r["tool"] == tool.name] or language_rows(data)) for tool in TOOLS]
+    questions = data["inference"]["questions"]
+    count = len(questions)
+    gaps = [q["rule"] for q in questions if not q["present"]]
+    out.append({"name": "nouls", "rules": count + data["inference"]["catalogue"], "whole": count, "part": count - len(gaps), "gaps": gaps, "unit": "questions"})
+    assert len(out) == len(TOOLS) + 1, f"a tally per tool and one for nouls, not {len(out)}"
+    assert all(t["whole"] for t in out), f"every tool fires on a fixture of its own, but not {[t['name'] for t in out if not t['whole']]}"
+    return out
+
+
 def summary(data: dict) -> list[str]:
     rows = []
-    for tool in TOOLS:
-        mine = [r for r in data["fixtures"] if r["tool"] == tool.name] or language_rows(data)
-        valid = [r for r in mine if r["old_fires"]]
-        answered = sum(bool(r["zanity_fires"]) for r in valid)
-        gaps = [r["rule"] for r in mine if r["old_fires"] is not False and not r["zanity_fires"]]
-        rows.append([f"[{tool.name}]({LINKS[tool.name]})" if LINKS[tool.name] else tool.name, str(len(mine)), f"{len(valid)}", f"{answered}/{len(valid)}", codes(gaps)])
-    questions = data["inference"]["questions"]
-    asked = sum(q["present"] for q in questions)
-    missing = [q["rule"] for q in questions if not q["present"]]
-    rows.append([f"[nouls]({LINKS['nouls']})", str(len(questions) + data["inference"]["catalogue"]), "–", f"{asked}/{len(questions)} questions", codes(missing)])
-    assert len(rows) == len(TOOLS) + 1, "a row per tool and one for nouls"
+    for t in tallies(data):
+        name, part, whole = t["name"], t["part"], t["whole"]
+        link = f"[{name}]({LINKS[name]})" if LINKS[name] else name
+        fixtures = "–" if t["unit"] == "questions" else str(whole)
+        rows.append([link, str(t["rules"]), fixtures, score(part, whole, f"{part}/{whole} {t['unit']}"), codes(t["gaps"])])
+    assert rows, "no tool was tallied"
     assert data["fixtures"], "no fixtures were scored"
     return table(["Tool", "Rules", "Fixtures it fires on", "zanity fires on", "zanity misses"], rows)
+
+
+def scoreboard(data: dict) -> list[str]:
+    """A card per tool: the share of its rules zanity matches, as a number and a bar."""
+    cards = []
+    for t in tallies(data):
+        part, whole = t["part"], t["whole"]
+        cards.append(
+            f'<div class="card {"pass" if part == whole else "partial"}"><div class="card-name">{t["name"]}</div>'
+            f'<div class="card-score">{part}<span>/{whole}</span></div>'
+            f'<div class="card-bar"><span style="width:{100 * part / whole:.0f}%"></span></div>'
+            f'<div class="card-unit">{t["unit"]} matched</div></div>'
+        )
+    assert cards, "no tool was tallied"
+    assert len(cards) == len(TOOLS) + 1, f"a card per tool and one for nouls, not {len(cards)}"
+    return raw(['<div class="scoreboard">', *cards, "</div>"])
 
 
 def rule_by_rule(data: dict) -> list[str]:
@@ -102,7 +216,7 @@ def languages(data: dict) -> list[str]:
         cells = []
         for language in LANGUAGES:
             found = data["languages"][language]["recall"].get(rule)
-            cells.append(f"{found['matched']}/{found['old']}" if found else "–")
+            cells.append(score(found["matched"], found["old"]) if found else badge("–", "none"))
         rows.append([f"`{rule}`", *cells])
     assert len(rows) == len(tool.rules), "a row per bonsai smell"
     assert set(data["languages"]) == set(LANGUAGES), "every language was scored"
@@ -115,7 +229,7 @@ def corpus(data: dict) -> list[str]:
         scored = data["corpus"][tool.name]
         for rule, s in scored["recall"].items():
             matched, old = s["matched"], s["old"]
-            recall_rows.append([tool.name, f"`{rule}`", codes(tool.rules[rule]), tool.notes.get(rule, ""), str(old), str(matched), pct(matched, old)])
+            recall_rows.append([tool.name, f"`{rule}`", codes(tool.rules[rule]), tool.notes.get(rule, ""), str(old), str(matched), score(matched, old, pct(matched, old))])
         for rule, s in scored["agreement"].items():
             matched, found = s["matched"], s["zanity"]
             agreement_rows.append([tool.name, f"`{rule}`", str(found), str(matched), pct(matched, found)])
@@ -151,26 +265,70 @@ def inference(data: dict) -> list[str]:
     ]
 
 
-def speed(data: dict) -> list[str]:
+def cli_speed(data: dict) -> list[str]:
     cli = data["cli"]
     base = cli["zanity, all rules, cold"]["mean"]
+    warm = cli["zanity, all rules, warm"]["mean"]
     old = sum(cli[tool.name]["mean"] for tool in TOOLS)
-    rows = [[name, seconds(r["mean"]), seconds(r["stddev"]), seconds(r["min"]), f"{r['mean'] / base:.1f}×"] for name, r in cli.items()]
-    rows.append(["the five tools, one after another", seconds(old), "", "", f"{old / base:.1f}×"])
-    servers = [[name, r["error"], "", ""] if "error" in r else [name, seconds(r["first"]), seconds(r["save"]), str(r["diagnostics"])] for name, r in data["lsp"].items()]
+    sequence = seconds(old)
+    rows = [[name, seconds(r["mean"]), seconds(r["stddev"]), seconds(r["min"]), megabytes(r["memory"]), f"{r['mean'] / base:.1f}×"] for name, r in cli.items()]
+    rows.append(["the five tools, one after another", sequence, "", "", "", f"{old / base:.1f}×"])
+    pairs = [(tool.name, cli[tool.name], cli[f"zanity, {tool.name} rules, cold"]) for tool in TOOLS]
+    slow = max(pairs, key=lambda pair: pair[1]["mean"])
     assert base > 0, f"zanity's time is the baseline, so it can't be {base} s"
-    assert servers, f"no language server was timed; results.json has {sorted(data)}"
+    assert all("memory" in r for r in cli.values()), f"results.json has no memory for {[n for n, r in cli.items() if 'memory' not in r]}; run parity.py again"
     return [
-        "## From the command line",
+        *raw([
+            '<div class="headline">',
+            f'<div><strong>{old / base:.0f}×</strong> faster than running the five tools: {seconds(base)} against {sequence}, on every rule at once, from an empty cache.</div>',
+            f'<div><strong>{slow[1]["mean"] / slow[2]["mean"]:.0f}×</strong> faster than the slowest, {slow[0]}, on its own rules.</div>',
+            "</div>",
+        ]),
+        "## Head to head",
         "",
-        f"The whole corpus, {data['runs']} runs after a warm-up, with [hyperfine](https://github.com/sharkdp/hyperfine). The tools ran through the same adapters as above. Cold zanity starts each run with an empty cache.",
+        f"Each tool on the whole corpus, {data['corpus_stats']['lines']:,} lines, beside zanity running only the rules that answer that tool's, from an empty cache. Each pair has its own scale. The mean of {data['runs']} runs after a warm-up, with [hyperfine](https://github.com/sharkdp/hyperfine).",
         "",
-        *table(["Command", "Mean", "±", "Fastest", "Against zanity, all rules, cold"], rows, right=4),
+        *duel([(name, t["mean"], z["mean"]) for name, t, z in pairs], seconds, ("faster", "slower"), "Time to check the corpus, shorter is better"),
+        *chart([("five tools in a row", old, sequence, False), ("zanity, cold", base, seconds(base), True), ("zanity, warm", warm, seconds(warm), True)], "Every rule at once, shorter is better"),
+        "## Memory",
+        "",
+        "The most memory each run held, from the kernel's accounting of the process.",
+        "",
+        *duel([(name, t["memory"], z["memory"]) for name, t, z in pairs], megabytes, ("smaller", "larger"), "Peak memory checking the corpus, smaller is better"),
+        "## Every command",
+        "",
+        "The tools ran through the same adapters as above. Cold zanity starts each run with an empty cache; warm reuses the last run's.",
+        "",
+        *table(["Command", "Mean", "±", "Fastest", "Peak memory", "Against zanity, all rules, cold"], rows, right=5),
+    ]
+
+
+def lsp_speed(data: dict) -> list[str]:
+    servers = data["lsp"]
+    timed = [(name, r) for name, r in servers.items() if "error" not in r]
+
+    def rows(key: str, show) -> list[Row]:
+        assert callable(show), f"show formats a {key} for the chart, not {show!r}"
+        assert all(key in r for _, r in timed), f"a timed server has no {key!r}; run parity.py again"
+        return [(name, r[key], show(r[key]), name == "zanity") for name, r in timed]
+
+    table_rows = []
+    for name, r in servers.items():
+        if "error" in r:
+            table_rows.append([name, r["error"], "", "", ""])
+            continue
+        table_rows.append([name, seconds(r["first"]), seconds(r["save"]), megabytes(r["memory"]), str(r["diagnostics"])])
+    assert any(name == "zanity" for name, _ in timed), f"zanity's language server wasn't timed; results.json has {sorted(servers)}"
+    assert timed, f"no language server was timed; each failed: {servers}"
+    return [
         "## As language servers",
         "",
-        f"rich's `console.py`, {data['lsp_lines']:,} lines, alone in a workspace; the median of {data['runs']}. First: from starting the server to diagnostics for the opened file. Save: from a change and save to fresh diagnostics. nouls' server needs `TYPESAFE_API_KEY` and did not run.",
+        f"rich's `console.py`, {data['lsp_lines']:,} lines, alone in a workspace; the median of {data['runs']}. First: from starting the server to diagnostics for the opened file. Save: from a change and save to fresh diagnostics. Memory: what the server held with the file open. nouls' server needs `TYPESAFE_API_KEY` and did not run.",
         "",
-        *table(["Server", "First", "Save", "Diagnostics"], servers, right=3),
+        *chart(rows("first", seconds), "Start to first diagnostics, shorter is better"),
+        *chart(rows("save", seconds), "Save to fresh diagnostics, shorter is better"),
+        *chart(rows("memory", megabytes), "Memory with the file open, smaller is better"),
+        *table(["Server", "First", "Save", "Memory", "Diagnostics"], table_rows, right=4),
     ]
 
 
@@ -186,12 +344,13 @@ def render(data: dict) -> str:
         "",
         "# Summary",
         "",
-        "Each rule has a small fixture written to trigger it. A fixture counts only if the old tool fires on it.",
+        "Each rule has a small fixture written to trigger it. A fixture counts only if the old tool fires on it. Green: zanity matches every rule. Amber: some. Red: none.",
         "",
+        *scoreboard(data),
         *summary(data),
         "# Rule by rule",
         "",
-        "Same line: zanity reports it on the tool's line, give or take one. A note says where zanity differs on purpose.",
+        "Same line: zanity reports it on the tool's line, give or take one. A note says where zanity differs on purpose. Rows zanity misses are shaded red.",
         "",
         *rule_by_rule(data),
         "# Six languages",
@@ -211,7 +370,8 @@ def render(data: dict) -> str:
         "",
         "On an M3 Max whose endpoint security slows every file open by a binary Apple didn't sign, which taxes zanity and the Python tools alike.",
         "",
-        *speed(data),
+        *cli_speed(data),
+        *lsp_speed(data),
         "# [Rerun]($heading.id('rerun'))",
         "",
         "The harness needs checkouts of the tools beside zanity's (or `ZANITY_PARITY_SOURCES` naming their parent), each synced with `uv sync`, and hyperfine.",

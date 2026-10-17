@@ -16,6 +16,14 @@
   --hl-function: #1d4ed8;
   --hl-builtin: #b45309;
   --hl-field: #334155;
+  --pass: #15803d;
+  --pass-soft: #dcfce7;
+  --partial: #b45309;
+  --partial-soft: #fef3c7;
+  --fail: #b91c1c;
+  --fail-soft: #fee2e2;
+  --bar-other: #78716c;
+  --track: #ebe7df;
   --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   --sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
 }
@@ -39,6 +47,11 @@
     --hl-function: #93c5fd;
     --hl-builtin: #fbbf24;
     --hl-field: #cbd5e1;
+    --pass-soft: #0f2a19;
+    --partial-soft: #2e2208;
+    --fail-soft: #3a1212;
+    --bar-other: #8a857b;
+    --track: #24231f;
   }
 }
 
@@ -146,7 +159,72 @@ table {
 }
 td code { white-space: nowrap; }
 th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
-th { color: var(--fg-muted); font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; }
+th { color: var(--fg); font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; }
+
+/* Results: solid badges, so a pass or a miss reads at a glance in either theme. */
+.badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.6;
+  white-space: nowrap;
+  color: #fff;
+}
+.badge.pass { background: var(--pass); }
+.badge.partial { background: var(--partial); }
+.badge.fail { background: var(--fail); }
+.badge.none { color: var(--fg-muted); background: none; border: 1px dashed var(--border); }
+tr:has(.badge.fail) td { background: var(--fail-soft); }
+tr:has(.badge.fail) td:first-child { box-shadow: inset 4px 0 0 var(--fail); }
+
+.scoreboard {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+  margin: 0 0 24px;
+}
+.card {
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-top: 5px solid var(--pass);
+  border-radius: 10px;
+  background: var(--pass-soft);
+}
+.card.partial { border-top-color: var(--partial); background: var(--partial-soft); }
+.card-name { font: 600 14px var(--mono); }
+.card-score { font-size: 34px; font-weight: 800; line-height: 1.1; margin: 6px 0; }
+.card-score span { font-size: 18px; color: var(--fg-muted); font-weight: 600; }
+.card-bar { height: 8px; border-radius: 4px; background: var(--fail); overflow: hidden; }
+.card-bar span { display: block; height: 100%; background: var(--pass); }
+.card-unit { margin-top: 6px; font-size: 12.5px; color: var(--fg-muted); }
+
+.headline {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+  margin: 0 0 24px;
+}
+.headline > div {
+  padding: 16px 18px;
+  border-left: 5px solid var(--pass);
+  border-radius: 0 10px 10px 0;
+  background: var(--pass-soft);
+}
+.headline strong { display: block; font-size: 40px; line-height: 1.1; color: var(--pass); }
+
+.chart { margin: 0 0 28px; max-width: 820px; }
+.chart figcaption { font-weight: 700; margin-bottom: 10px; }
+.chart-row { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 10px; align-items: center; margin: 4px 0; }
+.chart-label { font: 13px var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chart-track { display: flex; align-items: center; gap: 8px; height: 22px; background: var(--track); border-radius: 4px; }
+.chart-bar { height: 100%; border-radius: 4px; background: var(--bar-other); flex: none; }
+.chart-row.zanity .chart-bar { background: var(--accent); }
+.chart-row.zanity .chart-label { font-weight: 700; color: var(--accent); }
+.chart-value { font: 600 13px var(--mono); white-space: nowrap; }
+.duel { padding: 10px 0; border-bottom: 1px solid var(--border); }
+.duel-head { font: 600 14px var(--mono); margin-bottom: 4px; display: flex; gap: 10px; align-items: center; }
 
 blockquote {
   margin: 0 0 20px;
@@ -213,4 +291,5 @@ code.zig .punctuation_delimiter { color: var(--fg-muted); }
   main { padding: 32px 16px 64px; }
   h1 { font-size: 32px; }
   .pager a { min-width: 0; flex: 1; }
+  .chart-row { grid-template-columns: 100px minmax(0, 1fr); }
 }
