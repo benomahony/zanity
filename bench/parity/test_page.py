@@ -14,16 +14,26 @@ class ComparisonPagesTest(unittest.TestCase):
     def test_one_overview_and_one_page_per_tool(self) -> None:
         rendered = page.pages(DATA)
         names = [t["name"] for t in page.tallies(DATA)]
-        expected = {page.OVERVIEW, *(page.CONTENT / f"comparison-{name}.smd" for name in names)}
+        expected = {page.OVERVIEW, page.PERFORMANCE, *(page.CONTENT / f"comparison-{name}.smd" for name in names)}
         self.assertEqual(set(rendered), expected)
-        self.assertEqual(len(rendered), len(names) + 1)
+        self.assertEqual(len(rendered), len(names) + 2)
         self.assertEqual({page.OVERVIEW, *page.CONTENT.glob("comparison-*.smd")}, expected)
 
     def test_overview_links_to_every_tool_page(self) -> None:
         overview = page.render_overview(DATA)
         names = [t["name"] for t in page.tallies(DATA)]
         self.assertTrue(all(f"/comparison-{name}/" in overview for name in names))
+        self.assertIn("/comparison-performance/", overview)
         self.assertNotIn("# Rule by rule", overview)
+
+    def test_overview_is_a_hub_not_the_full_report(self) -> None:
+        overview = page.render_overview(DATA)
+        self.assertNotIn("## Recall", overview)
+        self.assertNotIn("## Agreement", overview)
+        self.assertNotIn("# Speed", overview)
+        performance = page.render_performance(DATA)
+        self.assertIn("# Command line", performance)
+        self.assertIn("# Editors and watch mode", performance)
 
     def test_specialised_evidence_lives_on_the_relevant_page(self) -> None:
         bonsai = page.render_tool(DATA, "bonsai")

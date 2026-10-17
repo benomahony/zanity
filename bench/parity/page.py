@@ -13,6 +13,7 @@ from tools import BY_NAME, HERE, REPO, TOOLS
 RESULTS = HERE / "results.json"
 CONTENT = REPO / "docs" / "content"
 OVERVIEW = CONTENT / "comparison.smd"
+PERFORMANCE = CONTENT / "comparison-performance.smd"
 LINKS = {
     "nasa-lsp": "https://github.com/benomahony/nasa-lsp",
     "testdesiderata": "https://github.com/benomahony/testdesiderata",
@@ -360,12 +361,11 @@ def document(lines: list[str]) -> str:
 
 
 def render_overview(data: dict) -> str:
-    stats = data["corpus_stats"]
     assert data["fixtures"], "results.json has no fixtures; run parity.py"
-    assert stats["files"], "results.json has an empty corpus; run parity.py"
+    assert data["inference"]["questions"], "results.json has no inference questions; fix the nouls adapter and rerun parity.py"
     return document([
         *front("Against the tools it replaces", "What zanity finds that the linters it consolidates find, and how fast."),
-        "zanity replaces six linters. The overview puts their coverage and speed together; each tool's page has its rule-by-rule evidence.",
+        "zanity replaces six linters. Start here, then open a tool for its rule-by-rule and real-code evidence.",
         *generated(data),
         "",
         "# Summary",
@@ -374,16 +374,28 @@ def render_overview(data: dict) -> str:
         "",
         *scoreboard(data),
         *summary(data),
-        f"# Real code",
+        "# Evidence",
         "",
-        f"{stats['files']} Python files, {stats['lines']:,} lines: [rich](https://github.com/Textualize/rich) and [click](https://github.com/pallets/click), and the old tools' own test suites. Nobody wrote this code to trigger a rule.",
+        "Each tool page has its fixture results, recall and agreement on real code. [Performance](/comparison-performance/) has command-line, editor and watch-mode timings.",
         "",
-        *corpus(data),
-        "# Speed",
+    ])
+
+
+def render_performance(data: dict) -> str:
+    assert data["cli"], "results.json has no command-line timings; rerun parity.py without --skip-bench"
+    assert data["lsp"], "results.json has no editor timings; rerun parity.py without --skip-bench"
+    return document([
+        *front("zanity performance", "Command-line, editor and watch-mode speed and memory beside the tools zanity replaces."),
+        "# [All comparisons](/comparison/)",
+        "",
+        *generated(data),
+        "# Command line",
         "",
         "On an M3 Max whose endpoint security slows every file open by a binary Apple didn't sign, which taxes zanity and the Python tools alike.",
         "",
         *cli_speed(data),
+        "# Editors and watch mode",
+        "",
         *lsp_speed(data),
         "# [Rerun]($heading.id('rerun'))",
         "",
@@ -440,8 +452,8 @@ def render_tool(data: dict, name: str) -> str:
 def pages(data: dict) -> dict[Path, str]:
     names = [t["name"] for t in tallies(data)]
     assert len(names) == len(set(names)), f"comparison tool names must be unique, not {names}; remove or rename the duplicate in tools.py"
-    rendered = {OVERVIEW: render_overview(data), **{CONTENT / f"comparison-{name}.smd": render_tool(data, name) for name in names}}
-    assert len(rendered) == len(names) + 1, f"wrote {len(rendered)} pages for {len(names)} tools and one overview; add the missing tool page in pages()"
+    rendered = {OVERVIEW: render_overview(data), PERFORMANCE: render_performance(data), **{CONTENT / f"comparison-{name}.smd": render_tool(data, name) for name in names}}
+    assert len(rendered) == len(names) + 2, f"wrote {len(rendered)} pages for {len(names)} tools, performance and one overview; add the missing comparison page in pages()"
     return rendered
 
 
