@@ -191,7 +191,9 @@ tr:has(.badge.fail) td:first-child { box-shadow: inset 4px 0 0 var(--fail); }
   border-top: 5px solid var(--pass);
   border-radius: 10px;
   background: var(--pass-soft);
+  color: var(--fg);
 }
+.card:hover { text-decoration: none; border-color: var(--accent); }
 .card.partial { border-top-color: var(--partial); background: var(--partial-soft); }
 .card-name { font: 600 14px var(--mono); }
 .card-score { font-size: 34px; font-weight: 800; line-height: 1.1; margin: 6px 0; }
