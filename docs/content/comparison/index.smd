@@ -1,6 +1,6 @@
 ---
 .title = "Comparisons",
-.description = "Rule-by-rule coverage and speed beside six other linters.",
+.description = "Rule-by-rule coverage and speed beside 6 other linters.",
 .date = .date("2026-10-17T00:00:02"),
 .layout = "page.shtml",
 ---

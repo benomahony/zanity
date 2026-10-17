@@ -365,7 +365,7 @@ def render_overview(data: dict) -> str:
     assert data["fixtures"], "results.json has no fixtures; run parity.py"
     assert data["inference"]["questions"], "results.json has no inference questions; fix the nouls adapter and rerun parity.py"
     return document([
-        *front("Comparisons", "Rule-by-rule coverage and speed beside six other linters."),
+        *front("Comparisons", f"Rule-by-rule coverage and speed beside {len(tallies(data))} other linters."),
         "Each card links to that tool's evidence.",
         *generated(data),
         "",
