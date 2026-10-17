@@ -107,6 +107,8 @@ a:hover { text-decoration: underline; }
   font-size: 15px;
 }
 .sidebar li a:hover { background: var(--border); text-decoration: none; }
+.sidebar li ul { margin: 2px 0 4px 6px; padding-left: 10px; border-left: 1px solid var(--border); }
+.sidebar li li a { padding: 3px 10px; font: 13.5px var(--mono); color: var(--fg-muted); }
 
 .external { margin-top: auto; display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
 .external a { color: var(--fg-muted); }
@@ -289,6 +291,7 @@ code.zig .punctuation_delimiter { color: var(--fg-muted); }
   }
   .sidebar ul { display: flex; flex-wrap: wrap; gap: 4px 16px; }
   .sidebar li a { margin: 0; padding: 4px 0; }
+  .sidebar li ul { margin: 0; padding: 0; border-left: 0; }
   .external { flex-direction: row; gap: 16px; }
   main { padding: 32px 16px 64px; }
   h1 { font-size: 32px; }

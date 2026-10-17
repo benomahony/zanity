@@ -18,7 +18,18 @@
 				<ul>
 					<li><a href="$site.page('').link()">Introduction</a></li>
 					<li><a href="$site.page('rules').link()">Rules</a></li>
-					<li><a href="$site.page('comparison').link()">Against the tools it replaces</a></li>
+					<li>
+						<a href="$site.page('comparison').link()">Against the tools it replaces</a>
+						<ul>
+							<li><a href="$site.page('comparison-nasa-lsp').link()">nasa-lsp</a></li>
+							<li><a href="$site.page('comparison-testdesiderata').link()">testdesiderata</a></li>
+							<li><a href="$site.page('comparison-mockbuster').link()">mockbuster</a></li>
+							<li><a href="$site.page('comparison-dddlint').link()">dddlint</a></li>
+							<li><a href="$site.page('comparison-bonsai').link()">bonsai</a></li>
+							<li><a href="$site.page('comparison-nouls').link()">nouls</a></li>
+							<li><a href="$site.page('comparison-performance').link()">performance</a></li>
+						</ul>
+					</li>
 				</ul>
 				<div class="external">
 					<a href="https://github.com/benomahony/zanity">Source</a>

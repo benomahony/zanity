@@ -386,8 +386,6 @@ def render_performance(data: dict) -> str:
     assert data["lsp"], "results.json has no editor timings; rerun parity.py without --skip-bench"
     return document([
         *front("zanity performance", "Command-line, editor and watch-mode speed and memory beside the tools zanity replaces."),
-        "# [All comparisons](/comparison/)",
-        "",
         *generated(data),
         "# Command line",
         "",
@@ -417,8 +415,6 @@ def render_tool(data: dict, name: str) -> str:
     source = f"[{name}]({external})" if external else name
     body = [
         *front(f"zanity and {name}", f"Rule-by-rule evidence for zanity's coverage of {name}."),
-        "# [All comparisons](/comparison/)",
-        "",
         f"This page compares zanity with {source} on the same source files.",
         *generated(data),
     ]
