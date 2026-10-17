@@ -4,14 +4,14 @@ const config = @import("config.zig");
 const rules = @import("rules.zig");
 
 fn parsed(arena: std.mem.Allocator, text: []const u8) !config.Config {
-    if (text.len == 0) assert.panic("parsing an empty test config; pass the TOML under test", .{});
+    if (text.len == 0) assert.panic("parsing an empty test config; pass the YAML under test", .{});
     const result = try config.parseConfig(try arena.dupe(u8, text));
     if (result.exclude_len > config.max_excludes) assert.panic("parsed {d} exclude patterns in room for {d}; parseConfig() must refuse lists longer than max_excludes", .{ result.exclude_len, config.max_excludes });
     return result;
 }
 
 fn expectProblem(text: []const u8, expected: []const u8) !void {
-    if (!std.mem.startsWith(u8, expected, config.file_name)) assert.panic("expected problem '{s}' should start with the file name; start the expected problem with zanity.toml:<line>:", .{expected});
+    if (!std.mem.startsWith(u8, expected, config.file_name)) assert.panic("expected problem '{s}' should start with the file name; start the expected problem with zanity.yaml:<line>:", .{expected});
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
     try std.testing.expectError(error.InvalidConfig, parsed(arena_state.allocator(), text));
@@ -19,23 +19,22 @@ fn expectProblem(text: []const u8, expected: []const u8) !void {
     if (config.problem_len == 0) assert.panic("the problem for '{s}' is empty; fail() must record a description of the problem", .{text});
 }
 
-test "a zanity.toml chooses rules, excludes paths and sets concurrency" {
+test "a zanity.yaml chooses rules, excludes paths and sets how --infer asks" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
     const c = try parsed(arena_state.allocator(),
-        \\# which rules run
-        \\rules = ["recursion", "long-function", 'NASA02']
-        \\exclude = [
-        \\    "vendor/",   # third-party
-        \\    "tests/golden/**",
-        \\]
-        \\
-        \\[infer]
-        \\concurrency = 1_6
-        \\threshold = 0.95
-        \\url = "http://127.0.0.1:8009/"
-        \\model = 'kev-latest'
-        \\api_key_env = "KEV_API_KEY"
+        \\# which files are skipped
+        \\exclude:
+        \\  - vendor/   # third-party
+        \\  - "tests/golden/**"
+        \\infer:
+        \\  concurrency: 16
+        \\  threshold: 0.95
+        \\  url: http://127.0.0.1:8009/
+        \\  model: 'kev-latest'
+        \\  api_key_env: "KEV_API_KEY"
+        \\rules:
+        \\  select: [recursion, long-function, NASA02]
         \\
     );
     try std.testing.expect(c.rules.?.enabled("recursion"));
@@ -50,21 +49,18 @@ test "a zanity.toml chooses rules, excludes paths and sets concurrency" {
     try std.testing.expectEqualStrings("KEV_API_KEY", c.api_key_env.?);
 }
 
-test "a [rules] table at the end selects and disables rules, as zanity init writes it" {
+test "rules selects and disables rules, as zanity init writes it" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
     const c = try parsed(arena_state.allocator(),
-        \\exclude = ["vendor/"]
-        \\
-        \\[infer]
-        \\concurrency = 4
-        \\
-        \\[rules]
-        \\select = ["all"]
-        \\disable = [
-        \\  "long-file",
-        \\  # "recursion",
-        \\]
+        \\exclude: [vendor/]
+        \\infer:
+        \\  concurrency: 4
+        \\rules:
+        \\  select: [all]
+        \\  disable:
+        \\    - long-file
+        \\    # - recursion
         \\
     );
     const chosen = c.selection(false);
@@ -72,14 +68,12 @@ test "a [rules] table at the end selects and disables rules, as zanity init writ
     try std.testing.expect(chosen.enabled("recursion"));
     try std.testing.expect(!chosen.enabled("long-file"));
     try std.testing.expectEqual(@as(?u32, 4), c.concurrency);
-    try expectProblem("[rules]\nrules = [\"all\"]\n", "zanity.toml:2: 'rules' isn't a [rules] setting; the settings are select and disable.");
-    try expectProblem("[rules]\nselect = []\n", "zanity.toml:2: 'select' is empty, so nothing would run; list at least one rule, or remove it to run the defaults.");
 }
 
 test "'all' enables every rule, including those off by default" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
-    const c = try parsed(arena_state.allocator(), "rules = [\"all\"]\ndisable = [\"long-file\"]\n");
+    const c = try parsed(arena_state.allocator(), "rules:\n  select: [all]\n  disable: [long-file]\n");
     const chosen = c.selection(false);
     try std.testing.expect(chosen.enabled("restated-type"));
     try std.testing.expect(chosen.enabled("wide-scope"));
@@ -90,7 +84,7 @@ test "'all' enables every rule, including those off by default" {
 test "disable removes rules from the defaults" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
-    const c = try parsed(arena_state.allocator(), "disable = [\"duplicate-name\", \"name-drift\"]\n");
+    const c = try parsed(arena_state.allocator(), "rules:\n  disable: [duplicate-name, name-drift]\n");
     const chosen = c.selection(false);
     try std.testing.expect(!chosen.enabled("duplicate-name"));
     try std.testing.expect(!chosen.enabled("name-drift"));
@@ -100,7 +94,7 @@ test "disable removes rules from the defaults" {
 test "strict adds the strict rules to the defaults, without what disable removes" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
-    const c = try parsed(arena_state.allocator(), "disable = [\"recursion\"]\n");
+    const c = try parsed(arena_state.allocator(), "rules:\n  disable: [recursion]\n");
     try std.testing.expect(!c.selection(false).enabled("assertion-density"));
     const chosen = c.selection(true);
     try std.testing.expect(chosen.enabled("assertion-density"));
@@ -112,46 +106,63 @@ test "strict adds the strict rules to the defaults, without what disable removes
 test "select 'strict' runs the defaults and the strict rules" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
-    const c = try parsed(arena_state.allocator(), "[rules]\nselect = [\"strict\"]\n");
+    const c = try parsed(arena_state.allocator(), "rules:\n  select: [strict]\n");
     const chosen = c.selection(false);
     try std.testing.expect(chosen.enabled("unbounded-loop"));
     try std.testing.expect(chosen.enabled("long-function"));
     try std.testing.expect(!chosen.enabled("misleading-error"));
 }
 
-test "mistakes in zanity.toml name the line and what to write" {
-    try expectProblem("rules = [\"recursions\"]\n", "zanity.toml:1: 'recursions' isn't a rule; the rules are listed in the README, 'all' names every rule, 'strict' the defaults and the strict rules, and 'zanity check --rules' takes the same names.");
-    try expectProblem("\ndisabled = []\n", "zanity.toml:2: 'disabled' isn't a setting; the settings are exclude and, under [rules], select and disable, and under [infer], url, model, api_key_env, concurrency and threshold.");
-    try expectProblem("[inference]\n", "zanity.toml:1: '[inference]' isn't a table zanity knows; the tables are [rules], [infer] and [paths.\"<pattern>\"].");
-    try expectProblem("[contexts.billing]\n", "zanity.toml:1: '[contexts]' has moved to ddd.yaml, where each domain or context lists its paths and terms; see the README.");
-    try expectProblem("[paths]\n", "zanity.toml:1: '[paths]' needs a pattern for the files it covers, such as [paths.\"tests/**\"].");
-    try expectProblem("[paths.\"\"]\n", "zanity.toml:1: a [paths] pattern is empty; name the files it covers, such as \"tests/**\".");
-    try expectProblem("[paths.\"tests/\"]\nrules = [\"recursion\"]\n", "zanity.toml:2: 'rules' isn't a [paths] setting; the only one is disable.");
-    try expectProblem("[infer]\nconcurrency = 500\n", "zanity.toml:2: concurrency is 500; it must be between 1 and 64.");
-    try expectProblem("[infer]\nthreshold = 1.5\n", "zanity.toml:2: threshold is 1.5; it must be above 0 and at most 1, such as 0.9 to report only what the model is at least 90% sure of.");
-    try expectProblem("[infer]\nthreshold = high\n", "zanity.toml:2: 'threshold' needs a number, such as threshold = 0.9.");
-    try expectProblem("[infer]\nmodels = \"x\"\n", "zanity.toml:2: 'models' isn't an [infer] setting; the settings are url, model, api_key_env, concurrency and threshold.");
-    try expectProblem("[infer]\nurl = \"localhost:8009\"\n", "zanity.toml:2: url is 'localhost:8009'; it must start with http:// or https://, such as \"http://127.0.0.1:8009\".");
-    try expectProblem("[infer]\nmodel = \"\"\n", "zanity.toml:2: 'model' is empty; name one, or remove the line to use the default.");
-    try expectProblem("rules = []\n", "zanity.toml:1: 'rules' is empty, so nothing would run; list at least one rule, or remove it to run the defaults.");
-    try expectProblem("exclude = [\"a\" \"b\"]\n", "zanity.toml:1: items in 'exclude' must be separated by commas, such as [\"a\", \"b\"].");
-    try expectProblem("rules = [\"recursion\"] extra\n", "zanity.toml:1: unexpected 'e' after a value; put each setting on its own line.");
+test "a file of only comments runs the defaults" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const c = try parsed(arena_state.allocator(), "# nothing yet\n");
+    try std.testing.expectEqual(null, c.rules);
+    try std.testing.expectEqual(@as(usize, 0), c.exclude_len);
 }
 
-test "a [paths] section turns rules off for the files its pattern matches" {
+test "the glossary may sit in zanity.yaml" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const c = try parsed(arena_state.allocator(), "contexts:\n  - name: Shared\n    forbidden: [util]\n");
+    try std.testing.expectEqual(@as(usize, 1), c.terms_len);
+    try std.testing.expectEqualStrings("util", c.terms[0].word);
+    try std.testing.expectEqualStrings("zanity.yaml", c.glossary_file);
+}
+
+test "mistakes in zanity.yaml name the line and what to write" {
+    try expectProblem("rules:\n  select: [recursions]\n", "zanity.yaml:2: 'recursions' isn't a rule; the rules are listed in the README, 'all' names every rule, 'strict' the defaults and the strict rules, and 'zanity check --rules' takes the same names.");
+    try expectProblem("\ndisabled: []\n", "zanity.yaml:2: 'disabled' isn't a setting; the settings are exclude, rules, infer and paths, and the glossary's contexts and directional.");
+    try expectProblem("[rules]\n", "zanity.yaml:1: expected a key such as 'name:'; write each setting as name: value.");
+    try expectProblem("rules: [all]\n", "zanity.yaml:1: 'rules' takes its settings on the indented lines below it, one name: value per line.");
+    try expectProblem("rules:\n  rules: [all]\n", "zanity.yaml:2: 'rules' isn't a rules setting; the settings are select and disable.");
+    try expectProblem("rules:\n  select: []\n", "zanity.yaml:2: 'select' is empty, so nothing would run; list at least one rule, or remove it to run the defaults.");
+    try expectProblem("rules:\n  select: [recursion] extra\n", "zanity.yaml:2: unexpected 'e' after a value; put each setting on its own line.");
+    try expectProblem("paths:\n  - disable: [recursion]\n", "zanity.yaml:2: a paths entry names no files; give it a pattern, such as files: tests/e2e/.");
+    try expectProblem("paths:\n  - files: tests/\n    rules: [recursion]\n", "zanity.yaml:3: 'rules' isn't a paths setting; the settings are files and disable.");
+    try expectProblem("infer:\n  concurrency: 500\n", "zanity.yaml:2: concurrency is 500; it must be between 1 and 64.");
+    try expectProblem("infer:\n  threshold: 1.5\n", "zanity.yaml:2: threshold is 1.5; it must be above 0 and at most 1, such as 0.9 to report only what the model is at least 90% sure of.");
+    try expectProblem("infer:\n  threshold: high\n", "zanity.yaml:2: 'threshold' needs a number, such as threshold: 0.9.");
+    try expectProblem("infer:\n  models: x\n", "zanity.yaml:2: 'models' isn't an infer setting; the settings are url, model, api_key_env, concurrency and threshold.");
+    try expectProblem("infer:\n  url: localhost:8009\n", "zanity.yaml:2: url is 'localhost:8009'; it must start with http:// or https://, such as http://127.0.0.1:8009.");
+    try expectProblem("infer:\n  model: \"\"\n", "zanity.yaml:2: 'model' is empty; name one, or remove the line to use the default.");
+    try expectProblem("exclude: [\"a\" \"b\"]\n", "zanity.yaml:1: items in 'exclude' must be separated by commas, such as [a, b].");
+    try expectProblem("exclude: [*.py]\n", "zanity.yaml:1: a value of 'exclude' starts with '*', which YAML reads as more than text; put the value in quotes.");
+}
+
+test "a paths entry turns rules off for the files its pattern matches" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
     var c = try parsed(arena_state.allocator(),
-        \\disable = ["name-drift"]
-        \\
-        \\[paths."src/golden_test.zig"]
-        \\disable = ["process-in-test", "filesystem-in-test"]
-        \\
-        \\[paths."tests/e2e/"]
-        \\disable = ["network-in-test"]
-        \\
-        \\[paths."*_integration.py"]
-        \\disable = ["database-in-test"]
+        \\rules:
+        \\  disable: [name-drift]
+        \\paths:
+        \\  - files: src/golden_test.zig
+        \\    disable: [process-in-test, filesystem-in-test]
+        \\  - files: tests/e2e/
+        \\    disable: [network-in-test]
+        \\  - files: "*_integration.py"
+        \\    disable: [database-in-test]
         \\
     );
     c.dir = "/repo";

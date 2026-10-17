@@ -1,4 +1,4 @@
-//! `zanity init`: a zanity.toml with every setting written out and explained, so a project can
+//! `zanity init`: a zanity.yaml with every setting written out and explained, so a project can
 //! start from the whole picture and delete what it doesn't need. Like the schema, it is written
 //! from the rules and limits in the code, so it never offers a setting or rule zanity lacks.
 //! `zanity init --minimal` writes only the settings themselves, with no notes and no rule list.
@@ -24,16 +24,16 @@ pub const Project = struct {
     pub const Count = struct { name: []const u8, files: usize };
 };
 
-/// Writes the whole zanity.toml: what applies to the whole project first, then the tables, and
+/// Writes the whole zanity.yaml: what applies to the whole project first, then the sections, and
 /// the long list of rules last, below everything else.
 pub fn renderConfig(w: *std.Io.Writer, project: Project) !void {
     if (project.present.len > usual_excludes.len) assert.panic("init found {d} usual excludes of {d}; pass only entries of init.usual_excludes that exist", .{ project.present.len, usual_excludes.len });
     if (rules.all.len == 0) assert.panic("rules.all is empty, so zanity init would list no rules; add the rules back to src/rules.zig", .{});
     if (project.minimal) return renderMinimal(w, project.present);
     try w.print(
-        \\#:schema {s}
+        \\# yaml-language-server: $schema={s}
         \\# zanity's settings for this project. Every line is optional: delete what you don't need.
-        \\# The first line lets TOML language servers complete and check this file as you type.
+        \\# The first line lets YAML language servers complete and check this file as you type.
         \\
     , .{schema.url});
     try renderFound(w, project);
@@ -47,28 +47,28 @@ pub fn renderConfig(w: *std.Io.Writer, project: Project) !void {
     try renderInferNotes(w);
     try w.writeAll(
         \\
-        \\[rules]
-        \\# Which rules run. "all" is every rule, including those off by default, and "strict" the defaults
-        \\# and the strict rules; leave `select` out to run only the defaults, and add the strict rules for
-        \\# one run with `zanity check --strict`. `zanity check --rules a,b` overrides it for one run.
-        \\select = ["all"]
+        \\rules:
+        \\  # Which rules run. "all" is every rule, including those off by default, and "strict" the
+        \\  # defaults and the strict rules; leave `select` out to run only the defaults, and add the
+        \\  # strict rules for one run with `zanity check --strict`. `zanity check --rules a,b`
+        \\  # overrides it for one run.
+        \\  select: [all]
         \\
-        \\# Rules to switch off everywhere. Every rule is listed here, with its severity, when it runs,
-        \\# and how to fix what it finds; uncomment the ones you don't want.
-        \\disable = [
+        \\  # Rules to switch off everywhere. Every rule is listed here, with its severity, when it
+        \\  # runs, and how to fix what it finds; uncomment the ones you don't want.
+        \\  disable:
         \\
     );
     try renderRuleList(w);
-    try w.writeAll("]\n");
 }
 
 /// Only the settings init chooses: the schema line, the excludes it found, and every rule.
 fn renderMinimal(w: *std.Io.Writer, present: []const []const u8) !void {
     if (present.len > usual_excludes.len) assert.panic("{d} excludes found of {d} candidates; pass only entries of init.usual_excludes", .{ present.len, usual_excludes.len });
     const before = w.end;
-    try w.print("#:schema {s}\n", .{schema.url});
+    try w.print("# yaml-language-server: $schema={s}\n", .{schema.url});
     if (present.len > 0) try renderExcludeList(w, present);
-    try w.writeAll("\n[rules]\nselect = [\"all\"]\ndisable = []\n");
+    try w.writeAll("rules:\n  select: [all]\n  disable: []\n");
     if (w.end <= before) assert.panic("zanity init --minimal left the writer at byte {d}, where it started at {d}", .{ w.end, before });
 }
 
@@ -91,14 +91,14 @@ fn renderFound(w: *std.Io.Writer, project: Project) !void {
     if (shown > project.languages.len) assert.panic("init listed {d} languages of {d}; renderFound() must list each language once", .{ shown, project.languages.len });
 }
 
-/// One commented line per rule, `#   "name",  # severity, when it runs. advice`.
+/// One commented item per rule, `    # - name  # severity, when it runs. advice`.
 fn renderRuleList(w: *std.Io.Writer) !void {
     var widest: usize = 0;
     for (rules.all) |rule| widest = @max(widest, rule.name.len);
     for (rules.all) |rule| {
         if (rule.advice.len == 0) assert.panic("rule {s} has no advice for zanity init to show; give it an .advice in src/rules.zig", .{rule.name});
-        try w.print("  # \"{s}\",", .{rule.name});
-        try w.splatByteAll(' ', widest - rule.name.len + 1);
+        try w.print("    # - {s}", .{rule.name});
+        try w.splatByteAll(' ', widest - rule.name.len + 3);
         try w.print("# {t}, {s}. {s}\n", .{ rule.severity, rules.tier_descriptions.get(rule.tier), rule.advice });
     }
     if (widest == 0) assert.panic("every rule in rules.all has an empty name; give each a .name in src/rules.zig", .{});
@@ -107,7 +107,7 @@ fn renderRuleList(w: *std.Io.Writer) !void {
 fn renderExcludes(w: *std.Io.Writer, present: []const []const u8) !void {
     if (present.len > usual_excludes.len) assert.panic("{d} excludes found of {d} candidates; pass only entries of init.usual_excludes", .{ present.len, usual_excludes.len });
     if (present.len == 0) {
-        try w.writeAll("# exclude = [\"vendor/\", \"tests/fixtures/\"]\n");
+        try w.writeAll("# exclude: [vendor/, tests/fixtures/]\n");
         return;
     }
     const before = w.end;
@@ -118,8 +118,8 @@ fn renderExcludes(w: *std.Io.Writer, present: []const []const u8) !void {
 
 fn renderExcludeList(w: *std.Io.Writer, present: []const []const u8) !void {
     if (present.len == 0) assert.panic("writing an exclude list with nothing in it; write the commented example instead", .{});
-    try w.writeAll("exclude = [");
-    for (present, 0..) |dir, i| try w.print("{s}\"{s}/\"", .{ if (i == 0) "" else ", ", dir });
+    try w.writeAll("exclude: [");
+    for (present, 0..) |dir, i| try w.print("{s}{s}/", .{ if (i == 0) "" else ", ", dir });
     try w.writeAll("]\n");
     if (present[0].len == 0) assert.panic("an empty directory name reached the excludes; init must pass only entries of usual_excludes", .{});
 }
@@ -133,23 +133,25 @@ fn renderInferNotes(w: *std.Io.Writer) !void {
         \\# as whether an error message misleads. It sends only the source of the functions it asks
         \\# about, and caches every answer. By default it asks TypeSafe's Jev, which needs
         \\# TYPESAFE_API_KEY; any other System One server works, such as Kev on your own machine.
-        \\[infer]
-        \\# url = "http://127.0.0.1:8009"    # default: TYPESAFE_BASE_URL, then TypeSafe's API
-        \\# model = "kev-latest"             # default: TYPESAFE_DEFAULT_MODEL, then jev-latest
-        \\# api_key_env = "KEV_API_KEY"      # default: TYPESAFE_API_KEY; optional except for TypeSafe
-        \\# Requests sent to the model at once, 1 to {d}.
-        \\concurrency = {d}
-        \\# How sure the model must be for a judgement to become a finding, above 0 and at most 1: 0.9
-        \\# reports only what it is at least 90% sure of, and a lower value reports more.
-        \\threshold = {d}
+        \\infer:
+        \\  # url: http://127.0.0.1:8009      # default: TYPESAFE_BASE_URL, then TypeSafe's API
+        \\  # model: kev-latest               # default: TYPESAFE_DEFAULT_MODEL, then jev-latest
+        \\  # api_key_env: KEV_API_KEY        # default: TYPESAFE_API_KEY; optional except for TypeSafe
+        \\  # Requests sent to the model at once, 1 to {d}.
+        \\  concurrency: {d}
+        \\  # How sure the model must be for a judgement to become a finding, above 0 and at most 1:
+        \\  # 0.9 reports only what it is at least 90% sure of, and a lower value reports more.
+        \\  threshold: {d}
         \\
-        \\# Rules that don't report in some files, one table per pattern (.gitignore syntax, relative
+        \\# Rules that don't report in some files, one entry per pattern (.gitignore syntax, relative
         \\# to this file). For example, end-to-end tests are meant to start processes and read files:
-        \\# [paths."tests/e2e/"]
-        \\# disable = ["process-in-test", "filesystem-in-test", "network-in-test"]
+        \\# paths:
+        \\#   - files: tests/e2e/
+        \\#     disable: [process-in-test, filesystem-in-test, network-in-test]
         \\
-        \\# The project's words for things, and the domains and contexts they belong to, go in
-        \\# ddd.yaml beside this file, in the shape of a Contextive glossary; see the README.
+        \\# The project's words for things, and the domains and contexts they belong to, go here as
+        \\# contexts, or in ddd.yaml beside this file, in the shape of a Contextive glossary; see the
+        \\# README.
         \\
     , .{ config.max_concurrency, infer.default_concurrency, infer.default_threshold });
 }

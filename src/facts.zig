@@ -13,7 +13,7 @@ pub const Definition = struct {
     column: u32,
     /// Whether code outside the module can use it: exported, `pub`, `public`, or capitalised in Go.
     public: bool = false,
-    /// The domain or context of zanity.toml it belongs to; empty for none.
+    /// The domain or context of the glossary it belongs to; empty for none.
     scope: []const u8 = "",
     /// Whether it is a method, or lives inside a function or class, so code reaches it only
     /// through what holds it.

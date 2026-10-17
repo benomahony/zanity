@@ -1,4 +1,4 @@
-//! The project's own words, from ddd.yaml: names that use a banned word or an alias of the
+//! The project's own words, from the glossary in ddd.yaml or zanity.yaml: names that use a banned word or an alias of the
 //! word the project settled on, tests filed in a different domain from the code they test, and
 //! vocabularies that contradict themselves.
 const std = @import("std");
@@ -6,7 +6,6 @@ const assert = @import("assert.zig");
 const memory = @import("memory.zig");
 const rules = @import("rules.zig");
 const config_module = @import("config.zig");
-const ddd = @import("ddd.zig");
 const naming = @import("naming.zig");
 const facts_module = @import("facts.zig");
 const Config = config_module.Config;
@@ -23,7 +22,7 @@ const max_words = 16;
 /// here can tell bounded contexts apart.
 pub fn assignScopes(anchor: Anchor, facts: *Facts) void {
     const settings = anchor.config;
-    if (settings.dir.len == 0) assert.panic("assigning scopes with no zanity.toml or ddd.yaml; anchorOf() returns null without one", .{});
+    if (settings.dir.len == 0) assert.panic("assigning scopes with no zanity.yaml or ddd.yaml; anchorOf() returns null without one", .{});
     const scopes = settings.domainsAndContexts();
     if (scopes.len == 0) return;
     var buffer: [std.fs.max_path_bytes]u8 = undefined;
@@ -44,7 +43,7 @@ pub fn checkVocabulary(anchor: Anchor, facts: *Facts, enabled: rules.Set, findin
     if (enabled.len == 0) assert.panic("vocabulary checks ran with no rules enabled; runCheck always enables at least one", .{});
     const before = findings.len;
     const run: Run = .{ .anchor = anchor, .text = facts.text, .enabled = enabled, .findings = findings };
-    if (enabled.enabled("vocabulary-conflict")) try conflicts(run);
+    if (enabled.enabled("vocabulary-conflict") and settings.glossary_file.len > 0) try conflicts(run);
     if (settings.terms_len > 0) for (facts.definitions.items()) |d| try checkName(run, d);
     if (enabled.enabled("misplaced-test") and settings.scopes_len > 0) try misplacedTests(facts, findings);
     if (findings.len < before) assert.panic("vocabulary checks dropped findings from {d} to {d}; they may only add", .{ before, findings.len });
@@ -86,7 +85,7 @@ fn checkName(run: Run, d: Definition) error{LimitExceeded}!void {
         const term = best orelse continue;
         if (term.canonical.len == 0) {
             const where = if (term.scope == 0) "" else anchor.config.scopes[term.scope - 1].name;
-            if (enabled.enabled("forbidden-term")) try findings.add(.{ .path = d.path, .line = d.line, .column = d.column, .rule = "forbidden-term", .message = try text.format("'{s}' uses '{s}', a word ddd.yaml bans{s}{s}, so the name says less than it should.", .{ d.name, word, if (where.len > 0) " in " else "", where }) });
+            if (enabled.enabled("forbidden-term")) try findings.add(.{ .path = d.path, .line = d.line, .column = d.column, .rule = "forbidden-term", .message = try text.format("'{s}' uses '{s}', a word {s} bans{s}{s}, so the name says less than it should.", .{ d.name, word, anchor.config.glossary_file, if (where.len > 0) " in " else "", where }) });
             continue;
         }
         if (!enabled.enabled("non-canonical-term")) continue;
@@ -124,7 +123,7 @@ fn conflicts(run: Run) error{LimitExceeded}!void {
     const findings = run.findings;
     const before = findings.len;
     var buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const path = try text.copy(anchor.configPath(ddd.glossary_file, &buffer));
+    const path = try text.copy(anchor.configPath(anchor.config.glossary_file, &buffer));
     const settings = anchor.config;
     const terms = settings.vocabulary();
     for (terms, 0..) |a, i| for (terms[i + 1 ..]) |b| {

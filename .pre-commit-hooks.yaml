@@ -6,11 +6,11 @@
 
 - id: zanity
   name: zanity
-  description: Check the repository with the rules zanity.toml chooses; any finding, warnings included, fails the commit.
+  description: Check the repository with the rules zanity.yaml chooses; any finding, warnings included, fails the commit.
   entry: zanity check . --fail-on warning
   language: system
   pass_filenames: false
-  files: (\.(py|pyi|zig|go|ts|mts|cts|rs|java)|(^|/)zanity\.toml)$
+  files: (\.(py|pyi|zig|go|ts|mts|cts|rs|java)|(^|/)(zanity|ddd)\.yaml)$
 
 - id: zanity-fix
   name: zanity (fix)
@@ -18,4 +18,4 @@
   entry: zanity check . --fail-on warning --fix
   language: system
   pass_filenames: false
-  files: (\.(py|pyi|zig|go|ts|mts|cts|rs|java)|(^|/)zanity\.toml)$
+  files: (\.(py|pyi|zig|go|ts|mts|cts|rs|java)|(^|/)(zanity|ddd)\.yaml)$

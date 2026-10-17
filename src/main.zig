@@ -110,16 +110,16 @@ const app: zcli.App = .{
             .{ .name = "fail-on", .metavar = "SEVERITY", .help = "Exit 1 on findings this severe or worse: error, or warning as a pre-commit hook or CI should.", .example = "warning" },
             .{ .name = "agent", .help = "Print findings for a coding agent: totals and the next command first, then each finding with its fix. On by default when CLAUDECODE is set and neither --json nor --plain is given.", .env = "ZANITY_AGENT" },
             .{ .name = "limit", .metavar = "N", .help = "With --agent, show at most N findings in all, rules first to last, and list the other rules by name; 0 shows them all.", .example = "0" },
-            .{ .name = "infer", .help = "Also ask a decision model what no deterministic check can decide, such as whether an error message misleads: TypeSafe's Jev, which needs TYPESAFE_API_KEY, or the System One server [infer] in zanity.toml names, such as a local Kev." },
+            .{ .name = "infer", .help = "Also ask a decision model what no deterministic check can decide, such as whether an error message misleads: TypeSafe's Jev, which needs TYPESAFE_API_KEY, or the System One server infer in zanity.yaml names, such as a local Kev." },
         },
     }, .{ .run = runCheck, .human = renderHuman }), zcli.command(InitOptions, InitRow, .{
         .name = "init",
-        .description = "Write a zanity.toml with every setting and rule explained, ready to trim.",
+        .description = "Write a zanity.yaml with every setting and rule explained, ready to trim.",
         .examples = &.{ "zanity init", "zanity init --minimal", "zanity init path/to/project", "zanity init --force" },
         .result_title = "Written",
-        .positional = .{ .name = "paths", .metavar = "DIR", .help = "The project's root, where zanity.toml goes.", .default = &.{"."} },
+        .positional = .{ .name = "paths", .metavar = "DIR", .help = "The project's root, where zanity.yaml goes.", .default = &.{"."} },
         .options = &.{
-            .{ .name = "force", .help = "Replace an existing zanity.toml." },
+            .{ .name = "force", .help = "Replace an existing zanity.yaml." },
             .{ .name = "minimal", .help = "Write only the settings, without the notes and the list of every rule." },
         },
     }, .{ .run = runInit, .human = renderInit }), zcli.command(UpgradeOptions, UpgradeRow, .{
@@ -145,7 +145,7 @@ const Workspace = struct {
     init_row: [1]InitRow = undefined,
     /// What `zanity upgrade` did; one run replaces one executable.
     upgrade_row: [1]UpgradeRow = undefined,
-    /// The zanity.toml in effect, for its [paths] sections.
+    /// The zanity.yaml in effect, for its paths entries.
     settings: ?*const config.Config = null,
     limits: memory.Limits,
     text: memory.Text,
@@ -656,10 +656,10 @@ fn storeProblem(ws: *Workspace) ![]const u8 {
 fn connectInference(ctx: *zcli.Context, ws: *Workspace, selected: *rules.Set, add_inferred: bool) !void {
     if (ws.inference != null) assert.panic("connecting to the decision model a second time; runCheck connects once per run", .{});
     const environ = ws.environ orelse assert.panic("--infer needs the process environment, but main did not store it in the workspace; main() must store the environment in the workspace before running a command", .{});
-    const settings = ws.settings orelse assert.panic("connecting --infer before zanity.toml was read; runCheck() reads it first", .{});
+    const settings = ws.settings orelse assert.panic("connecting --infer before zanity.yaml was read; runCheck() reads it first", .{});
     const server: infer.Server = .{ .environ = environ, .url = settings.url, .model = settings.model, .api_key_env = settings.api_key_env };
     ws.inference = infer.Inference.initInference(std.heap.page_allocator, ws.io, ws.limits, server) catch |e| switch (e) {
-        error.MissingApiKey => return ctx.fail(.usage, try ws.text.format("--infer asks TypeSafe's API, which needs an API key in {s}.", .{server.keyVariable()}), try ws.text.format("Set {s}; or point [infer] url in zanity.toml at another System One server, such as a local Kev; or run without --infer.", .{server.keyVariable()})),
+        error.MissingApiKey => return ctx.fail(.usage, try ws.text.format("--infer asks TypeSafe's API, which needs an API key in {s}.", .{server.keyVariable()}), try ws.text.format("Set {s}; or point infer url in zanity.yaml at another System One server, such as a local Kev; or run without --infer.", .{server.keyVariable()})),
         error.StoreUnavailable => return ctx.fail(.io, try storeProblem(ws), "Check that the cache directory is writable, or set ZANITY_STORE to a file zanity can create."),
         else => return e,
     };
@@ -699,18 +699,18 @@ fn fixFiles(ctx: *zcli.Context, ws: *Workspace) !void {
     }
 }
 
-/// Where the working directory sits under the zanity.toml in use; null when there is none.
+/// Where the working directory sits under the zanity.yaml in use; null when there is none.
 fn anchorOf(ws: *Workspace) !?config.Anchor {
     const settings = ws.settings orelse return null;
     if (settings.dir.len == 0) return null;
-    if (!std.fs.path.isAbsolute(settings.dir)) assert.panic("zanity.toml's folder '{s}' is relative; initConfig() records the real path", .{settings.dir});
+    if (!std.fs.path.isAbsolute(settings.dir)) assert.panic("zanity.yaml's folder '{s}' is relative; initConfig() records the real path", .{settings.dir});
     const cwd = try Io.Dir.cwd().realPathFileAlloc(ws.io, ".", std.heap.page_allocator);
     defer std.heap.page_allocator.free(cwd);
-    if (!std.mem.startsWith(u8, cwd, settings.dir)) assert.panic("zanity.toml was found in {s}, which is not at or above the working directory {s}; initConfig() must search only the working directory and the folders above it", .{ settings.dir, cwd });
+    if (!std.mem.startsWith(u8, cwd, settings.dir)) assert.panic("zanity.yaml was found in {s}, which is not at or above the working directory {s}; initConfig() must search only the working directory and the folders above it", .{ settings.dir, cwd });
     return .{ .config = settings, .below = try ws.text.copy(std.mem.trimStart(u8, cwd[settings.dir.len..], "/")) };
 }
 
-/// Drops the findings of rules that a [paths] section of zanity.toml turns off for their file,
+/// Drops the findings of rules that a paths entry of zanity.yaml turns off for their file,
 /// before they are reported or fixed.
 fn dropDisabled(ws: *Workspace) !void {
     const settings = ws.settings orelse return;

@@ -1,49 +1,33 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://raw.githubusercontent.com/benomahony/zanity/main/zanity.schema.json",
-  "title": "zanity.toml",
-  "description": "Settings for zanity check: which rules run, which files are skipped, and which model --infer asks.",
+  "title": "zanity.yaml",
+  "description": "Settings for zanity check: which rules run, which files are skipped, which model --infer asks, and optionally the project's glossary.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
     "rules": {
-      "description": "Which rules run: a [rules] table with select and disable. A list here, the older form, works as select.",
-      "oneOf": [
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "select": {
-              "description": "Run only these rules instead of the defaults. \"all\" is every rule, including those off by default, and \"strict\" the defaults and the strict rules. --rules on the command line overrides it.",
-              "type": "array",
-              "minItems": 1,
-              "uniqueItems": true,
-              "items": { "$ref": "#/definitions/ruleOrAll" }
-            },
-            "disable": {
-              "description": "Rules to leave out of the selection, such as [\"duplicate-name\"].",
-              "type": "array",
-              "uniqueItems": true,
-              "items": { "$ref": "#/definitions/rule" }
-            }
-          }
-        },
-        {
+      "description": "Which rules run.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "select": {
+          "description": "Run only these rules instead of the defaults. \"all\" is every rule, including those off by default, and \"strict\" the defaults and the strict rules. --rules on the command line overrides it.",
           "type": "array",
           "minItems": 1,
           "uniqueItems": true,
           "items": { "$ref": "#/definitions/ruleOrAll" }
+        },
+        "disable": {
+          "description": "Rules to leave out of the selection, such as [duplicate-name].",
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/definitions/rule" }
         }
-      ]
-    },
-    "disable": {
-      "description": "Rules to leave out of the selection, such as [\"duplicate-name\"]; the older form of [rules] disable.",
-      "type": "array",
-      "uniqueItems": true,
-      "items": { "$ref": "#/definitions/rule" }
+      }
     },
     "exclude": {
-      "description": "Paths to skip, in .gitignore syntax, relative to this file, such as [\"vendor/\", \"tests/fixtures/**\"].",
+      "description": "Paths to skip, in .gitignore syntax, relative to this file, such as [vendor/, tests/fixtures/].",
       "type": "array",
       "maxItems": 256,
       "items": { "type": "string", "minLength": 1 }
@@ -86,14 +70,15 @@
         }
       }
     },    "paths": {
-      "description": "Rules that don't report in some files, one table per pattern, such as [paths.\"tests/e2e/\"]. Patterns are .gitignore syntax, relative to this file.",
-      "type": "object",
-      "maxProperties": 32,
-      "propertyNames": { "minLength": 1 },
-      "additionalProperties": {
+      "description": "Rules that don't report in some files, one entry per pattern.",
+      "type": "array",
+      "maxItems": 32,
+      "items": {
         "type": "object",
         "additionalProperties": false,
+        "required": ["files"],
         "properties": {
+          "files": { "type": "string", "minLength": 1, "description": "The files it covers, in .gitignore syntax, relative to this file, such as tests/e2e/. Quote a pattern that starts with *." },
           "disable": {
             "description": "Rules that don't report in the files this pattern matches.",
             "type": "array",
@@ -102,9 +87,42 @@
           }
         }
       }
-    }
+    },
+    "directional": { "$ref": "#/definitions/words", "description": "Words that give a name a direction, so us_to_uk and uk_to_us aren't name drift.", "maxItems": 32 },
+    "contexts": {
+      "description": "The project's words for things, in the shape of a Contextive glossary. A context with no paths holds the words of the whole project. The glossary sits in zanity.yaml or in ddd.yaml, not both.",
+      "type": "array",
+      "items": { "$ref": "#/definitions/context" }
+    },
+    "imports": { "description": "Contextive's imports of other glossaries; zanity reads past them." }
   },
   "definitions": {
+    "words": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+    "context": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "description": "What the context is called; a context with paths needs one." },
+        "kind": { "enum": ["context", "domain"], "default": "context", "description": "A context's words win over a domain's, and the same name may be defined once in each context." },
+        "paths": { "$ref": "#/definitions/words", "maxItems": 16, "description": "The files it covers, in .gitignore syntax, relative to this file. Quote a pattern that starts with *." },
+        "forbidden": { "$ref": "#/definitions/words", "description": "Words no name in it may use, such as [util, manager]." },
+        "terms": { "type": "array", "items": { "$ref": "#/definitions/term" } },
+        "domainVisionStatement": { "type": "string", "description": "Contextive's summary of the context; zanity reads past it." },
+        "meta": { "description": "Contextive's details about the context; zanity reads past them." }
+      }
+    },
+    "term": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "description": "The project's word; a name using one of its aliases is respelled with it." },
+        "aliases": { "$ref": "#/definitions/words", "description": "The words it replaces, such as [client, user]." },
+        "definition": { "type": "string", "description": "What it means, for Contextive's hovers." },
+        "examples": { "type": "array", "items": { "type": "string" }, "description": "Sentences using it, for Contextive's hovers." },
+        "meta": { "description": "Contextive's details about the term; zanity reads past them." }
+      }
+    },
     "ruleOrAll": {
       "anyOf": [
         { "const": "all", "description": "Every rule, including those off by default." },
@@ -160,9 +178,9 @@
         { "const": "skipped-test", "description": "warning, on by default. Fix the test and turn it back on, or delete it; to skip only where it can't run, put the skip under a condition (skipif, an if around t.Skip), or use xfail(strict=True)." },
         { "const": "vague-test-name", "description": "warning, on by default. Name the behaviour it expects, such as test_rejects_expired_token or it(\"returns 404 for an unknown id\")." },
         { "const": "forbidden-term", "description": "warning, on by default. Rename it to say what it is or does, without the banned word." },
-        { "const": "non-canonical-term", "description": "warning, on by default. Rename it with the project's word, as ddd.yaml's terms give it." },
+        { "const": "non-canonical-term", "description": "warning, on by default. Rename it with the project's word, as the glossary's terms give it." },
         { "const": "misplaced-test", "description": "warning, on by default. Move the test next to the code it tests, or move the code to the domain the test is in." },
-        { "const": "vocabulary-conflict", "description": "error, on by default. Make the vocabulary in ddd.yaml agree with itself: one word per meaning, and none both banned and canonical." },
+        { "const": "vocabulary-conflict", "description": "error, on by default. Make the glossary agree with itself: one word per meaning, and none both banned and canonical." },
         { "const": "name-drift", "description": "warning, on by default. Pick one spelling and use it everywhere." },
         { "const": "duplicate-name", "description": "warning, on by default. Give each a name that says how it differs." },
         { "const": "restated-type", "description": "warning, on with --strict. Assert something about its value instead." },

@@ -80,7 +80,7 @@ test "a context with paths scopes its words, wherever its paths are listed" {
 test "mistakes in ddd.yaml name the line and what to write" {
     const Case = struct { yaml: []const u8, problem: []const u8 };
     const cases = [_]Case{
-        .{ .yaml = "vocabulary:\n", .problem = "ddd.yaml:1: 'vocabulary' isn't a top-level key; the keys are contexts, directional and imports." },
+        .{ .yaml = "vocabulary:\n", .problem = "ddd.yaml:1: 'vocabulary' isn't a glossary key; the keys are contexts, directional and imports, and zanity's own settings go in zanity.yaml." },
         .{ .yaml = "directional: to\n", .problem = "ddd.yaml:1: 'directional' needs a list, such as directional: [a, b], or one '- item' per line below it." },
         .{ .yaml = "contexts:\n  - name: Billing\n    paths: [src/**]\n    colour: red\n", .problem = "ddd.yaml:4: 'colour' isn't a context key; a context takes name, kind, paths, forbidden and terms, and Contextive's domainVisionStatement and meta." },
         .{ .yaml = "contexts:\n  - paths: [src/**]\n", .problem = "ddd.yaml:2: a context with paths has no name; give it one, such as name: Billing." },

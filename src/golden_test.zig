@@ -238,17 +238,19 @@ test "--fix rewrites each fixture into its .fixed file and leaves nothing more t
     try std.testing.expectEqual(@as(usize, 0), differ);
 }
 
-test "zanity.schema.json matches the rules and settings in the code" {
+test "zanity.schema.json and ddd.schema.json match the rules and settings in the code" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
     const arena = arena_state.allocator();
     var rendered: std.Io.Writer.Allocating = .init(arena);
     try schema.renderSchema(&rendered.writer);
+    var glossary: std.Io.Writer.Allocating = .init(arena);
+    try schema.renderGlossarySchema(&glossary.writer);
     const committed = try Io.Dir.cwd().readFileAlloc(std.testing.io, "zanity.schema.json", arena, .unlimited);
-    std.testing.expectEqualStrings(rendered.written(), committed) catch |e| {
-        std.debug.print("\nzanity.schema.json is out of date with the rules or settings; run zig build schema and commit the result\n", .{});
-        return e;
-    };
+    const committed_glossary = try Io.Dir.cwd().readFileAlloc(std.testing.io, "ddd.schema.json", arena, .unlimited);
+    const fresh = std.mem.eql(u8, rendered.written(), committed) and std.mem.eql(u8, glossary.written(), committed_glossary);
+    if (!fresh) std.debug.print("\nzanity.schema.json or ddd.schema.json is out of date with the rules or settings; run zig build schema and commit the result\n", .{});
+    try std.testing.expect(fresh);
 }
 
 /// Runs zanity check on a one-file project with `environ` and `flags`.
@@ -354,7 +356,7 @@ test "precedence-trap's fix shows how the code runs and the grouping it reads as
     try expectOutput(run.stdout, &.{ "It runs as `(!y) == true`; if you meant `!(y == true)`", "It runs as `a & (b == c)`; if you meant `(a & b) == c`", "It runs as `(a == b) & c`; if you meant `a == (b & c)`" }, &.{});
 }
 
-test "zanity init writes a zanity.toml that check reads, with [rules] last, and won't overwrite it unasked" {
+test "zanity init writes a zanity.yaml that check reads, with rules last, and won't overwrite it unasked" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
     const arena = arena_state.allocator();
@@ -368,9 +370,9 @@ test "zanity init writes a zanity.toml that check reads, with [rules] last, and 
     const work = try std.fs.path.join(arena, &.{ ".zig-cache", "tmp", &tmp.sub_path });
     const first = try std.process.run(arena, io, .{ .argv = &.{ zanity, "init" }, .cwd = .{ .path = work } });
     try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, first.term);
-    const written = try tmp.dir.readFileAlloc(io, "zanity.toml", arena, .unlimited);
-    try std.testing.expect(std.mem.startsWith(u8, written, "#:schema " ++ schema.url));
-    try expectOutput(written, &.{"exclude = [\"vendor/\"]"}, &.{});
+    const written = try tmp.dir.readFileAlloc(io, "zanity.yaml", arena, .unlimited);
+    try std.testing.expect(std.mem.startsWith(u8, written, "# yaml-language-server: $schema=" ++ schema.url));
+    try expectOutput(written, &.{"exclude: [vendor/]"}, &.{});
     const checked = try std.process.run(arena, io, .{ .argv = &.{ zanity, "check", "." }, .cwd = .{ .path = work } });
     try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, checked.term);
     try std.testing.expectEqualStrings("zanity: checked 1 file, no issues found\n", checked.stderr);
@@ -378,9 +380,9 @@ test "zanity init writes a zanity.toml that check reads, with [rules] last, and 
     try std.testing.expectEqual(std.process.Child.Term{ .exited = 2 }, again.term);
     const forced = try std.process.run(arena, io, .{ .argv = &.{ zanity, "init", "--force" }, .cwd = .{ .path = work } });
     try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, forced.term);
-    const full = try tmp.dir.readFileAlloc(io, "zanity.toml", arena, .unlimited);
-    const table = std.mem.indexOf(u8, full, "\n[rules]\n") orelse return error.NoRulesTable;
-    try expectOutput(full[table + 1 ..], &.{}, &.{"\n["});
+    const full = try tmp.dir.readFileAlloc(io, "zanity.yaml", arena, .unlimited);
+    const section = std.mem.indexOf(u8, full, "\nrules:\n") orelse return error.NoRulesSection;
+    try expectOutput(full[section + 1 ..], &.{}, &.{ "\nexclude:", "\ninfer:", "\npaths:", "\ncontexts:" });
 }
 
 test "zanity init --minimal writes only the settings, which check reads" {
@@ -396,7 +398,7 @@ test "zanity init --minimal writes only the settings, which check reads" {
     const work = try std.fs.path.join(arena, &.{ ".zig-cache", "tmp", &tmp.sub_path });
     const minimal = try std.process.run(arena, io, .{ .argv = &.{ zanity, "init", "--minimal" }, .cwd = .{ .path = work } });
     try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, minimal.term);
-    try std.testing.expectEqualStrings("#:schema " ++ schema.url ++ "\nexclude = [\"vendor/\"]\n\n[rules]\nselect = [\"all\"]\ndisable = []\n", try tmp.dir.readFileAlloc(io, "zanity.toml", arena, .unlimited));
+    try std.testing.expectEqualStrings("# yaml-language-server: $schema=" ++ schema.url ++ "\nexclude: [vendor/]\nrules:\n  select: [all]\n  disable: []\n", try tmp.dir.readFileAlloc(io, "zanity.yaml", arena, .unlimited));
     const checked = try std.process.run(arena, io, .{ .argv = &.{ zanity, "check", "." }, .cwd = .{ .path = work } });
     try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, checked.term);
 }
@@ -423,7 +425,7 @@ test "--strict runs the strict rules, which a plain run leaves off" {
     const zanity = try Io.Dir.cwd().realPathFileAlloc(io, paths.zanity, arena);
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
-    try tmp.dir.writeFile(io, .{ .sub_path = "zanity.toml", .data = "" });
+    try tmp.dir.writeFile(io, .{ .sub_path = "zanity.yaml", .data = "" });
     try tmp.dir.writeFile(io, .{ .sub_path = "spin.py", .data = "def spin():\n    while True:\n        pass\n" });
     const work = try std.fs.path.join(arena, &.{ ".zig-cache", "tmp", &tmp.sub_path });
     const plain = try std.process.run(arena, io, .{ .argv = &.{ zanity, "check", "-q", "--plain", "." }, .cwd = .{ .path = work } });
@@ -518,7 +520,7 @@ test "--infer keeps every answer, so a second run asks the model nothing and rep
     try expectOutput(requests, &.{"\"authorization\": \"Bearer test\""}, &.{});
 }
 
-test "--infer asks the System One server zanity.toml names, with only the key it names" {
+test "--infer asks the System One server zanity.yaml names, with only the key it names" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
     const arena = arena_state.allocator();
@@ -527,14 +529,14 @@ test "--infer asks the System One server zanity.toml names, with only the key it
     defer project.tmp.cleanup();
     defer project.mock.child.kill(io);
     const url = project.mock.env.get("TYPESAFE_BASE_URL") orelse assert.panic("startMock() set no TYPESAFE_BASE_URL", .{});
-    try project.tmp.dir.writeFile(io, .{ .sub_path = "zanity.toml", .data = try std.fmt.allocPrint(arena, "[infer]\nurl = \"{s}\"\nmodel = \"kev-latest\"\napi_key_env = \"KEV_API_KEY\"\n", .{url}) });
+    try project.tmp.dir.writeFile(io, .{ .sub_path = "zanity.yaml", .data = try std.fmt.allocPrint(arena, "infer:\n  url: {s}\n  model: kev-latest\n  api_key_env: KEV_API_KEY\n", .{url}) });
     const keyless = try project.checkInferring(arena, io);
     try expectOutput(keyless.stdout, &.{"(kev-latest is 95% sure)"}, &.{});
     const requests = try project.tmp.dir.readFileAlloc(io, "requests.log", arena, .unlimited);
     try expectOutput(requests, &.{"\"model\": \"kev-latest\""}, &.{"Bearer"});
     try project.mock.env.put("KEV_API_KEY", "local");
     try project.tmp.dir.deleteFile(io, "requests.log");
-    try project.tmp.dir.writeFile(io, .{ .sub_path = "zanity.toml", .data = try std.fmt.allocPrint(arena, "[infer]\nurl = \"{s}\"\nmodel = \"kev-4b\"\napi_key_env = \"KEV_API_KEY\"\n", .{url}) });
+    try project.tmp.dir.writeFile(io, .{ .sub_path = "zanity.yaml", .data = try std.fmt.allocPrint(arena, "infer:\n  url: {s}\n  model: kev-4b\n  api_key_env: KEV_API_KEY\n", .{url}) });
     _ = try project.checkInferring(arena, io);
     const keyed = try project.tmp.dir.readFileAlloc(io, "requests.log", arena, .unlimited);
     try expectOutput(keyed, &.{"\"authorization\": \"Bearer local\""}, &.{"Bearer test"});
@@ -575,7 +577,7 @@ test "--infer asks each unit only its own questions and skips what checks settle
     }
 }
 
-test "zanity.toml disables rules and excludes paths" {
+test "zanity.yaml disables rules and excludes paths" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
     const arena = arena_state.allocator();
@@ -587,7 +589,7 @@ test "zanity.toml disables rules and excludes paths" {
     try std.testing.expectEqualStrings("zanity: checked 1 file, no issues found\n", run.stderr);
 }
 
-test "a mistake in zanity.toml stops the run and says where" {
+test "a mistake in zanity.yaml stops the run and says where" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
     const arena = arena_state.allocator();
@@ -595,7 +597,7 @@ test "a mistake in zanity.toml stops the run and says where" {
     const zanity = try Io.Dir.cwd().realPathFileAlloc(io, paths.zanity, arena);
     const run = try std.process.run(arena, io, .{ .argv = &.{ zanity, "check", "--plain", "." }, .cwd = .{ .path = "tests/config/broken" } });
     try std.testing.expectEqual(std.process.Child.Term{ .exited = 2 }, run.term);
-    try expectOutput(run.stderr, &.{"zanity.toml:1: 'recursions' isn't a rule"}, &.{});
+    try expectOutput(run.stderr, &.{"zanity.yaml:2: 'recursions' isn't a rule"}, &.{});
 }
 
 /// One LSP message, framed as the protocol sends it.
