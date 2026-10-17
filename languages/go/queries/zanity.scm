@@ -116,6 +116,27 @@
     .)) @catch.swallowed
   (#eq? @_err "err"))
 
+; A function named as an error handler whose body is empty drops every error passed to it.
+([
+  (function_declaration
+    name: (identifier) @_handler
+    body: (block
+    .
+    "{"
+    .
+    "}"
+    .))
+  (method_declaration
+    name: (field_identifier) @_handler
+    body: (block
+    .
+    "{"
+    .
+    "}"
+    .))
+] @catch.swallowed
+  (#any-word? @_handler "except" "exception" "catch" "rescue" "error" "err"))
+
 (for_statement) @loop.outer
 
 [

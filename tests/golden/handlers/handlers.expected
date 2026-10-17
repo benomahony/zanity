@@ -1,0 +1,3 @@
+rules: swallowed-error
+exit: 0
+handlers.py:1:1: warning [swallowed-error]

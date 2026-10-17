@@ -1,0 +1,3 @@
+rules: swallowed-error
+exit: 0
+Handlers_java.java:2:5: warning [swallowed-error]

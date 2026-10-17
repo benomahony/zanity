@@ -208,6 +208,20 @@
     ]
     .)) @catch.swallowed
 
+; A function named as an error handler whose body is empty drops every error passed to it.
+; A decorated one, such as an abstract method, is wrapped in decorated_definition and left alone.
+([
+  (module
+    (function_definition
+      name: (identifier) @_handler
+      body: (block . (pass_statement) .)) @catch.swallowed)
+  (block
+    (function_definition
+      name: (identifier) @_handler
+      body: (block . (pass_statement) .)) @catch.swallowed)
+]
+  (#any-word? @_handler "except" "exception" "catch" "rescue" "error" "err"))
+
 (named_expression
   name: (_) @assignment.lhs
   value: (_) @assignment.rhs) @assignment.outer

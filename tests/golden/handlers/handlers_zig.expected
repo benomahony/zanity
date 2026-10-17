@@ -1,0 +1,3 @@
+rules: swallowed-error
+exit: 0
+handlers_zig.zig:5:1: warning [swallowed-error]

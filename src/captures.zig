@@ -4,6 +4,7 @@ const strings = @import("strings.zig");
 const Allocator = std.mem.Allocator;
 const ts = @import("ts.zig");
 const memory = @import("memory.zig");
+const naming = @import("naming.zig");
 
 pub const Id = u16;
 
@@ -17,6 +18,9 @@ pub const Predicate = union(enum) {
     eq_capture: struct { a: u32, b: u32, positive: bool, any: bool },
     eq_string: struct { capture: u32, value: []const u8, positive: bool, any: bool },
     any_of: struct { capture: u32, values: []const []const u8, positive: bool },
+    /// `#any-word? @x word...`: one of the words of `@x`, split as names are at `_` and case
+    /// changes, is one of these, ignoring case, so `handle_except` and `onCatch` both match.
+    any_word: struct { capture: u32, values: []const []const u8, positive: bool },
     ancestor: struct { capture: u32, kinds: []const []const u8, positive: bool },
     /// `#kind-eq? @x kind...`: `@x` is one of these node kinds. A wildcard child with this costs
     /// the query engine far less than an alternation of kinds, which it tracks one state per kind.
@@ -249,17 +253,26 @@ fn initPredicate(arena: Allocator, query: *const ts.Query, args: []const ts.Pred
         return .{ .eq_string = .{ .capture = capture, .value = ts.stringValue(query, args[2].value_id), .positive = positive, .any = any } };
     }
     const negated = name[0] == 'n';
-    if (strings.contains(&.{ "any-of?", "not-any-of?", "has-ancestor?", "not-has-ancestor?", "kind-eq?", "not-kind-eq?" }, name)) {
+    if (strings.contains(&.{ "any-of?", "not-any-of?", "any-word?", "not-any-word?", "has-ancestor?", "not-has-ancestor?", "kind-eq?", "not-kind-eq?" }, name)) {
         if (args.len < 3) return error.InvalidQuery;
         const values = try arena.alloc([]const u8, args.len - 2);
         for (args[2..], values) |arg, *v| v.* = ts.stringValue(query, arg.value_id);
-        if (std.mem.endsWith(u8, name, "any-of?")) return .{ .any_of = .{ .capture = capture, .values = values, .positive = !negated } };
-        if (std.mem.endsWith(u8, name, "kind-eq?")) return .{ .kind = .{ .capture = capture, .kinds = values, .positive = !negated } };
-        return .{ .ancestor = .{ .capture = capture, .kinds = values, .positive = !negated } };
+        return listPredicate(name, capture, values);
     }
     if (strings.contains(&.{ "empty?", "not-empty?" }, name)) return .{ .empty = .{ .capture = capture, .positive = !negated } };
     std.log.err("zanity does not evaluate the query predicate #{s}; rewrite the pattern with #eq?, #any-of?, #kind-eq?, #has-ancestor? or #empty?, or capture the construct structurally", .{name});
     return error.InvalidQuery;
+}
+
+/// A predicate that tests a capture against a list: of texts, words, node kinds or ancestor kinds.
+fn listPredicate(name: []const u8, capture: u32, values: []const []const u8) Predicate {
+    if (values.len == 0) assert.panic("#{s} lists nothing to compare capture {d} with", .{ name, capture });
+    if (name.len < 2 or name[name.len - 1] != '?') assert.panic("#{s} is not a predicate name; they end in '?'", .{name});
+    const positive = name[0] != 'n';
+    if (std.mem.endsWith(u8, name, "any-of?")) return .{ .any_of = .{ .capture = capture, .values = values, .positive = positive } };
+    if (std.mem.endsWith(u8, name, "any-word?")) return .{ .any_word = .{ .capture = capture, .values = values, .positive = positive } };
+    if (std.mem.endsWith(u8, name, "kind-eq?")) return .{ .kind = .{ .capture = capture, .kinds = values, .positive = positive } };
+    return .{ .ancestor = .{ .capture = capture, .kinds = values, .positive = positive } };
 }
 
 fn hasAncestor(node: ts.Node, kinds: []const []const u8) bool {
@@ -310,6 +323,9 @@ fn holds(predicate: Predicate, match: ts.QueryMatch, buffers: Buffers, text: []c
         .any_of => |q| for (nodes) |node| {
             if (oneOfText(node.text(text), q.values) != q.positive) break false;
         } else true,
+        .any_word => |q| for (nodes) |node| {
+            if (hasWord(node.text(text), q.values) != q.positive) break false;
+        } else true,
         .ancestor => |q| for (nodes) |node| {
             if (hasAncestor(node, q.kinds) != q.positive) break false;
         } else true,
@@ -327,6 +343,17 @@ fn holds(predicate: Predicate, match: ts.QueryMatch, buffers: Buffers, text: []c
 }
 
 const Sense = struct { positive: bool, any: bool };
+
+/// Whether one of the words of `name` is one of `words`, ignoring case.
+fn hasWord(name: []const u8, words: []const []const u8) bool {
+    if (words.len == 0) assert.panic("#any-word? lists no words to look for in '{s}'; give it at least one in the language's .scm files", .{name});
+    var split: naming.Words = .{ .text = name };
+    while (split.next()) |word| {
+        for (words) |w| if (std.ascii.eqlIgnoreCase(word, w)) return true;
+    }
+    if (split.at != name.len) assert.panic("splitting '{s}' into words stopped at byte {d}", .{ name, split.at });
+    return false;
+}
 
 fn oneOfText(text: []const u8, values: []const []const u8) bool {
     if (values.len == 0) assert.panic("#any-of? lists no values to compare '{s}' with; give #any-of? at least one value in the language's .scm files", .{text});
