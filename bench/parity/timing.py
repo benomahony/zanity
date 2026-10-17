@@ -184,6 +184,32 @@ def lsp_once(command: list[str], workspace: Path, env: dict[str, str] | None) ->
         proc.wait()
 
 
+def watch_once(zanity: Zanity, workspace: Path) -> tuple[float, float, int]:
+    """Seconds from starting `zanity check --watch` to its first findings, then from a save to
+    fresh ones, and how many findings it gave; each check prints one JSON line."""
+    path = workspace / LSP_FILE.name
+    assert path.is_file(), f"{path} is missing; bench_lsp copies it into the workspace first"
+    assert zanity.binary.is_file(), f"{zanity.binary} is missing; run `zig build`"
+    text = path.read_text()
+    env = zanity.env(Path(tempfile.mkdtemp(prefix="parity-watch-store-")) / "store.db")
+    started = time.perf_counter()
+    proc = subprocess.Popen([str(zanity.binary), "check", "--watch", "--json", "--quiet", "."], cwd=workspace, env=env, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    try:
+        first = json.loads(proc.stdout.readline())
+        opened = time.perf_counter() - started
+        # Let the watcher settle, so the save below is the change it answers.
+        time.sleep(1.0)
+        saved = time.perf_counter()
+        path.write_text(text + "\n")
+        line = proc.stdout.readline()
+        assert line, f"zanity check --watch exited with {proc.poll()} instead of checking again"
+        return opened, time.perf_counter() - saved, len(first)
+    finally:
+        path.write_text(text)
+        proc.kill()
+        proc.wait()
+
+
 def bench_lsp(zanity: Zanity, runs: int) -> dict[str, dict]:
     """Median time to first diagnostics and to diagnostics after a save, and memory, per server."""
     workspace = Path(tempfile.mkdtemp(prefix="parity-lsp-"))
@@ -204,6 +230,8 @@ def bench_lsp(zanity: Zanity, runs: int) -> dict[str, dict]:
             out[name] = {"error": str(error)}
             continue
         out[name] = {"first": statistics.median(s[0] for s in samples), "save": statistics.median(s[1] for s in samples), "diagnostics": samples[0][2], "memory": statistics.median(s[3] for s in samples)}
-    assert set(out) == set(servers), "every server timed or its failure recorded"
+    samples = [watch_once(zanity, workspace) for _ in range(runs)]
+    out["zanity check --watch"] = {"first": statistics.median(s[0] for s in samples), "save": statistics.median(s[1] for s in samples), "diagnostics": samples[0][2]}
+    assert set(servers) <= set(out), f"timed {sorted(out)}, but not every one of {sorted(servers)}"
     assert "error" not in out["zanity"], f"zanity's language server failed: {out['zanity']}"
     return out

@@ -311,24 +311,25 @@ def lsp_speed(data: dict) -> list[str]:
 
     def rows(key: str, show) -> list[Row]:
         assert callable(show), f"show formats a {key} for the chart, not {show!r}"
-        assert all(key in r for _, r in timed), f"a timed server has no {key!r}; run parity.py again"
-        return [(name, r[key], show(r[key]), name == "zanity") for name, r in timed]
+        measured = [(name, r) for name, r in timed if key in r]
+        assert measured, f"no timed server has a {key!r}; run parity.py again"
+        return [(name, r[key], show(r[key]), name.startswith("zanity")) for name, r in measured]
 
     table_rows = []
     for name, r in servers.items():
         if "error" in r:
             table_rows.append([name, r["error"], "", "", ""])
             continue
-        table_rows.append([name, seconds(r["first"]), seconds(r["save"]), megabytes(r["memory"]), str(r["diagnostics"])])
+        table_rows.append([name, seconds(r["first"]), seconds(r["save"]), megabytes(r["memory"]) if "memory" in r else "–", str(r["diagnostics"])])
     assert any(name == "zanity" for name, _ in timed), f"zanity's language server wasn't timed; results.json has {sorted(servers)}"
     assert timed, f"no language server was timed; each failed: {servers}"
-    assert timed[-1][0] == "zanity", f"zanity's server is timed last, so its bar ends each chart, not {timed[-1][0]}"
-    others = sum(r["memory"] for name, r in timed if name != "zanity")
+    assert timed[-1][0].startswith("zanity"), f"zanity is timed last, so its bars end each chart, not {timed[-1][0]}"
+    others = sum(r["memory"] for name, r in timed if not name.startswith("zanity"))
     held = rows("memory", megabytes)
     return [
-        "## As language servers",
+        "## As language servers, and watching",
         "",
-        f"rich's `console.py`, {data['lsp_lines']:,} lines, alone in a workspace; the median of {data['runs']}. First: from starting the server to diagnostics for the opened file. Save: from a change and save to fresh diagnostics. Memory: what the server held with the file open; an editor runs every server at once, so the others' memory adds up. nouls' server needs `TYPESAFE_API_KEY` and did not run.",
+        f"rich's `console.py`, {data['lsp_lines']:,} lines, alone in a workspace; the median of {data['runs']}. First: from starting the server to diagnostics for the opened file. Save: from a change and save to fresh diagnostics. Memory: what the server held with the file open; an editor runs every server at once, so the others' memory adds up. `zanity check --watch` re-checks on the system's file events, outside any editor, by running a fresh check for each change, so it holds no memory between checks to compare. nouls' server needs `TYPESAFE_API_KEY` and did not run.",
         "",
         *chart(rows("first", seconds), "Start to first diagnostics, shorter is better"),
         *chart(rows("save", seconds), "Save to fresh diagnostics, shorter is better"),
