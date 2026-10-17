@@ -718,7 +718,7 @@ fn checkFiles(ctx: *zcli.Context, ws: *Workspace, selected: rules.Set) !void {
         if (a.config.directional_len > 0) ws.naming.directional = a.config.directional[0..a.config.directional_len];
     }
     try naming.crossCheck(&ws.naming, &ws.facts, selected, &ws.findings);
-    if (anchor) |a| try vocabulary.checkVocabulary(a, &ws.facts, selected, &ws.findings);
+    if (anchor) |a| try vocabulary.checkVocabulary(.{ .anchor = a, .text = ws.facts.text, .enabled = selected, .findings = &ws.findings }, &ws.facts, ws.files.items());
     if (selected.enabled("recursion")) try graph.recursion(&ws.graph, &ws.facts, &ws.findings);
     const sources: structure.Sources = .{ .io = ws.io, .mine = ws.source, .theirs = ws.fixed };
     try structure.checkStructure(&ws.facts, selected, &ws.findings, sources);

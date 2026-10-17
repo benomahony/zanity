@@ -34,19 +34,58 @@ pub fn assignScopes(anchor: Anchor, facts: *Facts) void {
     if (facts.definitions.len > facts.definitions.capacity()) assert.panic("{d} definitions in room for {d}; Bounded.add() refuses more", .{ facts.definitions.len, facts.definitions.capacity() });
 }
 
-/// What the vocabulary checks report into.
-const Run = struct { anchor: Anchor, text: *memory.Text, enabled: rules.Set, findings: *memory.Bounded(Finding) };
+/// The project the vocabulary checks read and what they report into.
+pub const Run = struct { anchor: Anchor, text: *memory.Text, enabled: rules.Set, findings: *memory.Bounded(Finding) };
 
-pub fn checkVocabulary(anchor: Anchor, facts: *Facts, enabled: rules.Set, findings: *memory.Bounded(Finding)) error{LimitExceeded}!void {
-    const settings = anchor.config;
+/// `files` are every source file checked, sorted, for their module and package names.
+pub fn checkVocabulary(run: Run, facts: *Facts, files: []const []const u8) error{LimitExceeded}!void {
+    const settings = run.anchor.config;
+    const enabled = run.enabled;
+    const findings = run.findings;
     if (settings.dir.len == 0) return;
     if (enabled.len == 0) assert.panic("vocabulary checks ran with no rules enabled; runCheck always enables at least one", .{});
     const before = findings.len;
-    const run: Run = .{ .anchor = anchor, .text = facts.text, .enabled = enabled, .findings = findings };
     if (enabled.enabled("vocabulary-conflict")) try conflicts(run);
-    if (settings.terms_len > 0) for (facts.definitions.items()) |d| try checkName(run, d);
+    if (settings.terms_len > 0) {
+        for (facts.definitions.items()) |d| try checkName(run, .{ .name = d.name, .path = d.path, .line = d.line, .column = d.column, .scope = d.scope });
+        try checkPaths(run, files);
+    }
     if (enabled.enabled("misplaced-test") and settings.scopes_len > 0) try misplacedTests(facts, findings);
     if (findings.len < before) assert.panic("vocabulary checks dropped findings from {d} to {d}; they may only add", .{ before, findings.len });
+}
+
+/// A name the vocabulary checks read: a definition's, or a module's or package's, which a reader
+/// meets in every import and which only a rename of the file or directory changes.
+const Named = struct {
+    name: []const u8,
+    path: []const u8,
+    line: u32 = 0,
+    column: u32 = 0,
+    scope: []const u8 = "",
+    kind: enum { definition, module, package } = .definition,
+};
+
+/// Checks each file's module name, and each directory's package name once, on the first file in
+/// it; `files` is sorted, so a directory's files are next to each other.
+fn checkPaths(run: Run, files: []const []const u8) error{LimitExceeded}!void {
+    const settings = run.anchor.config;
+    var buffers: [2][std.fs.max_path_bytes]u8 = undefined;
+    var previous: []const u8 = "";
+    for (files, 0..) |path, i| {
+        if (i > 0 and !std.mem.lessThan(u8, files[i - 1], path)) assert.panic("'{s}' comes after '{s}'; sort the files, so a directory's files are next to each other", .{ path, files[i - 1] });
+        const relative = run.anchor.relative(path, &buffers[i % 2]);
+        if (relative.len == 0) continue;
+        const scope = if (settings.scopeOf(relative)) |s| settings.domainsAndContexts()[s].name else "";
+        var end: usize = 0;
+        while (std.mem.indexOfScalarPos(u8, relative, end, '/')) |slash| : (end = slash + 1) {
+            const shared = previous.len > slash and std.mem.eql(u8, previous[0 .. slash + 1], relative[0 .. slash + 1]);
+            if (!shared) try checkName(run, .{ .name = relative[end..slash], .path = path, .scope = scope, .kind = .package });
+        }
+        const stem = std.fs.path.stem(relative[end..]);
+        if (stem.len > 0) try checkName(run, .{ .name = stem, .path = path, .scope = scope, .kind = .module });
+        if (end > relative.len) assert.panic("'{s}' was split past its end at {d}", .{ relative, end });
+        previous = relative;
+    }
 }
 
 /// How strongly `term` applies to the definition: 0 when it doesn't, 1 for the whole project,
@@ -60,39 +99,62 @@ fn reach(settings: *const Config, term: Term, scope: []const u8) u8 {
     return if (owner.context) 3 else 2;
 }
 
-/// Reports each banned word in the definition's name, and each alias with the canonical word.
-fn checkName(run: Run, d: Definition) error{LimitExceeded}!void {
-    const anchor = run.anchor;
-    const text = run.text;
-    const enabled = run.enabled;
+/// Reports each banned word in the name, and each alias with the canonical word.
+fn checkName(run: Run, d: Named) error{LimitExceeded}!void {
     const findings = run.findings;
     const before = findings.len;
     if (d.name.len == 0) assert.panic("{s}:{d}: a definition has no name; the @name capture matched an empty node", .{ d.path, d.line + 1 });
-    const terms = anchor.config.vocabulary();
     var words: naming.Words = .{ .text = d.name };
     for (0..max_words) |_| {
         const word = words.next() orelse break;
-        var best: ?Term = null;
-        var best_reach: u8 = 0;
-        for (terms) |t| {
-            if (!std.ascii.eqlIgnoreCase(t.word, word)) continue;
-            const r = reach(anchor.config, t, d.scope);
-            if (r > best_reach) {
-                best = t;
-                best_reach = r;
-            }
-        }
-        const term = best orelse continue;
-        if (term.canonical.len == 0) {
-            const where = if (term.scope == 0) "" else anchor.config.scopes[term.scope - 1].name;
-            if (enabled.enabled("forbidden-term")) try findings.add(.{ .path = d.path, .line = d.line, .column = d.column, .rule = "forbidden-term", .message = try text.format("'{s}' uses '{s}', a word zanity.toml bans{s}{s}, so the name says less than it should.", .{ d.name, word, if (where.len > 0) " in " else "", where }) });
-            continue;
-        }
-        if (!enabled.enabled("non-canonical-term")) continue;
-        const renamed = try respelled(text, d.name, word, term.canonical);
-        try findings.add(.{ .path = d.path, .line = d.line, .column = d.column, .rule = "non-canonical-term", .message = try text.format("'{s}' says '{s}', but the project's word for it is '{s}', so a reader searching for '{s}' won't find it.", .{ d.name, word, term.canonical, term.canonical }), .fix = try text.format("Rename it to '{s}'.", .{renamed}) });
+        if (strongest(run.anchor.config, word, d.scope)) |term| try reportTerm(run, d, word, term);
     }
-    if (findings.len - before > 2 * max_words) assert.panic("'{s}' got {d} vocabulary findings; each of its {d} words gives at most one", .{ d.name, findings.len - before, max_words });
+    if (findings.len - before > max_words) assert.panic("'{s}' got {d} vocabulary findings; each of its {d} words gives at most one", .{ d.name, findings.len - before, max_words });
+}
+
+/// The vocabulary term for `word` that applies most specifically in `scope`, if any does.
+fn strongest(settings: *const Config, word: []const u8, scope: []const u8) ?Term {
+    if (word.len == 0) assert.panic("looking up an empty word; naming.Words never yields one", .{});
+    var best: ?Term = null;
+    var best_reach: u8 = 0;
+    for (settings.vocabulary()) |t| {
+        if (!std.ascii.eqlIgnoreCase(t.word, word)) continue;
+        const r = reach(settings, t, scope);
+        if (r > best_reach) {
+            best = t;
+            best_reach = r;
+        }
+    }
+    if (best != null and best_reach == 0) assert.panic("'{s}' matched a term that doesn't reach scope '{s}'", .{ word, scope });
+    return best;
+}
+
+/// Reports `word` in the name as banned, or as an alias of the term's canonical word.
+fn reportTerm(run: Run, d: Named, word: []const u8, term: Term) error{LimitExceeded}!void {
+    const text = run.text;
+    if (!std.ascii.eqlIgnoreCase(term.word, word)) assert.panic("reporting '{s}' in '{s}' under the term for '{s}'; strongest() matches by word", .{ word, d.name, term.word });
+    if (@intFromPtr(word.ptr) < @intFromPtr(d.name.ptr)) assert.panic("the word '{s}' is not inside '{s}'; pass a slice of the name from Words", .{ word, d.name });
+    const what = switch (d.kind) {
+        .definition => "",
+        .module => "The module ",
+        .package => "The package ",
+    };
+    if (term.canonical.len == 0) {
+        const settings = run.anchor.config;
+        const where = if (term.scope == 0) "" else settings.scopes[term.scope - 1].name;
+        if (run.enabled.enabled("forbidden-term")) try run.findings.add(.{ .path = d.path, .line = d.line, .column = d.column, .rule = "forbidden-term", .message = try text.format("{s}'{s}' uses '{s}', a word zanity.toml bans{s}{s}, so the name says less than it should.", .{ what, d.name, word, if (where.len > 0) " in " else "", where }) });
+        return;
+    }
+    if (!run.enabled.enabled("non-canonical-term")) return;
+    const renamed = try respelled(text, d.name, word, term.canonical);
+    const thing = switch (d.kind) {
+        .definition => "it",
+        .module => "the file",
+        .package => "the directory",
+    };
+    const extension = if (d.kind == .module) std.fs.path.extension(d.path) else "";
+    if (std.ascii.eqlIgnoreCase(renamed, d.name)) assert.panic("renaming '{s}' gave the same name; the alias '{s}' and '{s}' must differ", .{ d.name, word, term.canonical });
+    try run.findings.add(.{ .path = d.path, .line = d.line, .column = d.column, .rule = "non-canonical-term", .message = try text.format("{s}'{s}' says '{s}', but the project's word for it is '{s}', so a reader searching for '{s}' won't find it.", .{ what, d.name, word, term.canonical, term.canonical }), .fix = try text.format("Rename {s} to '{s}{s}'.", .{ thing, renamed, extension }) });
 }
 
 /// `name` with `word`, a slice of it, replaced by `canonical` in the same case: all capitals,
