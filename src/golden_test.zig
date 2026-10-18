@@ -292,6 +292,7 @@ test "--agent puts the totals and the next command first, then findings up to --
     try std.testing.expectEqual(std.process.Child.Term{ .exited = 1 }, run.term);
     try std.testing.expect(std.mem.startsWith(u8, run.stdout, "zanity: 2 errors, 2 warnings in 1/1 file; 1 [--fix].\nNext: `zanity check a.py --fix`"));
     try expectOutput(run.stdout, &.{
+        "rerun the full check with --fail-on warning. Resolve every finding in code. If the code is correct, make that correctness explicit enough for the rule to verify; never suppress the finding, disable its rule or exclude its path.\n",
         "\n\nassertion-density [error] 2 in 1 file\n",
         "\n  +1 more: --rules assertion-density --limit 0\n",
         "\nAlso, to see with --rules <name>:\n  unbounded-loop [warning] 1 in 1 file\n  assertion-message [warning] 1 in 1 file\n",

@@ -357,7 +357,10 @@ pub fn renderAgent(out: *std.Io.Writer, report: AgentReport) !void {
         const scope: CheckedPaths = .{ .paths = paths };
         try out.print("; {d} [--fix].\nNext: `zanity check {f} --fix`, fix the rest", .{ fixable, scope });
     } else try out.writeAll(".\nNext: fix these");
-    try out.writeAll(if (report.watching) "; saving a file checks again. Don't silence rules.\n" else ", rerun with --fail-on warning. Don't silence rules.\n");
+    try out.writeAll(if (report.watching)
+        "; saving a file checks again. Resolve every finding in code. If the code is correct, make that correctness explicit enough for the rule to verify; never suppress the finding, disable its rule or exclude its path.\n"
+    else
+        ", rerun the full check with --fail-on warning. Resolve every finding in code. If the code is correct, make that correctness explicit enough for the rule to verify; never suppress the finding, disable its rule or exclude its path.\n");
     const fired = Fired.initFired(findings);
     var budget = report.limit;
     var listed = false;
