@@ -233,9 +233,35 @@ pub const all = [_]Rule{
 
 pub fn find(code: []const u8) ?Rule {
     if (code.len == 0) assert.panic("looked up a rule by an empty name; pass a rule name or alias such as 'unbounded-loop'", .{});
-    if (all.len == 0) assert.panic("rules.all is empty, so '{s}' can't be found", .{code});
-    for (all) |r| if (r.answers(code)) return r;
-    return null;
+    const i = ruleIndex(code) orelse return null;
+    if (!all[i].answers(code)) assert.panic("'{s}' indexed rule {s}, which doesn't answer to it", .{ code, all[i].name });
+    return all[i];
+}
+
+/// Each rule's position in `all`, by name and by alias, so finding a rule and testing a set take
+/// one lookup however many rules there are.
+const positions = blk: {
+    @setEvalBranchQuota(1_000_000);
+    var count: usize = 0;
+    for (all) |r| count += if (r.alias.len > 0) 2 else 1;
+    var pairs: [count]struct { []const u8, u16 } = undefined;
+    var at: usize = 0;
+    for (all, 0..) |r, i| {
+        pairs[at] = .{ r.name, i };
+        at += 1;
+        if (r.alias.len > 0) {
+            pairs[at] = .{ r.alias, i };
+            at += 1;
+        }
+    }
+    break :blk std.StaticStringMap(u16).initComptime(pairs);
+};
+
+/// The position in `all` of the rule `code` names or aliases.
+pub fn ruleIndex(code: []const u8) ?u16 {
+    if (code.len == 0) assert.panic("looked up a rule by an empty name; pass a rule name or alias such as 'unbounded-loop'", .{});
+    if (all.len > std.math.maxInt(u16)) assert.panic("{d} rules outgrow the u16 positions", .{all.len});
+    return positions.get(code);
 }
 
 pub const max_needs = 8;
@@ -255,6 +281,8 @@ pub fn missing(rule: Rule, has: anytype, out: *[max_needs][]const u8) []const []
 pub const Set = struct {
     buffer: [all.len][]const u8 = undefined,
     len: usize = 0,
+    /// Which rules, by position in `all`, the set holds, so `enabled` is one lookup.
+    held: std.StaticBitSet(all.len) = .empty,
 
     /// Adds the rule `name` or `alias` answers to, every rule for `all`, including those off by
     /// default, or the defaults and the strict rules for `strict`. Returns false when no rule
@@ -296,10 +324,12 @@ pub const Set = struct {
     }
 
     pub fn include(self: *Set, name: []const u8) void {
-        if (find(name) == null) assert.panic("tried to enable '{s}', which is not a rule; check rules.all", .{name});
-        if (self.enabled(name)) return;
+        if (name.len == 0) assert.panic("enabling a rule with an empty name; pass a name from rules.all", .{});
+        const i = ruleIndex(name) orelse assert.panic("tried to enable '{s}', which is not a rule; check rules.all", .{name});
+        if (self.held.isSet(i)) return;
         if (self.len >= all.len) assert.panic("the rule set already holds all {d} rules, yet '{s}' was not among them; include() must check enabled() before adding", .{ all.len, name });
-        self.buffer[self.len] = name;
+        self.held.set(i);
+        self.buffer[self.len] = all[i].name;
         self.len += 1;
     }
 
@@ -320,8 +350,8 @@ pub const Set = struct {
     pub fn enabled(self: *const Set, name: []const u8) bool {
         if (name.len == 0) assert.panic("asked whether an empty rule name is enabled; pass a rule name", .{});
         if (self.len > all.len) assert.panic("the rule set holds {d} rules but only {d} exist; Set.include() must refuse to add past rules.all.len, so check it", .{ self.len, all.len });
-        for (self.buffer[0..self.len]) |n| if (std.mem.eql(u8, n, name)) return true;
-        return false;
+        const i = ruleIndex(name) orelse return false;
+        return self.held.isSet(i);
     }
 };
 
