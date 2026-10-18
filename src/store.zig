@@ -24,6 +24,8 @@ extern fn sqlite3_bind_double(stmt: *sqlite3_stmt, i: c_int, value: f64) c_int;
 extern fn sqlite3_column_double(stmt: *sqlite3_stmt, i: c_int) f64;
 extern fn sqlite3_column_text(stmt: *sqlite3_stmt, i: c_int) ?[*]const u8;
 extern fn sqlite3_column_bytes(stmt: *sqlite3_stmt, i: c_int) c_int;
+extern fn sqlite3_column_int64(stmt: *sqlite3_stmt, i: c_int) i64;
+extern fn sqlite3_column_type(stmt: *sqlite3_stmt, i: c_int) c_int;
 
 const ok = 0;
 const row = 100;
@@ -32,6 +34,7 @@ const open_readwrite = 0x2;
 const open_create = 0x4;
 const config_heap = 8;
 const transient: isize = -1;
+const column_null = 5;
 
 pub const schema =
     \\PRAGMA journal_mode = WAL;
@@ -110,6 +113,11 @@ const save_observation = "INSERT OR REPLACE INTO observations (path, rule, unit_
 const save_run = "INSERT INTO runs (at, path, units, asked, cached, input_tokens, output_tokens) VALUES (strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now'), ?1, ?2, ?3, ?4, ?5, ?6)";
 const save_false_positive = "INSERT OR REPLACE INTO false_positives (path, line, column, rule, message, code, version, flagged_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now'))";
 const find_analysis = "SELECT result FROM source_analyses WHERE analysis_hash = ?1 AND source_hash = ?2";
+const save_label = "INSERT OR REPLACE INTO labels (rule, unit_hash, real, labelled_at) VALUES (?1, ?2, ?3, strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now'))";
+const find_label = "SELECT real FROM labels WHERE rule = ?1 AND unit_hash = ?2";
+/// Every answer kept, newest first, with its label when it has one; ?1 narrows it to one rule,
+/// ?2 and ?3 to one path and line.
+const list_observed = "SELECT o.rule, o.path, o.line, o.unit_hash, o.unit_name, o.probability, o.threshold, l.real FROM observations o LEFT JOIN labels l ON l.rule = o.rule AND l.unit_hash = o.unit_hash WHERE (?1 = '' OR o.rule = ?1) AND (?2 = '' OR o.path = ?2) AND (?3 = 0 OR o.line = ?3) ORDER BY o.seen_at DESC";
 const touch_analysis = "UPDATE source_analyses SET used_at = strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now'), hits = hits + 1 WHERE analysis_hash = ?1";
 const save_analysis = "INSERT OR REPLACE INTO source_analyses (analysis_hash, source_hash, path, language, result, created_at, used_at, hits) VALUES (?1, ?2, ?3, ?4, ?5, strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now'), strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now'), 0)";
 
@@ -166,6 +174,22 @@ pub const RunTotals = struct {
     output_tokens: u64,
 };
 
+/// One kept answer, as `list_observed` reads it: valid until the next row is read.
+pub const Observed = struct {
+    rule: []const u8,
+    path: []const u8,
+    line: u32,
+    unit: Digest,
+    unit_name: []const u8,
+    probability: f64,
+    threshold: f64,
+    /// Whether someone confirmed the finding (true) or said it is not a problem (false).
+    real: ?bool,
+};
+
+/// Which answers `eachObserved` reads: any empty field matches every answer.
+pub const Narrow = struct { rule: []const u8 = "", path: []const u8 = "", line: u32 = 0 };
+
 /// One deterministic source analysis. `result` is a JSON document containing the local findings
 /// and every fact cross-file rules need, so `source_analyses` remains useful outside zanity.
 pub const Analysis = struct {
@@ -207,6 +231,9 @@ pub const Store = struct {
     touch_analysis: *sqlite3_stmt,
     save_analysis: *sqlite3_stmt,
     false_positive: *sqlite3_stmt,
+    save_label: *sqlite3_stmt,
+    find_label: *sqlite3_stmt,
+    list_observed: *sqlite3_stmt,
 
     /// Gives SQLite one fixed heap, then opens the store and prepares every statement, so
     /// nothing allocates after start-up. SQLite keeps the first heap for the life of the process,
@@ -239,6 +266,9 @@ pub const Store = struct {
             .touch_analysis = try prepare(db, touch_analysis),
             .save_analysis = try prepare(db, save_analysis),
             .false_positive = try prepare(db, save_false_positive),
+            .save_label = try prepare(db, save_label),
+            .find_label = try prepare(db, find_label),
+            .list_observed = try prepare(db, list_observed),
         };
         if (!configured) assert.panic("opened {s} before SQLite was given its heap; install the heap with sqlite3_config before opening the store", .{path});
         return opened;
@@ -293,6 +323,56 @@ pub const Store = struct {
         if (sqlite3_bind_double(self.observation, 10, o.threshold) != ok) return failed(self.db);
         try bindInt(self.observation, 11, @intFromBool(o.fired));
         if (sqlite3_step(self.observation) != done) return failed(self.db);
+    }
+
+    /// Records whether the finding `rule` makes about `unit` is real: confirmed, or not a problem.
+    pub fn label(self: *const Store, rule: []const u8, unit: Digest, real: bool) !void {
+        if (rule.len == 0) assert.panic("labelling a finding with no rule; pass the rule it was reported under", .{});
+        if (std.mem.indexOfNone(u8, &unit, "0123456789abcdef") != null) assert.panic("labelling '{s}' about '{s}', which is not a digest", .{ rule, &unit });
+        defer _ = sqlite3_reset(self.save_label);
+        try bind(self.save_label, 1, rule);
+        try bind(self.save_label, 2, &unit);
+        try bindInt(self.save_label, 3, @intFromBool(real));
+        if (sqlite3_step(self.save_label) != done) return failed(self.db);
+    }
+
+    /// Whether someone said `rule`'s finding about `unit` is real, if anyone has.
+    pub fn labelled(self: *const Store, rule: []const u8, unit: Digest) !?bool {
+        if (rule.len == 0) assert.panic("looking up a label with no rule; pass the rule it was reported under", .{});
+        if (std.mem.indexOfNone(u8, &unit, "0123456789abcdef") != null) assert.panic("looking up '{s}' about '{s}', which is not a digest", .{ rule, &unit });
+        defer _ = sqlite3_reset(self.find_label);
+        try bind(self.find_label, 1, rule);
+        try bind(self.find_label, 2, &unit);
+        return switch (sqlite3_step(self.find_label)) {
+            row => sqlite3_column_int64(self.find_label, 0) != 0,
+            done => null,
+            else => failed(self.db),
+        };
+    }
+
+    /// Calls `visit(context, observed)` for each kept answer `narrow` matches, newest first, until
+    /// it returns false.
+    pub fn eachObserved(self: *const Store, narrow: Narrow, context: anytype, comptime visit: fn (@TypeOf(context), Observed) anyerror!bool) !void {
+        const stmt = self.list_observed;
+        defer _ = sqlite3_reset(stmt);
+        try bind(stmt, 1, narrow.rule);
+        try bind(stmt, 2, narrow.path);
+        try bindInt(stmt, 3, narrow.line);
+        for (0..std.math.maxInt(u32)) |_| switch (sqlite3_step(stmt)) {
+            row => {
+                var unit: Digest = undefined;
+                const hash = columnText(stmt, 3);
+                if (hash.len != unit.len) assert.panic("a kept answer's unit_hash is {d} characters, not {d}; the store only keeps digests", .{ hash.len, unit.len });
+                @memcpy(&unit, hash);
+                const real: ?bool = if (sqlite3_column_type(stmt, 7) == column_null) null else sqlite3_column_int64(stmt, 7) != 0;
+                const line = sqlite3_column_int64(stmt, 2);
+                if (line < 1) assert.panic("a kept answer is on line {d}; observe() keeps lines from 1", .{line});
+                const observed: Observed = .{ .rule = columnText(stmt, 0), .path = columnText(stmt, 1), .line = @intCast(line), .unit = unit, .unit_name = columnText(stmt, 4), .probability = sqlite3_column_double(stmt, 5), .threshold = sqlite3_column_double(stmt, 6), .real = real };
+                if (!try visit(context, observed)) return;
+            },
+            done => return,
+            else => return failed(self.db),
+        };
     }
 
     /// Keeps a row for this run.
@@ -393,6 +473,15 @@ fn bind(stmt: *sqlite3_stmt, index: c_int, text: []const u8) !void {
     if (index < 1) assert.panic("binding parameter {d}; SQLite numbers parameters from 1", .{index});
     if (text.len > std.math.maxInt(c_int)) assert.panic("binding {d} bytes of text, more than SQLite takes in one parameter; shorten the function's source, or split the function", .{text.len});
     if (sqlite3_bind_text(stmt, index, text.ptr, @intCast(text.len), transient) != ok) return error.StoreUnavailable;
+}
+
+/// The text of column `index` in the current row, valid until the next row is read.
+fn columnText(stmt: *sqlite3_stmt, index: c_int) []const u8 {
+    if (index < 0) assert.panic("reading column {d}; SQLite numbers columns from 0", .{index});
+    const text = sqlite3_column_text(stmt, index) orelse return "";
+    const length = sqlite3_column_bytes(stmt, index);
+    if (length < 0) assert.panic("SQLite gave column {d} a length of {d}", .{ index, length });
+    return text[0..@intCast(length)];
 }
 
 fn bindInt(stmt: *sqlite3_stmt, index: c_int, value: u64) !void {

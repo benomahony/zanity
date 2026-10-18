@@ -581,6 +581,38 @@ test "--infer asks zanity.toml's own questions, and holds a retuned one to its o
     try expectOutput(run.stdout, &.{ "rule=\"payment-without-key\"", "severity=\"error\"", "In 'charge': A card is charged without an idempotency key" }, &.{"rule=\"misleading-error\""});
 }
 
+test "zanity mark --not-a-problem stops --infer reporting that finding for that function" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    const io = std.testing.io;
+    var project = try InferRun.initInferRun(arena, io);
+    defer project.tmp.cleanup();
+    defer project.mock.child.kill(io);
+    const first = try project.checkInferring(arena, io);
+    const at = std.mem.indexOf(u8, first.stdout, "rule=\"misleading-error\"") orelse return error.TestExpectedFinding;
+    const record = first.stdout[(std.mem.lastIndexOfScalar(u8, first.stdout[0..at], '\n') orelse 0)..at];
+    const path = between(record, "path=\"", "\"") orelse return error.TestExpectedPath;
+    const line = between(record, "line=", "\t") orelse return error.TestExpectedLine;
+    const place = try std.fmt.allocPrint(arena, "{s}:{s}", .{ path, line });
+    const marked = try std.process.run(arena, io, .{ .argv = &.{ project.zanity, "mark", place, "misleading-error", "--not-a-problem", "--plain" }, .cwd = .{ .path = project.work }, .environ_map = &project.mock.env });
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, marked.term);
+    try expectOutput(marked.stdout, &.{"real=false"}, &.{});
+    const second = try project.checkInferring(arena, io);
+    try expectOutput(second.stdout, &.{}, &.{"rule=\"misleading-error\""});
+    const stats = try std.process.run(arena, io, .{ .argv = &.{ project.zanity, "stats", "--rule", "misleading-error", "--plain" }, .cwd = .{ .path = project.work }, .environ_map = &project.mock.env });
+    try expectOutput(stats.stdout, &.{"not_a_problem=1"}, &.{});
+}
+
+/// The text after `start` up to `end` in `record`.
+fn between(record: []const u8, start: []const u8, end: []const u8) ?[]const u8 {
+    if (start.len == 0 or end.len == 0) assert.panic("looking between an empty marker in '{s}'", .{record});
+    const from = (std.mem.indexOf(u8, record, start) orelse return null) + start.len;
+    const to = std.mem.indexOfPos(u8, record, from, end) orelse return null;
+    if (to < from) assert.panic("found '{s}' at {d}, before the text it ends, at {d}", .{ end, to, from });
+    return record[from..to];
+}
+
 test "--infer asks each unit only its own questions and skips what checks settled" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();

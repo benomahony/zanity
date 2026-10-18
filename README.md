@@ -285,6 +285,8 @@ A finding is reported when the model is at least 80% sure, and says how sure it 
 
 **Cost and speed:** answers are cached in a SQLite file, `~/.cache/zanity/zanity.db` (or wherever `ZANITY_STORE` points), keyed by the function's source, so unchanged code is never asked about twice and a second run is instant. A progress line shows how many functions are answered and how long the rest will take. `[infer] concurrency` in `zanity.toml` sets how many requests run at once (default 8, up to 64).
 
+**Calibrating the questions:** `zanity mark app.py:12 cwe-15 --not-a-problem` says a finding is wrong for that function, so it is never reported there again, and `--confirm` says it is real. `zanity review cwe-15` lists unlabelled answers to mark, spread evenly from unsure to sure, so the labels cover what the model missed as well as what it found. `zanity stats` shows how often each question fires and how many of its answers are unsure (between 0.35 and 0.65; a well-posed question has few), and `zanity stats --thresholds` measures each marked question's precision and recall at a range of thresholds, to pick a `threshold` for it under `[questions."<name>"]`.
+
 **Querying what the model said:** each run also keeps every answer in the store, including the ones below the threshold, in `observations` (one row per question, function and place, with the probability, the threshold and whether it fired) and a row in `runs` with the tokens it used. Any SQLite client can read them; with [DuckDB](https://duckdb.org):
 
 ```sh

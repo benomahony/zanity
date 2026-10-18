@@ -283,6 +283,8 @@ pub const Inference = struct {
             const fired = p >= threshold;
             try self.store.observe(.{ .path = unit.path, .rule = rule.name, .unit = job.unit_hash, .unit_name = unit.name, .line = unit.line + 1, .language = unit.language, .model = self.model, .question = question, .probability = p, .threshold = threshold, .fired = fired });
             if (!fired) continue;
+            // Someone said this is not a problem for this unit, so it isn't reported again.
+            if (try self.store.labelled(rule.name, job.unit_hash) == false) continue;
             // A catalogue question's judgement is a sentence of its own; the others follow the name.
             const sentence = rule.judgement.len > 0 and std.ascii.isUpper(rule.judgement[0]);
             const message = if (sentence)

@@ -25,6 +25,7 @@ const config = @import("config.zig");
 const starter = @import("init.zig");
 const upgrade = @import("upgrade.zig");
 const edits = @import("edits.zig");
+const calibrate = @import("calibrate.zig");
 const lsp = @import("lsp.zig");
 const watch = @import("watch.zig");
 const Telemetry = @import("telemetry.zig").Telemetry;
@@ -137,7 +138,35 @@ const app: zcli.App = .{
         .description = "Serve the language server protocol on stdin and stdout: findings as diagnostics, refreshed on save, and zanity's fixes as code actions.",
         .examples = &.{"zanity lsp"},
         .result_title = "Language server",
-    }, .{ .run = runLsp }) },
+    }, .{ .run = runLsp }), zcli.command(calibrate.LabelOptions, calibrate.LabelRow, .{
+        .name = "mark",
+        .description = "Say whether a --infer finding is real: --confirm it, or mark it --not-a-problem, which stops it being reported for that function.",
+        .examples = &.{ "zanity mark app.py:12 cwe-15 --not-a-problem", "zanity mark app.py:12 vague-error --confirm" },
+        .result_title = "Marked",
+        .positional = .{ .name = "finding", .metavar = "PATH:LINE RULE", .help = "Where the finding is, as check reports it, and its rule." },
+        .options = &.{
+            .{ .name = "confirm", .help = "The finding is real." },
+            .{ .name = "not-a-problem", .help = "The finding is wrong for this function; don't report it there again." },
+        },
+    }, .{ .run = calibrate.runMark }), zcli.command(calibrate.ReviewOptions, calibrate.ReviewRow, .{
+        .name = "review",
+        .description = "List unlabelled answers to one --infer question to label, spread evenly from unsure to sure, so labels cover what the model missed as well as what it found.",
+        .examples = &.{ "zanity review cwe-15", "zanity review vague-error --limit 50" },
+        .result_title = "To label",
+        .positional = .{ .name = "rules", .metavar = "RULE", .help = "The question to review." },
+        .options = &.{
+            .{ .name = "limit", .metavar = "N", .help = "List at most N answers.", .example = "50" },
+        },
+    }, .{ .run = calibrate.runReview }), zcli.command(calibrate.StatsOptions, calibrate.StatsRow, .{
+        .name = "stats",
+        .description = "Show how often each --infer question fires and how many of its answers are unsure; with --thresholds, its precision and recall at each threshold against your labels.",
+        .examples = &.{ "zanity stats", "zanity stats --rule cwe-15", "zanity stats --thresholds" },
+        .result_title = "Questions",
+        .options = &.{
+            .{ .name = "rule", .metavar = "RULE", .help = "Show only this question.", .example = "cwe-15" },
+            .{ .name = "thresholds", .help = "Measure each labelled question's precision and recall at a range of thresholds." },
+        },
+    }, .{ .run = calibrate.runStats }) },
 };
 
 /// Everything a run needs, allocated once at startup and reused for every file.
@@ -276,7 +305,7 @@ pub fn main(init: std.process.Init) !u8 {
     return @backingInt(code);
 }
 
-fn workspaceOf(ctx: *zcli.Context) *Workspace {
+pub fn workspaceOf(ctx: *zcli.Context) *Workspace {
     const ws: *Workspace = @ptrCast(@alignCast(ctx.runtime.user_data orelse unreachable));
     if (ws.limits.files == 0) assert.panic("the workspace allows 0 files; it was not built by initWorkspace", .{});
     if (ws.files.capacity() != ws.limits.files) assert.panic("the workspace has room for {d} files but its limit is {d}; it was not built by initWorkspace", .{ ws.files.capacity(), ws.limits.files });
