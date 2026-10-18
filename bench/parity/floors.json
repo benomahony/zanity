@@ -139,7 +139,7 @@
     },
     "rust": {
       "dead-parameter": 7,
-      "dead-symbol": 18,
+      "dead-symbol": 20,
       "duplicated-expression": 1,
       "empty-handler": 1,
       "long-parameter-list": 2,

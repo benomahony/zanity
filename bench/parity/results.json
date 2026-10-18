@@ -1,6 +1,6 @@
 {
   "when": "2026-10-18",
-  "commit": "b40838c",
+  "commit": "1857167",
   "runs": 5,
   "fixtures": [
     {
@@ -1347,7 +1347,7 @@
         },
         "dead-symbol": {
           "old": 20,
-          "matched": 18
+          "matched": 20
         },
         "duplicated-expression": {
           "old": 1,
@@ -1376,8 +1376,8 @@
           "matched": 6
         },
         "dead-symbol": {
-          "zanity": 23,
-          "matched": 18
+          "zanity": 26,
+          "matched": 20
         },
         "duplicated-expression": {
           "zanity": 1,
@@ -1656,7 +1656,7 @@
     "bonsai": {
       "recall": {
         "dead-parameter": {
-          "old": 318,
+          "old": 315,
           "matched": 44
         },
         "dead-symbol": {
