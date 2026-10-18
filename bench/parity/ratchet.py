@@ -61,9 +61,9 @@ def regressions(current: dict, floors: dict) -> list[str]:
             continue
         for rule, floor in rules.items():
             matched = current_languages[language].get(rule)
-            if matched is None:
-                errors.append(f"missing language feature: {language}:{rule}")
-            elif matched < floor:
+            # Recall only records a smell the old tool reported, so a missing one is the tool's
+            # change, which additions() asks to record; zanity's own losses show as a fall.
+            if matched is not None and matched < floor:
                 errors.append(f"language recall fell: {language}:{rule} matched {matched}, floor {floor}")
     return errors
 
@@ -90,6 +90,9 @@ def additions(current: dict, floors: dict) -> list[str]:
                 gains.append(f"new language feature: {language}:{rule} matched {matched}")
             elif matched > floor:
                 gains.append(f"language recall rose: {language}:{rule} matched {matched}, floor {floor}")
+    for language, rules in floor_languages.items():
+        reported = current["language_recall"].get(language, {})
+        gains.extend(f"the tool no longer reports {language}:{rule} in its fixtures" for rule in sorted(set(rules) - set(reported)))
     return gains
 
 
@@ -97,7 +100,7 @@ def main() -> None:
     assert RESULTS.is_file(), f"{RESULTS} is missing; run the parity benchmark first"
     assert HERE.is_dir(), f"parity directory {HERE} is missing"
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--write", action="store_true", help="raise floors to the coverage in results.json")
+    parser.add_argument("--write", action="store_true", help="record the coverage in results.json as the floors")
     args = parser.parse_args()
     current = snapshot(json.loads(RESULTS.read_text()))
     floors = json.loads(FLOORS.read_text()) if FLOORS.is_file() else None
@@ -115,7 +118,7 @@ def main() -> None:
     gains = additions(current, floors)
     if gains:
         raise SystemExit(
-            "parity improved; raise the committed floor with "
+            "parity changed; record it as the committed floor with "
             f"`python3 {Path(__file__).relative_to(HERE.parent.parent)} --write`:\n  "
             + "\n  ".join(gains)
         )

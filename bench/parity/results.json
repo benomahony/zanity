@@ -1,6 +1,6 @@
 {
-  "when": "2026-10-17",
-  "commit": "7c4a2e5",
+  "when": "2026-10-18",
+  "commit": "b40838c",
   "runs": 5,
   "fixtures": [
     {
@@ -965,6 +965,109 @@
       "same_line": null,
       "others": [],
       "note": "No fixture: it comes from an embedding model in `dddlint map`, not from lint. zanity has no embedding features yet"
+    },
+    {
+      "tool": "lizard",
+      "rule": "cognitive_complexity",
+      "zanity": [
+        "deep-nesting"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-density",
+        "dead-symbol"
+      ],
+      "note": "zanity has no cognitive complexity; it reports the nesting that drives the score"
+    },
+    {
+      "tool": "lizard",
+      "rule": "cyclomatic_complexity",
+      "zanity": [
+        "complex-function"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-density",
+        "dead-symbol"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "lizard",
+      "rule": "length",
+      "zanity": [
+        "long-function"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-density",
+        "dead-symbol",
+        "long-file"
+      ],
+      "note": "Lizard warns past 1,000 lines; zanity flags 60 lines of code, as Power of Ten says"
+    },
+    {
+      "tool": "lizard",
+      "rule": "max_nested_structures",
+      "zanity": [
+        "deep-nesting"
+      ],
+      "old_fires": true,
+      "zanity_fires": false,
+      "same_line": false,
+      "others": [
+        "assertion-density",
+        "dead-symbol"
+      ],
+      "note": "Lizard warns at four nested structures and counts each elif as one more; zanity flags code nested deeper than four"
+    },
+    {
+      "tool": "lizard",
+      "rule": "max_nesting_depth",
+      "zanity": [
+        "deep-nesting"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-density",
+        "dead-symbol"
+      ],
+      "note": ""
+    },
+    {
+      "tool": "lizard",
+      "rule": "parameter_count",
+      "zanity": [
+        "long-parameter-list"
+      ],
+      "old_fires": true,
+      "zanity_fires": true,
+      "same_line": true,
+      "others": [
+        "assertion-density",
+        "dead-symbol"
+      ],
+      "note": "Lizard warns past 100 parameters; zanity flags more than four"
+    },
+    {
+      "tool": "lizard",
+      "rule": "nloc",
+      "zanity": [
+        "long-function"
+      ],
+      "old_fires": null,
+      "zanity_fires": null,
+      "same_line": null,
+      "others": [],
+      "note": "No fixture: its default limit is a million lines of code."
     }
   ],
   "languages": {
@@ -978,21 +1081,17 @@
           "old": 23,
           "matched": 23
         },
-        "duplicated-expression": {
-          "old": 2,
-          "matched": 2
-        },
         "empty-handler": {
           "old": 1,
           "matched": 1
         },
         "extractable-chunk": {
-          "old": 2,
-          "matched": 0
+          "old": 1,
+          "matched": 1
         },
         "long-function": {
-          "old": 2,
-          "matched": 0
+          "old": 1,
+          "matched": 1
         },
         "long-parameter-list": {
           "old": 4,
@@ -1003,12 +1102,16 @@
           "matched": 1
         },
         "passthrough-wrapper": {
-          "old": 4,
+          "old": 2,
           "matched": 2
         },
         "single-impl-abstraction": {
           "old": 1,
           "matched": 1
+        },
+        "structural-twins": {
+          "old": 14,
+          "matched": 2
         }
       },
       "agreement": {
@@ -1021,6 +1124,14 @@
           "matched": 23
         },
         "duplicated-expression": {
+          "zanity": 1,
+          "matched": 0
+        },
+        "extractable-block": {
+          "zanity": 1,
+          "matched": 1
+        },
+        "long-function": {
           "zanity": 1,
           "matched": 1
         },
@@ -1042,7 +1153,7 @@
         },
         "structural-twins": {
           "zanity": 2,
-          "matched": 0
+          "matched": 2
         },
         "swallowed-error": {
           "zanity": 3,
@@ -1060,10 +1171,6 @@
           "old": 20,
           "matched": 19
         },
-        "duplicated-expression": {
-          "old": 2,
-          "matched": 2
-        },
         "long-parameter-list": {
           "old": 2,
           "matched": 2
@@ -1073,8 +1180,12 @@
           "matched": 1
         },
         "passthrough-wrapper": {
-          "old": 4,
+          "old": 2,
           "matched": 2
+        },
+        "structural-twins": {
+          "old": 6,
+          "matched": 0
         }
       },
       "agreement": {
@@ -1088,7 +1199,7 @@
         },
         "duplicated-expression": {
           "zanity": 1,
-          "matched": 1
+          "matched": 0
         },
         "long-parameter-list": {
           "zanity": 2,
@@ -1118,14 +1229,6 @@
           "old": 30,
           "matched": 22
         },
-        "duplicated-expression": {
-          "old": 1,
-          "matched": 0
-        },
-        "long-function": {
-          "old": 2,
-          "matched": 0
-        },
         "long-parameter-list": {
           "old": 2,
           "matched": 2
@@ -1135,7 +1238,11 @@
           "matched": 1
         },
         "passthrough-wrapper": {
-          "old": 3,
+          "old": 2,
+          "matched": 2
+        },
+        "structural-twins": {
+          "old": 17,
           "matched": 2
         }
       },
@@ -1166,7 +1273,7 @@
         },
         "structural-twins": {
           "zanity": 2,
-          "matched": 0
+          "matched": 2
         },
         "swallowed-error": {
           "zanity": 2,
@@ -1184,13 +1291,17 @@
           "old": 21,
           "matched": 18
         },
-        "duplicated-expression": {
-          "old": 1,
-          "matched": 1
-        },
         "long-parameter-list": {
           "old": 3,
           "matched": 3
+        },
+        "passthrough-wrapper": {
+          "old": 2,
+          "matched": 2
+        },
+        "structural-twins": {
+          "old": 13,
+          "matched": 2
         }
       },
       "agreement": {
@@ -1199,12 +1310,12 @@
           "matched": 9
         },
         "dead-symbol": {
-          "zanity": 18,
+          "zanity": 19,
           "matched": 18
         },
         "duplicated-expression": {
           "zanity": 1,
-          "matched": 1
+          "matched": 0
         },
         "long-parameter-list": {
           "zanity": 3,
@@ -1216,11 +1327,11 @@
         },
         "passthrough-wrapper": {
           "zanity": 2,
-          "matched": 0
+          "matched": 2
         },
         "structural-twins": {
           "zanity": 2,
-          "matched": 0
+          "matched": 2
         },
         "swallowed-error": {
           "zanity": 1,
@@ -1236,7 +1347,7 @@
         },
         "dead-symbol": {
           "old": 20,
-          "matched": 14
+          "matched": 18
         },
         "duplicated-expression": {
           "old": 1,
@@ -1246,12 +1357,16 @@
           "old": 1,
           "matched": 1
         },
-        "long-function": {
-          "old": 2,
-          "matched": 0
-        },
         "long-parameter-list": {
           "old": 2,
+          "matched": 2
+        },
+        "passthrough-wrapper": {
+          "old": 2,
+          "matched": 2
+        },
+        "structural-twins": {
+          "old": 13,
           "matched": 2
         }
       },
@@ -1261,8 +1376,8 @@
           "matched": 6
         },
         "dead-symbol": {
-          "zanity": 18,
-          "matched": 14
+          "zanity": 23,
+          "matched": 18
         },
         "duplicated-expression": {
           "zanity": 1,
@@ -1278,7 +1393,7 @@
         },
         "passthrough-wrapper": {
           "zanity": 2,
-          "matched": 0
+          "matched": 2
         },
         "single-impl-abstraction": {
           "zanity": 1,
@@ -1286,7 +1401,7 @@
         },
         "structural-twins": {
           "zanity": 2,
-          "matched": 0
+          "matched": 2
         },
         "swallowed-error": {
           "zanity": 1,
@@ -1302,7 +1417,7 @@
         },
         "dead-symbol": {
           "old": 31,
-          "matched": 18
+          "matched": 22
         },
         "empty-handler": {
           "old": 1,
@@ -1310,6 +1425,14 @@
         },
         "long-parameter-list": {
           "old": 2,
+          "matched": 2
+        },
+        "passthrough-wrapper": {
+          "old": 2,
+          "matched": 2
+        },
+        "structural-twins": {
+          "old": 16,
           "matched": 2
         }
       },
@@ -1319,8 +1442,8 @@
           "matched": 4
         },
         "dead-symbol": {
-          "zanity": 15,
-          "matched": 15
+          "zanity": 20,
+          "matched": 20
         },
         "long-parameter-list": {
           "zanity": 2,
@@ -1328,7 +1451,7 @@
         },
         "passthrough-wrapper": {
           "zanity": 2,
-          "matched": 0
+          "matched": 2
         },
         "single-impl-abstraction": {
           "zanity": 1,
@@ -1336,7 +1459,7 @@
         },
         "structural-twins": {
           "zanity": 2,
-          "matched": 0
+          "matched": 2
         },
         "swallowed-error": {
           "zanity": 2,
@@ -1541,32 +1664,32 @@
           "matched": 37
         },
         "duplicated-expression": {
-          "old": 508,
-          "matched": 40
+          "old": 104,
+          "matched": 21
         },
         "empty-handler": {
           "old": 282,
           "matched": 0
         },
         "extractable-chunk": {
-          "old": 66,
+          "old": 31,
           "matched": 3
         },
         "long-function": {
-          "old": 236,
+          "old": 65,
           "matched": 55
         },
         "long-parameter-list": {
           "old": 450,
           "matched": 64
         },
-        "passthrough-wrapper": {
-          "old": 67,
-          "matched": 0
-        },
         "single-impl-abstraction": {
           "old": 15,
           "matched": 1
+        },
+        "structural-twins": {
+          "old": 639,
+          "matched": 28
         }
       },
       "agreement": {
@@ -1580,7 +1703,7 @@
         },
         "duplicated-expression": {
           "zanity": 22,
-          "matched": 22
+          "matched": 17
         },
         "extractable-block": {
           "zanity": 10,
@@ -1604,10 +1727,48 @@
         },
         "structural-twins": {
           "zanity": 28,
-          "matched": 0
+          "matched": 28
         },
         "swallowed-error": {
           "zanity": 25,
+          "matched": 0
+        }
+      }
+    },
+    "lizard": {
+      "recall": {
+        "cyclomatic_complexity": {
+          "old": 40,
+          "matched": 40
+        },
+        "cognitive_complexity": {
+          "old": 68,
+          "matched": 48
+        },
+        "max_nesting_depth": {
+          "old": 54,
+          "matched": 15
+        },
+        "max_nested_structures": {
+          "old": 808,
+          "matched": 26
+        }
+      },
+      "agreement": {
+        "complex-function": {
+          "zanity": 40,
+          "matched": 40
+        },
+        "deep-nesting": {
+          "zanity": 24,
+          "matched": 24
+        },
+        "long-function": {
+          "zanity": 55,
+          "matched": 0
+        },
+        "long-parameter-list": {
+          "zanity": 67,
           "matched": 0
         }
       }

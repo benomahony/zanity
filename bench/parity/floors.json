@@ -10,6 +10,11 @@
     "dddlint:forbidden": true,
     "dddlint:forbidden:module": true,
     "dddlint:test-domain-drift": true,
+    "lizard:cognitive_complexity": true,
+    "lizard:cyclomatic_complexity": true,
+    "lizard:length": true,
+    "lizard:max_nesting_depth": true,
+    "lizard:parameter_count": true,
     "mockbuster:mock-instantiation": true,
     "mockbuster:patch-call": true,
     "mockbuster:patch-context": true,
@@ -100,51 +105,54 @@
     "go": {
       "dead-parameter": 10,
       "dead-symbol": 18,
-      "duplicated-expression": 1,
-      "long-parameter-list": 3
+      "long-parameter-list": 3,
+      "passthrough-wrapper": 2,
+      "structural-twins": 2
     },
     "java": {
       "dead-parameter": 4,
-      "dead-symbol": 18,
+      "dead-symbol": 22,
       "empty-handler": 1,
-      "long-parameter-list": 2
+      "long-parameter-list": 2,
+      "passthrough-wrapper": 2,
+      "structural-twins": 2
     },
     "javascript": {
       "dead-parameter": 3,
       "dead-symbol": 19,
-      "duplicated-expression": 2,
       "long-parameter-list": 2,
       "message-chains": 1,
-      "passthrough-wrapper": 2
+      "passthrough-wrapper": 2,
+      "structural-twins": 0
     },
     "python": {
       "dead-parameter": 3,
       "dead-symbol": 23,
-      "duplicated-expression": 2,
       "empty-handler": 1,
-      "extractable-chunk": 0,
-      "long-function": 0,
+      "extractable-chunk": 1,
+      "long-function": 1,
       "long-parameter-list": 4,
       "message-chains": 1,
       "passthrough-wrapper": 2,
-      "single-impl-abstraction": 1
+      "single-impl-abstraction": 1,
+      "structural-twins": 2
     },
     "rust": {
       "dead-parameter": 7,
-      "dead-symbol": 14,
+      "dead-symbol": 18,
       "duplicated-expression": 1,
       "empty-handler": 1,
-      "long-function": 0,
-      "long-parameter-list": 2
+      "long-parameter-list": 2,
+      "passthrough-wrapper": 2,
+      "structural-twins": 2
     },
     "typescript": {
       "dead-parameter": 6,
       "dead-symbol": 22,
-      "duplicated-expression": 0,
-      "long-function": 0,
       "long-parameter-list": 2,
       "message-chains": 1,
-      "passthrough-wrapper": 2
+      "passthrough-wrapper": 2,
+      "structural-twins": 2
     }
   }
 }
