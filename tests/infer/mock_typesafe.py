@@ -1,6 +1,6 @@
 """A stand-in for TypeSafe's System One API, for testing `zanity check --infer` offline.
 
-Answers each noul question from markers in the source of the function, setting line or project
+Answers each noul question from markers in the source of the function, file, setting line or project
 files it is about: a comment
 `judge: <rule>` makes that rule's question answer 0.95, anything else 0.05.
 Each request is appended to the file named by MOCK_TYPESAFE_LOG, with the model and the
@@ -23,7 +23,7 @@ class Handler(BaseHTTPRequestHandler):
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         assert body.get("model"), "zanity sent no model; tai names one in every request"
         state = body["state"]
-        source = state.get("function") or state.get("line") or state.get("files") or state.get("repeated")
+        source = state.get("function") or state.get("line") or state.get("files") or state.get("repeated") or state.get("source")
         judged = set(re.findall(r"judge: ([a-z-]+)", source))
         answers = {name: {"type": "noul", "noul": 0.95 if name in judged else 0.05} for name in body["questions"]}
         log = os.environ.get("MOCK_TYPESAFE_LOG")

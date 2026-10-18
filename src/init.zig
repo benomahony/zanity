@@ -91,17 +91,19 @@ fn renderFound(w: *std.Io.Writer, project: Project) !void {
     if (shown > project.languages.len) assert.panic("init listed {d} languages of {d}; renderFound() must list each language once", .{ shown, project.languages.len });
 }
 
-/// One commented line per rule, `#   "name",  # severity, when it runs. advice`.
+/// One commented line per rule written in src/rules.zig, `#   "name",  # severity, when it runs.
+/// advice`, then one for the catalogue questions together.
 fn renderRuleList(w: *std.Io.Writer) !void {
     var widest: usize = 0;
-    for (rules.all) |rule| widest = @max(widest, rule.name.len);
-    for (rules.all) |rule| {
+    for (rules.core) |rule| widest = @max(widest, rule.name.len);
+    for (rules.core) |rule| {
         if (rule.advice.len == 0) assert.panic("rule {s} has no advice for zanity init to show; give it an .advice in src/rules.zig", .{rule.name});
         try w.print("  # \"{s}\",", .{rule.name});
         try w.splatByteAll(' ', widest - rule.name.len + 1);
         try w.print("# {t}, {s}. {s}\n", .{ rule.severity, rules.tier_descriptions.get(rule.tier), rule.advice });
     }
     if (widest == 0) assert.panic("every rule in rules.all has an empty name; give each a .name in src/rules.zig", .{});
+    try w.print("  # ...and {d} catalogue questions, named for their family such as \"cwe-89\" or \"ext-distributed-001\", that --infer asks about each function, file or the project's build files; select or disable them by name like any rule.\n", .{rules.catalogue.questions.len});
 }
 
 fn renderExcludes(w: *std.Io.Writer, present: []const []const u8) !void {

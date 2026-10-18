@@ -68,3 +68,40 @@ test "the catalogue and the rules agree on which rule detects which entry" {
     };
     try std.testing.expectEqual(@as(usize, 0), problems);
 }
+
+const Question = struct { id: []const u8, question: []const u8, severity: []const u8 };
+
+test "each catalogue question asks about a family no rule detects, as catalogue/questions.json says" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    const io = std.testing.io;
+    const catalogue = try std.json.parseFromSliceLeaky(Catalogue, arena, try std.Io.Dir.cwd().readFileAlloc(io, "catalogue/catalogue.json", arena, .unlimited), .{ .ignore_unknown_fields = true });
+    const listed = try std.json.parseFromSliceLeaky([]const Question, arena, try std.Io.Dir.cwd().readFileAlloc(io, "catalogue/questions.json", arena, .unlimited), .{ .ignore_unknown_fields = true });
+    var problems: usize = 0;
+    if (listed.len != rules.catalogue.questions.len) {
+        std.debug.print("\ncatalogue/questions.json lists {d} questions but src/catalogue_questions.zig has {d}; run python3 catalogue/questions.py", .{ listed.len, rules.catalogue.questions.len });
+        problems += 1;
+    }
+    for (listed, 0..) |q, i| {
+        const rule = if (i < rules.catalogue.questions.len) rules.catalogue.questions[i] else break;
+        if (!std.mem.eql(u8, rule.alias, q.id) or !std.mem.eql(u8, rule.question, q.question)) {
+            std.debug.print("\n{s} in catalogue/questions.json differs from rule {s}; run python3 catalogue/questions.py", .{ q.id, rule.name });
+            problems += 1;
+        }
+        const entry = entryById(catalogue.entries, q.id) orelse {
+            std.debug.print("\nthe question {s} names a family catalogue/catalogue.json doesn't have", .{q.id});
+            problems += 1;
+            continue;
+        };
+        if (entry.rule_ids.len > 0) {
+            std.debug.print("\n{s} is detected by {s}, so asking about it wastes a question; remove it from catalogue/questions.json", .{ q.id, entry.rule_ids[0] });
+            problems += 1;
+        }
+        if (rule.severity == .@"error" and std.mem.eql(u8, entry.assessment_kind, "risk_indicator")) {
+            std.debug.print("\n{s} reports errors, but the catalogue says a risk indicator never proves a bug; make it a warning in catalogue/questions.json", .{q.id});
+            problems += 1;
+        }
+    }
+    try std.testing.expectEqual(@as(usize, 0), problems);
+}

@@ -742,12 +742,24 @@ pub fn checkUnawaited(self: *File) !void {
 }
 
 pub fn checkLength(self: *File, root: ts.Node) !void {
+    try recordFile(self, root);
     var lines: u32 = 0;
     for (self.code_lines) |is_code| lines += @intFromBool(is_code);
     if (lines > self.code_lines.len) assert.panic("{s}: counted {d} code lines among {d}; code_lines must hold one flag per line of this file", .{ self.work.facts.path, lines, self.code_lines.len });
     if (lines <= rules.max_file_lines) return;
     _ = try self.report(root, "long-file", try self.say("This file has {d} lines of code; past {d}, it is hard to find things in or to hold in mind.", .{ lines, rules.max_file_lines }));
     if (lines == 0) assert.panic("{s}: reported a long file with no code; checkLength() must report only past rules.max_file_lines", .{self.work.facts.path});
+}
+
+/// Records the whole file as a unit for --infer, for questions no single function shows, such as
+/// what a module imports or how it is laid out.
+pub fn recordFile(self: *File, root: ts.Node) !void {
+    const facts = self.work.facts;
+    if (!facts.collect_units or self.source.len == 0) return;
+    const last = ts.ts_node_end_point(root).row;
+    if (ts.ts_node_end_byte(root) > self.source.len) assert.panic("{s}: the tree ends at byte {d} of {d}", .{ facts.path, ts.ts_node_end_byte(root), self.source.len });
+    if (facts.path.len == 0) assert.panic("recording a file with no path; set facts.path before walking it", .{});
+    try facts.unit(std.fs.path.basename(facts.path), self.source, .{ .kind = .file, .reports_error = false, .at = .{ 0, 0, last } });
 }
 
 /// Reports a finding a query captured as `@finding.<rule>`, with the rule's message about the code.

@@ -62,10 +62,32 @@ def intro(readme: list[str]) -> list[str]:
     return [line for line in lines if not line.startswith("Fast, deterministic")]
 
 
+CATALOGUE_RULE = re.compile(r"^(cwe|ext)-")
+
+
+def catalogue_questions() -> list[str]:
+    """A table of the questions --infer asks for each catalogue family no rule detects."""
+    questions = json.loads((REPO / "catalogue" / "questions.json").read_text())
+    assert questions, "catalogue/questions.json lists no questions; run catalogue/questions.py"
+    asked = {"function": "each function", "file": "each file", "project": "the build and CI files"}
+    rows = [f"| `{q['id'].lower()}` | {asked[q['scope']]} | {q['message'].partition('. ')[0]} | {q['severity']} |" for q in questions]
+    assert len(rows) == len({q["id"] for q in questions}), "catalogue/questions.json lists a family twice"
+    return [
+        "",
+        "# [Catalogue questions]($heading.id('catalogue-questions'))",
+        "",
+        f"With `--infer`, zanity also asks the model one question for each of {len(rows)} families of the engineering error catalogue that no deterministic rule detects. Each is a rule named for its family: select or disable it, or its whole family of findings, by that name.",
+        "",
+        "| Rule | Asked about | Finding | Severity |",
+        "|---|---|---|---|",
+        *rows,
+    ]
+
+
 def undescribed(rules_page: str) -> list[str]:
     """A table of the rules README.md doesn't describe, from what the schema says of each."""
     schema = json.loads((REPO / "zanity.schema.json").read_text())
-    entries = [e for e in schema["definitions"]["rule"]["oneOf"] if not e["description"].startswith("The NASA code")]
+    entries = [e for e in schema["definitions"]["rule"]["oneOf"] if not e["description"].startswith("The NASA code") and not CATALOGUE_RULE.match(e["const"])]
     missing = [e for e in entries if f"`{e['const']}`" not in rules_page]
     assert entries, "zanity.schema.json lists no rules; run `zig build schema`"
     assert len(missing) < len(entries), f"README.md's rules section describes none of the {len(entries)} rules; check its headings"
@@ -88,7 +110,7 @@ def main() -> None:
         if name == "index.smd":
             body = intro(readme) + body
         if name == "rules.smd":
-            body += undescribed("\n".join(body))
+            body += undescribed("\n".join(body)) + catalogue_questions()
         written[name] = page((title, description, layout), body, order)
     for name, text in written.items():
         (CONTENT / name).write_text(text)

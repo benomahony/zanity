@@ -565,9 +565,21 @@ test "--infer asks each unit only its own questions and skips what checks settle
     defer project.mock.child.kill(std.testing.io);
     _ = try project.checkInferring(arena, std.testing.io);
     const requests = try project.tmp.dir.readFileAlloc(std.testing.io, "requests.log", arena, .unlimited);
-    try std.testing.expectEqual(@as(usize, 16), std.mem.count(u8, requests, "\n"));
-    var lines = std.mem.tokenizeScalar(u8, requests, '\n');
-    while (lines.next()) |line| {
+    // Sixteen functions, tests, fixtures, settings and the project, each asked at least once; a
+    // unit with more questions than one request carries is asked in several.
+    try std.testing.expect(std.mem.count(u8, requests, "\n") >= 16);
+    // Every request a unit needed, joined, keyed by the unit's first line.
+    var asked: std.StringArrayHashMapUnmanaged(std.ArrayList(u8)) = .empty;
+    var requested = std.mem.tokenizeScalar(u8, requests, '\n');
+    while (requested.next()) |request| {
+        const logged = try std.json.parseFromSliceLeaky(struct { function: []const u8, questions: []const []const u8 }, arena, request, .{ .ignore_unknown_fields = true });
+        try std.testing.expect(logged.questions.len > 0 and logged.questions.len <= 64);
+        const entry = try asked.getOrPut(arena, logged.function);
+        if (!entry.found_existing) entry.value_ptr.* = .empty;
+        try entry.value_ptr.appendSlice(arena, request);
+    }
+    for (asked.values()) |joined| {
+        const line = joined.items;
         const fine = std.mem.indexOf(u8, line, "def fine") != null;
         const is_test = std.mem.indexOf(u8, line, "def test_") != null;
         const is_fixture = std.mem.indexOf(u8, line, "@pytest.fixture") != null;

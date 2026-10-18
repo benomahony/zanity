@@ -1,0 +1,2303 @@
+[
+ {
+  "id": "CWE-15",
+  "question": "Does the function let a untrusted input (a request, upload, message or another user, not the program's own arguments or configuration) choose a system or configuration setting, such as an environment variable, config key, database connection option or process setting, without restricting which settings or values are allowed?",
+  "message": "Input decides a system or configuration setting. Allow only a fixed set of settings and values, and reject everything else",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-76",
+  "question": "Does the function neutralise some dangerous characters or sequences in input but miss equivalent forms of them, such as alternate encodings, Unicode look-alikes, different case or other spellings with the same meaning?",
+  "message": "Dangerous input is filtered in one form but equivalent forms get through. Decode and normalise the input first, or allow only known-good characters",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-112",
+  "question": "Does the function parse XML from an untrusted source and use it without validating it against the expected schema or structure?",
+  "message": "Untrusted XML is used without checking it matches the expected schema. Validate it against the schema before reading values from it",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-115",
+  "question": "Does the function interpret input in a security-relevant way that could differ from what its sender intended, such as guessing a type, encoding or format, or trusting a field whose meaning is ambiguous?",
+  "message": "Input could be read differently from what was meant, in a way that affects security. Parse it strictly in one declared format and reject anything ambiguous",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-130",
+  "question": "Does the function trust a length or size field read from a message or structure without checking it against the actual amount of data received?",
+  "message": "A length field from input is trusted without checking the real data size. Check the declared length against the bytes actually available before using it",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-140",
+  "question": "Does the function join values into a delimited string, such as CSV, a header, a path list or a composite key, where a value from untrusted input could contain the delimiter and is not escaped?",
+  "message": "An untrusted value could contain the delimiter and split or merge fields. Escape delimiters, or use a format with proper quoting",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-166",
+  "question": "Does the function parse input that must contain a particular delimiter, terminator, quote or marker without handling the case where that element is missing?",
+  "message": "Input missing an expected delimiter or terminator is not handled. Check the element is present and reject the input when it is not",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-167",
+  "question": "Does the function parse input without handling extra, repeated or unexpected delimiters, quotes, separators or other special elements?",
+  "message": "Extra special characters in input are not handled. Reject input with unexpected or repeated special elements, or parse with a strict grammar",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-168",
+  "question": "Does the function parse input with paired or nested special characters, such as brackets or quotes, without handling pairs that are unbalanced, out of order or improperly nested?",
+  "message": "Unbalanced or badly nested pairs in input are not handled. Check pairs match and nest correctly, and reject input when they do not",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-178",
+  "question": "Does the function compare names, paths, identifiers, credentials or extensions in a way where case sensitivity differs from the system that uses them, so a different case could bypass a check or reach another resource?",
+  "message": "Case is handled differently here than where the value is used, so a different case can bypass the check. Normalise case consistently, or compare the way the target system does",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-179",
+  "question": "Does the function validate input before decoding, normalising, unescaping or otherwise transforming it, so the transformation could produce a value the validation would have rejected?",
+  "message": "Input is validated before it is transformed, so the transformed value is not checked. Decode and normalise first, then validate",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-182",
+  "question": "Does the function remove dangerous sequences from input in a single pass, so what remains can collapse into a dangerous value, for example ....// becoming ../ after removing ../?",
+  "message": "Removing dangerous text once can leave dangerous text behind. Reject input containing it instead of stripping, or repeat until nothing changes",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-183",
+  "question": "Does the function allow inputs through an allow list or pattern that is broader than intended, so it admits values that are unsafe?",
+  "message": "The allow list admits values that are not safe. Narrow the list or pattern to exactly the values that are safe",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-184",
+  "question": "Does the function protect against dangerous input using a list of disallowed values, characters or patterns that is incomplete?",
+  "message": "The deny list misses dangerous values. Use an allow list of known-good values instead of a deny list",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-186",
+  "question": "Does the function use a regular expression to detect dangerous or invalid values that fails to match some of the values it is meant to catch, for example missing anchors, case or alternate forms?",
+  "message": "The regular expression misses some of the values it should catch. Anchor it and test it against every form the dangerous value can take",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-190",
+  "question": "Does the function perform integer arithmetic, such as addition, multiplication or a size calculation, that could overflow or wrap around, where the result is then used for allocation, indexing, a loop bound or a security decision?",
+  "message": "This integer arithmetic can overflow and produce a small or negative value. Check the operands against the type's limits before the arithmetic, or use checked arithmetic",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-191",
+  "question": "Does the function subtract integers in a way that could go below the type's minimum and wrap around, particularly with unsigned values used as sizes or indexes?",
+  "message": "This subtraction can wrap around below zero. Check the operands first so the result stays in range",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-193",
+  "question": "Does the function use a maximum, minimum, length or loop bound that is off by one, such as <= where < is needed, or a buffer one element too small?",
+  "message": "A bound here is off by one. Check the first and last values, and whether each comparison should be inclusive or exclusive",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-201",
+  "question": "Does the function send, return or serialise data to a caller, client or other system that includes sensitive fields, such as passwords, tokens, secrets or personal data, that the recipient should not see?",
+  "message": "Sensitive fields are included in data sent to someone who should not see them. Send only the fields the recipient needs",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-204",
+  "question": "Does the function return different responses, status codes or messages depending on security-relevant state in a way that tells an unauthorised caller something, such as whether a username exists?",
+  "message": "Different responses reveal internal state, such as whether an account exists. Return the same response for every failure case",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-205",
+  "question": "Does the function behave observably differently depending on secret or internal state, for example in which calls it makes, what it returns or how it fails, in a way that reveals that state to an unauthorised caller?",
+  "message": "Observable behaviour reveals internal or secret state. Make the behaviour the same whichever way the secret decision goes",
+  "severity": "info",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-208",
+  "question": "Does the function compare secrets, such as passwords, tokens, MACs or API keys, with an ordinary equality check or early return that takes longer the more characters match?",
+  "message": "Comparing secrets this way leaks how much of them matched through timing. Use a constant-time comparison",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-212",
+  "question": "Does the function store, export, share or send a resource, such as a document, record, message or file, without removing sensitive information it contains first?",
+  "message": "Sensitive information is left in data that is stored or shared. Remove or redact it before the data leaves",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-213",
+  "question": "Does the function expose information that the code intends to share but that users, administrators or data subjects would consider sensitive, such as personal details, location or internal identifiers?",
+  "message": "This shares information that others would consider sensitive. Check it against the privacy policy and share only what is needed",
+  "severity": "info",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-214",
+  "question": "Does the function start a process with a password, token, key or other secret in its command-line arguments or environment, where other processes could see it?",
+  "message": "A secret is passed on the command line or in the environment, where other processes can read it. Pass it through standard input, a file with restricted permissions or a secret store",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-222",
+  "question": "Does the function truncate security-relevant information, such as usernames, source addresses, request details or error causes, when logging or displaying it, so the source or nature of an attack could be hidden?",
+  "message": "Security-relevant information is truncated, which can hide an attack. Record it in full, or record that it was truncated",
+  "severity": "info",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-223",
+  "question": "Does the function perform or reject a security-relevant action, such as a login, permission change or access denial, without recording who did it, what was affected and the outcome?",
+  "message": "A security-relevant action is not recorded with who, what and the outcome. Log the actor, the target and the result",
+  "severity": "info",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-224",
+  "question": "Does the function record security-relevant events using an alias, display name or non-canonical identifier for the entity instead of its canonical identity?",
+  "message": "Security events are recorded under an alias rather than the real identity. Log the canonical identifier of the entity",
+  "severity": "info",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-229",
+  "question": "Does the function read values from external input, such as a request, message or parsed document, without handling a value that is missing, empty, null or repeated?",
+  "message": "Missing, empty or repeated values in external input are not handled. Check each value and report which one is wrong",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-233",
+  "question": "Does the function read named parameters or fields from external input, such as a request, message or parsed document, without handling ones that are missing, undefined or unexpected?",
+  "message": "Missing or unexpected fields in external input are not handled. Validate the fields and report which one is wrong",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-237",
+  "question": "Does the function read nested fields from structured external input, such as a request body, message or parsed document, without checking that they exist and have the expected structure, or validating the whole input against a schema?",
+  "message": "Nested fields of external input are read without checking its structure. Validate the input against a schema first",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-241",
+  "question": "Does the function take a value from external input, such as a request body, message or parsed file, and use it as a particular type, such as a number, date or list, without checking the type or handling a failed conversion with a clear error?",
+  "message": "A value from external input is used without checking its type. Parse it into the expected type and report a clear error when that fails",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-248",
+  "question": "Does the function call code that can throw an exception it neither catches nor declares, in a place such as a thread entry point, callback, handler or main loop where an uncaught exception would crash the program or leak details?",
+  "message": "An exception can escape here and crash the program or expose details. Catch it at this boundary and handle or report it",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-252",
+  "question": "Does the function ignore the return value or error of a call that can fail, such as a write, close, allocation, lock or system call, so a failure goes unnoticed?",
+  "message": "A call that can fail has its result ignored. Check the return value or error and handle the failure",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-253",
+  "question": "Does the function check the return value of a call incorrectly, for example testing for the wrong error value, treating 0 as failure when it means success, or checking only some failure cases?",
+  "message": "The return value is checked the wrong way, so failures can be missed. Check it against the values the called function documents for failure",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-261",
+  "question": "Does the function obscure a password with a trivial encoding such as Base64, hex, XOR or ROT13, as if that protected it?",
+  "message": "A password is only encoded, which anyone can reverse. Hash it for storage, or encrypt it with a managed key if it must be recovered",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-262",
+  "question": "Does the function manage user passwords without any mechanism to record their age or require them to be changed after compromise or a policy period?",
+  "message": "Passwords have no age or rotation mechanism. Record when each password was set and force a change when policy or a compromise requires it",
+  "severity": "info",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-263",
+  "question": "Does the function set a password expiry period that is excessively long for the system's policy?",
+  "message": "The password expiry period is very long. Shorten it to match the security policy",
+  "severity": "info",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-266",
+  "question": "Does the function assign a role, permission or privilege to a user or actor who should not have it, for example granting admin by default or from an unverified request field?",
+  "message": "A privilege is granted to someone who should not have it. Grant only the privileges the actor is verified to need",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-267",
+  "question": "Does the function let a role or privilege perform actions beyond its intended purpose, such as a read-only role that can also modify data?",
+  "message": "A privilege allows more than it is meant to. Restrict what the privilege permits to its intended actions",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-268",
+  "question": "Does the function allow two separate privileges or roles to be combined so that together they permit an action neither should allow alone?",
+  "message": "Combining privileges here allows an action neither should permit alone. Check the combined effect of privileges, not each one separately",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-270",
+  "question": "Does the function switch between privilege levels or security contexts, such as impersonating a user or elevating temporarily, without correctly restoring the original context on every path including errors?",
+  "message": "Privileges may not be restored after switching context, especially on an error. Restore the original context in a finally block or equivalent",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-273",
+  "question": "Does the function attempt to drop privileges, for example with setuid or setgid, without checking that the drop succeeded?",
+  "message": "Dropping privileges is not checked, so the code may keep running privileged. Check the result and stop if the drop failed",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-274",
+  "question": "Does the function perform an operation that needs privileges without handling the case where it does not have them, so it continues in an unexpected state?",
+  "message": "Missing privileges are not handled, so the code may continue in a bad state. Check for the permission error and fail safely",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-277",
+  "question": "Does the function set a permissive default, such as umask 0 or a broad access list, that objects it creates later will inherit?",
+  "message": "Objects created later will inherit insecure permissions. Set a restrictive umask or default access list",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-278",
+  "question": "Does the function copy, extract or restore files while preserving their original permissions or ownership, without checking those permissions are safe?",
+  "message": "Insecure permissions are carried over from the source. Set safe permissions explicitly on files you copy or extract",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-280",
+  "question": "Does the function access a resource without handling a permission denied failure, so the code continues along an unexpected path or leaves state invalid?",
+  "message": "A permission failure is not handled and can leave state invalid. Catch the permission error and fail cleanly",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-281",
+  "question": "Does the function copy, restore, move or share files or objects in a way that loses their original permissions, leaving them less restricted than the source?",
+  "message": "The copy ends up with looser permissions than the original. Preserve the source permissions, or set restrictive ones explicitly",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-283",
+  "question": "Does the function trust the contents of a security-critical resource in a location other users can write to, such as a key file, credential file, socket or directory under /tmp, without checking that the expected user owns it?",
+  "message": "A security-critical resource in a shared location is trusted without checking its owner. Verify the owner before trusting its contents",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-289",
+  "question": "Does the function authenticate or authorise based on the name of a user or resource without handling every name that refers to the same entity, such as case variants, aliases, encoded forms or trailing characters?",
+  "message": "An alternate name for the same user or resource can bypass this check. Canonicalise the name before authenticating or authorising",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-290",
+  "question": "Does the function authenticate a caller using information the caller can forge, such as an IP address, hostname, Referer, a client-supplied header or user ID field?",
+  "message": "Authentication relies on something the caller can fake. Authenticate with a credential or signature the caller cannot forge",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-294",
+  "question": "Does the function accept an authentication message or token without a nonce, timestamp or one-time value, so a captured copy could be replayed to authenticate again?",
+  "message": "A captured authentication message can be replayed. Include a nonce or timestamp and reject any message seen before or too old",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-301",
+  "question": "Does the function implement a challenge-response authentication where the same key or procedure is used in both directions, so an attacker could reflect a challenge back to get it answered?",
+  "message": "The challenge-response can be answered by reflecting the challenge back. Use different keys or include the sender's identity in each direction",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-303",
+  "question": "Does the function implement a standard authentication algorithm, such as HMAC verification, JWT validation or password checking, incorrectly, for example skipping a step, comparing the wrong values or accepting a none algorithm?",
+  "message": "An authentication algorithm is implemented incorrectly and may be bypassed. Use a vetted library, or follow the specification step by step",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-305",
+  "question": "Does the function contain a path that skips authentication because of another flaw, such as an exception handler, default case or early return that lets the caller through?",
+  "message": "A separate flaw lets callers skip authentication. Make every path fail closed unless authentication succeeded",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-306",
+  "question": "Does the function perform a critical or expensive action, such as changing accounts, configuration, money or data, or starting heavy work, without first authenticating the caller?",
+  "message": "A critical action runs without authenticating the caller. Require authentication before this action",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-308",
+  "question": "Does the function grant access to a high-risk operation or account with only a password or a single factor, where a second factor would be expected?",
+  "message": "A high-risk operation relies on a single factor. Require a second factor for it",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-309",
+  "question": "Does the function use a password as the only primary means of authenticating to a sensitive system, where stronger methods such as keys, certificates or single sign-on are available?",
+  "message": "Authentication relies on passwords alone. Consider keys, certificates, single sign-on or a second factor",
+  "severity": "info",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-322",
+  "question": "Does the function perform a key exchange, such as Diffie-Hellman, without authenticating the other party, leaving it open to a man in the middle?",
+  "message": "The key exchange does not check who is on the other end. Authenticate the peer, for example with a certificate or signature",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-324",
+  "question": "Does the function use a cryptographic key, certificate or password without checking whether it has expired?",
+  "message": "A key or credential is used without checking its expiry. Check the expiry date and reject expired keys",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-325",
+  "question": "Does the function skip a required step of a cryptographic algorithm, such as verifying a tag, checking padding, using a salt or deriving the key properly?",
+  "message": "A required cryptographic step is missing, so the protection is weaker than it looks. Use a vetted library's high-level API that performs every step",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-334",
+  "question": "Does the function generate a security-relevant random value from a space small enough to brute force, such as a short PIN, a few random bytes or a small integer range?",
+  "message": "The random value has too few possibilities and can be guessed. Use at least 128 bits from a secure random source",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-342",
+  "question": "Does the function produce security-relevant identifiers or tokens that follow from previous values, such as incrementing IDs or sequential tokens?",
+  "message": "The next value can be predicted from previous ones. Use random identifiers from a secure source",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-343",
+  "question": "Does the function generate security-relevant values whose next value falls in a narrow range predictable from earlier values?",
+  "message": "The next value's range can be predicted from earlier ones. Use a cryptographically secure random source",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-344",
+  "question": "Does the function hard code a value, name, path or reference that should vary across environments, installations or users, such as a fixed key, salt, host or file location?",
+  "message": "A value that should vary by environment is hard coded. Load it from configuration or generate it per installation",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-346",
+  "question": "Does the function receive data or requests from another system or party, such as a webhook, message queue, cross-origin request or inter-process call, and act on them without verifying who sent them, for example by a signature, token or the Origin header?",
+  "message": "The sender of this data is not verified. Check its signature, token or origin before acting on it",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-347",
+  "question": "Does the function use signed data, such as a token, package, message or update, without verifying the signature, or verify it incorrectly, for example accepting unsigned data or not checking the key?",
+  "message": "Signed data is used without a correct signature check. Verify the signature with the expected key and algorithm before using the data",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-348",
+  "question": "Does the function take a security-relevant value from a less trusted source, such as a client header like X-Forwarded-For, when a more trusted source like the connection itself is available?",
+  "message": "A value is read from a less trusted source when a more trusted one exists. Use the trusted source, such as the actual connection address",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-349",
+  "question": "Does the function accept extra fields or data submitted alongside trusted data and treat them as trusted, for example mass-assigning request fields onto a model?",
+  "message": "Untrusted extra data is accepted along with trusted data. Accept only an explicit list of fields and ignore the rest",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-351",
+  "question": "Does the function fail to distinguish between different kinds of values or elements, such as treating a string and a number, a file and a directory, or two message types, as the same in a security decision?",
+  "message": "Different kinds of values are treated alike in a security decision. Check the exact type before deciding",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-353",
+  "question": "Does the function send or receive data over a protocol or format without any integrity check, such as a checksum, MAC or signature, where corruption or tampering matters?",
+  "message": "Data has no integrity check. Add a MAC, signature or checksum and verify it on receipt",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-354",
+  "question": "Does the function receive a checksum, MAC or integrity value with data but not verify it, or verify it incorrectly, before using the data?",
+  "message": "The integrity value is not checked, or is checked wrongly. Recompute it and compare, rejecting data that does not match",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-356",
+  "question": "Does the function perform a dangerous or irreversible action on the user's behalf, such as deleting data, running downloaded code or sending money, without warning the user first?",
+  "message": "A dangerous action runs without warning the user. Warn the user and ask for confirmation first",
+  "severity": "info",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-357",
+  "question": "Does the function present a warning about a dangerous operation in a way the user is likely to miss, such as a hidden, default-accepted or easily dismissed prompt?",
+  "message": "The warning about a dangerous action is easy to miss. Make it prominent and require an explicit choice",
+  "severity": "info",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-358",
+  "question": "Does the function implement a standard protocol, algorithm or technique but omit or get wrong one of its required security checks?",
+  "message": "A security check required by the standard is missing or wrong. Implement every check the standard requires, or use a vetted library",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-359",
+  "question": "Does the function expose personal information, such as names, addresses, health, financial or location data, to users or systems that are not authorised or did not get consent to see it?",
+  "message": "Personal information is exposed to someone not authorised to see it. Check authorisation and consent, and return only what is permitted",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-360",
+  "question": "Does the function trust system events, messages or notifications as proof of their origin, without verifying who sent them?",
+  "message": "Events are trusted without checking who sent them. Verify the sender before acting on the event",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-366",
+  "question": "Does the function read or modify data shared between threads without a lock, atomic operation or other synchronisation?",
+  "message": "Shared data is used across threads without synchronisation. Protect it with a lock, or use atomic operations",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-367",
+  "question": "Does the function check a property of a file or resource, such as existence, permissions or ownership, and then use it separately, so the resource could change between the check and the use?",
+  "message": "The resource can change between the check and the use. Act on it atomically, or check through the handle you then use",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-368",
+  "question": "Does the function switch between security contexts, such as users, origins or privilege levels, through several non-atomic steps that another actor could act during?",
+  "message": "Another actor can act in the middle of this context switch. Make the switch atomic, or block access until it completes",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-372",
+  "question": "Does the function decide which state it is in from incomplete information, so it could act as if in one state while actually in another, such as treating a pending request as complete?",
+  "message": "The code can mistake which state it is in. Track the state explicitly and check it before acting",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-374",
+  "question": "Does the function pass a mutable object that it relies on, such as an internal list or buffer, to untrusted or external code without copying it first?",
+  "message": "Untrusted code receives a mutable object this code relies on and can change it. Pass a copy or an immutable view",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-375",
+  "question": "Does the function return a reference to internal mutable state, such as a private list, map or array, that the caller could modify?",
+  "message": "The caller can modify internal state through the returned reference. Return a copy or an immutable view",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-378",
+  "question": "Does the function create a temporary file with a predictable name or with permissions that let other users read or write it?",
+  "message": "The temporary file is predictable or readable by others. Use a secure temporary file API that creates it atomically with private permissions",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-379",
+  "question": "Does the function create a temporary file in a shared or world-writable directory where other users can see or tamper with it?",
+  "message": "The temporary file sits in a directory other users can access. Create it in a private directory, or with a secure temporary file API",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-385",
+  "question": "Does the function let secret information influence the timing of observable behaviour, such as when messages are sent or how long operations take, so it could be inferred by watching?",
+  "message": "Secret information affects observable timing. Make timing independent of secret data",
+  "severity": "info",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-386",
+  "question": "Does the function look up the same object by name or path more than once, such as checking a file by path and then opening it by path again, where the name could refer to a different object between the lookups?",
+  "message": "The same name is looked up twice and could refer to different objects. Look it up once and keep the handle",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-392",
+  "question": "Does the function encounter an error but return normally, without an error code, exception or other signal that it failed?",
+  "message": "The function fails without telling its caller. Return an error or raise an exception when it fails",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-393",
+  "question": "Does the function return a status code or value that does not reflect what actually happened, such as success after a failure or a generic error for a specific one?",
+  "message": "The returned status does not match what happened. Return the status that reflects the real outcome",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-394",
+  "question": "Does the function call something that can return valid but unexpected values, such as zero, empty, partial or none, without handling those values?",
+  "message": "A valid but unexpected return value is not handled. Handle every value the called function can return",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-403",
+  "question": "Does the function start a child process while sensitive file descriptors or handles, such as sockets, key files or database connections, are open and inheritable?",
+  "message": "The child process inherits sensitive open handles. Mark them close-on-exec, or close them before starting the child",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-408",
+  "question": "Does the function perform expensive work, such as heavy computation, large allocations, database queries or outbound calls, before authenticating or authorising the caller?",
+  "message": "Expensive work runs before the caller is authenticated. Authenticate and authorise first",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-409",
+  "question": "Does the function decompress or expand input, such as zip, gzip, XML entities or images, without limiting the output size or compression ratio?",
+  "message": "Decompressing input has no size limit, so a small bomb can exhaust memory or disk. Cap the output size and ratio while decompressing",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-410",
+  "question": "Does the function use a resource pool, such as connections, threads or workers, sized so that a burst of requests could exhaust it and block other users?",
+  "message": "The resource pool can be exhausted by a burst of requests. Size it for peak demand, and limit how much one caller can take",
+  "severity": "info",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-412",
+  "question": "Does the function rely on a lock, such as a lock file or named mutex, that other users or processes outside its control can create or hold?",
+  "message": "An outside actor can take this lock and block the program. Use a lock in a location only this program can access",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-413",
+  "question": "Does the function need exclusive access to a shared resource, such as a file, record or shared memory, but not lock it, or lock it incorrectly?",
+  "message": "A shared resource is used without the exclusive lock it needs. Lock it for the whole operation",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-414",
+  "question": "Does the function perform a sensitive operation on a shared resource without checking whether another process or thread holds its lock?",
+  "message": "The lock is not checked before a sensitive operation. Acquire or check the lock first",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-419",
+  "question": "Does the function expose administrative or restricted functionality on a channel, such as an admin endpoint or management port, without authentication or encryption?",
+  "message": "Restricted functionality is reachable on an unprotected channel. Protect it with authentication and encryption",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-420",
+  "question": "Does the function provide an alternate way to reach functionality, such as a debug endpoint, backup API or internal route, with weaker protection than the main path?",
+  "message": "An alternate path has weaker protection than the main one. Apply the same authentication and authorisation checks to every path",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-421",
+  "question": "Does the function open a secondary channel, such as a callback port, temporary socket or file, for an authorised user, where another actor could reach it first?",
+  "message": "Another actor can reach this secondary channel before the intended user. Authenticate the connection on the channel",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-425",
+  "question": "Does the function serve a restricted page, file or endpoint without checking that the requester is authorised, relying on the URL being unlinked or hard to guess?",
+  "message": "A restricted resource is served without an authorisation check. Check authorisation on every request for it",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-428",
+  "question": "Does the function build or use a path to an executable containing spaces without quoting it, so it could run a program from a parent directory?",
+  "message": "An unquoted path with spaces can run the wrong program. Quote the path, or pass it as a separate argument",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-430",
+  "question": "Does the function dispatch an object or request to a handler chosen by an untrusted attribute, such as a guessed file type or extension, that could select the wrong handler?",
+  "message": "The handler is chosen from untrusted information and can be the wrong one. Choose it from verified type information",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-431",
+  "question": "Outside tests, does the function lack a handler for an event, message type, exception or enum value that it can evidently receive, such as a dispatch with no default branch?",
+  "message": "A case, event or exception that can occur has no handler. Add a handler, even if it only fails safely",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-434",
+  "question": "Does the function accept an uploaded file without restricting its type, extension and content, and store it where it could be served or executed?",
+  "message": "Uploaded files of any type are accepted and could be executed. Allow only safe types, check the content, and store uploads outside executable locations",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-437",
+  "question": "Does the function act as a proxy, filter or monitor between two systems but interpret requests or data differently from how the endpoint will, for example parsing headers or paths in another way?",
+  "message": "This intermediary can interpret data differently from the endpoint. Parse exactly as the endpoint does, or normalise before forwarding",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-439",
+  "question": "Does the function rely on a private, undocumented or experimental API of a library or platform, such as names starting with an underscore, or on behaviour documented to change between versions, without pinning or checking the version?",
+  "message": "This relies on behaviour that may change between versions. Use the documented API, or pin and check the version",
+  "severity": "info",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-440",
+  "question": "Does the function behave differently from its specification, documentation or the contract its name and signature imply?",
+  "message": "The function does not behave as specified. Fix the behaviour or correct the specification",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-444",
+  "question": "Does the function forward or parse HTTP requests or responses, as a proxy, gateway or server, in a way that could interpret ambiguous framing, such as both Content-Length and Transfer-Encoding or duplicated headers, differently from the next hop?",
+  "message": "Ambiguous HTTP framing could be read differently here and downstream, allowing request smuggling. Reject messages with conflicting or duplicated length headers",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-447",
+  "question": "Does the function present or report a security feature as enabled or working, such as a setting toggle or confirmation, when the underlying behaviour is not implemented?",
+  "message": "A security feature appears to work but does nothing. Implement it, or remove it from the interface",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-448",
+  "question": "Does the function keep offering a feature or option that is obsolete or no longer has effect, without warning the user?",
+  "message": "An obsolete feature is offered without warning. Remove it, or warn the user it no longer works",
+  "severity": "info",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-449",
+  "question": "Does the function perform a different action from the one the user requested, such as acting on the wrong item or applying the wrong operation?",
+  "message": "The action performed differs from what the user asked for. Make the action match the request",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-454",
+  "question": "Does the function initialise critical internal variables, settings or data stores from input that untrusted users can control, such as request parameters, cookies or environment variables?",
+  "message": "Critical internal state is initialised from untrusted input. Initialise it from trusted sources, and validate anything external",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-455",
+  "question": "Does the function continue running after a security-relevant initialisation step fails, such as loading configuration, keys, certificates or a security module, possibly in a less secure mode?",
+  "message": "Startup continues after a security setup step fails. Stop, or refuse to serve, when security initialisation fails",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-459",
+  "question": "Does the function create temporary or supporting resources, such as files, directories, processes or records, and fail to remove them on every path, including errors?",
+  "message": "Temporary resources are not cleaned up on every path. Remove them in a finally block, a context manager or equivalent",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-472",
+  "question": "Does the function trust a value from the client that is assumed not to change, such as a hidden form field, price, user ID or role in a request, without checking it on the server?",
+  "message": "A value the client can change is trusted as fixed. Look it up or recompute it on the server",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-474",
+  "question": "Does the function call a function whose behaviour differs across operating systems, platforms or versions in ways the code depends on?",
+  "message": "This relies on a function that behaves differently across platforms or versions. Use a portable alternative, or handle each behaviour",
+  "severity": "info",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-475",
+  "question": "Does the function call an API with an argument value for which the API's behaviour is undefined, such as overlapping buffers to memcpy or an invalid flag?",
+  "message": "The API is called with arguments that give undefined behaviour. Pass only values the API documents as valid",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-476",
+  "question": "Does the function dereference a pointer, reference or optional value that can be null, None or nil, such as a lookup or allocation result, without checking it first?",
+  "message": "A value that can be null is used without checking. Check it and handle the null case",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-487",
+  "question": "Does this Java file rely on package-private or default visibility to protect sensitive fields or methods from other code?",
+  "message": "Package visibility is not a security boundary. Make sensitive members private and check permissions explicitly",
+  "severity": "warning",
+  "scope": "file",
+  "languages": [
+   "java"
+  ]
+ },
+ {
+  "id": "CWE-488",
+  "question": "Does the function store request- or session-specific data in shared state, such as a singleton, static field, global or cached object, where another session could see or use it?",
+  "message": "Data for one session is kept where another session can reach it. Keep it in request or session scope",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-497",
+  "question": "Does the function expose system details, such as versions, paths, hostnames, environment variables or internal addresses, to users or callers who should not see them?",
+  "message": "System details are exposed to people who should not see them. Remove them from responses and error pages",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-501",
+  "question": "Does the function put untrusted input into a data structure, session or message that the rest of the code treats as trusted, without validating it first?",
+  "message": "Untrusted data is mixed into a trusted structure. Validate it before storing it alongside trusted data",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-515",
+  "question": "Does the function encode information in storage side effects, such as file attributes, flags or unused fields, where another program could read it covertly?",
+  "message": "Information may leak through a covert storage channel. Remove the side effect, or make it independent of secret data",
+  "severity": "info",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-524",
+  "question": "Does the function put sensitive information into a cache, such as a shared, HTTP, CDN or on-disk cache, that others outside the intended audience could read?",
+  "message": "Sensitive data is cached where others can read it. Do not cache it, or mark responses private and no-store",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-538",
+  "question": "Does the function write sensitive information, such as secrets, credentials or personal data, into files or directories that are accessible to users who should not see it, such as public web roots or shared folders?",
+  "message": "Sensitive data is written where others can read it. Write it to a private location with restricted permissions",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-544",
+  "question": "Does the function handle errors in its own ad hoc way, such as custom codes, printing or swallowing, instead of the standard error mechanism the rest of the codebase uses?",
+  "message": "Errors are handled differently from the rest of the codebase. Use the project's standard error handling mechanism",
+  "severity": "info",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-549",
+  "question": "Does the function display, echo or accept a password in a visible field, prompt or output instead of masking it?",
+  "message": "A password is shown on screen while being entered. Mask it, for example with a password field or getpass",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-551",
+  "question": "Does the function make an authorisation decision on a URL, path or request before fully decoding and canonicalising it?",
+  "message": "Authorisation checks the request before it is canonicalised, so encoded forms can bypass it. Decode and normalise first, then authorise",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-563",
+  "question": "Does the function assign a value to a named variable that is never read before being overwritten or going out of scope? Ignore assignments to _ or other names used to discard a value on purpose.",
+  "message": "A value is assigned and never used. Remove the assignment, or use the value if it was meant to be used",
+  "severity": "info",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-565",
+  "question": "Does the function rely on a cookie's presence or value for a security decision, such as authentication, role or price, without validating or signing it?",
+  "message": "A security decision trusts a cookie the client can change. Sign the cookie and verify it, or keep the value on the server",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-587",
+  "question": "Does the function assign a fixed numeric address, other than null, to a pointer?",
+  "message": "A pointer is set to a fixed address that will not be valid everywhere. Obtain the address from the platform or an allocation",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-603",
+  "question": "Does the function rely on authentication or authorisation checks performed in client-side code, without the server checking again?",
+  "message": "Authentication happens only in the client, which a modified client can skip. Check it on the server",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-605",
+  "question": "Does the function bind a socket with options, such as SO_REUSEADDR or SO_REUSEPORT, that let another process bind the same port and steal or spoof traffic?",
+  "message": "Another process can bind the same port and intercept traffic. Avoid port-sharing options, or use exclusive binding",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-606",
+  "question": "Does the function use untrusted input (a request, upload, message or another user, not the program's own arguments or configuration) as a loop bound or iteration count without limiting it?",
+  "message": "Input controls how many times this loop runs. Cap the loop bound to a sensible maximum",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-609",
+  "question": "Does the function use double-checked locking, checking a field outside a lock and again inside, without the field being volatile or atomic?",
+  "message": "Double-checked locking without a volatile or atomic field can see a half-built object. Make the field volatile, or use a safe lazy initialiser",
+  "severity": "error",
+  "scope": "function",
+  "languages": [
+   "java"
+  ]
+ },
+ {
+  "id": "CWE-617",
+  "question": "Does the function use an assert, panic or abort to reject bad input that comes from outside the program, such as file contents, configuration, command-line arguments, a request or a message, where a handled error with a clear message is needed, rather than only to check invariants that only a bug in the code could break?",
+  "message": "Bad input from outside the program is rejected with an assertion, which crashes with a traceback and disappears when assertions are disabled. Raise a specific error and report it clearly instead",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-618",
+  "question": "Does the function expose methods to web page scripts, such as through ActiveX, a browser plugin, a webview bridge or a scripting interface, that can perform actions outside the browser sandbox?",
+  "message": "Web content can call a dangerous method outside the sandbox. Remove the method, or restrict it to trusted origins",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-619",
+  "question": "Does the function open a database cursor or result set without closing it on every path, including errors?",
+  "message": "A database cursor can be left open. Close it in a finally block or context manager",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-620",
+  "question": "Does the function change a user's password without requiring the current password or another re-authentication?",
+  "message": "The password can be changed without re-authenticating. Require the current password or another proof of identity",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-628",
+  "question": "Does the function call another function with arguments that are wrong, such as in the wrong order, the wrong variable, a wrong count or the wrong type or unit?",
+  "message": "A call passes the wrong arguments. Check each argument's order, value and meaning against the called function",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-639",
+  "question": "Does the function fetch, update or delete a record identified by a key from the request, such as an ID in the URL or body, without checking the record belongs to or is permitted for the caller?",
+  "message": "Changing the ID in the request reaches another user's data. Check the record belongs to or is allowed for the caller",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-640",
+  "question": "Does the function implement password recovery in a weak way, such as security questions, predictable or long-lived reset tokens, or sending the password itself?",
+  "message": "Password recovery is weak. Send a single-use, short-lived, random reset link to a verified address",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-641",
+  "question": "Does the function build a file or resource name from input without restricting its length or characters, so the name could contain scripting, separators or reserved names?",
+  "message": "A resource name built from input is not restricted. Allow only safe characters and a bounded length",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-645",
+  "question": "Does the function lock accounts so easily, such as after very few failures or permanently, that an attacker could deliberately lock out legitimate users?",
+  "message": "The lockout is easy to trigger against other users. Use increasing delays or temporary lockouts instead",
+  "severity": "info",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-648",
+  "question": "Does the function call a privileged API incorrectly, such as without the required checks, in the wrong order or with unvalidated arguments?",
+  "message": "A privileged API is used incorrectly. Follow the API's requirements for privilege and argument checks",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-649",
+  "question": "Does the function rely on encrypting or obfuscating a value sent to the client, such as a token or hidden field, without an integrity check to detect tampering?",
+  "message": "Encrypted or obfuscated client data can be tampered with undetected. Add a MAC or use authenticated encryption",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-653",
+  "question": "Does the function mix operations that need different privilege levels in one place, without separating or isolating them?",
+  "message": "Operations needing different privileges are not isolated. Separate privileged work into its own component with its own checks",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-654",
+  "question": "Does the function make an access decision based on a single condition that could be spoofed or wrong, such as one header, flag or IP address?",
+  "message": "Access depends on a single condition. Combine independent checks for this decision",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-656",
+  "question": "Does the function rely on secrecy of its algorithm, hidden URLs, obfuscation or undocumented parameters as the main security protection?",
+  "message": "Security relies on obscurity. Use real authentication, authorisation or cryptography",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-663",
+  "question": "Does the function call a non-reentrant function, such as strtok, localtime or rand, from threads or signal handlers where another call could interleave?",
+  "message": "A non-reentrant function is used where calls can interleave. Use the reentrant variant, such as strtok_r",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-681",
+  "question": "Does the function convert between numeric types, such as long to int, float to int, or signed to unsigned, in a way that can truncate, overflow or change sign?",
+  "message": "This numeric conversion can lose data or change sign. Check the value fits in the target type first",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-694",
+  "question": "Does the function look up or operate on resources by an identifier that might not be unique, such as a name or non-unique field, where a unique identifier is required?",
+  "message": "The identifier may match more than one resource. Use a unique identifier, or reject duplicates",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-695",
+  "question": "Does the function use low-level functionality that the framework or platform forbids, such as raw sockets, threads or file access inside a managed container, bypassing its protections?",
+  "message": "This bypasses the framework using forbidden low-level calls. Use the framework's supported API",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-698",
+  "question": "Does the function send or return a redirect but then keep executing code that should not run, such as a missing return after redirect?",
+  "message": "Code keeps running after the redirect. Return or exit immediately after redirecting",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-708",
+  "question": "Does the function assign ownership of a resource, such as a file, record or object, to a user or process that should not own it?",
+  "message": "A resource is given to the wrong owner. Assign ownership to the intended user or process",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-733",
+  "question": "Does the function include security-critical code that a compiler may optimise away, such as clearing a secret with memset before free, or a check on undefined behaviour?",
+  "message": "The compiler may remove this security-critical code. Use explicit_bzero, a volatile write or another optimisation-safe primitive",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-749",
+  "question": "Does the function expose a dangerous capability, such as running commands, reading files or evaluating code, through a public API or interface without restricting who can call it?",
+  "message": "A dangerous operation is exposed without restriction. Remove it, or require authorisation to call it",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-756",
+  "question": "Does the function let the framework's default error page or raw exception output reach the user instead of a custom error response?",
+  "message": "Default error pages can expose internal details. Return a custom error response",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-764",
+  "question": "Does the function acquire the same lock more times than intended, for example locking a non-recursive mutex twice, which could deadlock?",
+  "message": "A lock can be taken twice. Take each lock once per critical section, or use a reentrant lock deliberately",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-765",
+  "question": "Does the function release a lock more times than it acquired it, for example unlocking on several paths?",
+  "message": "A lock can be released twice. Release it exactly once, for example with a scoped guard",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-766",
+  "question": "Does this file declare a critical field of a class, such as a password, key, balance or permission, as public?",
+  "message": "A critical field is public. Make it private and control access through methods",
+  "severity": "warning",
+  "scope": "file"
+ },
+ {
+  "id": "CWE-767",
+  "question": "Does the function provide public access that reads or modifies a critical private variable without validation or authorisation?",
+  "message": "A public method exposes critical private state. Validate and authorise access, or remove the method",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-771",
+  "question": "Does the function allocate a resource and then lose every reference to it, so it can never be released?",
+  "message": "A resource is allocated and then lost, so it cannot be released. Keep a reference and release it when done",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-772",
+  "question": "Does the function acquire a resource, such as a file, socket, connection, lock, handle or memory, and not release it on every path once it is no longer needed, including when an error occurs?",
+  "message": "A resource is not released on every path. Release it in a finally block, a context manager, defer or RAII",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-778",
+  "question": "Does the function handle a security-critical event, such as a login, failed authorisation, permission change or data export, without logging it or while omitting key details such as who, what and when?",
+  "message": "A security-critical event is not logged, or is logged without key details. Log the actor, action, target, outcome and time",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-779",
+  "question": "Does the function log far more data than needed, such as whole payloads, large objects or every iteration of a loop, making logs hard to use?",
+  "message": "This logs much more than needed. Log only the fields that help diagnose problems",
+  "severity": "info",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-791",
+  "question": "Does the function filter special characters or sequences from input before passing it on, but miss some of them, such as only the first occurrence or only some of the dangerous characters?",
+  "message": "The filter misses some special elements. Encode the output for its context, or filter every occurrence of every dangerous element",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-804",
+  "question": "Does the function implement a CAPTCHA or human check that a program could easily guess or solve, such as a simple sum, a fixed set of answers or an answer exposed to the client?",
+  "message": "The CAPTCHA can be solved automatically. Use a proven CAPTCHA service, and keep the answer on the server",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-807",
+  "question": "Does the function make a security decision, such as authentication, authorisation or pricing, based on input an untrusted actor can change, such as a cookie, header, hidden field or environment variable?",
+  "message": "A security decision trusts input the caller can change. Base the decision on server-side state or verified credentials",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-820",
+  "question": "Does the function use a resource shared between threads, processes or async tasks, such as a variable, file or collection, without any synchronisation?",
+  "message": "A shared resource is used concurrently without synchronisation. Protect it with a lock or use a thread-safe structure",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-821",
+  "question": "Does the function synchronise access to a shared resource incorrectly, such as locking only some accesses, using different locks for the same data or releasing the lock too early?",
+  "message": "Synchronisation here does not fully protect the shared resource. Use one lock for every access, held for the whole operation",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-826",
+  "question": "Does the function release, close or free a resource that is still in use by itself or other code, such as closing a shared connection or freeing memory that is still referenced?",
+  "message": "A resource is released while still in use. Release it only after every user is done, for example with reference counting or ownership",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-832",
+  "question": "Does the function unlock a lock or release a resource that may not be locked or held by it on the current path?",
+  "message": "A lock may be released when it is not held. Unlock only on paths where it was acquired, for example with a scoped guard",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-833",
+  "question": "Does the function acquire two or more locks in an order that could differ from other code, or wait on something while holding a lock, so threads could deadlock?",
+  "message": "Lock ordering here can deadlock. Always take locks in one global order, and do not wait while holding a lock",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-836",
+  "question": "Does the function authenticate a user by comparing a password hash sent by the client with the stored hash, so the hash itself works as the password?",
+  "message": "The stored hash works as a password. Receive the password over TLS and hash it on the server",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-837",
+  "question": "Does the function allow an action that should happen only once per user, such as voting, redeeming a code or claiming a reward, to be repeated?",
+  "message": "An action meant to happen once can be repeated. Record that it happened and check atomically before allowing it again",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-841",
+  "question": "Does the function allow a step of a multi-step workflow, such as checkout, reset or approval, to run without checking the previous steps were completed in order?",
+  "message": "A workflow step can be run out of order or skipped. Check the workflow state before each step",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-842",
+  "question": "Does the function add a user to a group or role other than the one intended, such as a default admin group or one chosen from the request?",
+  "message": "The user is put in the wrong group. Assign groups from verified server-side policy",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-908",
+  "question": "Does the function use a variable, field, buffer or resource before it has been initialised on every path?",
+  "message": "Something may be used before it is initialised. Initialise it on every path before use",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-909",
+  "question": "Does the function create a critical resource, such as a struct, object, buffer or configuration, without initialising all of its fields?",
+  "message": "A critical resource is left partly uninitialised. Initialise every field when creating it",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-910",
+  "question": "Does the function use a file descriptor or handle after it may have been closed?",
+  "message": "A file descriptor may be used after it is closed. Stop using it after close, and set it to an invalid value",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-911",
+  "question": "Does the function increment or decrement a reference count incorrectly, such as missing a decrement on an error path or decrementing twice?",
+  "message": "The reference count can become wrong, leaking or freeing the resource early. Balance each increment with one decrement on every path",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-914",
+  "question": "Does the function read or write variables whose names come from input, for example through extract, globals, setattr, eval or dynamic variable names?",
+  "message": "Input chooses which variables are read or written. Use an explicit map of allowed names",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-920",
+  "question": "Does the function run continuous or repeated work, such as polling, busy loops or wake locks, that wastes power on battery-powered or constrained devices?",
+  "message": "This keeps working in a way that drains power. Use events, backoff or sleep instead of polling or busy loops",
+  "severity": "info",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-921",
+  "question": "Does the function store sensitive data on storage without access control, such as external storage, removable media or shared directories?",
+  "message": "Sensitive data is stored where any app or user can read it. Store it in private storage, or encrypt it",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-924",
+  "question": "Does the function receive messages over a channel without verifying they were not modified in transit, for example no TLS, MAC or signature?",
+  "message": "Messages are not protected against tampering in transit. Use TLS, or add a MAC or signature and verify it",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-939",
+  "question": "Does the function handle a custom URL scheme, deep link or intent without checking which app or caller invoked it before acting?",
+  "message": "Any app can invoke this handler. Check the caller, and require confirmation for sensitive actions",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-940",
+  "question": "Does the function accept an incoming connection, message or request and act on it without verifying it comes from the expected source?",
+  "message": "The source of the incoming channel is not verified. Authenticate the peer before acting",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-941",
+  "question": "Does the function send an outgoing request to a destination that is wrong or not verified, such as a destination from input, a misconfigured address or a host without checking its identity?",
+  "message": "Outgoing requests may go to the wrong destination. Use the configured destination and verify its identity",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1007",
+  "question": "Does the function display identifiers, such as usernames, domains or URLs, without distinguishing visually similar characters from different scripts?",
+  "message": "Look-alike characters can make one identifier pass for another. Normalise the text, and flag mixed scripts or confusable characters",
+  "severity": "info",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1024",
+  "question": "Does the function compare values of incompatible types, such as a string with a number, or use loose equality that converts types implicitly?",
+  "message": "Values of different types are compared, which can give wrong results. Convert them to one type first, and use strict equality",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1025",
+  "question": "Does the function compare the wrong attributes of two things, such as references instead of values, names instead of IDs, or only part of a key?",
+  "message": "The comparison looks at the wrong properties. Compare the attributes that define identity or equality",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1037",
+  "question": "Does the function rely on execution order or timing for a security-critical check in a way a processor could change through speculative or out-of-order execution, for example a bounds check before an access that uses secret data?",
+  "message": "Speculative execution can bypass this security check. Add a speculation barrier or use a hardened primitive",
+  "severity": "info",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1043",
+  "question": "Does this file define a data structure or class with more than five fields that are themselves structures, objects or collections?",
+  "message": "A data structure here has too many non-primitive fields. Split it into smaller, focused structures",
+  "severity": "info",
+  "scope": "file"
+ },
+ {
+  "id": "CWE-1044",
+  "question": "Does the function reach across many architectural layers at once, such as a user interface handler calling storage, business logic and network layers directly, in a way that suggests too few or too many layers?",
+  "message": "This function spans an unusual number of architectural layers. Arrange calls through a clear, small set of layers",
+  "severity": "info",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1046",
+  "question": "Does the function build an immutable string by repeated concatenation in a loop, such as += on a string, instead of using a builder or join?",
+  "message": "Concatenating strings in a loop copies them each time. Collect the parts and join them once, or use a string builder",
+  "severity": "info",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1047",
+  "question": "Does this file import a module that evidently imports this file's own module back, directly or through deferred imports placed to avoid a cycle?",
+  "message": "This file is part of a circular dependency. Move the shared code into a module both can depend on",
+  "severity": "info",
+  "scope": "file"
+ },
+ {
+  "id": "CWE-1048",
+  "question": "Does the function call an excessively large number of distinct functions or objects outside its own module, for example more than five?",
+  "message": "This function depends on too many outside functions. Split it, or hide the calls behind fewer collaborators",
+  "severity": "info",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1049",
+  "question": "Does the function run a query with many joins or subqueries, such as more than five, over large tables?",
+  "message": "This query has many joins or subqueries on large tables. Simplify it, denormalise, or precompute the result",
+  "severity": "info",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1050",
+  "question": "Does the function acquire costly platform resources, such as connections, sessions, locks, threads or file handles, inside a loop body or condition?",
+  "message": "Platform resources are acquired in a loop. Acquire them once outside the loop, or reuse a pool",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1051",
+  "question": "Does the function initialise data with hard coded network details, such as IP addresses, hostnames, ports or URLs?",
+  "message": "Network locations are hard coded. Read them from configuration",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1052",
+  "question": "Outside tests, does the function initialise data with the same long literal, path, URL or magic number used elsewhere, or with one likely to change, instead of a named constant or configuration? Ignore messages, format strings, 0, 1 and empty values.",
+  "message": "Data is initialised with an unnamed literal that is likely to change or is repeated. Replace it with a named constant or configuration",
+  "severity": "info",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1053",
+  "question": "Is this file a module with complex or architecturally significant code but no module-level documentation of what it is for and how it fits into the design?",
+  "message": "This module does not document its design. Add a module docstring or header comment explaining its purpose and how it fits in",
+  "severity": "info",
+  "scope": "file"
+ },
+ {
+  "id": "CWE-1054",
+  "question": "Does the function skip an architectural layer, such as a controller or handler calling the database or storage directly instead of going through the service or domain layer?",
+  "message": "This skips a layer by calling a deeper layer directly. Go through the adjacent layer",
+  "severity": "info",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1055",
+  "question": "Does this file define a class that inherits from more than one concrete, non-abstract class?",
+  "message": "A class inherits from more than one concrete class. Inherit from one class and compose or use interfaces for the rest",
+  "severity": "info",
+  "scope": "file"
+ },
+ {
+  "id": "CWE-1057",
+  "question": "Does the function access the database or data store directly, such as with raw queries or connections, when the codebase evidently provides a central data manager, repository or ORM layer for that?",
+  "message": "This bypasses the project's data access layer. Go through the data manager or repository instead",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1058",
+  "question": "Does the function run in a multi-threaded context and modify a non-final static, global or shared member variable without synchronisation?",
+  "message": "Shared mutable static state is modified from multiple threads. Make it immutable, thread local or protected by a lock",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1060",
+  "question": "Does the function make many separate database queries, such as more than five or one per item in a loop, where a single set-based query would do?",
+  "message": "This makes many separate data queries. Combine them into one query or a batch",
+  "severity": "info",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1062",
+  "question": "Does this file define a parent class that refers to one of its own subclasses, their methods or members?",
+  "message": "A parent class depends on its child class. Move the behaviour into the child, or use an overridable method",
+  "severity": "warning",
+  "scope": "file"
+ },
+ {
+  "id": "CWE-1063",
+  "question": "Does this file create class instances in a static initialiser block or at module import time, rather than when they are needed?",
+  "message": "Instances are created in a static block or at import time. Create them lazily, or pass them in where needed",
+  "severity": "info",
+  "scope": "file"
+ },
+ {
+  "id": "CWE-1065",
+  "question": "Does the function manage low-level resources directly, such as threads, sockets or connections, inside a component meant to run on an application server that provides those resources?",
+  "message": "Resources are managed directly instead of through the application server. Use the server's managed resources API",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1066",
+  "question": "Does this file define a serialisable class that lacks an explicit serialisation method or version where the language expects one, such as serialVersionUID in Java?",
+  "message": "A serialisable class has no serialisation control. Define an explicit serialisation method or version",
+  "severity": "info",
+  "scope": "file"
+ },
+ {
+  "id": "CWE-1067",
+  "question": "Does the function run a query against a table in a way that cannot use an index, such as filtering on an unindexed column, a function of a column or a leading wildcard?",
+  "message": "This query likely scans the whole table. Filter on indexed columns, or add an index",
+  "severity": "info",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1068",
+  "question": "Does the function's implementation contradict its documented design, such as its docstring, spec reference or design comments?",
+  "message": "The implementation differs from its documented design. Bring the code and documentation back into line",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1070",
+  "question": "Does this file define a serialisable class with fields that cannot be serialised, such as locks, sockets, file handles or connections?",
+  "message": "A serialisable class holds fields that cannot be serialised. Mark them transient, or replace them with serialisable data",
+  "severity": "warning",
+  "scope": "file"
+ },
+ {
+  "id": "CWE-1072",
+  "question": "Does the function open a new connection to a database server for each request or operation, instead of reusing a pooled or long-lived connection?",
+  "message": "A new database connection is opened for each operation. Use a connection pool or reuse one connection",
+  "severity": "info",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1073",
+  "question": "Does the function send a large number of separate queries through a data manager or ORM, such as one per record, instead of using efficient set-based database operations?",
+  "message": "This makes many separate data accesses. Use set-based queries, batching or eager loading",
+  "severity": "info",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1074",
+  "question": "Does this file define a class with more than seven ancestor classes?",
+  "message": "A class in this file has too deep an inheritance chain. Flatten the hierarchy and prefer composition",
+  "severity": "info",
+  "scope": "file"
+ },
+ {
+  "id": "CWE-1083",
+  "question": "Does the function read or write data through an ad hoc mechanism, such as files, raw sockets or direct SQL, when the codebase has a designated data manager component for that data?",
+  "message": "Data is accessed outside the designated data manager. Use the data manager component",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1084",
+  "question": "Does the function perform many file or data store operations, such as more than seven reads, writes or queries?",
+  "message": "This function does many data or file operations. Split it, or batch the operations",
+  "severity": "info",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1085",
+  "question": "Does the function contain a large amount of commented-out code?",
+  "message": "The function contains a lot of commented-out code. Delete it; version control keeps the history",
+  "severity": "info",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1086",
+  "question": "Does this file define a class with more than ten direct subclasses?",
+  "message": "A class in this file has too many direct subclasses. Reorganise the hierarchy or use composition",
+  "severity": "info",
+  "scope": "file"
+ },
+ {
+  "id": "CWE-1089",
+  "question": "Does the function create or define a large table with an excessive number of indexes, such as more than three?",
+  "message": "This large table has too many indexes, slowing writes. Keep only the indexes queries use",
+  "severity": "info",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1090",
+  "question": "Does the function read or modify another class's private or internal members, such as names starting with an underscore, or reach through a chain of several other objects' fields, instead of calling methods on them?",
+  "message": "This reaches into another class's internals. Call a method on that class instead",
+  "severity": "info",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1092",
+  "question": "Does the function evidently get used from several architectural layers, such as both the UI and the storage layer, while not being a general utility?",
+  "message": "The same function is used across several layers. Give each layer its own entry point, or move it into a utility module",
+  "severity": "info",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1094",
+  "question": "Does the function query a large table with an index range scan that could cover a very large number of rows, such as an unbounded date or ID range?",
+  "message": "This query can scan a huge range of rows. Narrow the range, paginate or add a more selective filter",
+  "severity": "info",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1095",
+  "question": "Does the function have a loop whose condition depends on a value that the loop body also modifies, such as changing the counter of a for loop inside the body or modifying the collection being iterated?",
+  "message": "The loop body changes the value its condition depends on. Update the loop control in one place only",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1097",
+  "question": "Does this file define a class that is stored persistently or used as a key, such as an entity or record, without the equality, hashing or ordering methods needed to compare instances?",
+  "message": "A stored class cannot be compared correctly. Define equality, and hashing or ordering where needed",
+  "severity": "info",
+  "scope": "file"
+ },
+ {
+  "id": "CWE-1099",
+  "question": "Does this file name things inconsistently, such as mixing camelCase and snake_case for the same kind of name, or using different names for the same concept?",
+  "message": "Names in this file follow inconsistent conventions. Use one convention and one name per concept",
+  "severity": "info",
+  "scope": "file"
+ },
+ {
+  "id": "CWE-1100",
+  "question": "Does this file mix operating system or platform specific calls into general logic in several places, instead of isolating them in one module or function?",
+  "message": "System-dependent code is scattered through this file. Move it behind one small platform module",
+  "severity": "info",
+  "scope": "file"
+ },
+ {
+  "id": "CWE-1101",
+  "question": "Does the function rely on generated code that needs a specific runtime component or generator library to run?",
+  "message": "This depends on generated code that needs a special runtime. Document and pin the runtime, or generate code without that dependency",
+  "severity": "info",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1102",
+  "question": "Does the function depend on machine-specific data representation, such as byte order, word size, struct padding or the size of int or long?",
+  "message": "This depends on how a particular machine represents data. Use fixed-size types and explicit byte order",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1103",
+  "question": "Does the function rely on a third-party component or API that only works on some of the platforms the code targets?",
+  "message": "A third-party component used here is not available on every target platform. Choose a portable component, or provide a fallback",
+  "severity": "info",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1104",
+  "question": "Does the function use a third-party library or API that is evidently unmaintained, deprecated or abandoned?",
+  "message": "This relies on an unmaintained third-party component. Replace it with a maintained alternative",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1105",
+  "question": "Does this file use machine-dependent functionality, such as inline assembly, intrinsics or hardware registers, in several places without encapsulating it?",
+  "message": "Machine-dependent code is not encapsulated in this file. Put it behind a small interface",
+  "severity": "info",
+  "scope": "file"
+ },
+ {
+  "id": "CWE-1106",
+  "question": "Outside tests, does the function embed a literal limit, timeout, rate, size, threshold or retry count that is likely to change, or repeat the same literal in several places, without a named constant? Ignore messages, format strings, 0, 1 and empty values.",
+  "message": "A value likely to change is a bare literal. Define a named constant for it",
+  "severity": "info",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1107",
+  "question": "Does this file define the same constant more than once, or scatter constant definitions through its functions instead of grouping them in one place?",
+  "message": "Constants in this file are duplicated or scattered. Define each once, together, or in a shared constants module",
+  "severity": "info",
+  "scope": "file"
+ },
+ {
+  "id": "CWE-1108",
+  "question": "Does the function read or write global variables heavily instead of passing state through parameters and return values?",
+  "message": "The function relies on global variables. Pass state through parameters and return values",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1109",
+  "question": "Does the function reuse one variable for more than one purpose, such as holding a count and later an unrelated value?",
+  "message": "One variable is used for several purposes. Use a separate, well named variable for each",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1110",
+  "question": "Is the function complex, concurrent or part of initialisation, without documentation of its control flow, data flow or relationships to other components?",
+  "message": "Important design aspects of this code are undocumented. Document its control flow, data flow and relationships",
+  "severity": "info",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1111",
+  "question": "Does the function define an interface, such as a public API, CLI or endpoint, without documenting its inputs, outputs and errors?",
+  "message": "This interface does not document its inputs, outputs or errors. Document each of them",
+  "severity": "info",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1112",
+  "question": "Does the function read environment variables, configuration keys, command-line options or registry keys that change how the program runs, without documenting them?",
+  "message": "Settings that control execution are undocumented. Document each environment variable, option and key",
+  "severity": "info",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1113",
+  "question": "Does this file use comment or docstring styles that are inconsistent with each other or with the language's standard format?",
+  "message": "Comments in this file use inconsistent styles. Use one standard comment and docstring format",
+  "severity": "info",
+  "scope": "file"
+ },
+ {
+  "id": "CWE-1114",
+  "question": "Does this file use inconsistent whitespace or indentation, such as mixed tabs and spaces or different indentation widths?",
+  "message": "Whitespace in this file is inconsistent. Run the project formatter",
+  "severity": "info",
+  "scope": "file"
+ },
+ {
+  "id": "CWE-1115",
+  "question": "Does this file lack a standard header, such as a copyright or licence notice and a summary of what the module is for, at its top?",
+  "message": "This file has no standard header. Add the project's header, with its copyright or licence notice and what the module is for",
+  "severity": "info",
+  "scope": "file"
+ },
+ {
+  "id": "CWE-1116",
+  "question": "Does the function contain comments that do not accurately describe the code next to them?",
+  "message": "A comment does not match the code. Correct the comment, or the code if the comment is right",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1117",
+  "question": "Is this a public function, not a test or a small private helper, whose inputs, return value, side effects or errors are neither evident from its name and signature nor documented?",
+  "message": "The function's behaviour is not summarised. Document its inputs, return value, side effects and errors",
+  "severity": "info",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1118",
+  "question": "Does the function use an error handling technique, such as special return codes, error callbacks or custom exceptions, without documenting it?",
+  "message": "How this code reports errors is undocumented. Document the errors it raises or returns and what they mean",
+  "severity": "info",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1119",
+  "question": "Does the function use many unconditional branches, such as goto, or deeply scattered break and continue statements?",
+  "message": "Too many unconditional jumps make control flow hard to follow. Restructure with loops, functions and early returns",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1122",
+  "question": "Is the function dense with many distinct operators and operands, making it hard to read, for example long expressions with many variables?",
+  "message": "The function is dense with operators and operands. Break long expressions into named steps",
+  "severity": "info",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1123",
+  "question": "Outside tests, does the function change code at runtime, such as monkey patching functions or classes of other modules, replacing methods on existing objects or writing executable memory?",
+  "message": "Code is changed at runtime, which makes behaviour hard to predict. Use explicit configuration or dependency injection instead",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1125",
+  "question": "Does the function add many externally reachable entry points, parameters or outputs, beyond what its purpose needs?",
+  "message": "This exposes more entry points than needed. Remove or restrict the unnecessary ones",
+  "severity": "info",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1127",
+  "question": "Do these build files compile the code without enabling the compiler's warnings at a strict level, or without treating warnings as errors?",
+  "message": "The build does not enable strict compiler warnings. Turn on all warnings at the strictest level and treat them as errors",
+  "severity": "warning",
+  "scope": "project"
+ },
+ {
+  "id": "CWE-1173",
+  "question": "Does the function validate input by hand, or bypass or misuse the validation framework the codebase uses, such as disabling validation or validating only some fields?",
+  "message": "Input validation bypasses or misuses the validation framework. Validate through the framework for every field",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1220",
+  "question": "Does the function apply access control too coarsely, such as one permission covering reads and writes or all records, where finer control is needed?",
+  "message": "Access control is too coarse. Check permission for each specific action and resource",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1230",
+  "question": "Does the function protect a sensitive resource but expose metadata derived from it, such as file sizes, timestamps, counts, names or search results?",
+  "message": "Metadata reveals information about a protected resource. Apply the same access control to its metadata",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1235",
+  "question": "Does the function use boxed numbers, such as Integer or Double, in a performance-critical loop or collection where primitives would do?",
+  "message": "Boxing in hot code is slow. Use primitive types or primitive collections",
+  "severity": "info",
+  "scope": "function",
+  "languages": [
+   "java"
+  ]
+ },
+ {
+  "id": "CWE-1236",
+  "question": "Does the function write untrusted input (a request, upload, message or another user, not the program's own arguments or configuration) into a CSV file without neutralising values starting with =, +, - or @ that a spreadsheet would run as a formula?",
+  "message": "Values in this CSV can run as spreadsheet formulas. Prefix values that start with =, +, - or @ with a single quote",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1240",
+  "question": "Does the function implement its own cryptographic algorithm, or use a non-standard, unproven or disallowed implementation?",
+  "message": "Cryptography is hand-rolled or non-standard. Use a vetted, standard cryptographic library",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1241",
+  "question": "Does the function generate random numbers with a predictable algorithm, such as a linear congruential generator or LFSR, where unpredictability is needed?",
+  "message": "The random number algorithm is predictable. Use a cryptographically secure random generator",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1265",
+  "question": "Does the function call code that may, directly or through callbacks, call back into a non-reentrant function or object while it is already in progress?",
+  "message": "A nested call can re-enter code that is not reentrant. Guard against reentry, or defer the callback",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1285",
+  "question": "Does the function take an index, position or offset from input without checking it is within the bounds of the resource it indexes?",
+  "message": "An index or offset from input is not checked against bounds. Check it is at least zero and less than the size",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1286",
+  "question": "Does the function accept external input that must follow a syntax, such as an email address, date, URL or structured format from a request, message or file, without checking it is well formed?",
+  "message": "External input is not checked for well-formed syntax. Parse it strictly and reject malformed values with a clear error",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1287",
+  "question": "Does the function accept a value from external input, such as a JSON or YAML field from a request, message or file, and assume its type, such as a number, list or map, without checking it?",
+  "message": "The type of an external value is assumed. Check or parse it into the expected type and reject anything else",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1288",
+  "question": "Does the function accept external input with several fields that must agree with each other, such as a length and its data, or a start before an end, without checking that they do?",
+  "message": "Related fields in external input are not checked for consistency. Check they agree before using them",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1289",
+  "question": "Does the function take an identifier, path, host or reference from untrusted input (a request, upload, message or another user, not the program's own arguments or configuration) without rejecting values equivalent to unsafe ones, such as encoded .., alternate IP forms or localhost aliases?",
+  "message": "Untrusted input equivalent to an unsafe value is not rejected. Normalise it, then check it against the unsafe values",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1322",
+  "question": "Does the function perform blocking operations, such as synchronous I/O, sleep or CPU-heavy work, inside async code or an event loop?",
+  "message": "Blocking work inside async code stalls the event loop. Use the async API, or run it in a thread or process pool",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1327",
+  "question": "Does the function bind a server or service to 0.0.0.0 or all interfaces where only local or specific access is intended?",
+  "message": "The service listens on every interface. Bind to localhost or a specific interface unless public access is intended",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1335",
+  "question": "Does the function shift an integer by an amount that could be negative or at least the number of bits in its type?",
+  "message": "The shift amount can be negative or too large. Check it is between zero and the type's width minus one",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1339",
+  "question": "Does the function use floating point for values that need exact precision, such as money, or in a way that loses required accuracy?",
+  "message": "Floating point loses the precision this value needs. Use a decimal type or integers in the smallest unit",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1341",
+  "question": "Does the function close, free or release the same resource or handle more than once without reopening it in between?",
+  "message": "A resource can be released twice. Release it once, and clear the handle afterwards",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-77",
+  "question": "Does the function build a command for an interpreter, shell or other command processor from untrusted input (a request, upload, message or another user, not the program's own arguments or configuration) without neutralising special characters?",
+  "message": "Input is written into a command without neutralising it. Pass input as separate arguments, or escape it for that command language",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-99",
+  "question": "Does the function use untrusted input (a request, upload, message or another user, not the program's own arguments or configuration) as the identifier of a resource, such as a file, port, socket, table or queue, without restricting it to allowed values?",
+  "message": "Input chooses which resource is used. Map it to an allow list of resources",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-129",
+  "question": "Does the function use untrusted input (a request, upload, message or another user, not the program's own arguments or configuration), or a value derived from it, as an array index without checking it is at least zero and less than the array length?",
+  "message": "An index from input is not checked. Check it is within the array bounds before use",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-197",
+  "question": "Does the function cast a value to a smaller numeric type, losing high-order bits, where the value can exceed the smaller type's range?",
+  "message": "Casting to a smaller type can lose data. Check the value fits before casting",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-401",
+  "question": "Does the function allocate memory that is not freed on every path once it is no longer needed, for example leaking on an error return?",
+  "message": "Allocated memory can leak. Free it on every path, or use automatic ownership such as RAII or smart pointers",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-404",
+  "question": "Does the function fail to shut down or release a resource correctly, such as not closing it, closing it with the wrong call or leaving it half released?",
+  "message": "A resource is not released correctly. Close it with the right call on every path",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-407",
+  "question": "Does the function use an algorithm whose worst case is quadratic or worse on input size, such as nested loops over input or repeated linear searches, where input can be large?",
+  "message": "The worst-case cost grows badly with input size. Use a more efficient algorithm or data structure, or limit input size",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-424",
+  "question": "Does the function provide another path to restricted functionality or data, such as a different endpoint, method or parameter, that skips the protections on the main path?",
+  "message": "An alternate path skips the protections on the main one. Apply the same checks to every path",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-456",
+  "question": "Does the function declare a critical variable without initialising it, relying on whatever value it happens to have?",
+  "message": "A critical variable is not initialised. Initialise it when you declare it",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-457",
+  "question": "Does the function read a variable before it has been assigned on every path?",
+  "message": "A variable can be read before it is assigned. Assign it on every path before reading it",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-543",
+  "question": "Does the function lazily create a singleton instance in a multi-threaded context without synchronisation?",
+  "message": "Two threads can create the singleton at once. Create it eagerly, or synchronise its creation",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-564",
+  "question": "Does the function build a Hibernate, JPA, ORM or HQL query by concatenating untrusted input (a request, upload, message or another user, not the program's own arguments or configuration) into the query string?",
+  "message": "Input is concatenated into an ORM query. Use named or positional parameters",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-567",
+  "question": "Does the function read or modify shared static or instance data in a multi-threaded context, such as a servlet or request handler, without synchronisation?",
+  "message": "Shared data is accessed from several threads without synchronisation. Synchronise it, or keep the data per request",
+  "severity": "error",
+  "scope": "function",
+  "languages": [
+   "java"
+  ]
+ },
+ {
+  "id": "CWE-652",
+  "question": "Does the function build an XQuery expression by inserting untrusted input (a request, upload, message or another user, not the program's own arguments or configuration) as text instead of binding it as an external variable?",
+  "message": "Input is written into an XQuery expression. Bind it as an external variable",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-662",
+  "question": "Does the function share a resource that needs exclusive access across threads, processes or services without synchronisation that guarantees one user at a time?",
+  "message": "Exclusive access to a shared resource is not guaranteed. Use a lock, transaction or other synchronisation",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-665",
+  "question": "Does the function initialise a resource incorrectly or incompletely, such as missing fields, wrong defaults or initialising after first use?",
+  "message": "A resource is not initialised correctly. Initialise it fully with correct values before it is used",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-667",
+  "question": "Does the function acquire or release a lock incorrectly, such as not releasing it on an error path, releasing the wrong lock or not acquiring it before use?",
+  "message": "Lock handling is incorrect. Acquire before use and release on every path, for example with a scoped guard",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-672",
+  "question": "Does the function use a resource after it has expired, been released, closed or revoked, such as a closed connection, expired token or freed object?",
+  "message": "A resource is used after it expired or was released. Check it is still valid, or obtain a fresh one",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-682",
+  "question": "Does the function perform a calculation that gives a wrong result for its evident purpose, such as the wrong formula, wrong operand or wrong rounding?",
+  "message": "This calculation gives the wrong result. Check the formula and test it with known values",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-703",
+  "question": "Does the function perform an operation that commonly fails in normal use, such as reading a file, parsing input, a network call or a database query, and either handle some of its failures but miss another common one, or carry on as if it succeeded when it may have failed?",
+  "message": "A common failure of this operation is missed or ignored. Handle it, or let it propagate as a clear error",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-704",
+  "question": "Does the function convert or cast a value or object to another type incorrectly, such as an unchecked downcast or converting between incompatible representations?",
+  "message": "A type conversion here is incorrect. Check the type or range before converting",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-732",
+  "question": "Does the function set permissions on a security-critical resource, such as a key, config file, socket or directory, that let unintended users read or modify it?",
+  "message": "A critical resource gets permissions that are too broad. Restrict it to the owner or required group",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-758",
+  "question": "Does the function rely on behaviour that is undefined, unspecified or implementation-defined, such as dict ordering in old runtimes, evaluation order, signed overflow or uninitialised memory?",
+  "message": "The code relies on behaviour that is not guaranteed. Rewrite it to depend only on specified behaviour",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-775",
+  "question": "Does the function open a file, socket or handle and not close it on every path once it is no longer needed?",
+  "message": "A file or handle is not closed on every path. Use with, try-with-resources, defer or RAII",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1042",
+  "question": "Does this file define a class with a static or class-level member that is mutable, in a class that is not a singleton?",
+  "message": "A mutable static member makes every instance share state. Make it an instance member, or make it constant",
+  "severity": "warning",
+  "scope": "file"
+ },
+ {
+  "id": "CWE-1088",
+  "question": "Does the function make a synchronous call to a remote resource, such as HTTP, database, RPC or socket, with no timeout or an infinite one?",
+  "message": "A remote call has no timeout and can hang forever. Set an explicit timeout",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1091",
+  "question": "Does the function use an object that needs explicit disposal, such as close or dispose, without calling it afterwards?",
+  "message": "An object is not disposed after use. Call close or dispose, or use a scoped construct",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "CWE-1096",
+  "question": "Does the function implement singleton creation without locking or synchronisation, so more than one instance could be created concurrently?",
+  "message": "Singleton creation is not synchronised. Synchronise it, or create the instance eagerly",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "EXT-BUILD-002",
+  "question": "Does this file use a name, module or attribute that is neither defined in the file, imported by it, a parameter nor a builtin of its language, without a guarded fallback?",
+  "message": "A name used here is never defined or imported. Import or define it, or fix the spelling",
+  "severity": "error",
+  "scope": "file"
+ },
+ {
+  "id": "EXT-BUILD-003",
+  "question": "Does the function pass, return or assign a value whose type contradicts a declared type, such as a string where an integer parameter is declared, without a validated conversion?",
+  "message": "A value breaks the declared type contract. Convert and validate it explicitly, or fix the declared type",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "EXT-DOMAIN-001",
+  "question": "Does the function evidently omit a case its docstring, name or surrounding requirements say it must handle, such as a documented status, input kind or eligibility rule with no code path?",
+  "message": "A required case has no code path. Implement it, or document that the requirement excludes it",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "EXT-DOMAIN-002",
+  "question": "Does the function compute a business value, such as a price, tax, interest, fee or total, with a formula, rate, rounding or date rule that contradicts the domain rule it evidently implements?",
+  "message": "This business calculation disagrees with the domain rule it implements. Check it against reference calculations for the agreed formula",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "EXT-DOMAIN-003",
+  "question": "Does the function change the state of a domain entity, such as an order, payment or account, to a state that its prior state should not allow, such as shipping a cancelled order, without checking the transition is valid?",
+  "message": "A state change is allowed that the business state machine forbids. Check the current state permits the transition before changing it",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "EXT-DOMAIN-004",
+  "question": "Does the function combine, compare or assign values with different units or dimensions, such as milliseconds and seconds, metres and feet or cents and dollars, without converting?",
+  "message": "Values in different units are combined without converting. Convert to one unit, and name variables with their unit",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "EXT-DISTRIBUTED-001",
+  "question": "Does the function perform a side effect that must happen once, such as charging, sending or creating a record, in a way that a retry, redelivered message or repeated request would repeat, with no idempotency key or deduplication?",
+  "message": "A retry or duplicate delivery repeats a side effect that must happen once. Deduplicate with a stable request identity or idempotency key",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "EXT-DISTRIBUTED-002",
+  "question": "Does the function assume stronger consistency than its storage or messaging provides, such as reading from a replica or cache right after a write and expecting to see it, or relying on message order that is not guaranteed?",
+  "message": "The code assumes consistency or ordering the storage does not guarantee. Read from a source that provides the guarantee, or handle stale and reordered data",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "EXT-DISTRIBUTED-003",
+  "question": "Does the function write to more than one system, such as a database and a queue, payment provider or another service, so a failure between writes leaves them inconsistent with no transaction, outbox, saga or compensation?",
+  "message": "A failure between writes to different systems leaves them inconsistent. Use an outbox, saga or compensating action so the workflow completes or is undone",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "EXT-DISTRIBUTED-004",
+  "question": "Does the function perform exclusive work under a lease or distributed lock without checking the lease is still held, or without a fencing token, so a paused or slow worker could continue after losing it?",
+  "message": "Work can continue after the lease is lost. Check the lease before each write, and have storage reject writes with stale fencing tokens",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "EXT-DELIVERY-001",
+  "question": "Does the function change a data format, message, schema or API call in a way that old and new versions running side by side during a deployment could not both handle?",
+  "message": "Old and new versions cannot both handle this change during rollout. Use an expand and contract change that supports both versions",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "EXT-DELIVERY-002",
+  "question": "Is this a data migration or backfill that could drop, corrupt or lock existing data, for example by skipping records that fail to convert, lacking a rollback or not reconciling counts?",
+  "message": "This migration can lose or corrupt existing data. Reconcile record counts and totals, handle every record, and provide a rollback",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "EXT-DELIVERY-003",
+  "question": "Do these configuration files contain settings that contradict each other or their schema, such as a production endpoint with development credentials, or values of the wrong type or out of range?",
+  "message": "Configuration settings contradict each other or their schema. Validate configuration against a schema, including cross-field rules",
+  "severity": "warning",
+  "scope": "project"
+ },
+ {
+  "id": "EXT-DELIVERY-004",
+  "question": "Does the function create a backup, snapshot or release artifact that omits something needed to restore it, such as encryption keys, schema, configuration or dependent data?",
+  "message": "The backup or artifact cannot be restored as it is. Include everything the restore procedure needs, and rehearse a restore",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "EXT-ARCH-001",
+  "question": "Does this file import across an architectural boundary its own layout evidently forbids, such as domain code importing a web framework, database driver or other infrastructure directly?",
+  "message": "This file depends across a forbidden architectural boundary. Depend on an interface in the allowed layer instead",
+  "severity": "warning",
+  "scope": "file"
+ },
+ {
+  "id": "EXT-ARCH-002",
+  "question": "Does this file, belonging to a lower layer such as storage or domain code, import a higher layer such as a controller, command line or user interface module?",
+  "message": "A lower layer imports a higher one, creating a cycle between layers. Invert the dependency with an interface or event",
+  "severity": "warning",
+  "scope": "file"
+ },
+ {
+  "id": "EXT-ARCH-003",
+  "question": "Does the function assume platform behaviour that is not true on every target, such as case-sensitive paths, / separators, a particular shell, line endings or locale?",
+  "message": "The code assumes behaviour not available on every target platform. Use portable APIs, or handle each platform",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "EXT-ARCH-004",
+  "question": "Does the function change a public interface in a breaking way, such as adding a required parameter, removing or renaming a field, or changing a return type, that existing callers would not expect?",
+  "message": "A public interface changes in a breaking way. Add the change compatibly, for example as an optional parameter, or release it as a breaking change",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "EXT-VERIFY-001",
+  "question": "Is this a test whose expected value is computed the same way as the implementation, or copied from its output, rather than derived independently from the requirement?",
+  "message": "The expected value comes from the implementation, so the test repeats its mistakes. Derive expected values independently from the requirement",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "EXT-OBS-001",
+  "question": "Does the function record success, such as a success metric, log or status, before the operation has actually completed, or on a path where it failed?",
+  "message": "Success is recorded for an operation that may have failed. Record success only after the operation completes",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "EXT-OBS-002",
+  "question": "Does the function hand work to another thread, task, queue or service without passing along the trace, correlation or request identifier?",
+  "message": "The correlation identifier is lost at this handoff. Pass the trace or request context along with the work",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "EXT-OBS-003",
+  "question": "Does the function handle an operational failure, such as a stalled queue, exhausted retries or a dropped message, without emitting any metric, log or alert?",
+  "message": "An operational failure happens silently. Emit a metric, log or alert when it occurs",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "EXT-OBS-004",
+  "question": "Does the function use unbounded values, such as user IDs, request IDs, raw URLs or error messages, as metric labels or tags?",
+  "message": "Unbounded values are used as metric labels, which can explode storage. Use bounded labels, and put identifiers in logs or traces",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "EXT-HUMAN-001",
+  "question": "Does the function render user interface elements for a required action that cannot be used with a keyboard or assistive technology, such as clickable divs without roles, missing labels or mouse-only handlers?",
+  "message": "A required interaction is not accessible. Use semantic controls with labels, and support keyboard operation",
+  "severity": "warning",
+  "scope": "function"
+ },
+ {
+  "id": "EXT-HUMAN-002",
+  "question": "Does the function perform a destructive action, such as deleting or overwriting, where the confirmation shown or requested may refer to a different target than the one actually affected, or where no confirmation is required?",
+  "message": "The destructive action may not match what the user confirmed. Confirm the exact target, and act on that same target",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "EXT-HUMAN-003",
+  "question": "Does the function allow a safety-relevant action based on the assumption that another component or controller will block unsafe combinations, with no enforced check of its own?",
+  "message": "Unsafe combinations of actions are not prevented here. Enforce the safety constraint in this code instead of assuming another component will",
+  "severity": "error",
+  "scope": "function"
+ },
+ {
+  "id": "EXT-HUMAN-004",
+  "question": "Do these files describe an operational responsibility, such as recovery, on-call, key rotation or incident response, without naming an owner or giving a procedure to follow?",
+  "message": "An operational responsibility has no owner or procedure. Name an accountable role and write the runbook",
+  "severity": "info",
+  "scope": "project"
+ }
+]

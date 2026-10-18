@@ -9,8 +9,8 @@ pub const Severity = enum {
 
 /// What an inference question is asked about: functions that report errors, every function,
 /// fixtures and helpers in test files, every test, each line of a project file, the project files
-/// as a whole, or a cluster of functions or tests of one structure.
-pub const Asks = enum { errors, function, fixture, @"test", setting, project, cluster };
+/// as a whole, a cluster of functions or tests of one structure, or each source file whole.
+pub const Asks = enum { errors, function, fixture, @"test", setting, project, cluster, file };
 
 /// When a rule runs: by default; with --strict, for what safety-critical code needs and most code
 /// doesn't, such as two assertions in every function; or only when named.
@@ -50,7 +50,14 @@ pub const Rule = struct {
     }
 };
 
-pub const all = [_]Rule{
+pub const all = core ++ catalogue.questions;
+
+/// The --infer questions generated from the engineering error catalogue, one per family no
+/// deterministic rule detects; `all` holds them after the rules written here.
+pub const catalogue = @import("catalogue_questions.zig");
+
+/// The rules written here, which `zanity init` explains one by one.
+pub const core = [_]Rule{
     .{ .name = "parse-error", .advice = "Fix the syntax error, or report the construct if the code is valid.", .severity = .warning, .tier = .default, .catalogue = &.{"EXT-BUILD-001"} },
     .{ .name = "forbidden-call", .alias = "NASA01-A", .advice = "Call the code you need directly.", .severity = .warning, .tier = .default, .needs = &.{ "call.outer", "call.name" }, .catalogue = &.{ "CWE-94", "CWE-95", "CWE-470", "CWE-915" } },
     .{ .name = "recursion", .alias = "NASA01-B", .advice = "Rewrite it as a loop with a fixed bound.", .severity = .warning, .tier = .strict, .needs = &.{ "call.outer", "call.name", "call.receiver", "function.outer", "function.name" }, .catalogue = &.{"CWE-674"} },

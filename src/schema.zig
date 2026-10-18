@@ -10,7 +10,8 @@ const infer = @import("infer.zig");
 pub const url = "https://raw.githubusercontent.com/benomahony/zanity/main/zanity.schema.json";
 
 pub fn main(init: std.process.Init) !void {
-    var buffer: [64 * 1024]u8 = undefined;
+    // Room for the whole schema, so renderSchema() writes it before anything is flushed.
+    var buffer: [1024 * 1024]u8 = undefined;
     var out: std.Io.File.Writer = .initStreaming(.stdout(), init.io, &buffer);
     try renderSchema(&out.interface);
     if (out.interface.end == 0) assert.panic("the schema came out empty; renderSchema() must write the whole schema", .{});

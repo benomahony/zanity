@@ -15,19 +15,23 @@ const Unit = facts_module.Unit;
 const Finding = facts_module.Finding;
 const store = @import("store.zig");
 const strings = @import("strings.zig");
+const language = @import("language.zig");
 
 /// How sure the model must be before a judgement becomes a finding.
 pub const default_threshold = 0.8;
 /// Requests to the model at once when zanity.toml doesn't say.
 pub const default_concurrency = 8;
-const max_questions = 16;
+/// Questions sent in one request; a unit with more is asked in several, each with the same state.
+const max_request_questions = 64;
 
+/// One question about one unit: the rule asking it, and its answer once known.
+const Slot = struct { rule: *const rules.Rule, answer: ?f64 = null, known: bool = false };
+
+/// A unit's questions, `count` slots from `first` in Inference.slots.
 const Job = struct {
     unit: *const Unit,
     unit_hash: store.Digest,
-    rules: [max_questions]*const rules.Rule = undefined,
-    answers: [max_questions]?f64 = @splat(null),
-    known: [max_questions]bool = @splat(false),
+    first: usize = 0,
     count: usize = 0,
     state: []const u8 = "",
     failed: ?anyerror = null,
@@ -72,6 +76,7 @@ pub const Inference = struct {
     io: Io,
     store: store.Store,
     jobs: memory.Bounded(Job),
+    slots: memory.Bounded(Slot),
     json: memory.Text,
     reporter: ?Reporter = null,
     concurrency: usize = default_concurrency,
@@ -96,6 +101,7 @@ pub const Inference = struct {
             .io = io,
             .store = try .initStore(gpa, io, environ, limits.store_bytes),
             .jobs = try .initBounded(gpa, limits.functions, "functions to ask TypeSafe about"),
+            .slots = try .initBounded(gpa, limits.questions, "questions --infer asks in one run"),
             .json = try .initText(gpa, limits.judgement_bytes),
         };
         if (inference.model.len < client.model.len) assert.panic("answers are stored under '{s}', shorter than the model '{s}'", .{ inference.model, client.model });
@@ -108,6 +114,7 @@ pub const Inference = struct {
         if (enabled.len == 0) assert.panic("--infer ran with no rules enabled; runCheck always enables at least one", .{});
         const before = findings.len;
         self.jobs.clear();
+        self.slots.clear();
         self.json.used = 0;
         const started = Io.Timestamp.now(self.io, .awake);
         for (units) |*unit| try self.plan(unit, findings.items()[0..before], enabled);
@@ -121,28 +128,35 @@ pub const Inference = struct {
     /// Queues the questions a unit still needs, answering what it can from the cache.
     fn plan(self: *Inference, unit: *const Unit, settled: []const Finding, enabled: rules.Set) !void {
         if (unit.source.len == 0) assert.panic("{s}: function '{s}' has no source to ask about; facts.unit() must store the function's source when it records the unit", .{ unit.path, unit.name });
-        var job: Job = .{ .unit = unit, .unit_hash = self.unitHash(unit) };
+        var job: Job = .{ .unit = unit, .unit_hash = self.unitHash(unit), .first = self.slots.len };
+        const adapter = language.named(unit.language);
         for (&rules.all) |*rule| {
             if (rule.question.len == 0 or !enabled.enabled(rule.name) or !asked(rule.asks, unit) or decided(settled, unit, rule)) continue;
-            if (job.count == max_questions) break;
-            job.rules[job.count] = rule;
-            job.answers[job.count] = try self.store.cached(self.model, store.digest(&.{rule.question}), job.unit_hash);
-            job.known[job.count] = job.answers[job.count] != null;
-            job.count += 1;
+            if (adapter) |a| if (!language.applies(a, rule.name)) continue;
+            const answer = try self.store.cached(self.model, store.digest(&.{rule.question}), job.unit_hash);
+            try self.slots.add(.{ .rule = rule, .answer = answer, .known = answer != null });
         }
+        job.count = self.slots.len - job.first;
         if (job.count == 0) return;
         job.state = try self.stateOf(unit);
         try self.jobs.add(job);
-        if (job.count > max_questions) assert.panic("{s}: queued {d} questions about '{s}', more than {d}; raise max_questions to the number of judgement rules in rules.all", .{ unit.path, job.count, unit.name, max_questions });
+        if (job.first + job.count > self.slots.len) assert.panic("{s}: '{s}' claims slots {d}..{d} of {d}", .{ unit.path, unit.name, job.first, job.first + job.count, self.slots.len });
+    }
+
+    /// The slots holding a job's questions.
+    fn slotsOf(self: *Inference, job: *const Job) []Slot {
+        if (job.first + job.count > self.slots.len) assert.panic("{s}: '{s}' claims slots {d}..{d} of {d}", .{ job.unit.path, job.unit.name, job.first, job.first + job.count, self.slots.len });
+        if (job.count == 0) assert.panic("{s}: '{s}' was queued with no questions", .{ job.unit.path, job.unit.name });
+        return self.slots.items()[job.first..][0..job.count];
     }
 
     fn askAll(self: *Inference) !void {
         if (self.jobs.len > self.jobs.capacity()) assert.panic("{d} functions queued in room for {d}; raise memory.Limits for --infer functions, or check fewer files at once", .{ self.jobs.len, self.jobs.capacity() });
         var pending: usize = 0;
         var waiting: usize = 0;
-        for (self.jobs.items()) |job| {
+        for (self.jobs.items()) |*job| {
             var missing: usize = 0;
-            for (job.answers[0..job.count]) |a| missing += @intFromBool(a == null);
+            for (self.slotsOf(job)) |slot| missing += @intFromBool(slot.answer == null);
             pending += missing;
             waiting += @intFromBool(missing > 0);
         }
@@ -165,7 +179,7 @@ pub const Inference = struct {
             failure = try self.describe(job, err);
             return error.AskFailed;
         }
-        if (pending > self.jobs.len * max_questions) assert.panic("{d} unanswered questions across {d} functions; plan() must queue at most max_questions per function", .{ pending, self.jobs.len });
+        if (pending > self.slots.len) assert.panic("{d} unanswered questions in {d} queued; plan() queues each question once", .{ pending, self.slots.len });
     }
 
     /// Reports progress every 100 ms until every function is answered; the reporter decides what to redraw.
@@ -191,49 +205,78 @@ pub const Inference = struct {
     }
 
     fn ask(self: *Inference, job: *Job, semaphore: *Io.Semaphore) !void {
-        if (job.count > max_questions) assert.panic("{s}: '{s}' has {d} questions queued, more than {d}; raise max_questions to the number of judgement rules in rules.all", .{ job.unit.path, job.unit.name, job.count, max_questions });
-        var questions: [max_questions]tai.NamedQuestion = undefined;
+        if (job.failed != null) assert.panic("{s}: asking about '{s}' after its request failed", .{ job.unit.path, job.unit.name });
+        const slots = self.slotsOf(job);
+        var start: usize = 0;
+        for (0..slots.len) |_| {
+            while (start < slots.len and (slots[start].answer != null or slots[start].known)) start += 1;
+            if (start == slots.len) return;
+            start = try self.askFrom(job, start, semaphore);
+        }
+        if (start < slots.len) assert.panic("{s}: '{s}' still has questions from slot {d} of {d} after asking each at most once", .{ job.unit.path, job.unit.name, start, slots.len });
+    }
+
+    /// Asks up to max_request_questions unanswered questions from `start` in one request, and
+    /// returns where the next request starts.
+    fn askFrom(self: *Inference, job: *Job, start: usize, semaphore: *Io.Semaphore) !usize {
+        const slots = self.slotsOf(job);
+        if (start >= slots.len) assert.panic("{s}: asking from slot {d} of {d}", .{ job.unit.path, start, slots.len });
+        var questions: [max_request_questions]tai.NamedQuestion = undefined;
         var count: usize = 0;
-        for (job.rules[0..job.count], job.answers[0..job.count]) |rule, answer| {
-            if (answer != null) continue;
+        var next = start;
+        while (next < slots.len and count < max_request_questions) : (next += 1) {
+            const slot = slots[next];
+            if (slot.answer != null or slot.known) continue;
+            const rule = slot.rule;
             questions[count] = .{ .name = rule.name, .question = .{ .noul = .{ .instructions = .{ .text = rule.question } } } };
             count += 1;
         }
-        if (count == 0) return;
         semaphore.waitUncancelable(self.io);
         defer semaphore.post(self.io);
         var response = try self.client.systemOne(.{ .state = .{ .raw = job.state }, .questions = questions[0..count] }, .{ .diagnostics = &job.diagnostics });
         defer response.deinit();
         const usage = response.value.usage;
-        job.input_tokens = usage.input_tokens;
-        job.output_tokens = usage.output_tokens;
+        job.input_tokens += usage.input_tokens;
+        job.output_tokens += usage.output_tokens;
         for (response.value.answers) |named| {
             const p = switch (named.answer) {
                 .noul => |n| n.noul,
                 else => continue,
             };
-            for (job.rules[0..job.count], job.answers[0..job.count]) |rule, *answer| {
-                if (std.mem.eql(u8, rule.name, named.name)) answer.* = p;
+            for (slots[start..next]) |*slot| {
+                if (std.mem.eql(u8, slot.rule.name, named.name)) slot.answer = p;
             }
         }
-        if (count > job.count) assert.panic("{s}: asked {d} questions about '{s}' but only {d} were queued; ask() must ask only the unanswered questions in job.rules", .{ job.unit.path, count, job.unit.name, job.count });
+        // A question the server didn't answer is left unanswered rather than asked forever.
+        for (slots[start..next]) |*slot| if (slot.answer == null) {
+            slot.known = true;
+        };
+        if (count == 0) assert.panic("{s}: a request from slot {d} carried no questions", .{ job.unit.path, start });
+        return next;
     }
 
     /// Adds findings for the confident answers and caches the fresh ones.
     fn record(self: *Inference, job: *const Job, findings: *memory.Bounded(Finding)) !void {
         const unit = job.unit;
         if (job.failed) |err| assert.panic("{s}: recording answers about '{s}' after the request failed with {t}; askOne() must skip record() when the job failed", .{ unit.path, unit.name, err });
-        for (job.rules[0..job.count], job.answers[0..job.count], job.known[0..job.count]) |rule, answer, known| {
-            const p = answer orelse continue;
+        for (self.slotsOf(job)) |slot| {
+            const rule = slot.rule;
+            const known = slot.known;
+            const p = slot.answer orelse continue;
             const question = store.digest(&.{rule.question});
             if (!known) try self.store.keepAnswer(.{ .model = self.model, .question = question, .unit = job.unit_hash, .language = unit.language, .source = unit.source, .probability = p });
             const fired = p >= self.threshold;
             try self.store.observe(.{ .path = unit.path, .rule = rule.name, .unit = job.unit_hash, .unit_name = unit.name, .line = unit.line + 1, .language = unit.language, .model = self.model, .question = question, .probability = p, .threshold = self.threshold, .fired = fired });
             if (!fired) continue;
-            const message = try self.json.format("'{s}' {s} ({s} is {d:.0}% sure).", .{ unit.name, rule.judgement, self.client.model, p * 100 });
+            // A catalogue question's judgement is a sentence of its own; the others follow the name.
+            const sentence = rule.judgement.len > 0 and std.ascii.isUpper(rule.judgement[0]);
+            const message = if (sentence)
+                try self.json.format("In '{s}': {s} ({s} is {d:.0}% sure).", .{ unit.name, rule.judgement, self.client.model, p * 100 })
+            else
+                try self.json.format("'{s}' {s} ({s} is {d:.0}% sure).", .{ unit.name, rule.judgement, self.client.model, p * 100 });
             try findings.add(.{ .path = unit.path, .line = unit.line, .column = unit.column, .rule = rule.name, .message = message, .fix = unit.fix });
         }
-        if (job.count > max_questions) assert.panic("{s}: recorded {d} answers about '{s}', more than {d}; record() must keep at most one answer per queued question", .{ unit.path, job.count, unit.name, max_questions });
+        if (job.first + job.count > self.slots.len) assert.panic("{s}: recorded answers about '{s}' past the {d} queued questions", .{ unit.path, unit.name, self.slots.len });
     }
 
     /// Keeps a row for this run in the store, with the directory it ran in and the tokens it used.
@@ -268,6 +311,7 @@ pub const Inference = struct {
         var json: std.json.Stringify = .{ .writer = &writer };
         const written = switch (unit.kind) {
             .function, .fixture, .@"test" => json.write(.{ .language = unit.language, .function = unit.source }),
+            .file => json.write(.{ .language = unit.language, .file = unit.path, .source = unit.source }),
             .setting => json.write(.{ .file = unit.path, .line = unit.source }),
             .project => json.write(.{ .files = unit.source }),
             .cluster => json.write(.{ .language = unit.language, .repeated = unit.source }),
@@ -315,6 +359,7 @@ fn asked(asks: rules.Asks, unit: *const Unit) bool {
         .setting => unit.kind == .setting,
         .project => unit.kind == .project,
         .cluster => unit.kind == .cluster,
+        .file => unit.kind == .file,
     };
     if (applies and asks == .errors and !unit.reports_error) assert.panic("{s}: asking the error questions about '{s}', which reports no error", .{ unit.path, unit.name });
     return applies;
