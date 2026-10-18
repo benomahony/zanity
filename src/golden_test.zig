@@ -556,6 +556,31 @@ test "--infer reports what the model is sure of, for functions, fixtures, tests 
     try expectOutput(run.stdout, &.{ "rule=\"misleading-error\"", "rule=\"unconstructive-error\"", "'invalid input' doesn't say", "rule=\"hollow-test\"", "rule=\"fixture-leaks-state\"", "rule=\"fixture-hides-behaviour\"", "rule=\"weakened-check\"", "rule=\"unscheduled-analysis\"", "rule=\"repeated-mechanics\"", "between the first two, `\\\"alpha beta\\\"` becomes `\\\"ada lovelace\\\"`" }, &.{});
 }
 
+test "--infer asks zanity.toml's own questions, and holds a retuned one to its own threshold" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    const io = std.testing.io;
+    var project = try InferRun.initInferRun(arena, io);
+    defer project.tmp.cleanup();
+    defer project.mock.child.kill(io);
+    try project.tmp.dir.writeFile(io, .{ .sub_path = "zanity.toml", .data =
+        \\[questions."payment-without-key"]
+        \\question = "Does the function charge a card without an idempotency key?"
+        \\finding = "A card is charged without an idempotency key"
+        \\fix = "Pass the order's id as the payment's idempotency key."
+        \\severity = "error"
+        \\
+        \\[questions."misleading-error"]
+        \\threshold = 0.99
+        \\
+    });
+    try project.tmp.dir.writeFile(io, .{ .sub_path = "pay.py", .data = "def charge(card, amount):\n    # judge: payment-without-key\n    return card.charge(amount)\n" });
+    const run = try project.checkInferring(arena, io);
+    // The mock is 95% sure of every marked question: enough for the new one, short of the retuned 0.99.
+    try expectOutput(run.stdout, &.{ "rule=\"payment-without-key\"", "severity=\"error\"", "In 'charge': A card is charged without an idempotency key" }, &.{"rule=\"misleading-error\""});
+}
+
 test "--infer asks each unit only its own questions and skips what checks settled" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();

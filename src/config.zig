@@ -13,6 +13,17 @@
 //!     concurrency = 16                         # requests to the model at once
 //!     threshold = 0.9                          # how sure it must be to report
 //!
+//!     [questions."payment-without-key"]        # a --infer question of your own
+//!     question = "Does the function charge a card without an idempotency key?"
+//!     finding = "A card is charged without an idempotency key"
+//!     fix = "Pass the order's id as the payment's idempotency key."
+//!     severity = "error"                       # error, warning (the default) or information
+//!     asks = "function"                        # function, errors, fixture, test, file or project
+//!     threshold = 0.9                          # this question's own; [infer] threshold otherwise
+//!
+//!     [questions."cwe-15"]                     # or retune one of zanity's: its threshold,
+//!     threshold = 0.95                         # question, finding, fix or severity
+//!
 //!     [paths."src/*_test.zig"]                 # gitignore syntax, relative to this file
 //!     disable = ["process-in-test"]            # these rules don't report here
 //!
@@ -38,6 +49,8 @@ const ignore = @import("ignore.zig");
 pub const file_name = "zanity.toml";
 pub const max_excludes = 256;
 pub const max_concurrency = 64;
+/// Questions zanity.toml can define or retune.
+pub const max_questions = 64;
 pub const max_path_sections = 32;
 const max_file_bytes = 1 << 20;
 pub const max_terms = 512;
@@ -96,6 +109,15 @@ pub const Config = struct {
     /// Words that give a name its direction, so `us_to_uk` and `uk_to_us` aren't drift; none for the defaults.
     directional: [max_directional][]const u8 = undefined,
     directional_len: usize = 0,
+    /// The questions [questions."<name>"] tables define or retune, in the order they appear.
+    questions: [max_questions]rules.Rule = undefined,
+    questions_len: usize = 0,
+
+    pub fn questionRules(self: *const Config) []const rules.Rule {
+        if (self.questions_len > max_questions) assert.panic("{d} questions in room for {d}; the reader must refuse more", .{ self.questions_len, max_questions });
+        if (self.questions_len > 0 and self.questions[0].question.len == 0) assert.panic("the question '{s}' has no question text; the reader checks each table is complete", .{self.questions[0].name});
+        return self.questions[0..self.questions_len];
+    }
 
     pub fn vocabulary(self: *const Config) []const Term {
         if (self.terms_len > max_terms) assert.panic("{d} vocabulary terms in room for {d}; TomlReader must refuse the term past max_terms, so check where it adds terms", .{ self.terms_len, max_terms });
@@ -268,10 +290,11 @@ pub fn parseConfig(bytes: []u8) Error!Config {
         try reader.readEntry(&config);
     }
     if (reader.at != bytes.len) assert.panic("stopped parsing {s} at byte {d} of {d}; the loop in parseConfig() must read to the end of the file", .{ file_name, reader.at, bytes.len });
+    try reader.finishQuestion(&config);
     return config;
 }
 
-const Table = enum { root, rules, infer, paths, vocabulary, synonyms, scope };
+const Table = enum { root, rules, infer, paths, vocabulary, synonyms, scope, questions };
 
 const max_items = max_excludes;
 
@@ -284,6 +307,8 @@ const TomlReader = struct {
     pending_glob: []const u8 = "",
     /// The vocabulary table being read: 0 for [vocabulary], else one more than a scope's index.
     scope: u8 = 0,
+    /// Where the [questions] table being read starts, for saying which one is incomplete.
+    question_line: u32 = 0,
 
     fn line(self: *const TomlReader) u32 {
         if (self.at > self.bytes.len) assert.panic("counting the line of byte {d} in a {d}-byte file; nothing may move self.at past the end, so check the last place that advanced it", .{ self.at, self.bytes.len });
@@ -370,6 +395,12 @@ const TomlReader = struct {
         const start = self.at;
         self.at += 1;
         const name = self.readKey() orelse return self.fail("expected a table name after '['; write [infer] or [paths.\"<pattern>\"].", .{});
+        try self.finishQuestion(config);
+        if (std.mem.eql(u8, name, "questions")) {
+            try self.readQuestionHeader(config);
+            if (self.at <= start) assert.panic("reading a [questions] header at byte {d} consumed nothing", .{start});
+            return;
+        }
         if (std.mem.eql(u8, name, "vocabulary") or std.mem.eql(u8, name, "domains") or std.mem.eql(u8, name, "contexts")) {
             try self.readVocabularyHeader(config, name);
             if (self.at <= start) assert.panic("reading a vocabulary header at byte {d} consumed nothing", .{start});
@@ -384,7 +415,7 @@ const TomlReader = struct {
         if (self.peek() != ']') return self.fail("expected ']' after '[{s}'; close the table name with ']'.", .{name});
         self.at += 1;
         self.table = std.meta.stringToEnum(Table, name) orelse .root;
-        if (self.table == .root or self.table == .vocabulary) return self.fail("'[{s}]' isn't a table zanity knows; the tables are [rules], [infer], [paths.\"<pattern>\"], [vocabulary], [domains.<name>] and [contexts.<name>].", .{name});
+        if (self.table == .root or self.table == .vocabulary or self.table == .questions) return self.fail("'[{s}]' isn't a table zanity knows; the tables are [rules], [infer], [paths.\"<pattern>\"], [questions.\"<name>\"], [vocabulary], [domains.<name>] and [contexts.<name>].", .{name});
         if (self.table == .paths) try self.readPathSection(config);
         if (self.at <= start) assert.panic("reading a table header at byte {d} consumed nothing; readHeader() must consume at least the '[' it starts at", .{start});
     }
@@ -522,6 +553,70 @@ const TomlReader = struct {
         if (setting == .threshold and config.threshold == null) assert.panic("read [infer] threshold but stored nothing; its branch of readInferSetting() must store it", .{});
     }
 
+    /// `[questions."<name>"]`: starts a question of the file's own, or retunes one of zanity's,
+    /// starting from what zanity asks.
+    fn readQuestionHeader(self: *TomlReader, config: *Config) Error!void {
+        const start = self.at;
+        if (self.peek() != '.') return self.fail("'[questions]' needs the question's name, such as [questions.\"payment-without-key\"].", .{});
+        self.at += 1;
+        const name = (if (self.peek() == '"') try self.readString("questions") else self.readKey()) orelse return self.fail("expected a name after '[questions.', such as [questions.\"payment-without-key\"].", .{});
+        if (self.peek() != ']') return self.fail("expected ']' after the question's name; close the table with ']'.", .{});
+        self.at += 1;
+        if (name.len == 0) return self.fail("a question's name is empty; name it, such as [questions.\"payment-without-key\"].", .{});
+        for (config.questionRules()) |q| if (std.mem.eql(u8, q.name, name)) return self.fail("[questions.\"{s}\"] appears twice; put its settings in one table.", .{name});
+        if (config.questions_len == max_questions) return self.fail("there are more than {d} [questions] tables; keep the ones that matter most.", .{max_questions});
+        const builtin = if (rules.ruleIndex(name)) |i| rules.all[i] else null;
+        if (builtin) |b| if (b.question.len == 0) return self.fail("'{s}' is a deterministic rule, not a question, so there is nothing to retune; give your question a name of its own.", .{name});
+        config.questions[config.questions_len] = builtin orelse .{ .name = name, .advice = "", .severity = .warning, .tier = .default, .question = "", .judgement = "", .asks = .function };
+        config.questions[config.questions_len].name = name;
+        config.questions_len += 1;
+        self.table = .questions;
+        self.question_line = self.line();
+        if (self.at <= start) assert.panic("reading a [questions] header from byte {d} ended at {d}, having consumed nothing", .{ start, self.at });
+        if (config.questions_len > max_questions) assert.panic("{d} questions in room for {d}; the check above refuses more", .{ config.questions_len, max_questions });
+    }
+
+    /// One setting of the question being read.
+    fn readQuestionSetting(self: *TomlReader, config: *Config, key: []const u8) Error!void {
+        if (config.questions_len == 0) assert.panic("reading '{s}' with no [questions] table open; readQuestionHeader() opens one first", .{key});
+        const QuestionSetting = enum { question, finding, fix, severity, asks, threshold };
+        const setting = std.meta.stringToEnum(QuestionSetting, key) orelse return self.fail("'{s}' isn't a question setting; the settings are question, finding, fix, severity, asks and threshold.", .{key});
+        const q = &config.questions[config.questions_len - 1];
+        if (setting == .threshold) {
+            const value = try self.readDecimal(key);
+            if (!(value > 0 and value <= 1)) return self.fail("threshold is {d}; it must be above 0 and at most 1, such as 0.9 to report only what the model is at least 90% sure of.", .{value});
+            q.threshold = value;
+            return;
+        }
+        const text = try self.readString(key);
+        switch (setting) {
+            .threshold => unreachable,
+            .severity => q.severity = std.meta.stringToEnum(rules.Severity, text) orelse return self.fail("severity must be \"error\", \"warning\" or \"information\".", .{}),
+            .asks => q.asks = std.meta.stringToEnum(rules.Asks, text) orelse return self.fail("asks must be \"function\", \"errors\", \"fixture\", \"test\", \"file\" or \"project\".", .{}),
+            .question, .finding, .fix => {
+                if (text.len == 0) return self.fail("'{s}' is empty; write it, or remove the line.", .{key});
+                switch (setting) {
+                    .question => q.question = text,
+                    .finding => q.judgement = text,
+                    else => q.advice = text,
+                }
+            },
+        }
+        if (setting == .question and q.question.len == 0) assert.panic("read a question for '{s}' but stored none", .{q.name});
+    }
+
+    /// Checks the question just read says everything a finding needs.
+    fn finishQuestion(self: *TomlReader, config: *Config) Error!void {
+        if (self.table != .questions) return;
+        if (config.questions_len == 0) assert.panic("finishing a [questions] table that was never opened", .{});
+        const q = config.questions[config.questions_len - 1];
+        if (q.name.len == 0) assert.panic("the question table at line {d} has no name; readQuestionHeader() names it", .{self.question_line});
+        const missing: []const u8 = if (q.question.len == 0) "question" else if (q.judgement.len == 0) "finding" else if (q.advice.len == 0) "fix" else return;
+        const written = std.fmt.bufPrint(&problem, "{s}:{d}: [questions.\"{s}\"] has no {s}; a question of your own needs a question, a finding and a fix.", .{ file_name, self.question_line, q.name, missing }) catch problem[0..];
+        problem_len = written.len;
+        return error.InvalidConfig;
+    }
+
     const Setting = enum { rules, select, disable, exclude };
 
     /// Which setting `key` is at the top of the file or in [rules]: `select` belongs in [rules],
@@ -546,10 +641,17 @@ const TomlReader = struct {
     fn readSetting(self: *TomlReader, config: *Config, key: []const u8) Error!void {
         if (key.len == 0) assert.panic("setting a key with no name at byte {d}; readEntry() must read a key before calling readSetting()", .{self.at});
         if (self.table == .paths) return self.readPathSetting(config, key);
+        if (self.table == .questions) return self.readQuestionSetting(config, key);
         if (self.table == .infer) return self.readInferSetting(config, key);
         if (self.table == .vocabulary or self.table == .synonyms or self.table == .scope) return self.readVocabularySetting(config, key);
-        const which = try self.settingNamed(key);
+        try self.storeSetting(config, try self.settingNamed(key), key);
+        if (config.exclude_len > max_excludes) assert.panic("{d} exclude patterns in room for {d}; readStrings() must refuse lists longer than max_excludes", .{ config.exclude_len, max_excludes });
+    }
+
+    /// Reads and stores a top-level or [rules] setting: exclude, or a rule list.
+    fn storeSetting(self: *TomlReader, config: *Config, which: Setting, key: []const u8) Error!void {
         const items = try self.readStrings(key);
+        if (key.len == 0) assert.panic("storing a setting with no name; readEntry() reads its key first", .{});
         switch (which) {
             .exclude => {
                 for (items) |glob| if (glob.len == 0) return self.fail("an 'exclude' pattern is empty; remove it or name a path.", .{});
@@ -563,7 +665,7 @@ const TomlReader = struct {
                 if (which == .disable) config.disable = set else config.rules = set;
             },
         }
-        if (config.exclude_len > max_excludes) assert.panic("{d} exclude patterns in room for {d}; readStrings() must refuse lists longer than max_excludes", .{ config.exclude_len, max_excludes });
+        if (which == .exclude and config.exclude_len != items.len) assert.panic("read {d} exclude patterns but stored {d}", .{ items.len, config.exclude_len });
     }
 
     fn readInteger(self: *TomlReader, key: []const u8) Error!i64 {

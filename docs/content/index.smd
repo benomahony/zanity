@@ -322,6 +322,19 @@ concurrency = 16
 # How sure the model must be for a judgement to become a finding (above 0 up to 1, default 0.8).
 threshold = 0.9
 
+# A question of your own for --infer: a table named for its rule, with the question, what a
+# finding says and how to fix it. severity (default "warning"), asks (default "function"; or
+# "errors", "fixture", "test", "file" or "project") and threshold are optional.
+[questions."payment-without-key"]
+question = "Does the function charge a card without an idempotency key?"
+finding = "A card is charged without an idempotency key"
+fix = "Pass the order's id as the payment's idempotency key."
+severity = "error"
+
+# Naming one of zanity's questions retunes it instead: give only what changes.
+[questions."cwe-15"]
+threshold = 0.95
+
 # Rules that don't report in some files. The pattern is .gitignore syntax, relative to this
 # file; add a section per pattern.
 [paths."tests/e2e/"]

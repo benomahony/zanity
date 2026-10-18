@@ -42,6 +42,8 @@ pub const Rule = struct {
     asks: Asks = .errors,
     /// Deterministic rules whose finding inside a unit already answers `question` there.
     settled_by: []const []const u8 = &.{},
+    /// How sure the model must be for `question` to report; [infer] threshold when null.
+    threshold: ?f64 = null,
 
     pub fn answers(rule: Rule, code: []const u8) bool {
         if (rule.name.len == 0) assert.panic("a rule in rules.all has no name (advice: '{s}'); give every entry in rules.all a .name", .{rule.advice});
@@ -238,8 +240,21 @@ pub const core = [_]Rule{
     .{ .name = "long-file", .advice = "Split the file by responsibility into modules of a few hundred lines.", .severity = .warning, .tier = .default, .catalogue = &.{"CWE-1080"} },
 };
 
+/// The questions zanity.toml defines or retunes under [questions."<name>"], set once the file is
+/// read; a retuned question here takes the place of the one in `all`.
+pub var custom: []const Rule = &.{};
+
+/// The question zanity.toml defines or retunes under `name`, if it does.
+pub fn customNamed(name: []const u8) ?*const Rule {
+    if (name.len == 0) assert.panic("looked up a question by an empty name", .{});
+    for (custom) |*rule| if (std.mem.eql(u8, rule.name, name)) return rule;
+    if (custom.len > 0 and custom[0].name.len == 0) assert.panic("the first of {d} questions from zanity.toml has no name; the reader names each from its table", .{custom.len});
+    return null;
+}
+
 pub fn find(code: []const u8) ?Rule {
     if (code.len == 0) assert.panic("looked up a rule by an empty name; pass a rule name or alias such as 'unbounded-loop'", .{});
+    if (customNamed(code)) |rule| return rule.*;
     const i = ruleIndex(code) orelse return null;
     if (!all[i].answers(code)) assert.panic("'{s}' indexed rule {s}, which doesn't answer to it", .{ code, all[i].name });
     return all[i];
@@ -357,7 +372,8 @@ pub const Set = struct {
     pub fn enabled(self: *const Set, name: []const u8) bool {
         if (name.len == 0) assert.panic("asked whether an empty rule name is enabled; pass a rule name", .{});
         if (self.len > all.len) assert.panic("the rule set holds {d} rules but only {d} exist; Set.include() must refuse to add past rules.all.len, so check it", .{ self.len, all.len });
-        const i = ruleIndex(name) orelse return false;
+        // A question of zanity.toml's own runs whenever --infer does; removing its table stops it.
+        const i = ruleIndex(name) orelse return customNamed(name) != null;
         return self.held.isSet(i);
     }
 };

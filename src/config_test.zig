@@ -122,7 +122,7 @@ test "select 'strict' runs the defaults and the strict rules" {
 test "mistakes in zanity.toml name the line and what to write" {
     try expectProblem("rules = [\"recursions\"]\n", "zanity.toml:1: 'recursions' isn't a rule; the rules are listed in the README, 'all' names every rule, 'strict' the defaults and the strict rules, and 'zanity check --rules' takes the same names.");
     try expectProblem("\ndisabled = []\n", "zanity.toml:2: 'disabled' isn't a setting; the settings are exclude and, under [rules], select and disable, and under [infer], url, model, api_key_env, concurrency and threshold.");
-    try expectProblem("[inference]\n", "zanity.toml:1: '[inference]' isn't a table zanity knows; the tables are [rules], [infer], [paths.\"<pattern>\"], [vocabulary], [domains.<name>] and [contexts.<name>].");
+    try expectProblem("[inference]\n", "zanity.toml:1: '[inference]' isn't a table zanity knows; the tables are [rules], [infer], [paths.\"<pattern>\"], [questions.\"<name>\"], [vocabulary], [domains.<name>] and [contexts.<name>].");
     try expectProblem("[contexts]\n", "zanity.toml:1: '[contexts]' needs a name, such as [contexts.billing].");
     try expectProblem("[vocabulary.words]\n", "zanity.toml:1: '[vocabulary.words]' isn't a table zanity knows; the only one inside [vocabulary] is synonyms.");
     try expectProblem("[contexts.billing]\ninclude = [\"\"]\n", "zanity.toml:2: an include pattern of [billing] is empty; name the files it covers.");
@@ -138,6 +138,34 @@ test "mistakes in zanity.toml name the line and what to write" {
     try expectProblem("rules = []\n", "zanity.toml:1: 'rules' is empty, so nothing would run; list at least one rule, or remove it to run the defaults.");
     try expectProblem("exclude = [\"a\" \"b\"]\n", "zanity.toml:1: items in 'exclude' must be separated by commas, such as [\"a\", \"b\"].");
     try expectProblem("rules = [\"recursion\"] extra\n", "zanity.toml:1: unexpected 'e' after a value; put each setting on its own line.");
+    try expectProblem("[questions.\"mine\"]\nquestion = \"Does it?\"\nfinding = \"It does\"\n", "zanity.toml:1: [questions.\"mine\"] has no fix; a question of your own needs a question, a finding and a fix.");
+    try expectProblem("[questions.\"long-function\"]\nthreshold = 0.9\n", "zanity.toml:1: 'long-function' is a deterministic rule, not a question, so there is nothing to retune; give your question a name of its own.");
+    try expectProblem("[questions.\"cwe-15\"]\nseverity = \"fatal\"\n", "zanity.toml:2: severity must be \"error\", \"warning\" or \"information\".");
+    try expectProblem("[questions.\"cwe-15\"]\nweight = 2\n", "zanity.toml:2: 'weight' isn't a question setting; the settings are question, finding, fix, severity, asks and threshold.");
+}
+
+test "a [questions] table adds a question, or retunes one of zanity's from what it asks" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const c = try parsed(arena_state.allocator(),
+        \\[questions."payment-without-key"]
+        \\question = "Does the function charge a card without an idempotency key?"
+        \\finding = "A card is charged without an idempotency key"
+        \\fix = "Pass the order's id as the idempotency key."
+        \\severity = "error"
+        \\threshold = 0.9
+        \\
+        \\[questions."cwe-15"]
+        \\threshold = 0.95
+        \\
+    );
+    const questions = c.questionRules();
+    try std.testing.expectEqual(@as(usize, 2), questions.len);
+    try std.testing.expectEqualStrings("payment-without-key", questions[0].name);
+    try std.testing.expectEqual(rules.Severity.@"error", questions[0].severity);
+    try std.testing.expectEqual(@as(?f64, 0.9), questions[0].threshold);
+    try std.testing.expectEqualStrings((rules.find("cwe-15") orelse unreachable).question, questions[1].question);
+    try std.testing.expectEqual(@as(?f64, 0.95), questions[1].threshold);
 }
 
 test "a [paths] section turns rules off for the files its pattern matches" {

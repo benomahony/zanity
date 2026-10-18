@@ -291,6 +291,8 @@ fn runCheck(ctx: *zcli.Context, options: CheckOptions) ![]const Row {
     if (options.watch) return watchCheck(ctx, ws, options, agent);
     ws.settings = &settings;
     defer ws.settings = null;
+    rules.custom = settings.questionRules();
+    defer rules.custom = &.{};
     var selected = if (options.rules) |list| try parseRules(ctx, ws, list) else settings.selection(options.strict);
     if (options.rules != null and options.strict) selected.includeTier(.strict);
     if (options.infer) try connectInference(ctx, ws, &selected, options.rules == null);
@@ -403,6 +405,7 @@ fn watchCheck(ctx: *zcli.Context, ws: *Workspace, options: CheckOptions, asked_f
         if (terminal) try out.writer.writeAll(watch.clear_screen);
         const settings = try loadSettings(ctx, checks, settings_arena.allocator());
         checks.settings = &settings;
+        rules.custom = settings.questionRules();
         var selected = if (options.rules) |list| try parseRules(ctx, checks, list) else settings.selection(options.strict);
         if (options.rules != null and options.strict) selected.includeTier(.strict);
         var live = Live.initLive(console(ctx, err), checks.io, !ctx.quiet);

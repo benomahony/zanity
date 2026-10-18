@@ -84,6 +84,7 @@ pub fn renderSchema(w: *std.Io.Writer) !void {
 fn renderInferAndPaths(w: *std.Io.Writer) !void {
     if (config.max_path_sections == 0) assert.panic("config.max_path_sections is 0, so no [paths] table could be written; raise it in src/config.zig", .{});
     try renderInfer(w);
+    try renderQuestions(w);
     try w.print(
         \\    "paths": {{
         \\      "description": "Rules that don't report in some files, one table per pattern, such as [paths.\"tests/e2e/\"]. Patterns are .gitignore syntax, relative to this file.",
@@ -153,6 +154,32 @@ fn renderInfer(w: *std.Io.Writer) !void {
         \\      }}
         \\    }},
     , .{ config.max_concurrency, infer.default_concurrency, infer.default_threshold });
+}
+
+/// The [questions."<name>"] tables: questions --infer asks besides zanity's own, or retunes.
+fn renderQuestions(w: *std.Io.Writer) !void {
+    if (config.max_questions == 0) assert.panic("config.max_questions is 0, so no [questions] table could be written; raise it in src/config.zig", .{});
+    const start = w.end;
+    try w.print(
+        \\    "questions": {{
+        \\      "description": "Questions check --infer asks besides zanity's own, each a table named for its rule. Naming one of zanity's questions, such as cwe-15, retunes it instead: give only what changes.",
+        \\      "type": "object",
+        \\      "maxProperties": {d},
+        \\      "additionalProperties": {{
+        \\        "type": "object",
+        \\        "additionalProperties": false,
+        \\        "properties": {{
+        \\          "question": {{ "description": "The yes or no question asked about each unit, such as \"Does the function charge a card without an idempotency key?\"", "type": "string", "minLength": 1 }},
+        \\          "finding": {{ "description": "What a finding says, as a sentence, such as \"A card is charged without an idempotency key\".", "type": "string", "minLength": 1 }},
+        \\          "fix": {{ "description": "How to fix what it finds.", "type": "string", "minLength": 1 }},
+        \\          "severity": {{ "description": "How serious a finding is.", "enum": ["error", "warning", "information"], "default": "warning" }},
+        \\          "asks": {{ "description": "What it is asked about: every function, functions that report errors, test fixtures and helpers, tests, each whole file, or the project's build and CI files.", "enum": ["function", "errors", "fixture", "test", "file", "project"], "default": "function" }},
+        \\          "threshold": {{ "description": "How sure the model must be for this question to report; [infer] threshold when unset.", "type": "number", "exclusiveMinimum": 0, "maximum": 1 }}
+        \\        }}
+        \\      }}
+        \\    }},
+    , .{config.max_questions});
+    if (w.end <= start) assert.panic("rendering the [questions] tables left the writer at byte {d}, where it started at {d}; renderQuestions() must write them", .{ w.end, start });
 }
 
 /// The [vocabulary] table and the [domains.<name>] and [contexts.<name>] tables.

@@ -129,18 +129,32 @@ pub const Inference = struct {
     fn plan(self: *Inference, unit: *const Unit, settled: []const Finding, enabled: rules.Set) !void {
         if (unit.source.len == 0) assert.panic("{s}: function '{s}' has no source to ask about; facts.unit() must store the function's source when it records the unit", .{ unit.path, unit.name });
         var job: Job = .{ .unit = unit, .unit_hash = self.unitHash(unit), .first = self.slots.len };
-        const adapter = language.named(unit.language);
-        for (&rules.all) |*rule| {
-            if (rule.question.len == 0 or !enabled.enabled(rule.name) or !asked(rule.asks, unit) or decided(settled, unit, rule)) continue;
-            if (adapter) |a| if (!language.applies(a, rule.name)) continue;
-            const answer = try self.store.cached(self.model, store.digest(&.{rule.question}), job.unit_hash);
-            try self.slots.add(.{ .rule = rule, .answer = answer, .known = answer != null });
+        const target: Target = .{ .unit = unit, .unit_hash = job.unit_hash, .settled = settled, .enabled = enabled, .adapter = language.named(unit.language) };
+        for (&rules.all) |*builtin| {
+            // zanity.toml may retune the question; its own questions follow zanity's.
+            const rule = rules.customNamed(builtin.name) orelse builtin;
+            try self.queue(target, rule);
         }
+        for (rules.custom) |*rule| if (rules.ruleIndex(rule.name) == null) try self.queue(target, rule);
         job.count = self.slots.len - job.first;
         if (job.count == 0) return;
         job.state = try self.stateOf(unit);
         try self.jobs.add(job);
         if (job.first + job.count > self.slots.len) assert.panic("{s}: '{s}' claims slots {d}..{d} of {d}", .{ unit.path, unit.name, job.first, job.first + job.count, self.slots.len });
+    }
+
+    /// The unit questions are queued about, and what decides whether each is asked.
+    const Target = struct { unit: *const Unit, unit_hash: store.Digest, settled: []const Finding, enabled: rules.Set, adapter: ?*const language.Adapter };
+
+    /// Adds `rule`'s question about the target unit to the pool, with its answer when the store has one.
+    fn queue(self: *Inference, target: Target, rule: *const rules.Rule) !void {
+        const unit = target.unit;
+        if (rule.name.len == 0) assert.panic("{s}: queueing a question with no name about '{s}'", .{ unit.path, unit.name });
+        if (rule.question.len == 0 or !target.enabled.enabled(rule.name) or !asked(rule.asks, unit) or decided(target.settled, unit, rule)) return;
+        if (target.adapter) |a| if (rules.ruleIndex(rule.name) != null and !language.applies(a, rule.name)) return;
+        const answer = try self.store.cached(self.model, store.digest(&.{rule.question}), target.unit_hash);
+        try self.slots.add(.{ .rule = rule, .answer = answer, .known = answer != null });
+        if (self.slots.len == 0) assert.panic("{s}: queued '{s}' but the pool is empty", .{ unit.path, rule.name });
     }
 
     /// The slots holding a job's questions.
@@ -265,8 +279,9 @@ pub const Inference = struct {
             const p = slot.answer orelse continue;
             const question = store.digest(&.{rule.question});
             if (!known) try self.store.keepAnswer(.{ .model = self.model, .question = question, .unit = job.unit_hash, .language = unit.language, .source = unit.source, .probability = p });
-            const fired = p >= self.threshold;
-            try self.store.observe(.{ .path = unit.path, .rule = rule.name, .unit = job.unit_hash, .unit_name = unit.name, .line = unit.line + 1, .language = unit.language, .model = self.model, .question = question, .probability = p, .threshold = self.threshold, .fired = fired });
+            const threshold = rule.threshold orelse self.threshold;
+            const fired = p >= threshold;
+            try self.store.observe(.{ .path = unit.path, .rule = rule.name, .unit = job.unit_hash, .unit_name = unit.name, .line = unit.line + 1, .language = unit.language, .model = self.model, .question = question, .probability = p, .threshold = threshold, .fired = fired });
             if (!fired) continue;
             // A catalogue question's judgement is a sentence of its own; the others follow the name.
             const sentence = rule.judgement.len > 0 and std.ascii.isUpper(rule.judgement[0]);
