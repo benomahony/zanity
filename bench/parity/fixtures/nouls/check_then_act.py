@@ -1,0 +1,7 @@
+import os
+
+
+def write_once(path, data):
+    if not os.path.exists(path):
+        with open(path, "w") as handle:
+            handle.write(data)

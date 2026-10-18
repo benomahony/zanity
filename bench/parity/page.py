@@ -267,13 +267,35 @@ def inference(data: dict) -> list[str]:
     families, detected = found["catalogue"], found["deterministic"]
     assert rows, f"nouls listed no named questions beside its {families} catalogue ones; check its config"
     assert families >= detected, f"{detected} detected families can't outnumber the {families} in the catalogue"
-    ran = "" if found["key"] else "`TYPESAFE_API_KEY` was not set, so neither nouls nor `zanity check --infer` ran; this compares the questions. "
+    asked = found.get("asked", 0)
+    left = families - detected - asked
     return [
-        f"nouls asks a model {len(rows)} named questions and one question per error-catalogue family, {families} in all. {ran}The list comes from nouls' own config loader.",
+        f"nouls asks a model {len(rows)} named questions and one question per error-catalogue family, {families} in all. The list comes from nouls' own config loader.",
         "",
         *table(["nouls question", "zanity --infer question", "In zanity"], rows),
-        f"Of nouls' {families} catalogue questions, {detected} ({pct(detected, families)}) are about a family a deterministic zanity rule detects, so zanity answers them without a model. zanity asks no question per family.",
+        f"Of nouls' {families} catalogue questions, {detected} ({pct(detected, families)}) are about a family a deterministic zanity rule detects, so zanity answers them without a model, and zanity `--infer` asks {asked} ({pct(asked, families)}) itself, as rules named for their family. The other {left} are about families only C, C++, PHP or Perl can have, which zanity has no grammar for.",
         "",
+        *live(data),
+    ]
+
+
+def live(data: dict) -> list[str]:
+    """Both tools' answers from the same model to each named question about its fixture."""
+    found = data.get("inference_live")
+    if not found:
+        return ["Neither nouls nor `zanity check --infer` has been run here against a model; `parity.py --infer-url` runs both against a System One server, such as a local Kev.", ""]
+    rows = found["rows"]
+    assert rows, f"results.json has live inference for {found.get('model')} with no rows; rerun parity.py --infer-url"
+    show = lambda p: "–" if p is None else f"{p:.2f}"
+    table_rows = [[f"`{r['rule']}`", f"`{r['zanity']}`", show(r["theirs"]), mark(r["theirs_fires"]), show(r["ours"]), mark(r["ours_fires"]), codes(r["settled"])] for r in rows]
+    both = sum(r["theirs_fires"] and r["ours_fires"] for r in rows)
+    assert all(r["rule"] for r in rows), f"a live row has no question: {[r for r in rows if not r['rule']][:1]}"
+    return [
+        "# Asking the same model",
+        "",
+        f"Each named question asked about a fixture written to have the problem it asks about, by both tools, of the same model, {found['model']}, served locally. The probability is how sure the model was that the problem is there; a finding needs 0.8. Settled: a deterministic zanity rule found it, so zanity didn't need to ask. Both reported {both} of {len(rows)}.",
+        "",
+        *table(["nouls question", "zanity question", "nouls p", "nouls reports", "zanity p", "zanity reports", "Settled by"], table_rows),
     ]
 
 
@@ -412,6 +434,7 @@ def render_performance(data: dict) -> str:
         "```sh",
         "zig build",
         "python3 bench/parity/parity.py   # scores, times, and writes every comparison page",
+        "python3 bench/parity/parity.py --skip-bench --infer-url http://127.0.0.1:8009 --infer-model kev-4b   # also asks both inference linters, through a local Kev",
         "python3 bench/parity/page.py     # rewrites the pages from bench/parity/results.json",
         "```",
         "",

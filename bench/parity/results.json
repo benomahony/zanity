@@ -1,6 +1,6 @@
 {
   "when": "2026-10-18",
-  "commit": "1857167",
+  "commit": "68a6651",
   "runs": 5,
   "fixtures": [
     {
@@ -1656,7 +1656,7 @@
     "bonsai": {
       "recall": {
         "dead-parameter": {
-          "old": 315,
+          "old": 320,
           "matched": 44
         },
         "dead-symbol": {
@@ -1775,6 +1775,7 @@
     }
   },
   "inference": {
+    "asked": 327,
     "key": false,
     "questions": [
       {
@@ -1930,7 +1931,7 @@
     ],
     "catalogue": 475,
     "unknown": 0,
-    "deterministic": 103,
+    "deterministic": 105,
     "detected_by": {
       "parameter-file-path": 7,
       "hardcoded-secret": 7,
@@ -1957,8 +1958,10 @@
       "duplicated-expression": 1,
       "passthrough-wrapper": 1,
       "structural-twins": 1,
+      "variadic-parameter": 1,
       "long-parameter-list": 1,
       "empty-block": 1,
+      "goto-statement": 1,
       "float-equality": 1,
       "long-file": 1,
       "complex-function": 1,
@@ -2013,6 +2016,269 @@
       "test-double": 1,
       "relaxed-check": 1
     }
+  },
+  "inference_live": {
+    "model": "kev-4b",
+    "rows": [
+      {
+        "rule": "name_behaviour_mismatch",
+        "zanity": "name-behaviour-mismatch",
+        "theirs": 0.5835,
+        "theirs_fires": false,
+        "ours": 0.5827,
+        "ours_fires": false,
+        "settled": []
+      },
+      {
+        "rule": "docstring_drift",
+        "zanity": "comment-drift",
+        "theirs": 0.4851,
+        "theirs_fires": false,
+        "ours": 0.4851,
+        "ours_fires": false,
+        "settled": []
+      },
+      {
+        "rule": "query_with_side_effect",
+        "zanity": "query-with-side-effect",
+        "theirs": 0.4795,
+        "theirs_fires": false,
+        "ours": 0.4812,
+        "ours_fires": false,
+        "settled": []
+      },
+      {
+        "rule": "partial_failure",
+        "zanity": "partial-failure",
+        "theirs": 0.6954,
+        "theirs_fires": false,
+        "ours": 0.7263,
+        "ours_fires": false,
+        "settled": []
+      },
+      {
+        "rule": "check_then_act",
+        "zanity": "check-then-act",
+        "theirs": 0.4967,
+        "theirs_fires": false,
+        "ours": 0.4204,
+        "ours_fires": false,
+        "settled": []
+      },
+      {
+        "rule": "non_idempotent_retry",
+        "zanity": "non-idempotent-retry",
+        "theirs": 0.4186,
+        "theirs_fires": false,
+        "ours": 0.4186,
+        "ours_fires": false,
+        "settled": []
+      },
+      {
+        "rule": "unit_mismatch",
+        "zanity": "unit-mismatch",
+        "theirs": 0.5617,
+        "theirs_fires": false,
+        "ours": 0.5597,
+        "ours_fires": false,
+        "settled": []
+      },
+      {
+        "rule": "boundary_error",
+        "zanity": "boundary-error",
+        "theirs": 0.5417,
+        "theirs_fires": false,
+        "ours": 0.5472,
+        "ours_fires": false,
+        "settled": []
+      },
+      {
+        "rule": "missing_authorisation",
+        "zanity": "missing-authorisation",
+        "theirs": 0.5178,
+        "theirs_fires": false,
+        "ours": 0.5178,
+        "ours_fires": false,
+        "settled": []
+      },
+      {
+        "rule": "misleading_error",
+        "zanity": "misleading-error",
+        "theirs": 0.5667,
+        "theirs_fires": false,
+        "ours": 0.5677,
+        "ours_fires": false,
+        "settled": []
+      },
+      {
+        "rule": "cryptic_error",
+        "zanity": "cryptic-error",
+        "theirs": 0.5174,
+        "theirs_fires": false,
+        "ours": 0.4692,
+        "ours_fires": false,
+        "settled": []
+      },
+      {
+        "rule": "vague_error",
+        "zanity": "vague-error",
+        "theirs": 0.4724,
+        "theirs_fires": false,
+        "ours": null,
+        "ours_fires": true,
+        "settled": []
+      },
+      {
+        "rule": "unconstructive_error",
+        "zanity": "unconstructive-error",
+        "theirs": 0.6209,
+        "theirs_fires": false,
+        "ours": 0.6209,
+        "ours_fires": false,
+        "settled": []
+      },
+      {
+        "rule": "mixed_abstraction",
+        "zanity": "mixed-abstraction",
+        "theirs": 0.8214,
+        "theirs_fires": true,
+        "ours": 0.6034,
+        "ours_fires": false,
+        "settled": []
+      },
+      {
+        "rule": "test_not_isolated",
+        "zanity": "order-dependent-test",
+        "theirs": 0.5514,
+        "theirs_fires": false,
+        "ours": 0.5481,
+        "ours_fires": false,
+        "settled": []
+      },
+      {
+        "rule": "test_not_composable",
+        "zanity": "combinatorial-test",
+        "theirs": 0.5348,
+        "theirs_fires": false,
+        "ours": 0.5353,
+        "ours_fires": false,
+        "settled": []
+      },
+      {
+        "rule": "test_nondeterministic",
+        "zanity": "flaky-test",
+        "theirs": 0.7329,
+        "theirs_fires": false,
+        "ours": null,
+        "ours_fires": true,
+        "settled": [
+          "nondeterministic-test"
+        ]
+      },
+      {
+        "rule": "test_slow",
+        "zanity": "slow-test",
+        "theirs": 0.8253,
+        "theirs_fires": true,
+        "ours": 0.8241,
+        "ours_fires": true,
+        "settled": []
+      },
+      {
+        "rule": "test_hard_to_write",
+        "zanity": "heavy-setup-test",
+        "theirs": 0.5576,
+        "theirs_fires": false,
+        "ours": 0.5574,
+        "ours_fires": false,
+        "settled": []
+      },
+      {
+        "rule": "test_unreadable",
+        "zanity": "unreadable-test",
+        "theirs": 0.5288,
+        "theirs_fires": false,
+        "ours": null,
+        "ours_fires": true,
+        "settled": [
+          "vague-test-name"
+        ]
+      },
+      {
+        "rule": "test_not_behavioural",
+        "zanity": "hollow-test",
+        "theirs": 0.507,
+        "theirs_fires": false,
+        "ours": 0.4323,
+        "ours_fires": false,
+        "settled": []
+      },
+      {
+        "rule": "test_structure_sensitive",
+        "zanity": "implementation-coupled-test",
+        "theirs": 0.7262,
+        "theirs_fires": false,
+        "ours": 0.7248,
+        "ours_fires": false,
+        "settled": []
+      },
+      {
+        "rule": "test_not_automated",
+        "zanity": "manual-test",
+        "theirs": 0.8145,
+        "theirs_fires": true,
+        "ours": null,
+        "ours_fires": true,
+        "settled": [
+          "stdin-in-test"
+        ]
+      },
+      {
+        "rule": "test_not_specific",
+        "zanity": "unfocused-test",
+        "theirs": 0.5781,
+        "theirs_fires": false,
+        "ours": 0.5778,
+        "ours_fires": false,
+        "settled": []
+      },
+      {
+        "rule": "test_not_predictive",
+        "zanity": "self-mocking-test",
+        "theirs": 0.7782,
+        "theirs_fires": false,
+        "ours": 0.7784,
+        "ours_fires": false,
+        "settled": []
+      },
+      {
+        "rule": "test_not_inspiring",
+        "zanity": "trivial-test",
+        "theirs": 0.6972,
+        "theirs_fires": false,
+        "ours": 0.6703,
+        "ours_fires": false,
+        "settled": []
+      },
+      {
+        "rule": "fixture_leaks_state",
+        "zanity": "fixture-leaks-state",
+        "theirs": 0.7388,
+        "theirs_fires": false,
+        "ours": 0.716,
+        "ours_fires": false,
+        "settled": []
+      },
+      {
+        "rule": "fixture_hides_behaviour",
+        "zanity": "fixture-hides-behaviour",
+        "theirs": 0.8954,
+        "theirs_fires": true,
+        "ours": 0.8954,
+        "ours_fires": true,
+        "settled": []
+      }
+    ]
   },
   "cli": {
     "nasa-lsp": {

@@ -20,7 +20,7 @@ import time
 from pathlib import Path
 
 import page
-from score import Zanity, build_corpus, score_corpus, score_fixtures, score_inference, score_languages, zanity_rules
+from score import Server, Zanity, build_corpus, score_inference_live, score_corpus, score_fixtures, score_inference, score_languages, zanity_rules
 from timing import LSP_FILE, bench_cli, bench_lsp
 from tools import REPO, TOOLS
 
@@ -30,6 +30,8 @@ def arguments() -> argparse.Namespace:
     parser.add_argument("--zanity", type=Path, default=REPO / "zig-out" / "bin" / "zanity")
     parser.add_argument("--skip-bench", action="store_true", help="score only; keep the timings already in results.json")
     parser.add_argument("--runs", type=int, default=5)
+    parser.add_argument("--infer-url", help="a System One server, such as a local Kev, to ask both inference linters the named questions about their fixtures")
+    parser.add_argument("--infer-model", default="kev-4b", help="the model --infer-url serves")
     args = parser.parse_args()
     assert args.runs > 0, f"--runs must be at least 1, not {args.runs}"
     assert args.zanity.is_file(), f"{args.zanity} is missing; run `zig build`"
@@ -54,6 +56,10 @@ def main() -> None:
     zanity = Zanity(args.zanity.resolve(), Path(tempfile.mkdtemp(prefix="parity-")) / "store.db")
     commit = subprocess.run(["git", "-C", str(REPO), "rev-parse", "--short", "HEAD"], capture_output=True, text=True, check=True)
     data = {"when": time.strftime("%Y-%m-%d"), "commit": commit.stdout.strip(), "runs": args.runs, **scores(zanity)}
+    if args.infer_url:
+        data["inference_live"] = {"model": args.infer_model, "rows": score_inference_live(zanity, Server(args.infer_url, args.infer_model))}
+    elif page.RESULTS.is_file() and "inference_live" in (kept_live := json.loads(page.RESULTS.read_text())):
+        data["inference_live"] = kept_live["inference_live"]
     if args.skip_bench and page.RESULTS.is_file():
         kept = json.loads(page.RESULTS.read_text())
         data |= {key: kept[key] for key in ("cli", "lsp", "lsp_lines", "runs") if key in kept}

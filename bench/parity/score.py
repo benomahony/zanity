@@ -4,6 +4,7 @@ import json
 import os
 import re
 import shutil
+import sqlite3
 import subprocess
 from collections import Counter
 from dataclasses import dataclass
@@ -50,6 +51,92 @@ class Zanity:
         unplaced = [f for f in found if f["line"] < 1]
         assert not unplaced, f"zanity reports lines from 1, but gave {unplaced[:3]}; fix the reported locations in zanity"
         return found
+
+
+@dataclass
+class Server:
+    """A System One server both tools ask, such as a local Kev, and the model to ask."""
+
+    url: str
+    model: str
+
+    def env(self, base: dict[str, str]) -> dict[str, str]:
+        """base with the variables both tools read to find the server; a local Kev needs no key,
+        but the inference linter's client wants one set."""
+        assert self.url.startswith(("http://", "https://")), f"{self.url} is not a server's address"
+        assert self.model, "name the model the server runs"
+        return base | {"TYPESAFE_BASE_URL": self.url, "TYPESAFE_DEFAULT_MODEL": self.model, "TYPESAFE_API_KEY": base.get("TYPESAFE_API_KEY") or "local"}
+
+
+def settled_by() -> dict[str, list[str]]:
+    """The deterministic rules whose finding already answers each zanity question, from rules.zig."""
+    text = (REPO / "src" / "rules.zig").read_text()
+    found = {m.group(1): re.findall(r'"([^"]+)"', m.group(2)) for m in re.finditer(r'\.name = "([a-z-]+)"[^\n]*?\.settled_by = &\.\{([^}]*)\}', text)}
+    assert found, "found no settled_by in src/rules.zig; check the pattern"
+    assert all(found.values()), f"an empty settled_by in {found}"
+    return found
+
+
+def score_inference_live(zanity: Zanity, server: Server) -> list[dict]:
+    """Both tools' answers, from the same server, to each named question about the fixture that
+    has the problem it asks about: how sure each was, and whether each reported it."""
+    root = FIXTURES / "nouls"
+    named = {q: z for q, z in QUESTIONS.items() if (root / f"{q}.py").exists() or (root / f"test_{q}.py").exists()}
+    adapter = [str(SOURCES / "nouls" / ".venv" / "bin" / "python"), str(HERE / "adapters" / "run_nouls.py"), str(root)]
+    theirs = json.loads(subprocess.run(adapter, env=server.env(os.environ | {"NOULS_PARITY_RULES": ",".join(named)}), capture_output=True, text=True, check=True).stdout)
+    settles = settled_by()
+    rules = sorted({z for z in named.values()} | {r for z in named.values() for r in settles.get(z, [])})
+    store = zanity.store.parent / "inference.db"
+    store.unlink(missing_ok=True)
+    args = [str(zanity.binary), "check", "--infer", "--json", "--quiet", "--rules", ",".join(rules), "."]
+    out = subprocess.run(args, cwd=root, env=server.env(zanity.env(store)), capture_output=True, text=True, check=False)
+    assert out.returncode <= 1, f"zanity check --infer failed in {root}:\n{out.stderr}"
+    reported = json.loads(out.stdout or "[]")
+    ours = [dict(zip(("path", "rule", "probability", "threshold", "fired"), r)) for r in sqlite3.connect(store).execute("SELECT path, rule, probability, threshold, fired FROM observations")]
+    answers = Answers(theirs, ours, reported, settles)
+    rows = [live_row(question, rule, fixture_named(root, question), answers) for question, rule in named.items()]
+    assert rows, f"no named question has a fixture in {root}"
+    assert len(rows) == len(named), "a row per question with a fixture"
+    return rows
+
+
+@dataclass
+class Answers:
+    """What both tools said about the fixtures: the inference linter's answers, zanity's answers,
+    zanity's findings, and which deterministic rules settle each zanity question."""
+
+    theirs: list[dict]
+    ours: list[dict]
+    reported: list[dict]
+    settles: dict[str, list[str]]
+
+
+def fixture_named(root: Path, question: str) -> str:
+    """The fixture written for a question: a module, or a test file for test and fixture questions."""
+    name = f"{question}.py" if (root / f"{question}.py").exists() else f"test_{question}.py"
+    assert (root / name).exists(), f"{question} has no fixture in {root}"
+    assert question, "a question has no name"
+    return name
+
+
+def live_row(question: str, rule: str, name: str, a: Answers) -> dict:
+    """Both tools' answers to one question about its own fixture."""
+    assert question and rule, f"a live row needs both questions, not {question!r} and {rule!r}"
+    mine = [o for o in a.theirs if Path(o["path"]).name == name and o["rule"] == question]
+    zans = [o for o in a.ours if Path(o["path"]).name == name and o["rule"] == rule]
+    found = {f["rule"] for f in a.reported if Path(f["path"]).name == name}
+    settled = sorted(found & set(a.settles.get(rule, [])))
+    row = {
+        "rule": question,
+        "zanity": rule,
+        "theirs": max((o["probability"] for o in mine), default=None),
+        "theirs_fires": any(o["fired"] for o in mine),
+        "ours": max((o["probability"] for o in zans), default=None),
+        "ours_fires": rule in found or bool(settled),
+        "settled": settled,
+    }
+    assert row["theirs"] is None or 0 <= row["theirs"] <= 1, f"{question} has probability {row['theirs']}"
+    return row
 
 
 def zanity_rules() -> dict[str, dict]:
@@ -248,7 +335,9 @@ def score_inference(rules: dict[str, dict]) -> dict:
         for rule in named
     ]
     detected = Counter(rule for family in catalogue for rule in family.get("rule_ids", []))
+    asked = {q["id"] for q in json.loads((REPO / "catalogue" / "questions.json").read_text())}
     return {
+        "asked": sum(family.get("id") in asked for family in catalogue),
         "key": listed["key"],
         "questions": questions,
         "catalogue": len(catalogue),
