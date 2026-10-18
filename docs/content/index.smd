@@ -189,7 +189,9 @@ sqlite3 ~/.cache/zanity/zanity.db "
 
 - **zanity: fix &lt;rule&gt;**, the edit `--fix` would make, for each finding zanity can fix;
 - **zanity: fix all N in this file**, every such edit in the file at once (kind `source.fixAll.zanity`, so an editor can run it on save);
-- **zanity: flag &lt;rule&gt; here as a false positive**, for any finding that is wrong.
+- **zanity: flag &lt;rule&gt; here as a false positive**, for any deterministic finding that is wrong.
+
+`zanity lsp --infer` also asks the model on every check, as `zanity check --infer` does; its answers are cached, so after the first check only edited code is asked. A finding the model made offers **zanity: &lt;rule&gt; is not a problem here**, which hides it and stops it being reported for that function, and **zanity: confirm &lt;rule&gt; here**, the same marks `zanity mark` makes.
 
 A flag hides the finding for the rest of the session and keeps it, with the line of code it was about and the zanity version, in the `false_positives` table of `~/.cache/zanity/zanity.db`, so the rule can be made more precise:
 

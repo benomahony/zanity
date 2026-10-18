@@ -8,6 +8,7 @@ const assert = @import("assert.zig");
 const memory = @import("memory.zig");
 const nameHash = @import("facts.zig").nameHash;
 const store = @import("store.zig");
+const rules = @import("rules.zig");
 const Telemetry = @import("telemetry.zig").Telemetry;
 const Attribute = @import("telemetry.zig").Attribute;
 const Io = std.Io;
@@ -81,12 +82,23 @@ const Entry = struct {
     }
 };
 
+/// Keeps the unit of the first answer `eachObserved` reads.
+fn firstUnit(found: *?store.Digest, observed: store.Observed) anyerror!bool {
+    if (found.* != null) assert.panic("kept a second answer at {s}:{d}; firstUnit() stops after one", .{ observed.path, observed.line });
+    if (observed.rule.len == 0) assert.panic("a kept answer at {s}:{d} has no rule", .{ observed.path, observed.line });
+    found.* = observed.unit;
+    return false;
+}
+
 /// Which finding a command is about, as its code action passes it back.
 const Target = struct { path: []const u8, line: u32, column: u32, rule: []const u8, message: []const u8 };
 
 /// The commands the server's code actions run.
 const flag_command = "zanity.flagFalsePositive";
 const fixed_command = "zanity.fixApplied";
+/// Mark a --infer finding real, or not a problem for its function, as `zanity mark` does.
+const confirm_command = "zanity.confirmFinding";
+const dismiss_command = "zanity.notAProblem";
 /// The code action kind that applies every fix in a file.
 const fix_all = "source.fixAll.zanity";
 
@@ -187,6 +199,8 @@ const Scratch = struct {
 pub const Services = struct {
     exe: []const u8,
     version: []const u8,
+    /// Whether each check also asks the model, as `zanity lsp --infer` says.
+    infer: bool = false,
     store: ?*const store.Store = null,
     telemetry: ?*Telemetry = null,
 };
@@ -287,7 +301,7 @@ pub const LanguageServer = struct {
                 .positionEncoding = if (self.utf8) "utf-8" else "utf-16",
                 .textDocumentSync = .{ .openClose = true, .change = 2, .save = true },
                 .codeActionProvider = .{ .codeActionKinds = &[_][]const u8{ "quickfix", fix_all } },
-                .executeCommandProvider = .{ .commands = &[_][]const u8{ flag_command, fixed_command } },
+                .executeCommandProvider = .{ .commands = &[_][]const u8{ flag_command, fixed_command, confirm_command, dismiss_command } },
             },
             .serverInfo = .{ .name = "zanity", .version = self.services.version },
         });
@@ -343,8 +357,9 @@ pub const LanguageServer = struct {
     fn runCheck(self: *LanguageServer, into: *Results) !?[]const Record {
         if (into.entries.len != 0) assert.panic("checking into results that hold {d} findings; clear them first", .{into.entries.len});
         var output: std.heap.FixedBufferAllocator = .init(into.output);
+        const argv = [_][]const u8{ self.services.exe, "check", ".", "--json", "--quiet", "--no-color", "--infer" };
         const result = std.process.run(output.allocator(), self.io, .{
-            .argv = &.{ self.services.exe, "check", ".", "--json", "--quiet", "--no-color" },
+            .argv = argv[0..if (self.services.infer) argv.len else argv.len - 1],
             .cwd = .{ .path = self.root },
             .stdout_limit = .limited(into.output.len / 2),
             .stderr_limit = .limited(1 << 16),
@@ -460,7 +475,7 @@ pub const LanguageServer = struct {
         };
         if (wants(only, fix_all)) if (try self.fixAll(file)) |action| try actions.add(action);
         try self.respond(id, actions.items());
-        if (actions.len > 2 * entries.len + 1) assert.panic("offered {d} actions for {d} findings; offer at most a fix and a flag per finding and one for the file", .{ actions.len, entries.len });
+        if (actions.len > 4 * entries.len + 1) assert.panic("offered {d} actions for {d} findings; offer at most a fix, a flag and two marks per finding and one for the file", .{ actions.len, entries.len });
     }
 
     /// Adds the finding's own fix, when it has one, and the action that flags it.
@@ -476,9 +491,18 @@ pub const LanguageServer = struct {
             const title = try s.text.format("zanity: fix {s}", .{rule});
             try s.actions.add(.{ .title = title, .kind = "quickfix", .diagnostics = diagnostics, .isPreferred = true, .edit = .{ .changes = .{ .uri = file.uri, .edits = edit[0..1] } }, .command = .{ .title = title, .command = fixed_command, .arguments = target } });
         }
-        const title = try s.text.format("zanity: flag {s} here as a false positive", .{rule});
-        try s.actions.add(.{ .title = title, .kind = "quickfix", .diagnostics = diagnostics, .isPreferred = false, .command = .{ .title = title, .command = flag_command, .arguments = target } });
-        if (s.actions.len - before > 2) assert.panic("offered {d} actions for one {s} finding; offer at most a fix and a flag", .{ s.actions.len - before, rule });
+        // A judgement of the model is marked, so it stops being reported for that function.
+        const judged = if (rules.find(rule)) |r| r.question.len > 0 else false;
+        if (judged and self.services.store != null) {
+            const dismiss = try s.text.format("zanity: {s} is not a problem here", .{rule});
+            try s.actions.add(.{ .title = dismiss, .kind = "quickfix", .diagnostics = diagnostics, .isPreferred = false, .command = .{ .title = dismiss, .command = dismiss_command, .arguments = target } });
+            const confirm = try s.text.format("zanity: confirm {s} here", .{rule});
+            try s.actions.add(.{ .title = confirm, .kind = "quickfix", .diagnostics = diagnostics, .isPreferred = false, .command = .{ .title = confirm, .command = confirm_command, .arguments = target } });
+        } else {
+            const title = try s.text.format("zanity: flag {s} here as a false positive", .{rule});
+            try s.actions.add(.{ .title = title, .kind = "quickfix", .diagnostics = diagnostics, .isPreferred = false, .command = .{ .title = title, .command = flag_command, .arguments = target } });
+        }
+        if (s.actions.len - before > 3) assert.panic("offered {d} actions for one {s} finding; offer at most a fix and a flag or two marks", .{ s.actions.len - before, rule });
     }
 
     /// One action with every fix in the file whose edit does not overlap an earlier one, as
@@ -512,12 +536,43 @@ pub const LanguageServer = struct {
         if (target.line == 0 or target.column == 0) return self.sendError(id, -32602, try self.scratch.text.format("The finding is at line {d} column {d}, but both count from 1.", .{ target.line, target.column }));
         if (std.mem.eql(u8, call.command, flag_command)) {
             try self.flag(target);
+        } else if (std.mem.eql(u8, call.command, confirm_command) or std.mem.eql(u8, call.command, dismiss_command)) {
+            try self.mark(target, std.mem.eql(u8, call.command, confirm_command));
         } else if (std.mem.eql(u8, call.command, fixed_command)) {
             const started = if (self.services.telemetry) |t| t.now() else Io.Timestamp.zero;
             try self.trace("fix applied", started, &attributesOf(target, ""));
-        } else return self.sendError(id, -32601, try self.scratch.text.format("zanity has no command {s}; it has {s} and {s}.", .{ call.command, flag_command, fixed_command }));
+        } else return self.sendError(id, -32601, try self.scratch.text.format("zanity has no command {s}; it has {s}, {s}, {s} and {s}.", .{ call.command, flag_command, fixed_command, confirm_command, dismiss_command }));
         try self.respond(id, no_value);
         if (target.line == 0 or target.column == 0) assert.panic("ran {s} for a finding at line {d} column {d}; such a target is refused above", .{ call.command, target.line, target.column });
+    }
+
+    /// Marks a --infer finding real or not a problem in the store, from the answer kept where it
+    /// was reported, and hides one that is not a problem.
+    fn mark(self: *LanguageServer, target: Target, real: bool) !void {
+        if (target.rule.len == 0) assert.panic("marking a finding with no rule at {s}:{d}", .{ target.path, target.line });
+        const kept = self.services.store orelse return self.show(1, "zanity: there is no store to keep the mark in; check ZANITY_STORE names a writable file.");
+        var found: ?store.Digest = null;
+        try kept.eachObserved(.{ .rule = target.rule, .path = target.path, .line = target.line }, &found, firstUnit);
+        const unit = found orelse return self.show(2, try self.scratch.text.format("zanity: no answer is kept for {s} at {s}:{d}; check it again with --infer first.", .{ target.rule, target.path, target.line }));
+        try kept.label(target.rule, unit, real);
+        if (try kept.labelled(target.rule, unit) != real) assert.panic("marked {s} at {s}:{d}, but the store doesn't say so", .{ target.rule, target.path, target.line });
+        if (!real) try self.hide(target);
+        try self.show(3, try self.scratch.text.format("zanity: marked {s} at {s}:{d} {s}.", .{ target.rule, target.path, target.line, if (real) "as real" else "not a problem; it won't be reported for this function again" }));
+    }
+
+    /// Stops publishing the finding `target` names until the next check.
+    fn hide(self: *LanguageServer, target: Target) !void {
+        if (target.line == 0) assert.panic("hiding a {s} finding on line 0; findings count lines from 1", .{target.rule});
+        const file = self.current.find(target.path) orelse return;
+        const entries = self.current.entriesOf(file);
+        const index = for (entries, 0..) |entry, i| {
+            const r = entry.record;
+            if (r.line == target.line and r.column == target.column and std.mem.eql(u8, r.rule, target.rule)) break i;
+        } else return;
+        std.mem.copyForwards(Entry, entries[index..], entries[index + 1 ..]);
+        file.count -= 1;
+        try self.publish(file.uri, entries[0 .. entries.len - 1]);
+        if (file.count >= entries.len) assert.panic("hiding a {s} finding left {d} of {d}", .{ target.rule, file.count, entries.len });
     }
 
     /// Keeps a finding the editor flagged as a false positive, sends it as a span, and hides it.

@@ -75,7 +75,7 @@ const UpgradeRow = struct {
     status: []const u8,
 };
 
-const LspOptions = struct {};
+const LspOptions = struct { infer: bool = false };
 
 /// `zanity lsp` writes the protocol to stdout itself, so it has no rows.
 const LspRow = struct { messages: usize };
@@ -136,8 +136,11 @@ const app: zcli.App = .{
     }, .{ .run = runUpgrade, .dry_run = previewUpgrade, .human = renderUpgrade }), zcli.command(LspOptions, LspRow, .{
         .name = "lsp",
         .description = "Serve the language server protocol on stdin and stdout: findings as diagnostics, refreshed on save, and zanity's fixes as code actions.",
-        .examples = &.{"zanity lsp"},
+        .examples = &.{ "zanity lsp", "zanity lsp --infer" },
         .result_title = "Language server",
+        .options = &.{
+            .{ .name = "infer", .help = "Also ask the model on every check, as zanity check --infer does; answers are cached, so only edited code is asked again." },
+        },
     }, .{ .run = runLsp }), zcli.command(calibrate.LabelOptions, calibrate.LabelRow, .{
         .name = "mark",
         .description = "Say whether a --infer finding is real: --confirm it, or mark it --not-a-problem, which stops it being reported for that function.",
@@ -567,7 +570,7 @@ fn renderHuman(ctx: *zcli.Context, rows: []const Row) !void {
     if (ws.checked > ws.files.len) assert.panic("checked {d} files out of {d} collected; count a file as checked only once, in checkFiles()", .{ ws.checked, ws.files.len });
 }
 
-fn runLsp(ctx: *zcli.Context, _: LspOptions) ![]const LspRow {
+fn runLsp(ctx: *zcli.Context, options: LspOptions) ![]const LspRow {
     const ws = workspaceOf(ctx);
     const environ = ws.environ orelse assert.panic("zanity lsp ran without the environment; main() passes it to the workspace", .{});
     const exe = std.process.executablePathAlloc(ws.io, ctx.allocator) catch |e| {
@@ -578,6 +581,7 @@ fn runLsp(ctx: *zcli.Context, _: LspOptions) ![]const LspRow {
     const services: lsp.Services = .{
         .exe = exe,
         .version = app.version,
+        .infer = options.infer,
         .store = if (ws.source_cache) |*s| s else null,
         .telemetry = if (telemetry) |*t| t else null,
     };
