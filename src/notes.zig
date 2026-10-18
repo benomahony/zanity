@@ -29,7 +29,7 @@ pub fn note(self: *File, node: ts.Node, id: captures.Id) !bool {
         if (enabled.enabled("dead-symbol")) {
             const hash = facts_module.nameHash(text);
             try self.s.names.tally(hash, 1);
-            try self.s.names.hold(hash, holderOf(self));
+            try self.s.names.hold(hash, holderOf(self, node));
         }
     } else if (v.abstraction_name == id) {
         const at = ts.ts_node_start_point(node);
@@ -42,9 +42,14 @@ pub fn note(self: *File, node: ts.Node, id: captures.Id) !bool {
     return true;
 }
 
-/// The hash of the outermost named function, class or definition open around the current node,
-/// which holds every reference inside it; 0 at module level.
-fn holderOf(self: *File) u64 {
+/// The hash of what holds a reference at `node`: the name itself where it names the construct it
+/// belongs to (@reference.self), the construct's own name where only it keeps the name alive
+/// (@reference.held), or else the outermost named function, class or definition open around it;
+/// 0 at module level.
+fn holderOf(self: *File, node: ts.Node) u64 {
+    const compiled = self.checker.compiled;
+    if (self.index.marks(node, compiled.id("reference.self"))) return facts_module.nameHash(node.text(self.source));
+    if (self.index.marks(node, compiled.id("reference.held"))) if (heldBy(self, node)) |owner| return facts_module.nameHash(owner.text(self.source));
     const items = self.s.contexts.items();
     if (items.len > self.s.contexts.capacity()) assert.panic("{s}: {d} open constructs in room for {d}", .{ self.work.facts.path, items.len, self.s.contexts.capacity() });
     if (self.source.len == 0 and items.len > 0) assert.panic("{s}: {d} constructs open in an empty file", .{ self.work.facts.path, items.len });
@@ -56,6 +61,32 @@ fn holderOf(self: *File) u64 {
     }
     return 0;
 }
+
+/// The @reference.self name of the construct `node` sits in, such as the type of an impl block:
+/// a child of an enclosing node, or a child of that child, as in `impl Trait for Type<T>`.
+fn heldBy(self: *File, node: ts.Node) ?ts.Node {
+    const self_id = self.checker.compiled.id("reference.self") orelse return null;
+    if (!self.index.marks(node, self.checker.compiled.id("reference.held"))) assert.panic("{s}: looking for what holds {f}, which isn't a @reference.held name", .{ self.work.facts.path, node.where() });
+    var current = node.parent();
+    for (0..max_holder_steps) |_| {
+        const construct = current orelse return null;
+        for (0..@min(ts.ts_node_named_child_count(construct), max_holder_children)) |i| {
+            const child = ts.ts_node_named_child(construct, @intCast(i));
+            if (self.index.marks(child, self_id)) return child;
+            for (0..@min(ts.ts_node_named_child_count(child), max_holder_children)) |k| {
+                const grandchild = ts.ts_node_named_child(child, @intCast(k));
+                if (self.index.marks(grandchild, self_id)) return grandchild;
+            }
+        }
+        current = construct.parent();
+    }
+    if (current == null) assert.panic("{s}: the walk up from {f} ran off the root without returning", .{ self.work.facts.path, node.where() });
+    return null;
+}
+
+/// Enclosing nodes heldBy() climbs, and children it looks through at each level.
+const max_holder_steps = 8;
+const max_holder_children = 16;
 
 /// How often each name occurs in one file, by hash, less once for each place it is defined, so
 /// the names left above zero are the ones the file refers to. Open addressing over a fixed table.

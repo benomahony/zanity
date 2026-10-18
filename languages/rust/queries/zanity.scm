@@ -334,6 +334,24 @@
   (type_identifier)
 ] @reference.name
 
+; The type an impl block belongs to, which naming there doesn't keep alive, and the trait it
+; implements, which only that type, if reachable, keeps alive.
+(impl_item
+  type: [
+    (type_identifier) @reference.self
+    (generic_type
+      type: (type_identifier) @reference.self)
+  ])
+
+(impl_item
+  trait: [
+    (type_identifier) @reference.held
+    (generic_type
+      type: (type_identifier) @reference.held)
+    (scoped_type_identifier
+      name: (type_identifier) @reference.held)
+  ])
+
 ; Traits, and what types implement them, for single-impl-abstraction.
 (trait_item
   name: (type_identifier) @abstraction.name)

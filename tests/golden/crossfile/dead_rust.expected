@@ -3,3 +3,6 @@ exit: 0
 main.rs:1:8: warning [dead-symbol]
 main.rs:5:8: warning [dead-symbol]
 main.rs:9:4: warning [dead-symbol]
+main.rs:21:8: warning [dead-symbol]
+main.rs:29:7: warning [dead-symbol]
+main.rs:33:8: warning [dead-symbol]
