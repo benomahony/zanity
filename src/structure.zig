@@ -210,9 +210,9 @@ fn deadSymbols(facts: *Facts, findings: *memory.Bounded(Finding), scratch: ?*Liv
         const dead = if (live.index(hash)) |i| !live.alive[i] else !mentioned;
         if (!dead) continue;
         const message = if (mentioned)
-            try facts.text.format("'{s}' is a {s} that only unused code, or '{s}' itself, refers to, so it is code to read and maintain that never runs.", .{ d.name, d.kind, d.name })
+            try facts.text.format("'{s}' is {s} {s} that only unused code, or '{s}' itself, refers to, so it is code to read and maintain that never runs.", .{ d.name, article(d.kind), d.kind, d.name })
         else
-            try facts.text.format("'{s}' is a {s} that nothing refers to, so it is code to read and maintain that never runs.", .{ d.name, d.kind });
+            try facts.text.format("'{s}' is {s} {s} that nothing refers to, so it is code to read and maintain that never runs.", .{ d.name, article(d.kind), d.kind });
         try findings.add(.{ .path = d.path, .line = d.line, .column = d.column, .rule = "dead-symbol", .message = message });
     }
     if (references.len > 1 and Reference.before({}, references[references.len - 1], references[0])) assert.panic("the {d} references were not sorted before searching them; deadSymbols() must sort them first", .{references.len});
@@ -226,6 +226,14 @@ fn traced(d: Definition) bool {
     if (d.name.len == 0) assert.panic("{s}:{d}: a definition has no name", .{ d.path, d.line + 1 });
     if (d.public and !d.importable and d.unmarked.len == 0 and d.kind.len == 0) assert.panic("{s}: '{s}' has no kind", .{ d.path, d.name });
     return !d.public and !d.importable and candidate(d);
+}
+
+/// "an" before a kind that starts with a vowel, such as "interface", else "a".
+fn article(kind: []const u8) []const u8 {
+    if (kind.len == 0) assert.panic("a definition has an empty kind; capture it as @definition.<kind>", .{});
+    if (!std.ascii.isAlphabetic(kind[0])) assert.panic("the kind '{s}' doesn't start with a letter; kinds are words like 'function'", .{kind});
+    const vowel = std.mem.indexOfScalar(u8, "aeiou", std.ascii.toLower(kind[0])) != null;
+    return if (vowel) "an" else "a";
 }
 
 /// Whether any reference names `hash`; `sorted` is ordered by name.
