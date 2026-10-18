@@ -1,0 +1,3 @@
+rules: variadic-parameter,goto-statement
+exit: 0
+variadics_js.js:1:17: information [variadic-parameter]

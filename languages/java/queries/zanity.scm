@@ -613,3 +613,6 @@
         .)))) @finding.opaque-check @opaque.negated
   (#eq? @_check "assertFalse")
   (#eq? @opaque.key "equals"))
+
+; CWE-1056: a parameter that takes any number of arguments.
+(spread_parameter) @finding.variadic-parameter

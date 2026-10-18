@@ -1,0 +1,4 @@
+rules: variadic-parameter,goto-statement
+exit: 0
+variadics_go.go:3:13: information [variadic-parameter]
+variadics_go.go:11:3: warning [goto-statement]

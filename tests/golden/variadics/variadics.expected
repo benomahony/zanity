@@ -1,0 +1,4 @@
+rules: variadic-parameter,goto-statement
+exit: 0
+variadics.py:1:13: information [variadic-parameter]
+variadics.py:5:15: information [variadic-parameter]

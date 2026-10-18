@@ -223,6 +223,8 @@
         { "const": "NASA05-M4", "description": "The NASA code for conversion-assertion: information, on with --strict. Assert the property you need it to have." },
         { "const": "guaranteed-length", "description": "information, on with --strict. Assert the length you actually require." },
         { "const": "NASA05-M5", "description": "The NASA code for guaranteed-length: information, on with --strict. Assert the length you actually require." },
+        { "const": "variadic-parameter", "description": "information, on with --strict. Take explicit parameters, or one collection parameter." },
+        { "const": "goto-statement", "description": "warning, on by default. Use a loop, a break or continue, or a function of its own instead." },
         { "const": "empty-block", "description": "warning, on by default. Fill in the body, delete the block, or leave a comment saying why nothing happens here." },
         { "const": "constant-condition", "description": "warning, on by default. Delete the branch that can't run, or test the value that actually varies." },
         { "const": "divide-by-zero", "description": "error, on by default. Use the intended non-zero divisor, or validate a variable divisor before dividing." },

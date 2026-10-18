@@ -427,6 +427,8 @@ Rules marked *strict* hold code to what safety-critical software needs and most 
 | `extractable-block` | information | in a long function, the longest run of statements that reads at most four names from before it, sets at most one read after it, and doesn't return or break out, so it can become a function of its own; with long-function on, it becomes that finding's fix |
 | `swallowed-error` | warning | an error handler that does nothing |
 | `empty-block` | warning | an empty block where code was expected |
+| `goto-statement` | warning | a `goto`, which makes control flow hard to follow |
+| `variadic-parameter` | information, *strict* | a parameter that takes any number of arguments, outside decorator wrappers and methods that may override one |
 | `deep-nesting` | warning | code nested too deep to follow |
 | `complex-function` | warning | a function or test with too many paths through it |
 | `long-file` | warning | a file too long to hold in mind |

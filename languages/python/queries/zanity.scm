@@ -674,3 +674,63 @@
       (decorated_definition
         definition: (function_definition) @visibility.public @method.override)
     ]))
+
+; CWE-1056: a parameter that takes any number of arguments, in a function at module level or a
+; method of a class that extends nothing. A method of a class that extends another may override
+; one whose signature it must keep, and a function inside a function is usually a decorator's
+; wrapper, where *args and **kwargs pass every call through unchanged.
+(module
+  [
+    (function_definition
+    parameters: (parameters
+      [
+            (list_splat_pattern)
+            (dictionary_splat_pattern)
+            (typed_parameter
+              [
+                (list_splat_pattern)
+                (dictionary_splat_pattern)
+              ])
+          ] @finding.variadic-parameter))
+    (decorated_definition
+      definition: (function_definition
+        parameters: (parameters
+          [
+                (list_splat_pattern)
+                (dictionary_splat_pattern)
+                (typed_parameter
+                  [
+                    (list_splat_pattern)
+                    (dictionary_splat_pattern)
+                  ])
+              ] @finding.variadic-parameter)))
+  ])
+
+(class_definition
+  !superclasses
+  body: (block
+    [
+      (function_definition
+      parameters: (parameters
+        [
+              (list_splat_pattern)
+              (dictionary_splat_pattern)
+              (typed_parameter
+                [
+                  (list_splat_pattern)
+                  (dictionary_splat_pattern)
+                ])
+            ] @finding.variadic-parameter))
+      (decorated_definition
+        definition: (function_definition
+          parameters: (parameters
+            [
+                  (list_splat_pattern)
+                  (dictionary_splat_pattern)
+                  (typed_parameter
+                    [
+                      (list_splat_pattern)
+                      (dictionary_splat_pattern)
+                    ])
+                ] @finding.variadic-parameter)))
+    ]))

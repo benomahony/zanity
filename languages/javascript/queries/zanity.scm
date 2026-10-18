@@ -794,3 +794,7 @@
     property: (property_identifier) @_matcher)) @finding.opaque-check @opaque.negated
   (#eq? @_expect "expect")
   (#eq? @_matcher "toBeFalsy"))
+
+; CWE-1056: a parameter that takes any number of arguments.
+(formal_parameters
+  (rest_pattern) @finding.variadic-parameter)
