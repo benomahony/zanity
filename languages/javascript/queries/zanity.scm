@@ -640,6 +640,13 @@
 (class_declaration
   name: (identifier) @name) @definition.class
 
+; An ES module, which exports only what it says it does, rather than a script or CommonJS file.
+(program
+  [
+    (import_statement)
+    (export_statement)
+  ] @module.syntax)
+
 [
   (identifier)
   (property_identifier)

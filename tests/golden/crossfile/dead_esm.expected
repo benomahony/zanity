@@ -1,0 +1,4 @@
+rules: dead-symbol
+exit: 0
+shapes.ts:3:10: warning [dead-symbol]
+shapes.ts:7:10: warning [dead-symbol]

@@ -644,6 +644,13 @@
     body: (class_body
       (method_definition) @visibility.public)))
 
+; An ES module, which exports only what it says it does, rather than a script or CommonJS file.
+(program
+  [
+    (import_statement)
+    (export_statement)
+  ] @module.syntax)
+
 ; Names the code refers to, for dead-symbol: every name other than where it is defined.
 [
   (identifier)

@@ -52,6 +52,7 @@ pub const looked_up = [_][]const u8{
     "literal.none",
     "literal.string",
     "literal.true",
+    "module.syntax",
     "reference.name",
     "storage.read",
     "local.reference",

@@ -329,6 +329,7 @@ pub const Checker = struct {
         try suppress.collectSuppressions(&file);
         try hazards.checkSuspiciousComments(&file);
         file.code_lines = file.codeLines();
+        file.module = naming.usesModuleSyntax(self.compiled.id("module.syntax"), file.index.triples, source);
         if (ts.ts_node_has_error(root)) {
             _ = try file.report(root, "parse-error", "zanity couldn't fully parse this file, so some findings may be missing.");
         }
@@ -354,6 +355,8 @@ pub const File = struct {
     source: []const u8,
     index: captures.Index,
     code_lines: []const bool = &.{},
+    /// Whether the file uses `import` or `export`, so only what it exports leaves it.
+    module: bool = false,
     serials: u32 = 0,
     /// Where the walk's capture lookups have reached in `index`.
     next_capture: usize = 0,
