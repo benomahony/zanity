@@ -447,6 +447,13 @@ fn plaintextConfigSecret(line: []const u8, lower: []const u8) ?[]const u8 {
     return name;
 }
 
+/// Values that grant access rather than hold a credential, as in a GitHub workflow's
+/// `id-token: write`, so a setting named for a token that takes one stores no secret.
+const access_levels = [_][]const u8{ "read", "write", "none", "read-all", "write-all" };
+/// Values that switch a setting on or off rather than hold a credential, as in a GitHub workflow's
+/// `persist-credentials: false`.
+const switch_values = [_][]const u8{ "true", "false", "yes", "no", "on", "off" };
+
 fn isLiteralSecret(value: []const u8) bool {
     if (value.len > 512) assert.panic("checking a {d}-byte secret value beyond the project line inspection window", .{value.len});
     if (std.mem.indexOfAny(u8, value, "\r\n") != null) assert.panic("checking a multiline secret value; pass one trimmed project line", .{});
@@ -454,8 +461,8 @@ fn isLiteralSecret(value: []const u8) bool {
     const references = [_][]const u8{ "secretkeyref", "secrets.", "vault" };
     for (references) |reference| if (std.mem.indexOf(u8, value, reference) != null) return false;
     for (rules.secret_placeholders) |placeholder| if (std.mem.eql(u8, value, placeholder)) return false;
-    for (rules.access_levels) |level| if (std.mem.eql(u8, value, level)) return false;
-    for (rules.switch_values) |switch_value| if (std.mem.eql(u8, value, switch_value)) return false;
+    for (access_levels) |level| if (std.mem.eql(u8, value, level)) return false;
+    for (switch_values) |switch_value| if (std.mem.eql(u8, value, switch_value)) return false;
     return std.mem.indexOfScalar(u8, rules.secret_masks, value[0]) == null or std.mem.indexOfNone(u8, value, value[0..1]) != null;
 }
 

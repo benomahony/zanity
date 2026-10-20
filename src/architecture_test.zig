@@ -46,6 +46,9 @@ fn violations(arena: std.mem.Allocator, checker: Probe, path: []const u8, source
     defer ts.ts_tree_delete(tree);
     var scratch = try captures.CaptureScratch.initCaptureScratch(arena, .{ .captures = 1 << 18, .per_file = 1 << 12 });
     const index = try captures.index(&scratch, checker.compiled, ts.ts_tree_root_node(tree), source);
+    const sees_trees = for (tree_imports) |import| {
+        if (std.mem.indexOf(u8, source, import) != null) break true;
+    } else false;
     var found: usize = 0;
     for (index.triples, 0..) |entry, i| {
         if (i > 0 and index.triples[i - 1].key.start == entry.key.start and index.triples[i - 1].key.id == entry.key.id) continue;
@@ -54,7 +57,7 @@ fn violations(arena: std.mem.Allocator, checker: Probe, path: []const u8, source
         const is_name = index.marks(entry.node, checker.path) and std.mem.indexOfScalar(u8, text, '.') == null;
         const word = if (is_string) text[1 .. text.len - 1] else if (is_name) text else continue;
         const names_language = k.languages.contains(word);
-        const names_kind = is_string and k.kinds.contains(word) and !k.vocabulary.contains(word);
+        const names_kind = is_string and k.kinds.contains(word) and !k.vocabulary.contains(word) and (sees_trees or !private(entry.node, source));
         if (!names_language and !names_kind) continue;
         found += 1;
         const at = ts.ts_node_start_point(entry.node);
@@ -62,6 +65,27 @@ fn violations(arena: std.mem.Allocator, checker: Probe, path: []const u8, source
     }
     if (found > index.triples.len) assert.panic("{s}: reported {d} violations from {d} captured nodes; count at most one violation per captured node, so check the loop's continue", .{ path, found, index.triples.len });
     return found;
+}
+
+/// Imports that hand a file syntax trees; a file with none of them compares its strings to text.
+const tree_imports = [_][]const u8{ "@import(\"ts.zig\")", "@import(\"captures.zig\")", "@import(\"language.zig\")", "@import(\"adapters\")" };
+
+/// Whether `node` sits in a declaration its file keeps to itself, so no tree-reading file can
+/// compare a node's kind against it.
+fn private(node: ts.Node, source: []const u8) bool {
+    var top = node;
+    var depth: usize = 0;
+    while (top.parent()) |up| : (depth += 1) {
+        if (depth > 1 << 10) assert.panic("climbed {d} parents from a string without reaching the file; the tree has a cycle", .{depth});
+        if (up.parent() == null) break;
+        top = up;
+    }
+    var lines = std.mem.tokenizeScalar(u8, top.text(source), '\n');
+    while (lines.next()) |line| {
+        const code = std.mem.trimStart(u8, line, " \t");
+        if (!std.mem.startsWith(u8, code, "//")) return !std.mem.startsWith(u8, code, "pub ");
+    }
+    return true;
 }
 
 const Probe = struct {
