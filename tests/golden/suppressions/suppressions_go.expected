@@ -1,0 +1,5 @@
+rules: relaxed-check
+exit: 0
+suppressions_go.go:10:1: warning [relaxed-check]
+suppressions_go.go:15:21: warning [relaxed-check]
+suppressions_go.go:6:30: warning [relaxed-check]

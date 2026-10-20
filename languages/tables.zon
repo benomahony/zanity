@@ -1,6 +1,7 @@
 .{
     .{
         .ecosystem = "python",
+        .suppression_markers = .{ "noqa", "type: ignore", "type:ignore", "pyright: ignore", "pyright:ignore", "pylint: disable", "pylint:disable", "mypy: ignore-errors", "mypy: disable-error-code", "pyre-ignore", "pyre-fixme", "pytype: disable", "pragma: no cover", "pragma: no branch", "nosec", "NOSONAR", "lgtm[", "codeql[" },
         .specific_checks = .{
             .{ .when = "==", .check = "self.assertEqual($1, $2)", .negated = "self.assertNotEqual($1, $2)" },
             .{ .when = "!=", .check = "self.assertNotEqual($1, $2)", .negated = "self.assertEqual($1, $2)" },
@@ -113,6 +114,7 @@
     },
     .{
         .ecosystem = "go",
+        .suppression_markers = .{ "nolint", "lint:ignore", "lint:file-ignore", "nosec", "NOSONAR", "lgtm[", "codeql[" },
         .exported_by_case = true,
         .fixed_signatures = .{ "ServeHTTP", "Read", "Write", "Less", "Swap", "MarshalJSON", "UnmarshalJSON", "MarshalText", "UnmarshalText", "Is", "As", "Format", "Scan", "Value" },
         .stdin_reads = .{ "fmt.Scan", "fmt.Scanln", "fmt.Scanf", "os.Stdin.Read", "term.ReadPassword" },
@@ -156,6 +158,7 @@
     },
     .{
         .ecosystem = "node",
+        .suppression_markers = .{ "eslint-disable", "@ts-ignore", "@ts-expect-error", "@ts-nocheck", "biome-ignore", "deno-lint-ignore", "oxlint-disable", "tslint:disable", "jshint ignore", "istanbul ignore", "c8 ignore", "v8 ignore", "NOSONAR", "lgtm[", "codeql[" },
         .specific_checks = .{
             .{ .when = "===", .check = "expect($1).toBe($2)", .negated = "expect($1).not.toBe($2)" },
             .{ .when = "!==", .check = "expect($1).not.toBe($2)", .negated = "expect($1).toBe($2)" },
@@ -218,6 +221,7 @@
     },
     .{
         .ecosystem = "rust",
+        .suppression_markers = .{ "NOSONAR", "lgtm[", "codeql[" },
         .fixed_signatures = .{ "fmt", "from", "try_from", "eq", "ne", "partial_cmp", "cmp", "hash", "deref", "deref_mut", "as_ref", "drop", "index", "index_mut", "add", "sub", "mul", "div", "poll", "visit_str", "serialize", "deserialize" },
         .stdin_reads = .{ "std::io::stdin", "io::stdin", "stdin", "rpassword::read_password" },
         .weak_hashes = .{ "md5::compute", "Md5::new", "Md5::digest", "Sha1::new", "Sha1::digest" },
@@ -255,6 +259,7 @@
     },
     .{
         .ecosystem = "jvm",
+        .suppression_markers = .{ "NOPMD", "CHECKSTYLE:OFF", "CHECKSTYLE.OFF", "CHECKSTYLE:SUPPRESS", "noinspection", "NOSONAR", "lgtm[", "codeql[" },
         .specific_checks = .{
             .{ .when = "equals", .check = "assertEquals($2, $1)", .negated = "assertNotEquals($2, $1)" },
         },
@@ -298,6 +303,7 @@
     },
     .{
         .ecosystem = "dotnet",
+        .suppression_markers = .{ "ReSharper disable", "NOSONAR", "lgtm[", "codeql[" },
         .specific_checks = .{
             .{ .when = "==", .check = "Assert.Equal($2, $1)", .negated = "Assert.NotEqual($2, $1)" },
             .{ .when = "!=", .check = "Assert.NotEqual($2, $1)", .negated = "Assert.Equal($2, $1)" },

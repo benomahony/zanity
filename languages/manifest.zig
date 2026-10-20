@@ -187,6 +187,9 @@ pub const Tables = struct {
     assertion_value: []const u8 = "",
     /// Whether `$message` sits in a format string in `assertion_form`, where braces must be doubled.
     assertion_braces_doubled: bool = false,
+    /// Comment markers that turn a linter's, type checker's or analyser's check off, such as a
+    /// marker naming the rules to ignore on that line.
+    suppression_markers: []const []const u8 = &.{},
     /// What starts a comment that runs to the end of the line; fixes leave TODOs with it.
     line_comment: []const u8 = "",
     /// Where a test says which behaviour it checks, as the start of a sentence naming the test.

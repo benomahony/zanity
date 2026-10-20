@@ -1096,3 +1096,18 @@
   (#eq? @_arguments "Arguments")
   (#any-of? @_shell "\"cmd\"" "\"cmd.exe\"" "\"sh\"" "\"bash\"" "\"zsh\"" "\"/bin/sh\"" "\"/bin/bash\"" "\"/bin/zsh\"" "\"powershell\"" "\"powershell.exe\"" "\"pwsh\"")
   (#not-kind-eq? @_command "string_literal" "verbatim_string_literal" "raw_string_literal"))
+
+; EXT-VERIFY-004: a pragma or attribute that turns a compiler or analyser check off.
+(preproc_pragma
+  "disable") @finding.relaxed-check
+
+(preproc_nullable
+  "disable") @finding.relaxed-check
+
+((attribute
+  name: [
+    (identifier) @_lint_off
+    (qualified_name
+      name: (identifier) @_lint_off)
+  ]) @finding.relaxed-check
+  (#any-of? @_lint_off "SuppressMessage" "SuppressMessageAttribute" "UnconditionalSuppressMessage" "UnconditionalSuppressMessageAttribute" "ExcludeFromCodeCoverage" "ExcludeFromCodeCoverageAttribute"))

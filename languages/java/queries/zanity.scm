@@ -616,3 +616,12 @@
 
 ; CWE-1056: a parameter that takes any number of arguments.
 (spread_parameter) @finding.variadic-parameter
+
+; EXT-VERIFY-004: an annotation that turns a compiler or analyser check off.
+((annotation
+  name: [
+    (identifier) @_lint_off
+    (scoped_identifier
+      name: (identifier) @_lint_off)
+  ]) @finding.relaxed-check
+  (#any-of? @_lint_off "SuppressWarnings" "SuppressFBWarnings" "SuppressLint"))

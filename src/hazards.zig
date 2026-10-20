@@ -49,37 +49,52 @@ fn placeholder(value: []const u8) bool {
     return false;
 }
 
-/// Conventional defect markers in comments. These exact uppercase tokens are deliberately
-/// narrower than prose containing words such as "debug" or "bugfix".
-pub fn checkSuspiciousComments(self: *File) !void {
-    if (!self.checker.enabled.enabled("suspicious-comment")) return;
+/// Conventional defect markers in comments, and comments that turn another tool's check off on
+/// their line, such as a linter's ignore marker from the language's tables. The defect markers are
+/// exact uppercase tokens, deliberately narrower than prose containing words such as "debug".
+pub fn checkComments(self: *File) !void {
+    const defects: []const []const u8 = if (self.checker.enabled.enabled("suspicious-comment")) &defect_markers else &.{};
+    const switches = if (self.checker.enabled.enabled("relaxed-check")) self.tables.suppression_markers else &.{};
+    if (defects.len + switches.len == 0) return;
     const comment = self.v.comment orelse return;
     if (comment >= self.checker.compiled.captureCount()) assert.panic("comment capture {d} is outside the query's {d} captures; build the vocabulary from this checker", .{ comment, self.checker.compiled.captureCount() });
-    var inspected: usize = 0;
+    var reported: usize = 0;
     for (self.index.triples) |t| {
         if (t.id != comment) continue;
-        inspected += 1;
         const text = t.node.text(self.source);
-        const marker = commentMarker(text) orelse continue;
-        _ = try self.report(t.node, "suspicious-comment", try self.say("This comment contains the defect marker '{s}', saying the code is broken or unfinished.", .{marker}));
+        if (markerIn(text, defects, false)) |marker| {
+            reported += 1;
+            _ = try self.report(t.node, "suspicious-comment", try self.say("This comment contains the defect marker '{s}', saying the code is broken or unfinished.", .{marker}));
+        }
+        const off = markerIn(text, switches, true) orelse continue;
+        reported += 1;
+        _ = try self.report(t.node, "relaxed-check", try self.say("This comment's '{s}' turns a check off here, so a problem it should catch passes.", .{off}));
     }
-    if (inspected > self.index.triples.len) assert.panic("inspected {d} comments among {d} captures; count only matching captures", .{ inspected, self.index.triples.len });
+    if (reported > 2 * self.index.triples.len) assert.panic("reported {d} comment findings among {d} captures; each comment reports at most one of each rule", .{ reported, self.index.triples.len });
 }
 
-fn commentMarker(text: []const u8) ?[]const u8 {
+const defect_markers = [_][]const u8{ "FIXME", "XXX", "BUG" };
+
+/// Bytes that join a marker into a longer name when they touch it: letters, digits and `_`.
+const word_bytes = blk: {
+    var set: std.StaticBitSet(256) = .empty;
+    for (0..256) |c| if (std.ascii.isAlphanumeric(c) or c == '_') set.set(c);
+    break :blk set;
+};
+
+/// The first of `markers` that `text` holds as a whole word, not inside a longer name.
+fn markerIn(text: []const u8, markers: []const []const u8, ignore_case: bool) ?[]const u8 {
     if (text.len == 0) assert.panic("checking an empty comment for a marker; comment nodes include their delimiter", .{});
-    const markers = [_][]const u8{ "FIXME", "XXX", "BUG" };
     for (markers) |marker| {
-        var from: usize = 0;
-        while (std.mem.indexOfPos(u8, text, from, marker)) |at| {
-            const before_word = at > 0 and (std.ascii.isAlphanumeric(text[at - 1]) or text[at - 1] == '_');
+        if (marker.len == 0) assert.panic("looking for an empty comment marker; every marker must name visible text", .{});
+        for (0..text.len) |at| {
+            const rest = text[at..];
+            const hit = if (ignore_case) std.ascii.startsWithIgnoreCase(rest, marker) else std.mem.startsWith(u8, rest, marker);
+            if (!hit) continue;
             const end = at + marker.len;
-            const after_word = end < text.len and (std.ascii.isAlphanumeric(text[end]) or text[end] == '_');
-            if (!before_word and !after_word) {
-                if (marker.len == 0) assert.panic("matched an empty comment marker; every marker must name visible text", .{});
-                return marker;
-            }
-            from = end;
+            const joined_before = at > 0 and word_bytes.isSet(text[at - 1]) and word_bytes.isSet(marker[0]);
+            const joined_after = end < text.len and word_bytes.isSet(text[end]) and word_bytes.isSet(marker[marker.len - 1]);
+            if (!joined_before and !joined_after) return marker;
         }
     }
     return null;

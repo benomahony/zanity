@@ -330,7 +330,7 @@ pub const Checker = struct {
             .index = try captures.index(&work.scratch.captures, self.compiled, root, source),
         };
         try suppress.collectSuppressions(&file);
-        try hazards.checkSuspiciousComments(&file);
+        try hazards.checkComments(&file);
         file.code_lines = file.codeLines();
         file.module = naming.usesModuleSyntax(self.compiled.id("module.syntax"), file.index.triples, source);
         if (ts.ts_node_has_error(root)) {

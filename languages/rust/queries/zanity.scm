@@ -383,3 +383,29 @@
   operator: ["/" "%"]
   right: [(integer_literal) (float_literal)] @_zero_divisor) @finding.divide-by-zero
   (#any-of? @_zero_divisor "0" "00" "0.0" "0." "0x0" "0o0" "0b0"))
+
+; EXT-VERIFY-004: an attribute that turns a compiler or lint check off, directly or under cfg_attr.
+([
+  (attribute_item
+    (attribute
+      (identifier) @_lint_off))
+  (inner_attribute_item
+    (attribute
+      (identifier) @_lint_off))
+] @finding.relaxed-check
+  (#any-of? @_lint_off "allow" "expect"))
+
+([
+  (attribute_item
+    (attribute
+      (identifier) @_lint_when
+      arguments: (token_tree
+        (identifier) @_lint_off)))
+  (inner_attribute_item
+    (attribute
+      (identifier) @_lint_when
+      arguments: (token_tree
+        (identifier) @_lint_off)))
+] @finding.relaxed-check
+  (#eq? @_lint_when "cfg_attr")
+  (#any-of? @_lint_off "allow" "expect"))

@@ -85,7 +85,7 @@ Rules marked *strict* hold code to what safety-critical software needs and most 
 
 | Rule | Severity | Flags |
 |---|---|---|
-| `relaxed-check` | warning | a setting that lets a check pass when it should fail: `continue-on-error: true`, `\|\| true`, `--exit-zero`, `allow_failure: true`, `strict = false`, `ignore_missing_imports = true`, `"skipLibCheck": true` and the like |
+| `relaxed-check` | warning | a setting that lets a check pass when it should fail: `continue-on-error: true`, `\|\| true`, `--exit-zero`, `allow_failure: true`, `strict = false`, `ignore_missing_imports = true`, `"skipLibCheck": true` and the like; in source, a comment such as `# noqa`, `// eslint-disable` or `//nolint`, or an attribute or pragma such as `#[allow(...)]`, `@SuppressWarnings` or `#pragma warning disable` |
 | `weakened-check` | warning | any other setting line that weakens a check; needs `--infer` |
 | `unscheduled-analysis` | warning | project files that run no strict static analyser on every change, or daily, with zero warnings allowed; needs `--infer` |
 
