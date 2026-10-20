@@ -167,9 +167,25 @@ const Lookup = struct {
         return self.sorted[lo..hi];
     }
 
+    /// A call resolves as `placed` does, and among those candidates only to ones that take as many
+    /// parameters as it passes arguments when any do, so `Emit(event)` inside the five-parameter
+    /// overload `Emit` reaches the one-parameter `Emit`, not itself. When none fit, as with default
+    /// arguments or Python's `self`, it reaches them all.
+    fn accepts(self: Lookup, c: u32) bool {
+        if (c >= self.functions.len) assert.panic("call to '{s}' resolved to function {d}, but only {d} are recorded; resolve calls only against the recorded functions", .{ self.call.callee, c, self.functions.len });
+        if (!self.placed(c)) return false;
+        const wanted = self.call.arguments;
+        if (self.functions[c].parameters == wanted) return true;
+        for (self.candidates()) |other| {
+            if (other != c and self.functions[other].parameters == wanted and self.placed(other)) return false;
+        }
+        if (self.functions[c].parameters == wanted) assert.panic("function {d} fits the {d} arguments of '{s}' yet was only accepted for want of a fit; return early on a fit", .{ c, wanted, self.call.callee });
+        return true;
+    }
+
     /// A call resolves to same-file candidates when there are any, and only
     /// to functions or methods when the call syntax says which it must be.
-    fn accepts(self: Lookup, c: u32) bool {
+    fn placed(self: Lookup, c: u32) bool {
         const caller_path = self.functions[self.call.caller].path;
         if (c >= self.functions.len) assert.panic("call to '{s}' resolved to function {d}, but only {d} are recorded; resolve calls only against the recorded functions", .{ self.call.callee, c, self.functions.len });
         if (!reaches(self.call.reach, self.functions[c].method)) return false;
@@ -235,4 +251,18 @@ test "cycles are found without recursion" {
     for (found) |c| members += c.members.len;
     try std.testing.expectEqual(@as(usize, 2), found.len);
     try std.testing.expectEqual(@as(usize, 3), members);
+}
+
+test "a call reaches the overload whose parameters fit its arguments, or every overload when none do" {
+    const functions = [_]Function{
+        .{ .path = "a.cs", .name = "Emit", .method = true, .line = 1, .column = 1, .parameters = 1 },
+        .{ .path = "a.cs", .name = "Emit", .method = true, .line = 9, .column = 1, .parameters = 5 },
+    };
+    const sorted = [_]u32{ 0, 1 };
+    const fitting: Lookup = .{ .functions = &functions, .sorted = &sorted, .call = .{ .caller = 1, .callee = "Emit", .reach = .any, .arguments = 1 } };
+    try std.testing.expectEqual(true, fitting.accepts(0));
+    try std.testing.expectEqual(false, fitting.accepts(1));
+    const unfitting: Lookup = .{ .functions = &functions, .sorted = &sorted, .call = .{ .caller = 1, .callee = "Emit", .reach = .any, .arguments = 3 } };
+    try std.testing.expectEqual(true, unfitting.accepts(0));
+    try std.testing.expectEqual(true, unfitting.accepts(1));
 }

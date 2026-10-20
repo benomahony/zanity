@@ -212,3 +212,22 @@ pub const NameCounts = struct {
         self.used.clear();
     }
 };
+
+/// Records the calls `ctx` makes by bare name, other than to its own locals, and how many
+/// parameters it declares, for the cross-file call graph.
+pub fn resolveBareCalls(self: *File, ctx: check.Context) !void {
+    const caller = ctx.fact orelse return;
+    self.work.facts.arity(caller, ctx.formal_parameters);
+    if (ctx.family != .function) assert.panic("{s}: resolving the calls of {f}, which is a {t}, not a function; call resolveBareCalls() only from closeFunction()", .{ self.work.facts.path, ctx.node.where(), ctx.family });
+    const reach: facts_module.Reach = if (self.tables.methods_need_receiver) .functions else .any;
+    const locals = self.s.locals.items();
+    const calls = self.s.bare_calls.items();
+    if (ctx.owned_start > calls.len or ctx.owned_start > locals.len) assert.panic("{s}: {f} owns calls and locals from {d}, but only {d} calls and {d} locals are recorded; open() must set owned_start from those lists' lengths when the function opens", .{ self.work.facts.path, ctx.node.where(), ctx.owned_start, calls.len, locals.len });
+    outer: for (calls[ctx.owned_start..]) |call| {
+        if (call.owner != ctx.serial) continue;
+        for (locals[ctx.owned_start..]) |local| {
+            if (local.owner == ctx.serial and check.sameText(local.text, call.text)) continue :outer;
+        }
+        try self.work.facts.call(.{ .caller = caller, .callee = call.text, .reach = reach, .arguments = call.arguments });
+    }
+}

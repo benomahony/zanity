@@ -40,6 +40,8 @@ pub const Function = struct {
     method: bool,
     line: u32,
     column: u32,
+    /// How many parameters it declares, so a call can tell overloads of one name apart.
+    parameters: u32 = 0,
 };
 
 /// A change that fixes a finding: bytes `start..end` of its file become `replacement`.
@@ -107,7 +109,8 @@ pub fn nameHash(name: []const u8) u64 {
     return hash;
 }
 
-pub const Edge = struct { caller: u32, callee: []const u8, reach: Reach };
+/// A call from function `caller` to a function named `callee` with `arguments` arguments.
+pub const Edge = struct { caller: u32, callee: []const u8, reach: Reach, arguments: u32 = 0 };
 
 /// What a unit of code is, which decides the questions `check --infer` asks about it.
 pub const UnitKind = enum { function, fixture, @"test", setting, project, cluster, file };
@@ -245,9 +248,21 @@ pub const Facts = struct {
         });
     }
 
-    pub fn call(self: *Facts, caller: u32, callee: []const u8, reach: Reach) error{LimitExceeded}!void {
+    /// Records how many parameters function `id` declares, known once its signature is read.
+    pub fn arity(self: *Facts, id: u32, parameters: u32) void {
+        if (id >= self.functions.len) assert.panic("setting the arity of function {d}, but only {d} are recorded; record the function before closing it", .{ id, self.functions.len });
+        if (parameters > 1 << 16) assert.panic("function {d} declares {d} parameters; count @function.parameter captures, not nodes inside them", .{ id, parameters });
+        self.functions.items()[id].parameters = parameters;
+    }
+
+    /// Records `edge`, keeping its own copy of the callee's name.
+    pub fn call(self: *Facts, edge: Edge) error{LimitExceeded}!void {
+        const caller = edge.caller;
+        const callee = edge.callee;
         if (caller >= self.functions.len) assert.panic("call to '{s}' names caller {d}, but only {d} functions are recorded; record the calling function before its calls", .{ callee, caller, self.functions.len });
         if (callee.len == 0) assert.panic("function {d} calls something with an empty name; check the @call.name capture", .{caller});
-        try self.calls.add(.{ .caller = caller, .callee = try self.text.copy(callee), .reach = reach });
+        var kept = edge;
+        kept.callee = try self.text.copy(callee);
+        try self.calls.add(kept);
     }
 };

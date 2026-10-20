@@ -232,8 +232,8 @@ fn commitFacts(snapshot: Snapshot, run: Replay) error{LimitExceeded}!void {
         .importable = definition.importable,
         .unmarked = try run.text.copy(definition.unmarked),
     });
-    for (snapshot.functions) |function| try facts.functions.add(.{ .path = run.path, .name = try run.text.copy(function.name), .method = function.method, .line = function.line, .column = function.column });
-    for (snapshot.calls) |call| try facts.calls.add(.{ .caller = @intCast(first + call.caller), .callee = try run.text.copy(call.callee), .reach = call.reach });
+    for (snapshot.functions) |function| try facts.functions.add(.{ .path = run.path, .name = try run.text.copy(function.name), .method = function.method, .line = function.line, .column = function.column, .parameters = function.parameters });
+    for (snapshot.calls) |call| try facts.calls.add(.{ .caller = @intCast(first + call.caller), .callee = try run.text.copy(call.callee), .reach = call.reach, .arguments = call.arguments });
     for (snapshot.shapes) |shape| {
         var kept = shape;
         kept.function = @intCast(first + shape.function);
@@ -280,7 +280,7 @@ test "a cached analysis replays local findings and cross-file facts" {
     source_facts.language = loaded.adapter.name;
     try source_facts.define("answer", "function", .{ .at = .{ 2, 4 }, .public = true, .unmarked = "answer" });
     const function = try source_facts.function("answer", .{ 2, 4 }, false);
-    try source_facts.call(function, "helper", .functions);
+    try source_facts.call(.{ .caller = function, .callee = "helper", .reach = .functions });
     try source_facts.references.add(.{ .name = 7 });
     try source_facts.references.add(.{ .name = 7 });
     const checker = try check.Checker.initChecker(arena, loaded, rules.Set.defaults());

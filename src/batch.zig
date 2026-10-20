@@ -219,7 +219,7 @@ pub const Batch = struct {
             try facts.functions.add(kept);
         }
         for (recorded.calls.items()) |c| {
-            try facts.calls.add(.{ .caller = @intCast(first + c.caller), .callee = try worker.retain(self.text, c.callee), .reach = c.reach });
+            try facts.calls.add(.{ .caller = @intCast(first + c.caller), .callee = try worker.retain(self.text, c.callee), .reach = c.reach, .arguments = c.arguments });
         }
         for (recorded.shapes.items()) |shape| {
             var kept = shape;

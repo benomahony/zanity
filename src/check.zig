@@ -111,7 +111,8 @@ pub const Context = struct {
     summary: Summary = .none,
 };
 
-const Owned = struct { owner: u32, text: []const u8 };
+/// Something a function owns, such as a local or an unqualified call and how many arguments it passes.
+pub const Owned = struct { owner: u32, text: []const u8, arguments: u32 = 0 };
 const Weak = struct { owner: u32, line: u32 };
 const Trail = struct { parent: ts.Node.Key, summary: Summary };
 const Suppression = struct { line: u32, start: usize, len: usize };
@@ -813,10 +814,10 @@ pub const File = struct {
         const caller = function.fact orelse return;
         if (ctx.receiver) |receiver| {
             if (!contains(self.tables.self_receivers, receiver.text(self.source))) return;
-            try self.work.facts.call(caller, name, .methods);
+            try self.work.facts.call(.{ .caller = caller, .callee = name, .reach = .methods, .arguments = ctx.argument_count });
             return;
         }
-        try self.s.bare_calls.add(.{ .owner = function.serial, .text = name });
+        try self.s.bare_calls.add(.{ .owner = function.serial, .text = name, .arguments = ctx.argument_count });
     }
 
     pub fn inAssertionCondition(self: *File, node: ts.Node) bool {
@@ -951,25 +952,9 @@ pub const File = struct {
         return false;
     }
 
-    pub fn resolveBareCalls(self: *File, ctx: Context) !void {
-        const caller = ctx.fact orelse return;
-        if (ctx.family != .function) assert.panic("{s}: resolving the calls of {f}, which is a {t}, not a function; call resolveBareCalls() only from closeFunction()", .{ self.work.facts.path, ctx.node.where(), ctx.family });
-        const reach: facts_module.Reach = if (self.tables.methods_need_receiver) .functions else .any;
-        const locals = self.s.locals.items();
-        const calls = self.s.bare_calls.items();
-        if (ctx.owned_start > calls.len or ctx.owned_start > locals.len) assert.panic("{s}: {f} owns calls and locals from {d}, but only {d} calls and {d} locals are recorded; open() must set owned_start from those lists' lengths when the function opens", .{ self.work.facts.path, ctx.node.where(), ctx.owned_start, calls.len, locals.len });
-        outer: for (calls[ctx.owned_start..]) |call| {
-            if (call.owner != ctx.serial) continue;
-            for (locals[ctx.owned_start..]) |local| {
-                if (local.owner == ctx.serial and sameText(local.text, call.text)) continue :outer;
-            }
-            try self.work.facts.call(caller, call.text, reach);
-        }
-    }
-
     pub fn closeFunction(self: *File, ctx: Context) !void {
         if (ctx.family != .function) assert.panic("{s}: closing {f} as a function, but it is a {t}; close() must dispatch each construct by its family, so check its switch", .{ self.work.facts.path, ctx.node.where(), ctx.family });
-        try self.resolveBareCalls(ctx);
+        try notes.resolveBareCalls(self, ctx);
         const name_node = ctx.name orelse return;
         const name = name_node.text(self.source);
         if (name.len == 0) assert.panic("{s}: @function.name matched the empty {f}; capture the function's identifier", .{ self.work.facts.path, name_node.where() });
