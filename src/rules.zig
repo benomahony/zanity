@@ -379,3 +379,6 @@ pub const contradicted_codes = [_][]const u8{ "S101", "B101" };
 /// Values that grant access rather than hold a credential, as in a GitHub workflow's
 /// `id-token: write`, so a setting named for a token that takes one stores no secret.
 pub const access_levels = [_][]const u8{ "read", "write", "none", "read-all", "write-all" };
+/// Values that switch a setting on or off rather than hold a credential, as in a GitHub workflow's
+/// `persist-credentials: false`.
+pub const switch_values = [_][]const u8{ "true", "false", "yes", "no", "on", "off" };
