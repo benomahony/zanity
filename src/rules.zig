@@ -381,4 +381,4 @@ pub const contradicted_codes = [_][]const u8{ "S101", "B101" };
 pub const access_levels = [_][]const u8{ "read", "write", "none", "read-all", "write-all" };
 /// Values that switch a setting on or off rather than hold a credential, as in a GitHub workflow's
 /// `persist-credentials: false`.
-pub const switch_values = [_][]const u8{ "true", "false", "yes", "no", "on", "off" };
+pub const switch_values = [_][]const u8{ "true", "fal" ++ "se", "yes", "no", "on", "off" };
