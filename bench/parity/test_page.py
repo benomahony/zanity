@@ -1,11 +1,12 @@
 import copy
+import importlib
 import json
 import sys
 import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import page  # noqa: E402
+page = importlib.import_module("page")
 
 
 DATA = json.loads(page.RESULTS.read_text())
