@@ -15,16 +15,18 @@ const Finding = facts_module.Finding;
 
 /// The files that configure how a project is built and checked, in .gitignore syntax.
 pub const patterns = [_][]const u8{
-    "pyproject.toml",     "setup.cfg",          "tox.ini",                 "ruff.toml",                ".ruff.toml",          "mypy.ini",
-    ".mypy.ini",          "pyrightconfig.json", "package.json",            "tsconfig.json",            "tsconfig.*.json",     "eslint.config.*",
-    ".eslintrc*",         "biome.json",         "biome.jsonc",             "Cargo.toml",               "clippy.toml",         ".clippy.toml",
-    ".cargo/config.toml", "go.mod",             ".golangci.y*ml",          ".golangci.toml",           "staticcheck.conf",    "build.zig",
-    "build.zig.zon",      "CMakeLists.txt",     "Makefile",                "meson.build",              ".clang-tidy",         "build.gradle",
-    "build.gradle.kts",   "pom.xml",            ".pre-commit-config.yaml", "Justfile",                 "justfile",            "Taskfile.y*ml",
-    "noxfile.py",         ".gitlab-ci.yml",     ".circleci/config.yml",    ".github/workflows/*.y*ml", "Dockerfile*",         "docker-compose*.y*ml",
-    "compose*.y*ml",      "requirements*.txt",  "*.tf",                    "*.tfvars",                 ".terraform.lock.hcl", "Chart.yaml",
-    "values.y*ml",        "*.bicep",            "*.sh",                    ".env",                     ".env.*",              "*.properties",
-    "application*.y*ml",  "config*.y*ml",       "*.conf",                  ".htaccess",
+    "pyproject.toml",          "setup.cfg",                "tox.ini",                 "ruff.toml",                ".ruff.toml",          "mypy.ini",
+    ".mypy.ini",               "pyrightconfig.json",       "package.json",            "tsconfig.json",            "tsconfig.*.json",     "eslint.config.*",
+    ".eslintrc*",              "biome.json",               "biome.jsonc",             "Cargo.toml",               "clippy.toml",         ".clippy.toml",
+    ".cargo/config.toml",      "go.mod",                   ".golangci.y*ml",          ".golangci.toml",           "staticcheck.conf",    "build.zig",
+    "build.zig.zon",           "CMakeLists.txt",           "Makefile",                "meson.build",              ".clang-tidy",         "build.gradle",
+    "build.gradle.kts",        "pom.xml",                  ".pre-commit-config.yaml", "Justfile",                 "justfile",            "Taskfile.y*ml",
+    "noxfile.py",              ".gitlab-ci.yml",           ".circleci/config.yml",    ".github/workflows/*.y*ml", "Dockerfile*",         "docker-compose*.y*ml",
+    "compose*.y*ml",           "requirements*.txt",        "*.tf",                    "*.tfvars",                 ".terraform.lock.hcl", "Chart.yaml",
+    "values.y*ml",             "*.bicep",                  "*.sh",                    ".env",                     ".env.*",              "*.properties",
+    "application*.y*ml",       "config*.y*ml",             "*.conf",                  ".htaccess",                "*.csproj",            "Directory.Build.props",
+    "Directory.Build.targets", "Directory.Packages.props", ".editorconfig",           "*.ruleset",                "global.json",         "nuget.config",
+    "NuGet.Config",
 };
 
 /// Hidden directories that hold project files, which the walk otherwise skips.
@@ -60,6 +62,17 @@ const relaxations = [_]struct { []const u8, []const u8 }{
     .{ "\"strictnullchecks\": false", "lets null and undefined go unchecked" },
     .{ "warnings = \"allow\"", "allows every compiler warning" },
     .{ "-wno-error", "lets warnings that should stop the build through" },
+    .{ "<nullable>disable</nullable>", "turns nullable reference checking off, so possible null dereferences go unreported" },
+    .{ "<treatwarningsaserrors>false</treatwarningsaserrors>", "lets compiler warnings through" },
+    .{ "<warninglevel>0</warninglevel>", "turns compiler warnings off" },
+    .{ "<nowarn>", "silences these compiler and analyzer warnings" },
+    .{ "<enablenetanalyzers>false</enablenetanalyzers>", "turns the .NET code analyzers off" },
+    .{ "<runanalyzers>false</runanalyzers>", "turns the .NET code analyzers off" },
+    .{ "<runanalyzersduringbuild>false</runanalyzersduringbuild>", "skips the .NET code analyzers during the build" },
+    .{ "<analysismode>none</analysismode>", "turns the .NET code analyzers off" },
+    .{ "<analysislevel>none</analysislevel>", "turns the .NET code analyzers off" },
+    .{ "severity = none", "turns this analyzer rule off" },
+    .{ "severity=none", "turns this analyzer rule off" },
 };
 
 /// Whether the file at `relative`, a path from the checked directory, configures the project.
