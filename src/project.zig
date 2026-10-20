@@ -7,6 +7,7 @@ const Io = std.Io;
 const memory = @import("memory.zig");
 const rules = @import("rules.zig");
 const ignore = @import("ignore.zig");
+const suppress = @import("suppress.zig");
 const strings = @import("strings.zig");
 const facts_module = @import("facts.zig");
 const Facts = facts_module.Facts;
@@ -114,16 +115,18 @@ fn checkProjectFile(run: ProjectRun, path: []const u8, source: []const u8) !void
         if (line.len == 0 or line[0] == '#' or std.mem.startsWith(u8, line, "//")) continue;
         if (onlyContradicted(line)) continue;
         const column: u32 = @intCast(std.mem.indexOfNone(u8, raw, " \t") orelse 0);
+        var line_run = run;
+        line_run.enabled = try unsuppressed(run.enabled, line);
         var lower: [512]u8 = undefined;
         const kept = @min(line.len, lower.len);
         const lowered = std.ascii.lowerString(lower[0..kept], line[0..kept]);
         for (relaxations) |r| {
             if (std.mem.indexOf(u8, lowered, r[0]) == null) continue;
-            if (!run.enabled.enabled("relaxed-check")) break;
+            if (!line_run.enabled.enabled("relaxed-check")) break;
             try run.findings.add(.{ .path = path, .line = row, .column = column, .rule = "relaxed-check", .message = try facts.text.format("'{s}' {s}, so a problem it should catch passes.", .{ strings.header(line), r[1] }) });
             break;
         }
-        try checkRepositoryArtifact(run, .{ .path = path, .text = line[0..kept], .lower = lowered, .row = row, .column = column });
+        try checkRepositoryArtifact(line_run, .{ .path = path, .text = line[0..kept], .lower = lowered, .row = row, .column = column });
         const name = strings.header(line);
         if (!facts.collect_units or name.len == 0) continue;
         facts.path = path;
@@ -131,6 +134,34 @@ fn checkProjectFile(run: ProjectRun, path: []const u8, source: []const u8) !void
         try facts.unit(name, line, .{ .kind = .setting, .reports_error = false, .at = .{ row, column, row } });
     }
     if (row == 0 and source.len > 0) assert.panic("{s}: read {d} bytes as no lines; splitting on newlines always gives at least one", .{ path, source.len });
+}
+
+/// The rules in `enabled` that a `zanity: ignore` comment on `line` leaves on.
+fn unsuppressed(enabled: rules.Set, line: []const u8) !rules.Set {
+    if (line.len == 0) assert.panic("reading suppressions from an empty setting; checkProjectFile() skips blank lines", .{});
+    var slots: [16][]const u8 = undefined;
+    var codes: memory.Bounded([]const u8) = .{ .buffer = &slots, .what = "suppressed rule names on one project file line" };
+    if (!try suppress.parseIgnore(&codes, line)) return enabled;
+    var kept: rules.Set = .{};
+    if (codes.len == 0) return kept;
+    for (enabled.names()) |name| {
+        const rule = rules.find(name) orelse unreachable;
+        for (codes.items()) |code| {
+            if (rule.answers(code)) break;
+        } else kept.include(name);
+    }
+    if (kept.len > enabled.len) assert.panic("suppressions on '{s}' left {d} of {d} rules on; they can only turn rules off", .{ line, kept.len, enabled.len });
+    return kept;
+}
+
+test "a zanity: ignore comment on a project file line turns off only the rules it names" {
+    var enabled: rules.Set = .{};
+    enabled.include("plaintext-config-secret");
+    enabled.include("relaxed-check");
+    const kept = try unsuppressed(enabled, "api-token: hunter2 # zanity: ignore[plaintext-config-secret]");
+    try std.testing.expect(!kept.enabled("plaintext-config-secret"));
+    try std.testing.expect(kept.enabled("relaxed-check"));
+    try std.testing.expect((try unsuppressed(enabled, "api-token: hunter2 # zanity: ignore")).len == 0);
 }
 
 /// Whether every rule code the setting names, before any comment, is one that bans what zanity
@@ -411,7 +442,7 @@ fn plaintextConfigSecret(line: []const u8, lower: []const u8) ?[]const u8 {
     const name = lastSettingWord(key);
     if (name.len == 0) return null;
     if (!secretSettingName(name)) return null;
-    const value = std.mem.trim(u8, lower[separator + 1 ..], " \t\r\"',");
+    const value = std.mem.trim(u8, withoutComment(lower[separator + 1 ..]), " \t\r\"',");
     if (!isLiteralSecret(value)) return null;
     return name;
 }
@@ -424,7 +455,31 @@ fn isLiteralSecret(value: []const u8) bool {
     for (references) |reference| if (std.mem.indexOf(u8, value, reference) != null) return false;
     for (rules.secret_placeholders) |placeholder| if (std.mem.eql(u8, value, placeholder)) return false;
     for (rules.access_levels) |level| if (std.mem.eql(u8, value, level)) return false;
+    for (rules.switch_values) |switch_value| if (std.mem.eql(u8, value, switch_value)) return false;
     return std.mem.indexOfScalar(u8, rules.secret_masks, value[0]) == null or std.mem.indexOfNone(u8, value, value[0..1]) != null;
+}
+
+/// A setting's value without a trailing ` #` comment outside quotes, as YAML, TOML and INI allow.
+fn withoutComment(value: []const u8) []const u8 {
+    if (value.len > 512) assert.panic("stripping a comment from a {d}-byte value beyond the project line inspection window", .{value.len});
+    if (std.mem.indexOfAny(u8, value, "\r\n") != null) assert.panic("stripping a comment from a multiline value; pass one project line", .{});
+    var quote: ?u8 = null;
+    for (value, 0..) |c, i| {
+        if (quote) |q| {
+            if (c == q) quote = null;
+            continue;
+        }
+        if (c == '"' or c == '\'') quote = c;
+        if (c == '#' and i > 0 and std.ascii.isWhitespace(value[i - 1])) return value[0..i];
+    }
+    return value;
+}
+
+test "a secret setting holding a switch, an access level or a commented value stores no secret" {
+    try std.testing.expect(plaintextConfigSecret("persist-credentials: false", "persist-credentials: false") == null);
+    try std.testing.expect(plaintextConfigSecret("id-token: write # deploy to pages", "id-token: write # deploy to pages") == null);
+    try std.testing.expect(plaintextConfigSecret("api_token = \"a#b\"", "api_token = \"a#b\"") != null);
+    try std.testing.expect(plaintextConfigSecret("api-token: hunter2 # staging", "api-token: hunter2 # staging") != null);
 }
 
 fn lastSettingWord(key: []const u8) []const u8 {
