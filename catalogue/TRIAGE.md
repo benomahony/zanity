@@ -6,9 +6,9 @@ unreviewed: a bucket is a starting point for review, not a claim about the weakn
 | Bucket | Families | Meaning |
 |---|---:|---|
 | mapped | 180 | Has a zanity rule |
-| static | 160 | Static analysis can find it (upstream says so); a candidate for a deterministic rule |
-| inference | 381 | Visible in source but needs judgement; a candidate for a --infer question |
-| other-languages | 73 | Specific to languages zanity has no grammar for yet (C, C++, PHP, C#...) |
+| static | 163 | Static analysis can find it (upstream says so); a candidate for a deterministic rule |
+| inference | 386 | Visible in source but needs judgement; a candidate for a --infer question |
+| other-languages | 65 | Specific to languages zanity has no grammar for yet (C, C++, PHP, Perl...) |
 | hardware | 58 | Hardware design weaknesses; not in software source |
 | abstract | 115 | A class or pillar; covered through its more specific children |
 | deprecated | 25 | Deprecated upstream; do not build new rules on it |
@@ -118,6 +118,7 @@ Total: 1035 families.
 | CWE-96 | defect | Improper Neutralization of Directives in Statically Saved Code ('Static Code Injection') |
 | CWE-103 | defect | Struts: Incomplete validate() Method Definition |
 | CWE-104 | defect | Struts: Form Bean Does Not Extend Validation Class |
+| CWE-11 | defect | ASP.NET Misconfiguration: Creating Debug Binary |
 | CWE-110 | defect | Struts: Validator Without Form Field |
 | CWE-129 | defect | Improper Validation of Array Index |
 | CWE-150 | defect | Improper Neutralization of Escape, Meta, or Control Sequences |
@@ -144,10 +145,12 @@ Total: 1035 families.
 | CWE-543 | defect | Use of Singleton Pattern Without Synchronization in a Multithreaded Context |
 | CWE-566 | defect | Authorization Bypass Through User-Controlled SQL Primary Key |
 | CWE-579 | defect | J2EE Bad Practices: Non-serializable Object Stored in Session |
+| CWE-587 | defect | Assignment of a Fixed Address to a Pointer |
 | CWE-589 | defect | Call to Non-ubiquitous API |
 | CWE-605 | defect | Multiple Binds to the Same Port |
 | CWE-615 | defect | Inclusion of Sensitive Information in Source Code Comments |
 | CWE-618 | defect | Exposed Unsafe ActiveX Method |
+| CWE-626 | defect | Null Byte Interaction Error (Poison Null Byte) |
 | CWE-647 | defect | Use of Non-Canonical URL Paths for Authorization Decisions |
 | CWE-687 | defect | Function Call With Incorrectly Specified Argument Value |
 | CWE-759 | defect | Use of a One-Way Hash without a Salt |
@@ -399,7 +402,10 @@ Total: 1035 families.
 | CWE-108 | defect | Struts: Unvalidated Action Form |
 | CWE-109 | defect | Struts: Validator Turned Off |
 | CWE-1096 | defect | Singleton Class Instance Creation without Proper Locking or Synchronization |
+| CWE-1174 | defect | ASP.NET Misconfiguration: Improper Model Validation |
+| CWE-12 | defect | ASP.NET Misconfiguration: Missing Custom Error Page |
 | CWE-1255 | defect | Comparison Logic is Vulnerable to Power Side-Channel Attacks |
+| CWE-13 | defect | ASP.NET Misconfiguration: Password in Configuration File |
 | CWE-1385 | defect | Missing Origin Validation in WebSockets |
 | CWE-14 | defect | Compiler Removal of Code to Clear Buffers |
 | CWE-141 | defect | Improper Neutralization of Parameter/Argument Delimiters |
@@ -486,7 +492,9 @@ Total: 1035 families.
 | CWE-55 | defect | Path Equivalence: '/./' (Single Dot Directory) |
 | CWE-550 | defect | Server-generated Error Message Containing Sensitive Information |
 | CWE-553 | defect | Command Shell in Externally Accessible Directory |
+| CWE-554 | defect | ASP.NET Misconfiguration: Not Using Input Validation Framework |
 | CWE-555 | defect | J2EE Misconfiguration: Plaintext Password in Configuration File |
+| CWE-556 | defect | ASP.NET Misconfiguration: Use of Identity Impersonation |
 | CWE-56 | defect | Path Equivalence: 'filedir*' (Wildcard) |
 | CWE-564 | defect | SQL Injection: Hibernate |
 | CWE-57 | defect | Path Equivalence: 'fakedir/../realdir/filename' |

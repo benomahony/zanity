@@ -17,7 +17,9 @@ pub const Name = struct {
 pub const Predicate = union(enum) {
     eq_capture: struct { a: u32, b: u32, positive: bool, any: bool },
     eq_string: struct { capture: u32, value: []const u8, positive: bool, any: bool },
-    any_of: struct { capture: u32, values: []const []const u8, positive: bool },
+    /// `#any-of? @x value...`: `@x` is one of these; with `#any-suffix?`, ends with one of them, as
+    /// C#'s decimal literal `0.1m` ends with `m`.
+    any_of: struct { capture: u32, values: []const []const u8, positive: bool, suffix: bool = false },
     /// `#any-word? @x word...`: one of the words of `@x`, split as names are at `_` and case
     /// changes, is one of these, ignoring case, so `handle_except` and `onCatch` both match.
     any_word: struct { capture: u32, values: []const []const u8, positive: bool },
@@ -253,7 +255,7 @@ fn initPredicate(arena: Allocator, query: *const ts.Query, args: []const ts.Pred
         return .{ .eq_string = .{ .capture = capture, .value = ts.stringValue(query, args[2].value_id), .positive = positive, .any = any } };
     }
     const negated = name[0] == 'n';
-    if (strings.contains(&.{ "any-of?", "not-any-of?", "any-word?", "not-any-word?", "has-ancestor?", "not-has-ancestor?", "kind-eq?", "not-kind-eq?" }, name)) {
+    if (strings.contains(&.{ "any-of?", "not-any-of?", "any-word?", "not-any-word?", "any-suffix?", "not-any-suffix?", "has-ancestor?", "not-has-ancestor?", "kind-eq?", "not-kind-eq?" }, name)) {
         if (args.len < 3) return error.InvalidQuery;
         const values = try arena.alloc([]const u8, args.len - 2);
         for (args[2..], values) |arg, *v| v.* = ts.stringValue(query, arg.value_id);
@@ -271,6 +273,7 @@ fn listPredicate(name: []const u8, capture: u32, values: []const []const u8) Pre
     const positive = name[0] != 'n';
     if (std.mem.endsWith(u8, name, "any-of?")) return .{ .any_of = .{ .capture = capture, .values = values, .positive = positive } };
     if (std.mem.endsWith(u8, name, "any-word?")) return .{ .any_word = .{ .capture = capture, .values = values, .positive = positive } };
+    if (std.mem.endsWith(u8, name, "any-suffix?")) return .{ .any_of = .{ .capture = capture, .values = values, .positive = positive, .suffix = true } };
     if (std.mem.endsWith(u8, name, "kind-eq?")) return .{ .kind = .{ .capture = capture, .kinds = values, .positive = positive } };
     return .{ .ancestor = .{ .capture = capture, .kinds = values, .positive = positive } };
 }
@@ -321,7 +324,7 @@ fn holds(predicate: Predicate, match: ts.QueryMatch, buffers: Buffers, text: []c
     const nodes = capturesOf(match, predicate.subject(), buffers.a);
     const result = switch (predicate) {
         .any_of => |q| for (nodes) |node| {
-            if (oneOfText(node.text(text), q.values) != q.positive) break false;
+            if (oneOfText(node.text(text), q.values, q.suffix) != q.positive) break false;
         } else true,
         .any_word => |q| for (nodes) |node| {
             if (hasWord(node.text(text), q.values) != q.positive) break false;
@@ -330,7 +333,7 @@ fn holds(predicate: Predicate, match: ts.QueryMatch, buffers: Buffers, text: []c
             if (hasAncestor(node, q.kinds) != q.positive) break false;
         } else true,
         .kind => |q| for (nodes) |node| {
-            if (oneOfText(std.mem.span(ts.ts_node_type(node)), q.kinds) != q.positive) break false;
+            if (oneOfText(std.mem.span(ts.ts_node_type(node)), q.kinds, false) != q.positive) break false;
         } else true,
         .empty => |q| for (nodes) |node| {
             if ((ts.ts_node_named_child_count(node) == 0) != q.positive) break false;
@@ -355,11 +358,12 @@ fn hasWord(name: []const u8, words: []const []const u8) bool {
     return false;
 }
 
-fn oneOfText(text: []const u8, values: []const []const u8) bool {
+/// Whether `text` is one of `values`, or with `suffix` ends with one of them.
+fn oneOfText(text: []const u8, values: []const []const u8, suffix: bool) bool {
     if (values.len == 0) assert.panic("#any-of? lists no values to compare '{s}' with; give #any-of? at least one value in the language's .scm files", .{text});
     for (values) |v| {
         if (v.len == 0) assert.panic("#any-of? lists an empty value alongside '{s}'; remove it from the query", .{values[0]});
-        if (std.mem.eql(u8, text, v)) return true;
+        if (if (suffix) std.mem.endsWith(u8, text, v) else std.mem.eql(u8, text, v)) return true;
     }
     return false;
 }

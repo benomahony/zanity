@@ -11,16 +11,16 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-OUR_LANGUAGES = {"Python", "JavaScript", "TypeScript", "Java", "Go", "Rust", "Zig"}
+OUR_LANGUAGES = {"Python", "JavaScript", "TypeScript", "Java", "Go", "Rust", "Zig", "C#", "ASP.NET"}
 GENERIC = {"Not Language-Specific", "Interpreted", "Compiled", "Object-Oriented"}
 HARDWARE_WORDS = ("Hardware", "System on Chip", "Verilog", "VHDL")
-OTHER_LANGUAGES = {"C", "C++", "PHP", "C#", "Perl", "ASP.NET", "Memory-Unsafe", "Assembly", "Ruby", "Objective-C", "Swift", "Kotlin", "Shell"}
+OTHER_LANGUAGES = {"C", "C++", "PHP", "Perl", "Memory-Unsafe", "Assembly", "Ruby", "Objective-C", "Swift", "Kotlin", "Shell"}
 
 BUCKETS = {
     "mapped": "Has a zanity rule",
     "static": "Static analysis can find it (upstream says so); a candidate for a deterministic rule",
     "inference": "Visible in source but needs judgement; a candidate for a --infer question",
-    "other-languages": "Specific to languages zanity has no grammar for yet (C, C++, PHP, C#...)",
+    "other-languages": "Specific to languages zanity has no grammar for yet (C, C++, PHP, Perl...)",
     "hardware": "Hardware design weaknesses; not in software source",
     "abstract": "A class or pillar; covered through its more specific children",
     "deprecated": "Deprecated upstream; do not build new rules on it",
