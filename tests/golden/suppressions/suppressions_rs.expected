@@ -1,0 +1,6 @@
+rules: relaxed-check
+exit: 0
+suppressions_rs.rs:1:1: warning [relaxed-check]
+suppressions_rs.rs:3:1: warning [relaxed-check]
+suppressions_rs.rs:6:1: warning [relaxed-check]
+suppressions_rs.rs:9:1: warning [relaxed-check]

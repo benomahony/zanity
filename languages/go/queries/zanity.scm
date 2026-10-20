@@ -116,6 +116,27 @@
     .)) @catch.swallowed
   (#eq? @_err "err"))
 
+; A function named as an error handler whose body is empty drops every error passed to it.
+([
+  (function_declaration
+    name: (identifier) @_handler
+    body: (block
+    .
+    "{"
+    .
+    "}"
+    .))
+  (method_declaration
+    name: (field_identifier) @_handler
+    body: (block
+    .
+    "{"
+    .
+    "}"
+    .))
+] @catch.swallowed
+  (#any-word? @_handler "except" "exception" "catch" "rescue" "error" "err"))
+
 (for_statement) @loop.outer
 
 [
@@ -372,3 +393,9 @@
   operator: ["/" "%"]
   right: [(int_literal) (float_literal)] @_zero_divisor) @finding.divide-by-zero
   (#any-of? @_zero_divisor "0" "00" "0.0" "0." ".0" "0x0" "0o0" "0b0"))
+
+; CWE-1056: a parameter that takes any number of arguments.
+(variadic_parameter_declaration) @finding.variadic-parameter
+
+; CWE-1075: a goto.
+(goto_statement) @finding.goto-statement

@@ -1,0 +1,3 @@
+rules: dead-parameter
+exit: 0
+Handlers.cs:38:24: warning [dead-parameter]

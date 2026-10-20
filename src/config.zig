@@ -10,6 +10,16 @@
 //!       api_key_env: KEV_API_KEY               # where the key is, if the server needs one
 //!       concurrency: 16                        # requests to the model at once
 //!       threshold: 0.9                         # how sure it must be to report
+//!     questions:
+//!       payment-without-key:                   # a --infer question of your own
+//!         question: Does the function charge a card without an idempotency key?
+//!         finding: A card is charged without an idempotency key
+//!         fix: Pass the order's id as the payment's idempotency key.
+//!         severity: error                      # error, warning (the default) or information
+//!         asks: function                       # function, errors, fixture, test, file or project
+//!         threshold: 0.9                       # this question's own; infer threshold otherwise
+//!       cwe-15:                                # or retune one of zanity's: its threshold,
+//!         threshold: 0.95                      # question, finding, fix or severity
 //!     paths:
 //!       - files: "*_test.zig"                  # gitignore syntax, relative to this file
 //!         disable: [process-in-test]           # these rules don't report here
@@ -31,6 +41,8 @@ const yaml = @import("yaml.zig");
 pub const file_name = "zanity.yaml";
 pub const max_excludes = 256;
 pub const max_concurrency = 64;
+/// Questions zanity.yaml can define or retune.
+pub const max_questions = 64;
 pub const max_path_sections = 32;
 pub const max_file_bytes = 1 << 20;
 pub const max_terms = 512;
@@ -92,6 +104,15 @@ pub const Config = struct {
     directional_len: usize = 0,
     /// The file the glossary was read from, zanity.yaml or ddd.yaml; empty when there is none.
     glossary_file: []const u8 = "",
+    /// The questions `questions:` defines or retunes, in the order they appear.
+    questions: [max_questions]rules.Rule = undefined,
+    questions_len: usize = 0,
+
+    pub fn questionRules(self: *const Config) []const rules.Rule {
+        if (self.questions_len > max_questions) assert.panic("{d} questions in room for {d}; the reader must refuse more", .{ self.questions_len, max_questions });
+        if (self.questions_len > 0 and self.questions[0].question.len == 0) assert.panic("the question '{s}' has no question text; the reader checks each entry is complete", .{self.questions[0].name});
+        return self.questions[0..self.questions_len];
+    }
 
     pub fn vocabulary(self: *const Config) []const Term {
         if (self.terms_len > max_terms) assert.panic("{d} vocabulary terms in room for {d}; the ddd.yaml reader must refuse the term past max_terms, so check where it adds terms", .{ self.terms_len, max_terms });
@@ -290,8 +311,10 @@ const ConfigReader = struct {
             try self.readSection(config, key, .infer);
         } else if (std.mem.eql(u8, key, "paths")) {
             try self.readPathSections(config, key);
+        } else if (std.mem.eql(u8, key, "questions")) {
+            try self.readQuestions(config, key);
         } else if (!try ddd.readGlossaryKey(text, config, key)) {
-            return text.fail("'{s}' isn't a setting; the settings are exclude, rules, infer and paths, and the glossary's contexts and directional.", .{key});
+            return text.fail("'{s}' isn't a setting; the settings are exclude, rules, infer, questions and paths, and the glossary's contexts and directional.", .{key});
         }
         if (config.exclude_len > max_excludes) assert.panic("{d} exclude patterns in room for {d}; readStrings() must refuse lists longer than max_excludes", .{ config.exclude_len, max_excludes });
         if (text.at < start) assert.panic("reading '{s}' moved back from byte {d} to {d}; it must only move forward", .{ key, start, text.at });
@@ -354,6 +377,73 @@ const ConfigReader = struct {
         try text.endLine();
         if (setting == .concurrency and config.concurrency == null) assert.panic("read infer concurrency but stored nothing; its branch of readInferSetting() must store it", .{});
         if (setting == .threshold and config.threshold == null) assert.panic("read infer threshold but stored nothing; its branch of readInferSetting() must store it", .{});
+    }
+
+    /// The `questions:` settings: each key a question of the file's own, or one of zanity's to
+    /// retune starting from what zanity asks, with its settings on the indented lines below.
+    fn readQuestions(self: *ConfigReader, config: *Config, key: []const u8) Error!void {
+        const text = self.text;
+        const before = config.questions_len;
+        var mapping = (try text.nestedMapping(key, 0)) orelse return;
+        for (0..text.bytes.len) |_| {
+            const name = (try text.nextKey(&mapping)) orelse break;
+            const at_line = text.line();
+            try self.addQuestion(config, name);
+            if (try text.nestedMapping(name, mapping.indent)) |found| {
+                var settings = found;
+                for (0..text.bytes.len) |_| try self.readQuestionSetting(config, (try text.nextKey(&settings)) orelse break);
+            }
+            try self.finishQuestion(config, at_line);
+        }
+        if (config.questions_len < before) assert.panic("reading questions dropped them from {d} to {d}; it may only add them", .{ before, config.questions_len });
+        if (config.questions_len > max_questions) assert.panic("{d} questions in room for {d}; addQuestion() must refuse more", .{ config.questions_len, max_questions });
+    }
+
+    /// Starts the question `name`: one of the file's own, or one of zanity's, from what it asks.
+    fn addQuestion(self: *ConfigReader, config: *Config, name: []const u8) Error!void {
+        const text = self.text;
+        if (name.len == 0) assert.panic("adding a question with no name; nextKey() returns only named keys", .{});
+        for (config.questionRules()) |q| if (std.mem.eql(u8, q.name, name)) return text.fail("the question '{s}' appears twice; put its settings in one entry.", .{name});
+        if (config.questions_len == max_questions) return text.fail("there are more than {d} questions; keep the ones that matter most.", .{max_questions});
+        const builtin = if (rules.ruleIndex(name)) |i| rules.all[i] else null;
+        if (builtin) |b| if (b.question.len == 0) return text.fail("'{s}' is a deterministic rule, not a question, so there is nothing to retune; give your question a name of its own.", .{name});
+        config.questions[config.questions_len] = builtin orelse .{ .name = name, .advice = "", .severity = .warning, .tier = .default, .question = "", .judgement = "", .asks = .function };
+        config.questions[config.questions_len].name = name;
+        config.questions_len += 1;
+        if (config.questions_len > max_questions) assert.panic("{d} questions in room for {d}; the check above refuses more", .{ config.questions_len, max_questions });
+    }
+
+    /// One setting of the question being read.
+    fn readQuestionSetting(self: *ConfigReader, config: *Config, key: []const u8) Error!void {
+        const text = self.text;
+        if (config.questions_len == 0) assert.panic("reading '{s}' with no question open; addQuestion() opens one first", .{key});
+        const QuestionSetting = enum { question, finding, fix, severity, asks, threshold };
+        const setting = std.meta.stringToEnum(QuestionSetting, key) orelse return text.fail("'{s}' isn't a question setting; the settings are question, finding, fix, severity, asks and threshold.", .{key});
+        const q = &config.questions[config.questions_len - 1];
+        const value = try text.readScalar(key, false);
+        switch (setting) {
+            .threshold => {
+                const number = std.fmt.parseFloat(f64, value) catch return text.fail("'threshold' needs a number, such as threshold: 0.9.", .{});
+                if (!(number > 0 and number <= 1)) return text.fail("threshold is {d}; it must be above 0 and at most 1, such as 0.9 to report only what the model is at least 90% sure of.", .{number});
+                q.threshold = number;
+            },
+            .severity => q.severity = std.meta.stringToEnum(rules.Severity, value) orelse return text.fail("severity must be error, warning or information.", .{}),
+            .asks => q.asks = std.meta.stringToEnum(rules.Asks, value) orelse return text.fail("asks must be function, errors, fixture, test, file or project.", .{}),
+            .question => q.question = value,
+            .finding => q.judgement = value,
+            .fix => q.advice = value,
+        }
+        try text.endLine();
+        if (setting == .question and q.question.len == 0) assert.panic("read a question for '{s}' but stored none", .{q.name});
+    }
+
+    /// Checks the question just read, which started on `at_line`, says everything a finding needs.
+    fn finishQuestion(self: *ConfigReader, config: *Config, at_line: u32) Error!void {
+        if (config.questions_len == 0) assert.panic("finishing a question that was never started", .{});
+        const q = config.questions[config.questions_len - 1];
+        if (q.name.len == 0) assert.panic("the question on line {d} has no name; addQuestion() names it", .{at_line});
+        const missing: []const u8 = if (q.question.len == 0) "question" else if (q.judgement.len == 0) "finding" else if (q.advice.len == 0) "fix" else return;
+        return self.text.failAt(at_line, "the question '{s}' has no {s}; a question of your own needs a question, a finding and a fix.", .{ q.name, missing });
     }
 
     /// The `paths:` list: each item a files pattern and the rules that don't report in its files.

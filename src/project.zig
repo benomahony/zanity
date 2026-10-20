@@ -7,6 +7,7 @@ const Io = std.Io;
 const memory = @import("memory.zig");
 const rules = @import("rules.zig");
 const ignore = @import("ignore.zig");
+const suppress = @import("suppress.zig");
 const strings = @import("strings.zig");
 const facts_module = @import("facts.zig");
 const Facts = facts_module.Facts;
@@ -14,20 +15,35 @@ const Finding = facts_module.Finding;
 
 /// The files that configure how a project is built and checked, in .gitignore syntax.
 pub const patterns = [_][]const u8{
-    "pyproject.toml",     "setup.cfg",          "tox.ini",                 "ruff.toml",                ".ruff.toml",          "mypy.ini",
-    ".mypy.ini",          "pyrightconfig.json", "package.json",            "tsconfig.json",            "tsconfig.*.json",     "eslint.config.*",
-    ".eslintrc*",         "biome.json",         "biome.jsonc",             "Cargo.toml",               "clippy.toml",         ".clippy.toml",
-    ".cargo/config.toml", "go.mod",             ".golangci.y*ml",          ".golangci.toml",           "staticcheck.conf",    "build.zig",
-    "build.zig.zon",      "CMakeLists.txt",     "Makefile",                "meson.build",              ".clang-tidy",         "build.gradle",
-    "build.gradle.kts",   "pom.xml",            ".pre-commit-config.yaml", "Justfile",                 "justfile",            "Taskfile.y*ml",
-    "noxfile.py",         ".gitlab-ci.yml",     ".circleci/config.yml",    ".github/workflows/*.y*ml", "Dockerfile*",         "docker-compose*.y*ml",
-    "compose*.y*ml",      "requirements*.txt",  "*.tf",                    "*.tfvars",                 ".terraform.lock.hcl", "Chart.yaml",
-    "values.y*ml",        "*.bicep",            "*.sh",                    ".env",                     ".env.*",              "*.properties",
-    "application*.y*ml",  "config*.y*ml",       "*.conf",                  ".htaccess",
+    "pyproject.toml",          "setup.cfg",                "tox.ini",                 "ruff.toml",                ".ruff.toml",          "mypy.ini",
+    ".mypy.ini",               "pyrightconfig.json",       "package.json",            "tsconfig.json",            "tsconfig.*.json",     "eslint.config.*",
+    ".eslintrc*",              "biome.json",               "biome.jsonc",             "Cargo.toml",               "clippy.toml",         ".clippy.toml",
+    ".cargo/config.toml",      "go.mod",                   ".golangci.y*ml",          ".golangci.toml",           "staticcheck.conf",    "build.zig",
+    "build.zig.zon",           "CMakeLists.txt",           "Makefile",                "meson.build",              ".clang-tidy",         "build.gradle",
+    "build.gradle.kts",        "pom.xml",                  ".pre-commit-config.yaml", "Justfile",                 "justfile",            "Taskfile.y*ml",
+    "noxfile.py",              ".gitlab-ci.yml",           ".circleci/config.yml",    ".github/workflows/*.y*ml", "Dockerfile*",         "docker-compose*.y*ml",
+    "compose*.y*ml",           "requirements*.txt",        "*.tf",                    "*.tfvars",                 ".terraform.lock.hcl", "Chart.yaml",
+    "values.y*ml",             "*.bicep",                  "*.sh",                    ".env",                     ".env.*",              "*.properties",
+    "application*.y*ml",       "config*.y*ml",             "*.conf",                  ".htaccess",                "*.csproj",            "Directory.Build.props",
+    "Directory.Build.targets", "Directory.Packages.props", ".editorconfig",           "*.ruleset",                "global.json",         "nuget.config",
+    "NuGet.Config",
 };
 
 /// Hidden directories that hold project files, which the walk otherwise skips.
 pub const hidden_dirs = [_][]const u8{ ".github", ".circleci", ".cargo" };
+
+/// Directories of dependencies and build output, which the walk never enters.
+const skipped_dirs = [_][]const u8{ "node_modules", "zig-out", "__pycache__", "target", "dist", "build", "venv" };
+
+/// Whether the walk leaves out a directory called `name`: dependencies, build output, and hidden
+/// directories other than those holding project files.
+pub fn skippedDir(name: []const u8) bool {
+    if (name.len == 0) assert.panic("asked whether a directory with an empty name is skipped; skip empty names before calling skippedDir()", .{});
+    if (std.mem.indexOfAny(u8, name, "/\\") != null) assert.panic("'{s}' is a path, but skippedDir() takes one directory name; pass the directory's base name", .{name});
+    if (name[0] == '.') return !strings.contains(&hidden_dirs, name);
+    for (skipped_dirs) |s| if (std.mem.eql(u8, s, name)) return true;
+    return false;
+}
 
 /// Setting text that lets a check pass when it should fail, lowercased, and what it does.
 const relaxations = [_]struct { []const u8, []const u8 }{
@@ -46,6 +62,17 @@ const relaxations = [_]struct { []const u8, []const u8 }{
     .{ "\"strictnullchecks\": false", "lets null and undefined go unchecked" },
     .{ "warnings = \"allow\"", "allows every compiler warning" },
     .{ "-wno-error", "lets warnings that should stop the build through" },
+    .{ "<nullable>disable</nullable>", "turns nullable reference checking off, so possible null dereferences go unreported" },
+    .{ "<treatwarningsaserrors>false</treatwarningsaserrors>", "lets compiler warnings through" },
+    .{ "<warninglevel>0</warninglevel>", "turns compiler warnings off" },
+    .{ "<nowarn>", "silences these compiler and analyzer warnings" },
+    .{ "<enablenetanalyzers>false</enablenetanalyzers>", "turns the .NET code analyzers off" },
+    .{ "<runanalyzers>false</runanalyzers>", "turns the .NET code analyzers off" },
+    .{ "<runanalyzersduringbuild>false</runanalyzersduringbuild>", "skips the .NET code analyzers during the build" },
+    .{ "<analysismode>none</analysismode>", "turns the .NET code analyzers off" },
+    .{ "<analysislevel>none</analysislevel>", "turns the .NET code analyzers off" },
+    .{ "severity = none", "turns this analyzer rule off" },
+    .{ "severity=none", "turns this analyzer rule off" },
 };
 
 /// Whether the file at `relative`, a path from the checked directory, configures the project.
@@ -99,17 +126,20 @@ fn checkProjectFile(run: ProjectRun, path: []const u8, source: []const u8) !void
     while (lines.next()) |raw| : (row += 1) {
         const line = std.mem.trim(u8, raw, " \t\r");
         if (line.len == 0 or line[0] == '#' or std.mem.startsWith(u8, line, "//")) continue;
+        if (onlyContradicted(line)) continue;
         const column: u32 = @intCast(std.mem.indexOfNone(u8, raw, " \t") orelse 0);
+        var line_run = run;
+        line_run.enabled = try unsuppressed(run.enabled, line);
         var lower: [512]u8 = undefined;
         const kept = @min(line.len, lower.len);
         const lowered = std.ascii.lowerString(lower[0..kept], line[0..kept]);
         for (relaxations) |r| {
             if (std.mem.indexOf(u8, lowered, r[0]) == null) continue;
-            if (!run.enabled.enabled("relaxed-check")) break;
+            if (!line_run.enabled.enabled("relaxed-check")) break;
             try run.findings.add(.{ .path = path, .line = row, .column = column, .rule = "relaxed-check", .message = try facts.text.format("'{s}' {s}, so a problem it should catch passes.", .{ strings.header(line), r[1] }) });
             break;
         }
-        try checkRepositoryArtifact(run, .{ .path = path, .text = line[0..kept], .lower = lowered, .row = row, .column = column });
+        try checkRepositoryArtifact(line_run, .{ .path = path, .text = line[0..kept], .lower = lowered, .row = row, .column = column });
         const name = strings.header(line);
         if (!facts.collect_units or name.len == 0) continue;
         facts.path = path;
@@ -117,6 +147,70 @@ fn checkProjectFile(run: ProjectRun, path: []const u8, source: []const u8) !void
         try facts.unit(name, line, .{ .kind = .setting, .reports_error = false, .at = .{ row, column, row } });
     }
     if (row == 0 and source.len > 0) assert.panic("{s}: read {d} bytes as no lines; splitting on newlines always gives at least one", .{ path, source.len });
+}
+
+/// The rules in `enabled` that a `zanity: ignore` comment on `line` leaves on.
+fn unsuppressed(enabled: rules.Set, line: []const u8) !rules.Set {
+    if (line.len == 0) assert.panic("reading suppressions from an empty setting; checkProjectFile() skips blank lines", .{});
+    var slots: [16][]const u8 = undefined;
+    var codes: memory.Bounded([]const u8) = .{ .buffer = &slots, .what = "suppressed rule names on one project file line" };
+    if (!try suppress.parseIgnore(&codes, line)) return enabled;
+    var kept: rules.Set = .{};
+    if (codes.len == 0) return kept;
+    for (enabled.names()) |name| {
+        const rule = rules.find(name) orelse unreachable;
+        for (codes.items()) |code| {
+            if (rule.answers(code)) break;
+        } else kept.include(name);
+    }
+    if (kept.len > enabled.len) assert.panic("suppressions on '{s}' left {d} of {d} rules on; they can only turn rules off", .{ line, kept.len, enabled.len });
+    return kept;
+}
+
+test "a zanity: ignore comment on a project file line turns off only the rules it names" {
+    var enabled: rules.Set = .{};
+    enabled.include("plaintext-config-secret");
+    enabled.include("relaxed-check");
+    const kept = try unsuppressed(enabled, "api-token: hunter2 # zanity: ignore[plaintext-config-secret]");
+    try std.testing.expect(!kept.enabled("plaintext-config-secret"));
+    try std.testing.expect(kept.enabled("relaxed-check"));
+    try std.testing.expectEqual(0, (try unsuppressed(enabled, "api-token: hunter2 # zanity: ignore")).len);
+}
+
+/// Whether every rule code the setting names, before any comment, is one that bans what zanity
+/// requires, so the line turns off a check zanity's rules contradict and weakens nothing.
+fn onlyContradicted(line: []const u8) bool {
+    if (line.len == 0) assert.panic("checking an empty setting for rule codes; checkProjectFile() skips blank lines", .{});
+    const setting = line[0 .. std.mem.indexOfScalar(u8, line, '#') orelse line.len];
+    var named: u32 = 0;
+    var i: usize = 0;
+    while (i < setting.len) {
+        const start = i;
+        while (i < setting.len and std.ascii.isAlphanumeric(setting[i])) i += 1;
+        const word = setting[start..i];
+        if (i == start) i += 1;
+        if (!ruleCode(word)) continue;
+        if (!strings.contains(&rules.contradicted_codes, word)) return false;
+        named += 1;
+    }
+    if (i < setting.len) assert.panic("reading '{s}' for rule codes stopped at byte {d}", .{ setting, i });
+    if (named > setting.len / 2) assert.panic("counted {d} rule codes in the {d}-byte '{s}'; each takes at least two bytes", .{ named, setting.len, setting });
+    return named > 0;
+}
+
+/// Whether `word` reads as a linter's rule code: capitals then digits, as in `S101` or `E501`.
+fn ruleCode(word: []const u8) bool {
+    if (std.mem.indexOfNone(u8, word, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789") != null) assert.panic("'{s}' is not one word; onlyContradicted() splits at every other byte", .{word});
+    const letters = std.mem.indexOfNone(u8, word, "ABCDEFGHIJKLMNOPQRSTUVWXYZ") orelse return false;
+    if (letters > word.len) assert.panic("found {d} capitals in the {d}-byte '{s}'", .{ letters, word.len, word });
+    return letters > 0 and letters < word.len and std.mem.indexOfNone(u8, word[letters..], "0123456789") == null;
+}
+
+test "a setting that only turns off rules banning what zanity requires weakens nothing" {
+    try std.testing.expect(onlyContradicted("ignore = [\"S101\"]  # assertion-density needs asserts"));
+    try std.testing.expect(onlyContradicted("\"tests/*\" = [\"S101\", \"B101\"]"));
+    try std.testing.expect(!onlyContradicted("ignore = [\"S101\", \"E501\"]"));
+    try std.testing.expect(!onlyContradicted("line-length = 200"));
 }
 
 /// Findings whose evidence is a checked-in build, dependency, CI or infrastructure artifact.
@@ -287,8 +381,8 @@ fn authenticationPolicy(lower: []const u8) ?PolicyFinding {
 }
 
 fn disabledAuthenticationPolicy(key: []const u8) ?PolicyFinding {
-    if (key.len == 0) assert.panic("classifying an empty disabled authentication setting; authenticationPolicy parsed a key", .{});
-    if (std.mem.indexOfAny(u8, key, "\r\n") != null) assert.panic("classifying a multiline authentication key; project settings have one line", .{});
+    if (key.len == 0) assert.panic("classifying an empty disabled authentication setting; fix authenticationPolicy() to pass its parsed key", .{});
+    if (std.mem.indexOfAny(u8, key, "\r\n") != null) assert.panic("classifying a multiline authentication key; split the project file into single settings first", .{});
     if (std.mem.indexOf(u8, key, "csrf") != null) return .{ .rule = "csrf-protection-disabled", .problem = "explicitly disables cross-site request forgery protection" };
     const expiry = std.mem.indexOf(u8, key, "timeout") != null or std.mem.indexOf(u8, key, "expiry") != null or std.mem.indexOf(u8, key, "expiration") != null;
     if (std.mem.indexOf(u8, key, "session") != null and expiry) return .{ .rule = "session-expiry-disabled", .problem = "lets authenticated sessions remain valid without a time limit" };
@@ -361,10 +455,17 @@ fn plaintextConfigSecret(line: []const u8, lower: []const u8) ?[]const u8 {
     const name = lastSettingWord(key);
     if (name.len == 0) return null;
     if (!secretSettingName(name)) return null;
-    const value = std.mem.trim(u8, lower[separator + 1 ..], " \t\r\"',");
+    const value = std.mem.trim(u8, withoutComment(lower[separator + 1 ..]), " \t\r\"',");
     if (!isLiteralSecret(value)) return null;
     return name;
 }
+
+/// Values that grant access rather than hold a credential, as in a GitHub workflow's
+/// `id-token: write`, so a setting named for a token that takes one stores no secret.
+const access_levels = [_][]const u8{ "read", "write", "none", "read-all", "write-all" };
+/// Values that switch a setting on or off rather than hold a credential, as in a GitHub workflow's
+/// `persist-credentials: false`.
+const switch_values = [_][]const u8{ "true", "false", "yes", "no", "on", "off" };
 
 fn isLiteralSecret(value: []const u8) bool {
     if (value.len > 512) assert.panic("checking a {d}-byte secret value beyond the project line inspection window", .{value.len});
@@ -373,7 +474,32 @@ fn isLiteralSecret(value: []const u8) bool {
     const references = [_][]const u8{ "secretkeyref", "secrets.", "vault" };
     for (references) |reference| if (std.mem.indexOf(u8, value, reference) != null) return false;
     for (rules.secret_placeholders) |placeholder| if (std.mem.eql(u8, value, placeholder)) return false;
+    for (access_levels) |level| if (std.mem.eql(u8, value, level)) return false;
+    for (switch_values) |switch_value| if (std.mem.eql(u8, value, switch_value)) return false;
     return std.mem.indexOfScalar(u8, rules.secret_masks, value[0]) == null or std.mem.indexOfNone(u8, value, value[0..1]) != null;
+}
+
+/// A setting's value without a trailing ` #` comment outside quotes, as YAML, TOML and INI allow.
+fn withoutComment(value: []const u8) []const u8 {
+    if (value.len > 512) assert.panic("stripping a comment from a {d}-byte value beyond the project line inspection window", .{value.len});
+    if (std.mem.indexOfAny(u8, value, "\r\n") != null) assert.panic("stripping a comment from a multiline value; pass one project line", .{});
+    var quote: ?u8 = null;
+    for (value, 0..) |c, i| {
+        if (quote) |q| {
+            if (c == q) quote = null;
+            continue;
+        }
+        if (c == '"' or c == '\'') quote = c;
+        if (c == '#' and i > 0 and std.ascii.isWhitespace(value[i - 1])) return value[0..i];
+    }
+    return value;
+}
+
+test "a secret setting holding a switch, an access level or a commented value stores no secret" {
+    try std.testing.expectEqual(null, plaintextConfigSecret("persist-credentials: false", "persist-credentials: false"));
+    try std.testing.expectEqual(null, plaintextConfigSecret("id-token: write # deploy to pages", "id-token: write # deploy to pages"));
+    try std.testing.expect(plaintextConfigSecret("api_token = \"a#b\"", "api_token = \"a#b\"") != null);
+    try std.testing.expect(plaintextConfigSecret("api-token: hunter2 # staging", "api-token: hunter2 # staging") != null);
 }
 
 fn lastSettingWord(key: []const u8) []const u8 {

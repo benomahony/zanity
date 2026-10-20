@@ -1,0 +1,9 @@
+synonyms:
+  - canonical: customer
+    aliases: [client]
+contexts:
+  - name: sales
+    include: ['**/sales/**']
+    synonyms:
+      - canonical: buyer
+        aliases: [client]

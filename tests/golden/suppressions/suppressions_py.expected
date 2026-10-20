@@ -1,0 +1,9 @@
+rules: relaxed-check
+exit: 0
+suppressions_py.py:11:17: warning [relaxed-check]
+suppressions_py.py:12:29: warning [relaxed-check]
+suppressions_py.py:1:12: warning [relaxed-check]
+suppressions_py.py:2:13: warning [relaxed-check]
+suppressions_py.py:6:24: warning [relaxed-check]
+suppressions_py.py:7:24: warning [relaxed-check]
+suppressions_py.py:8:27: warning [relaxed-check]

@@ -1,0 +1,3 @@
+rules: variadic-parameter,goto-statement
+exit: 0
+Variadics_java.java:2:16: information [variadic-parameter]

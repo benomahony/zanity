@@ -1,0 +1,6 @@
+root = true
+
+[*.cs]
+# Keep the analyzers at their defaults except where noted.
+dotnet_diagnostic.CA2100.severity = none
+dotnet_diagnostic.CA1062.severity = error

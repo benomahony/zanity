@@ -1,0 +1,3 @@
+rules: dead-parameter
+exit: 0
+HandlersJava.java:15:22: warning [dead-parameter]

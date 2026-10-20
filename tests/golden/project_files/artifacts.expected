@@ -3,6 +3,7 @@ exit: 1
 .github/workflows/ci.yml:4:7: warning [mutable-artifact-reference]
 .github/workflows/ci.yml:7:7: error [download-execution]
 .github/workflows/ci.yml:9:7: warning [mutable-artifact-reference]
+.github/workflows/ci.yml:15:3: error [plaintext-config-secret]
 application.yml:1:1: error [cookie-secure-disabled]
 application.yml:2:1: error [cookie-httponly-disabled]
 application.yml:3:1: error [cookie-samesite-disabled]

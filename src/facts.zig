@@ -40,6 +40,10 @@ pub const Function = struct {
     method: bool,
     line: u32,
     column: u32,
+    /// How many parameters it declares, so a call can tell overloads of one name apart.
+    parameters: u32 = 0,
+    /// Its parameters' declared types, separated by `;`, when every one declares one.
+    types: []const u8 = "",
 };
 
 /// A change that fixes a finding: bytes `start..end` of its file become `replacement`.
@@ -58,6 +62,9 @@ pub const Finding = struct {
     message: []const u8,
     fix: []const u8 = "",
     edit: ?Edit = null,
+    /// The hash of a function name that cancels the finding when any file passes the function as
+    /// a value, as an unused parameter whose signature a callback type fixes; 0 for none.
+    subject: u64 = 0,
     /// Set once `--fix` has applied `edit`, so the finding is no longer reported.
     fixed: bool = false,
 
@@ -86,6 +93,20 @@ pub fn typeHash(language: []const u8, name: []const u8) u64 {
 }
 
 /// The hash of a name, for comparing names across files without keeping their text.
+/// A name a file refers to, by hash, and the hash of the top-level definition the reference sits
+/// in, or 0 at module level, so dead-symbol can tell a name only dead code refers to.
+pub const Reference = struct {
+    name: u64,
+    holder: u64 = 0,
+
+    pub fn before(_: void, a: Reference, b: Reference) bool {
+        if (a.name == 0) assert.panic("ordering a reference to no name, held by {d}; NameCounts never records the 0 hash", .{a.holder});
+        if (b.name == 0) assert.panic("ordering a reference to no name, held by {d}; NameCounts never records the 0 hash", .{b.holder});
+        if (a.name != b.name) return a.name < b.name;
+        return a.holder < b.holder;
+    }
+};
+
 pub fn nameHash(name: []const u8) u64 {
     if (name.len == 0) assert.panic("hashing an empty name; skip empty names before calling nameHash()", .{});
     const hash = std.hash.Wyhash.hash(0, name);
@@ -93,10 +114,32 @@ pub fn nameHash(name: []const u8) u64 {
     return hash;
 }
 
-pub const Edge = struct { caller: u32, callee: []const u8, reach: Reach };
+/// Separates one argument's or parameter's type from the next in `Function.types` and `Edge.types`.
+pub const type_separator = ';';
+
+/// Whether the call's argument types `arguments` match a function's parameter types `parameters`:
+/// both known, as many of each, and every argument whose type shows is of its parameter's type.
+pub fn typesAgree(arguments: []const u8, parameters: []const u8) bool {
+    if (arguments.len == 0 or parameters.len == 0) return false;
+    if (arguments.len > 1 << 16 or parameters.len > 1 << 16) assert.panic("comparing {d} bytes of argument types with {d} of parameter types; lists of types are bounded far below that", .{ arguments.len, parameters.len });
+    if (std.mem.count(u8, arguments, &.{type_separator}) != std.mem.count(u8, parameters, &.{type_separator})) return false;
+    var given = std.mem.splitScalar(u8, arguments, type_separator);
+    var taken = std.mem.splitScalar(u8, parameters, type_separator);
+    while (given.next()) |argument| {
+        const parameter = taken.next() orelse unreachable;
+        if (argument.len > 0 and !std.mem.eql(u8, argument, parameter)) return false;
+    }
+    const extra = taken.next();
+    if (extra != null) assert.panic("parameter types '{s}' outnumber argument types '{s}' after both counted alike; split both by type_separator", .{ parameters, arguments });
+    return true;
+}
+
+/// A call from function `caller` to a function named `callee` with `arguments` arguments, and
+/// the `types` they plainly have, separated by `;`, empty where one doesn't show.
+pub const Edge = struct { caller: u32, callee: []const u8, reach: Reach, arguments: u32 = 0, types: []const u8 = "" };
 
 /// What a unit of code is, which decides the questions `check --infer` asks about it.
-pub const UnitKind = enum { function, @"test", setting, project, cluster };
+pub const UnitKind = enum { function, fixture, @"test", setting, project, cluster, file };
 
 /// A function or a test, kept whole so `check --infer` can ask about it.
 pub const Unit = struct {
@@ -122,13 +165,16 @@ pub const Facts = struct {
     functions: memory.Bounded(Function),
     calls: memory.Bounded(Edge),
     units: memory.Bounded(Unit),
-    /// Hashes of the names each file refers to, other than where they are defined.
-    references: memory.Bounded(u64),
+    /// The names each file refers to, other than where they are defined, with the top-level
+    /// definition each reference sits in.
+    references: memory.Bounded(Reference),
     shapes: memory.Bounded(Shape),
     /// Interfaces, traits, protocols and abstract classes, for single-impl-abstraction.
     abstractions: memory.Bounded(Definition),
     /// Hashes of the names types implement or extend, once per implementing type.
     implemented: memory.Bounded(u64),
+    /// Hashes of the functions passed as values, such as Java's `Calculator::cost`.
+    passed: memory.Bounded(u64),
     /// Whether to keep `units`; only `check --infer` needs them.
     collect_units: bool = false,
 
@@ -145,11 +191,36 @@ pub const Facts = struct {
             .shapes = try .initBounded(gpa, limits.functions, "function shapes across all files"),
             .abstractions = try .initBounded(gpa, limits.definitions, "interfaces and abstract types across all files"),
             .implemented = try .initBounded(gpa, limits.definitions, "implemented interfaces across all files"),
+            .passed = try .initBounded(gpa, limits.references, "functions passed as values across all files"),
         };
+    }
+
+    /// Empties one run's facts while retaining their allocations.
+    pub fn reset(self: *Facts) void {
+        inline for (.{ "definitions", "functions", "calls", "units", "references", "shapes", "abstractions", "implemented", "passed" }) |field| @field(self, field).clear();
+        self.path = "";
+        self.language = "";
+        self.collect_units = false;
+        if (self.definitions.len != 0 or self.units.len != 0) assert.panic("reset facts left {d} definitions and {d} units; reset() must empty every collection", .{ self.definitions.len, self.units.len });
+        if (self.path.len != 0 or self.language.len != 0) assert.panic("reset facts kept path '{s}' or language '{s}'; both belong to one file", .{ self.path, self.language });
     }
 
     /// Where a definition is and whether code outside its module can use it.
     pub const Place = struct { at: [2]u32, public: bool, member: bool = false, importable: bool = false, unmarked: []const u8 = "" };
+
+    /// Adds `found`, sorted and without repeats, as one file's references.
+    pub fn addReferences(self: *Facts, found: []Reference) error{LimitExceeded}!void {
+        for (found) |r| if (r.name == 0) assert.panic("adding a reference to the 0 hash, held by {d}; nameHash() never returns 0 for a name", .{r.holder});
+        const before = self.references.len;
+        std.mem.sort(Reference, found, {}, Reference.before);
+        var previous: ?Reference = null;
+        for (found) |r| {
+            if (previous) |p| if (p.name == r.name and p.holder == r.holder) continue;
+            previous = r;
+            try self.references.add(r);
+        }
+        if (self.references.len - before > found.len) assert.panic("added {d} references from {d}; each is added at most once", .{ self.references.len - before, found.len });
+    }
 
     pub fn define(self: *Facts, name: []const u8, kind: []const u8, place: Place) error{LimitExceeded}!void {
         const at = place.at;
@@ -206,9 +277,25 @@ pub const Facts = struct {
         });
     }
 
-    pub fn call(self: *Facts, caller: u32, callee: []const u8, reach: Reach) error{LimitExceeded}!void {
+    /// Records how many parameters function `id` declares and their `types`, known once its
+    /// signature is read.
+    pub fn arity(self: *Facts, id: u32, parameters: u32, types: []const u8) error{LimitExceeded}!void {
+        if (id >= self.functions.len) assert.panic("setting the arity of function {d}, but only {d} are recorded; record the function before closing it", .{ id, self.functions.len });
+        if (parameters > 1 << 16) assert.panic("function {d} declares {d} parameters; count @function.parameter captures, not nodes inside them", .{ id, parameters });
+        const recorded = &self.functions.items()[id];
+        recorded.parameters = parameters;
+        recorded.types = try self.text.copy(types);
+    }
+
+    /// Records `edge`, keeping its own copy of the callee's name.
+    pub fn call(self: *Facts, edge: Edge) error{LimitExceeded}!void {
+        const caller = edge.caller;
+        const callee = edge.callee;
         if (caller >= self.functions.len) assert.panic("call to '{s}' names caller {d}, but only {d} functions are recorded; record the calling function before its calls", .{ callee, caller, self.functions.len });
         if (callee.len == 0) assert.panic("function {d} calls something with an empty name; check the @call.name capture", .{caller});
-        try self.calls.add(.{ .caller = caller, .callee = try self.text.copy(callee), .reach = reach });
+        var kept = edge;
+        kept.callee = try self.text.copy(callee);
+        kept.types = try self.text.copy(edge.types);
+        try self.calls.add(kept);
     }
 };

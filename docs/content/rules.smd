@@ -1,0 +1,540 @@
+---
+.title = "Rules",
+.description = "Every rule zanity runs, what it flags, and how severe it is.",
+.date = .date("2026-10-17T00:00:01"),
+.layout = "page.shtml",
+---
+
+
+Rules marked *strict* hold code to what safety-critical software needs and most code doesn't, so they run only with `--strict`, `select = ["strict"]` or `select = ["all"]`, or when named. Rules marked *off* run only with `--rules all`, `select = ["all"]`, or when named.
+
+**NASA's Power of Ten**
+
+| Rule | Severity | Flags |
+|---|---|---|
+| `recursion` | warning, *strict* | a function that calls itself, directly or through a cycle of calls across files |
+| `unbounded-loop` | warning, *strict* | a loop with no bound, such as `while True` or `for {}` |
+| `dynamic-allocation` | error, *strict* | allocation after initialization, in Zig and Rust |
+| `long-function` | warning | a function with 60 or more lines of code, not counting blank and comment lines |
+| `wide-scope` | warning | a local declared in a wider block than the only one that uses it |
+| `assertion-density` | error, *strict* | a function with fewer than two assertions that can catch a bug, or a test with no check that can |
+| `assertion-message` | warning, *strict* | an assertion with no message |
+| `assertion-side-effect` | error | an assertion that assigns or calls something that changes state |
+| `forbidden-call` | warning | `eval`, `exec` and other calls that run code no one can review |
+| `restated-type`, `constant-assertion`, `redundant-null-check`, `conversion-assertion`, `guaranteed-length` | *strict* | assertions that cannot fail, which do not count towards density |
+
+**Structure**
+
+| Rule | Severity | Flags |
+|---|---|---|
+| `long-parameter-list` | warning | more than four parameters; not tests, whose parameters are fixtures, or functions whose signature something else fixes, as for `dead-parameter`. Its fix names the parameters to pass as one value: those whose names share a first or last word, and those with defaults |
+| `dead-parameter` | warning | a parameter the function's body never uses; not stubs, tests, `_`-prefixed names, methods an interface fixes such as `__exit__`, overrides of a base class's method, decorated or annotated functions, or functions their file passes as a value, such as a callback (not Zig, whose compiler already rejects these) |
+| `passthrough-wrapper` | warning | a function whose whole body passes its own parameters, unchanged and in order, to another call; not one that fixes or transforms an argument, a decorated one, or a method delegating to another object |
+| `message-chain` | warning | code that reaches through objects, such as `order.customer.address.city`: three member accesses from a local or parameter, or two from a field of `self`; module paths such as `xml.etree.ElementTree` are fine, and so are tests, which configure mocks and check results this way |
+| `duplicated-expression` | warning | a computed expression (a call, an index or arithmetic) written three or more times in one function with nothing it reads changing in between; not plain field reads, calls made for their effect, values returned on separate early exits, calls that make a new object or give a new value each time (`Event()`, `time.monotonic()`), types such as `dict[str, Any]`, or tests, which repeat steps on purpose |
+| `structural-twins` | warning | functions whose bodies have the same structure, differing only in names and values, across files; tests and functions under six lines are left out |
+| `dead-symbol` | warning | a function, method, class or type nothing anywhere refers to; not exported or `pub` API, decorated or annotated code a framework reaches, tests, or entry points such as `main` |
+| `single-impl-abstraction` | information | an interface, trait, protocol or abstract class with exactly one implementation (not Go, whose interfaces are implicit) |
+| `extractable-block` | information | in a long function, the longest run of statements that reads at most four names from before it, sets at most one read after it, and doesn't return or break out, so it can become a function of its own; with long-function on, it becomes that finding's fix |
+| `swallowed-error` | warning | an error handler that does nothing |
+| `empty-block` | warning | an empty block where code was expected |
+| `goto-statement` | warning | a `goto`, which makes control flow hard to follow |
+| `variadic-parameter` | information, *strict* | a parameter that takes any number of arguments, outside decorator wrappers and methods that may override one |
+| `deep-nesting` | warning | code nested too deep to follow |
+| `complex-function` | warning | a function or test with too many paths through it |
+| `long-file` | warning | a file too long to hold in mind |
+
+**Tests**
+
+| Rule | Severity | Flags |
+|---|---|---|
+| `long-test` | warning | a test with 50 or more lines of code, not counting blank and comment lines |
+| `undocumented-test` | warning | a test with 20 or more lines of code and no docstring, comment or sentence for a name saying which behaviour it checks |
+| `eager-test` | warning | a test that makes more than 10 checks, counting assertions and test-framework checks such as `expect` and `assertEquals` |
+| `sleep-in-test` | warning | a test that waits on the clock |
+| `polling-loop` | warning | a loop in a test that polls with a sleep |
+| `nondeterministic-test` | warning | randomness or the current time in a test |
+| `test-double` | warning | a mock, stub, spy or patch that replaces real behaviour, in a test or anywhere in a test file, such as a fixture or a `@patch` decorator; not a patch of a boundary the language's tables list, such as `requests.get`, `time.monotonic` or `subprocess.run`, nor a module mock of a package, such as `vi.mock("node:child_process")`, which is how a test is meant to isolate itself. A module mock of the project's own code, such as `vi.mock("./db")` or `jest.mock("@/services/x")`, is reported. Its fix names what a patch replaces |
+| `call-verification` | warning | a test that checks how a test double was called, such as `assert_called_with`, `toHaveBeenCalledWith` or `verify(mock)`, rather than what the code did |
+| `branching-double` | warning | a test double given behaviour that branches on what it is called with, such as `vi.fn((url) => url.includes("/users") ? users : orders)` or a `mockImplementation` that switches on its arguments: the fake re-implements what it replaces |
+| `storage-read-in-test` | warning | a test, or a helper in a test file, that reads the database directly to check what the code did, such as Drizzle's or Prisma's `findMany`/`findFirst`, `db.select().from(table)` or a `sql` template that SELECTs, rather than going through the code's own interface |
+| `shared-state-in-test` | warning | a test that changes process-wide state: an environment variable, the working directory, the import path, a global default or a `global` |
+| `filesystem-in-test` | warning | a test that reads or changes real files outside its own temporary directory |
+| `network-in-test` | warning | a test that makes a real network request or connection |
+| `database-in-test` | warning | a test that connects to a real database; in-memory databases are fine |
+| `unmanaged-temp-in-test` | warning | a test that makes temporary files its framework doesn't clean up |
+| `stdin-in-test` | warning | a test that reads what someone types, such as `input()`, `fmt.Scanln` or `prompt`, so it hangs in CI |
+| `process-in-test` | warning | a test that starts a real process |
+| `vague-test-name` | warning | a test name that doesn't say what behaviour it expects: `test_1`, `it("works")`, or a single word like `test_parse` (Go's `TestParse`, named after the function, is fine) |
+| `opaque-check` | warning | a yes/no check of a comparison that fails without the values, such as `self.assertTrue(a == b)`, `expect(a === b).toBe(true)`, `assertTrue(a.equals(b))` or `try std.testing.expect(a == b)`, with the specific check to write instead |
+| `broad-expected-error` | warning | a test that expects any error at all: `pytest.raises(Exception)`, `assertThrows(Exception.class, ...)`, a bare `toThrow()`, or `#[should_panic]` without `expected` |
+| `skipped-test` | warning | a test turned off with no condition: a skip mark, `t.Skip()` as the test's own statement, `#[ignore]`, `@Disabled`, `it.skip`, or an expected failure that isn't strict |
+
+**Names**
+
+| Rule | Severity | Flags |
+|---|---|---|
+| `name-drift` | warning | one concept spelled several ways, such as `order_total` and `total_order`; not the same words written by convention, such as a class `FallbackModel` and its instance `fallback_model`, or a private `_now` beside `now`. Its fix names the spelling most definitions use |
+| `duplicate-name` | warning | the same name defined more than once in one language and one domain or context, where another file could use either: not methods, nested functions, tests, or names private to their module |
+| `forbidden-term` | warning | a name using a word `ddd.yaml` bans for the project or for its domain or context |
+| `non-canonical-term` | warning | a name using an alias where the project has settled on another word, with the name respelled |
+| `misplaced-test` | warning | a test in one domain or context whose subject lives in exactly one other |
+| `vocabulary-conflict` | error | a vocabulary that contradicts itself: a word both banned and canonical, an alias mapped two ways, or two domains or contexts with nearly the same name |
+
+**Project files** (build, lint, type-check, test and CI configuration: `pyproject.toml`, `tsconfig.json`, `Cargo.toml`, `.github/workflows/*.yml` and others, checked as text)
+
+| Rule | Severity | Flags |
+|---|---|---|
+| `relaxed-check` | warning | a setting that lets a check pass when it should fail: `continue-on-error: true`, `\|\| true`, `--exit-zero`, `allow_failure: true`, `strict = false`, `ignore_missing_imports = true`, `"skipLibCheck": true` and the like; in source, a comment such as `# noqa`, `// eslint-disable` or `//nolint`, or an attribute or pragma such as `#[allow(...)]`, `@SuppressWarnings` or `#pragma warning disable` |
+| `weakened-check` | warning | any other setting line that weakens a check; needs `--infer` |
+| `unscheduled-analysis` | warning | project files that run no strict static analyser on every change, or daily, with zero warnings allowed; needs `--infer` |
+
+**Error messages**
+
+| Rule | Severity | Flags |
+|---|---|---|
+| `vague-error` | warning | a message too vague to find the problem |
+| `cryptic-error` | warning | a message that is only a code or an internal name |
+| `unconstructive-error` | warning | a message that does not say how to fix the problem |
+| `misleading-error` | *off* | a message that describes a different failure; needs `--infer` |
+
+**Hazards** (each traces to an entry in the engineering error catalogue in `catalogue/`)
+
+`constant-condition`, `float-equality`, `discarded-comparison`, `unreachable-code`, `generic-catch`, `generic-throw`, `debug-leftover`, `hardcoded-secret`, `return-in-finally`, `identity-comparison`, `precedence-trap`, `switch-fallthrough`, `missing-default`, `no-effect-statement`, `tls-verification-disabled`, `weak-hash`, `unsafe-deserialization`, `shell-command`, `sql-built-from-strings`, `secret-in-log`, `wall-clock-duration` and `unawaited-call`.
+
+`parse-error` reports a file tree-sitter could not fully parse; the other rules still run on what it recovered.
+
+
+# More rules
+
+What the schema says of the rules described above only by name, or not yet.
+
+| Rule | Severity | Fix |
+|---|---|---|
+| `divide-by-zero` | error, on by default | Use the intended non-zero divisor, or validate a variable divisor before dividing. |
+| `assignment-in-condition` | warning, on by default | Assign on the preceding line, or compare here with the language's equality operator. |
+| `null-catch` | warning, on by default | Check the value for null before using it, and let unexpected null dereferences fail at their source. |
+| `empty-synchronized` | warning, on by default | Move the shared-state operation inside the synchronized block, or remove the empty block. |
+| `public-finalizer` | warning, on by default | Remove the public modifier and provide an explicit close method for resources. |
+| `direct-thread` | warning, on by default | Submit the task to a bounded, application-managed executor. |
+| `unsafe-jni` | warning, on by default | Replace it with a safe library API, or isolate and audit the native boundary with explicit input validation. |
+| `public-static-field` | warning, on by default | Make it private and expose behaviour instead of state; make a constant unassignable, with final in Java or const or readonly in C#. |
+| `public-static-array` | warning, on by default | Keep the array private and return an immutable view or a defensive copy. |
+| `missing-super-finalizer` | warning, on by default | Remove finalization in favour of explicit resource ownership, or call super.finalize() in a finally block while legacy finalization remains. |
+| `missing-super-clone` | warning, on by default | Start with super.clone(), or replace Cloneable with an explicit copy constructor or factory. |
+| `public-clone-method` | warning, on by default | Make clone final, or replace Cloneable with an explicit copy constructor or factory. |
+| `thread-run` | error, on by default | Call start(), or submit the task to an application-managed executor. |
+| `class-name-comparison` | error, on by default | Compare the types themselves, or test with instanceof or is when subclasses are valid. |
+| `equals-without-hashcode` | error, on by default | Compute the hash code from the same fields as equality, and test the two together. |
+| `hashcode-without-equals` | error, on by default | Define equality from the same fields as the hash code, and test the two together. |
+| `struts-public-field` | warning, on by default | Make the field private and expose it only through the validated bean accessor. |
+| `suspicious-comment` | warning, on by default | Resolve the defect or incomplete code the marker identifies, then remove the marker; track longer work in the issue system. |
+| `prototype-mutation` | warning, on by default | Use an own data property on an object with a fixed prototype; reject __proto__, constructor and prototype as externally supplied keys. |
+| `name-behaviour-mismatch` | warning, on by default | Rename it to say what it does, or change the body to do what the name says. |
+| `comment-drift` | warning, on by default | Update the comment to match the code, or fix the code if the comment is right. |
+| `query-with-side-effect` | warning, on by default | Rename it to say what it changes, or move the change into a separate function. |
+| `partial-failure` | warning, on by default | Wrap the steps in a transaction, or undo the earlier steps when a later one fails. |
+| `check-then-act` | warning, on by default | Make the check and the action one atomic operation, for example with a lock or a conditional write. |
+| `non-idempotent-retry` | error, on by default | Make the operation idempotent, for example with an idempotency key, or stop retrying it. |
+| `unit-mismatch` | error, on by default | Convert them to one unit first, and put the unit in the variable names. |
+| `boundary-error` | error, on by default | Check the edge values and add a test for each boundary. |
+| `missing-authorisation` | warning, on by default | Check the caller's permission before acting. |
+| `mixed-abstraction` | information, on by default | Move the low-level detail into well-named helper functions. |
+| `order-dependent-test` | warning, on by default | Give it its own state, or reset the shared state before it runs. |
+| `combinatorial-test` | information, on by default | Split it into one test per dimension, or parametrise it. |
+| `flaky-test` | error, on by default | Inject a fixed clock, seed or fake, or sort before comparing. |
+| `slow-test` | warning, on by default | Replace the wait or service with a fake, and shrink the data. |
+| `heavy-setup-test` | information, on by default | Simplify the code's dependencies, or move shared setup into a small builder. |
+| `unreadable-test` | information, on by default | Name it after the behaviour, name the magic values, and separate arrange, act and assert. |
+| `hollow-test` | error, on by default | Assert on the output or effect of that behaviour. |
+| `implementation-coupled-test` | warning, on by default | Assert on public results instead of private state or internal calls. |
+| `manual-test` | error, on by default | Replace manual input, printing or setup with assertions and automated fixtures. |
+| `unfocused-test` | warning, on by default | Split it up, or assert only on the parts that matter. |
+| `self-mocking-test` | warning, on by default | Exercise the real code, and mock only its external dependencies. |
+| `trivial-test` | warning, on by default | Test the risky behaviour and edge cases, and make the name match what is verified. |
+| `fixture-leaks-state` | warning, on by default | Restore the state in teardown, or give each test a temporary copy of it. |
+| `fixture-hides-behaviour` | warning, on by default | Use the real implementation, and stub only external dependencies. |
+| `repeated-mechanics` | information, on by default | Write the shared steps once as a builder, helper or table of cases named in the domain's words, so each one says only what differs. |
+| `mutable-artifact-reference` | warning, on by default | Pin the artifact by immutable digest or commit, and let an update tool propose reviewed changes. |
+| `download-execution` | error, on by default | Download a versioned artifact, verify its published digest or signature, then execute the verified local file. |
+| `plaintext-config-secret` | error, on by default | Replace the literal with a reference to an environment variable or secret manager, and rotate any credential already committed. |
+| `privileged-container` | error, on by default | Run the container without privileged mode and add back only the specific capability it demonstrably needs. |
+| `world-writable-permission` | error, on by default | Grant write access only to the owning user or group; do not make deployed paths world-writable. |
+| `public-storage` | error, on by default | Keep object storage private and grant access through authenticated, least-privilege policies or short-lived signed URLs. |
+| `directory-listing-enabled` | error, on by default | Disable directory indexes and expose only explicitly routed files. |
+| `wildcard-cors-origin` | error, on by default | Allow only the trusted origins that need browser access; do not grant cross-origin access to everyone. |
+| `unrestricted-framing` | error, on by default | Restrict frame ancestors to 'self' or an explicit allowlist with Content-Security-Policy. |
+| `csrf-protection-disabled` | error, on by default | Enable the framework's CSRF protection and require an unpredictable token on every state-changing browser request. |
+| `session-expiry-disabled` | error, on by default | Expire authenticated sessions after a bounded idle and absolute lifetime. |
+| `authentication-lockout-disabled` | error, on by default | Throttle repeated authentication attempts and temporarily lock or challenge abusive clients. |
+| `weak-password-length` | error, on by default | Require passwords of at least 8 characters, preferably longer, and permit password-manager-generated values. |
+| `legacy-tls-version` | error, on by default | Require TLS 1.2 or newer and remove SSL and TLS 1.0/1.1 from the negotiated protocol set. |
+| `untrusted-search-path` | error, on by default | Remove the current directory from PATH and invoke security-sensitive tools by an absolute trusted path. |
+| `default-credential` | error, on by default | Require a unique credential from a secret manager or first-run provisioning; never ship a reusable default. |
+| `default-password` | error, on by default | Require a unique password from a secret manager or first-run provisioning; never ship a reusable default password. |
+| `cookie-secure-disabled` | error, on by default | Set the session cookie's Secure attribute and serve it only over HTTPS. |
+| `cookie-httponly-disabled` | error, on by default | Set HttpOnly on session and authentication cookies so scripts cannot read them. |
+| `cookie-samesite-disabled` | error, on by default | Use SameSite=Lax or Strict for sensitive cookies, with a narrowly justified exception where cross-site use is required. |
+| `weak-random` | error, on by default | Use the platform's cryptographically secure random generator for secrets, tokens, nonces and security decisions. |
+| `constant-random-seed` | error, on by default | Use an unpredictable operating-system seed for production randomness; keep fixed seeds inside tests or reproducible offline simulations. |
+| `nested-regex-quantifier` | error, on by default | Rewrite the repeated group so one input character has only one possible match, or use a linear-time regex engine. |
+| `constant-cbc-iv` | error, on by default | Generate a fresh unpredictable IV for every encryption and store it alongside the ciphertext. |
+| `constant-aead-nonce` | error, on by default | Generate a unique nonce for every encryption under a key; never embed or reuse one. |
+| `constant-password-salt` | error, on by default | Generate a unique random salt for each password and store it with that password's derived hash. |
+| `rsa-without-oaep` | error, on by default | Use RSA-OAEP with an explicit modern digest for RSA encryption, or prefer a modern hybrid-encryption construction. |
+| `parameter-format-string` | warning, on by default | Use a fixed format string and pass the parameter as a value to format, never as the format itself. |
+| `parameter-network-target` | warning, on by default | Parse the target and allow only expected schemes, hosts and ports before making the server-side request. |
+| `parameter-redirect-target` | warning, on by default | Redirect only to a fixed local route or a destination selected from an explicit allowlist. |
+| `parameter-file-path` | warning, on by default | Resolve the path beneath a fixed trusted root and reject absolute paths, parent traversal, virtual device names and symlink escapes before file access. |
+| `parameter-xpath-expression` | warning, on by default | Compile a fixed XPath expression and bind caller-controlled values as variables rather than concatenating or evaluating them as XPath. |
+| `parameter-ldap-filter` | warning, on by default | Build LDAP filters with the library's escaping or filter-construction API instead of treating a caller-controlled parameter as filter syntax. |
+| `parameter-header-value` | warning, on by default | Reject carriage returns and line feeds before placing caller-controlled data in an HTTP header, or use an API that guarantees that validation. |
+| `parameter-template-source` | warning, on by default | Keep template source fixed and pass caller-controlled data only as escaped template values. |
+| `parameter-expression-language` | warning, on by default | Use a fixed expression or select from an allowlist; never parse caller-controlled text as expression-language code. |
+| `parameter-raw-html` | error, on by default | Keep automatic HTML escaping enabled and pass caller-controlled data as a value, not as pre-approved markup. |
+| `missing-integer-radix` | warning, on by default | Pass an explicit radix, usually 10, whenever parsing an integer from text. |
+| `parameter-window-opener` | warning, on by default | Open caller-controlled links with noopener (and usually noreferrer), or navigate within the current tab. |
+| `parameter-allocation-size` | warning, on by default | Validate and cap the requested size before allocation, then pass only the bounded value to the allocator. |
+| `xml-entity-expansion` | error, on by default | Disable DTD loading and external or recursive entity resolution, or use a hardened XML parser. |
+| `sensitive-query-string` | error, on by default | Send credentials and secrets in an authenticated header or request body, never in the URL. |
+| `cleartext-http` | error, on by default | Use HTTPS and verify the peer; keep plain HTTP only for an explicitly local loopback endpoint. |
+| `cleartext-credential-url` | error, on by default | Send credentials only over verified HTTPS, preferably in an authenticated header rather than the URL. |
+| `insecure-temp-file` | error, on by default | Create and open the temporary file atomically with the platform's secure temporary-file API. |
+| `process-exit` | warning, on by default | Return an error to the application boundary and let the owner decide how to stop or recover. |
+| `obsolete-call` | warning, on by default | Replace it with the supported standard-library API documented for the current language version. |
+| `explicit-finalizer` | warning, on by default | Release the resource explicitly with close/deinit, or leave finalization to the runtime. |
+| `parameter-log-message` | warning, on by default | Use a fixed log message and record caller-controlled data in a structured field after removing line breaks and control characters. |
+
+# [Catalogue questions]($heading.id('catalogue-questions'))
+
+With `--infer`, zanity also asks the model one question for each of 327 families of the engineering error catalogue that no deterministic rule detects. Each is a rule named for its family: select or disable it, or its whole family of findings, by that name.
+
+| Rule | Asked about | Finding | Severity |
+|---|---|---|---|
+| `cwe-15` | each function | Input decides a system or configuration setting | warning |
+| `cwe-76` | each function | Dangerous input is filtered in one form but equivalent forms get through | warning |
+| `cwe-112` | each function | Untrusted XML is used without checking it matches the expected schema | warning |
+| `cwe-115` | each function | Input could be read differently from what was meant, in a way that affects security | warning |
+| `cwe-130` | each function | A length field from input is trusted without checking the real data size | error |
+| `cwe-140` | each function | An untrusted value could contain the delimiter and split or merge fields | warning |
+| `cwe-166` | each function | Input missing an expected delimiter or terminator is not handled | warning |
+| `cwe-167` | each function | Extra special characters in input are not handled | warning |
+| `cwe-168` | each function | Unbalanced or badly nested pairs in input are not handled | warning |
+| `cwe-178` | each function | Case is handled differently here than where the value is used, so a different case can bypass the check | warning |
+| `cwe-179` | each function | Input is validated before it is transformed, so the transformed value is not checked | warning |
+| `cwe-182` | each function | Removing dangerous text once can leave dangerous text behind | warning |
+| `cwe-183` | each function | The allow list admits values that are not safe | warning |
+| `cwe-184` | each function | The deny list misses dangerous values | warning |
+| `cwe-186` | each function | The regular expression misses some of the values it should catch | warning |
+| `cwe-190` | each function | This integer arithmetic can overflow and produce a small or negative value | error |
+| `cwe-191` | each function | This subtraction can wrap around below zero | error |
+| `cwe-193` | each function | A bound here is off by one | error |
+| `cwe-201` | each function | Sensitive fields are included in data sent to someone who should not see them | warning |
+| `cwe-204` | each function | Different responses reveal internal state, such as whether an account exists | warning |
+| `cwe-205` | each function | Observable behaviour reveals internal or secret state | info |
+| `cwe-208` | each function | Comparing secrets this way leaks how much of them matched through timing | warning |
+| `cwe-212` | each function | Sensitive information is left in data that is stored or shared | warning |
+| `cwe-213` | each function | This shares information that others would consider sensitive | info |
+| `cwe-214` | each function | A secret is passed on the command line or in the environment, where other processes can read it | warning |
+| `cwe-222` | each function | Security-relevant information is truncated, which can hide an attack | info |
+| `cwe-223` | each function | A security-relevant action is not recorded with who, what and the outcome | info |
+| `cwe-224` | each function | Security events are recorded under an alias rather than the real identity | info |
+| `cwe-229` | each function | Missing, empty or repeated values in external input are not handled | warning |
+| `cwe-233` | each function | Missing or unexpected fields in external input are not handled | warning |
+| `cwe-237` | each function | Nested fields of external input are read without checking its structure | warning |
+| `cwe-241` | each function | A value from external input is used without checking its type | warning |
+| `cwe-248` | each function | An exception can escape here and crash the program or expose details | warning |
+| `cwe-252` | each function | A call that can fail has its result ignored | warning |
+| `cwe-253` | each function | The return value is checked the wrong way, so failures can be missed | warning |
+| `cwe-261` | each function | A password is only encoded, which anyone can reverse | error |
+| `cwe-262` | each function | Passwords have no age or rotation mechanism | info |
+| `cwe-263` | each function | The password expiry period is very long | info |
+| `cwe-266` | each function | A privilege is granted to someone who should not have it | error |
+| `cwe-267` | each function | A privilege allows more than it is meant to | warning |
+| `cwe-268` | each function | Combining privileges here allows an action neither should permit alone | warning |
+| `cwe-270` | each function | Privileges may not be restored after switching context, especially on an error | error |
+| `cwe-273` | each function | Dropping privileges is not checked, so the code may keep running privileged | error |
+| `cwe-274` | each function | Missing privileges are not handled, so the code may continue in a bad state | warning |
+| `cwe-277` | each function | Objects created later will inherit insecure permissions | warning |
+| `cwe-278` | each function | Insecure permissions are carried over from the source | warning |
+| `cwe-280` | each function | A permission failure is not handled and can leave state invalid | warning |
+| `cwe-281` | each function | The copy ends up with looser permissions than the original | warning |
+| `cwe-283` | each function | A security-critical resource in a shared location is trusted without checking its owner | warning |
+| `cwe-289` | each function | An alternate name for the same user or resource can bypass this check | error |
+| `cwe-290` | each function | Authentication relies on something the caller can fake | error |
+| `cwe-294` | each function | A captured authentication message can be replayed | error |
+| `cwe-301` | each function | The challenge-response can be answered by reflecting the challenge back | error |
+| `cwe-303` | each function | An authentication algorithm is implemented incorrectly and may be bypassed | error |
+| `cwe-305` | each function | A separate flaw lets callers skip authentication | error |
+| `cwe-306` | each function | A critical action runs without authenticating the caller | error |
+| `cwe-308` | each function | A high-risk operation relies on a single factor | warning |
+| `cwe-309` | each function | Authentication relies on passwords alone | info |
+| `cwe-322` | each function | The key exchange does not check who is on the other end | error |
+| `cwe-324` | each function | A key or credential is used without checking its expiry | warning |
+| `cwe-325` | each function | A required cryptographic step is missing, so the protection is weaker than it looks | error |
+| `cwe-334` | each function | The random value has too few possibilities and can be guessed | error |
+| `cwe-342` | each function | The next value can be predicted from previous ones | error |
+| `cwe-343` | each function | The next value's range can be predicted from earlier ones | warning |
+| `cwe-344` | each function | A value that should vary by environment is hard coded | warning |
+| `cwe-346` | each function | The sender of this data is not verified | error |
+| `cwe-347` | each function | Signed data is used without a correct signature check | error |
+| `cwe-348` | each function | A value is read from a less trusted source when a more trusted one exists | warning |
+| `cwe-349` | each function | Untrusted extra data is accepted along with trusted data | error |
+| `cwe-351` | each function | Different kinds of values are treated alike in a security decision | warning |
+| `cwe-353` | each function | Data has no integrity check | warning |
+| `cwe-354` | each function | The integrity value is not checked, or is checked wrongly | error |
+| `cwe-356` | each function | A dangerous action runs without warning the user | info |
+| `cwe-357` | each function | The warning about a dangerous action is easy to miss | info |
+| `cwe-358` | each function | A security check required by the standard is missing or wrong | error |
+| `cwe-359` | each function | Personal information is exposed to someone not authorised to see it | error |
+| `cwe-360` | each function | Events are trusted without checking who sent them | warning |
+| `cwe-366` | each function | Shared data is used across threads without synchronisation | error |
+| `cwe-367` | each function | The resource can change between the check and the use | error |
+| `cwe-368` | each function | Another actor can act in the middle of this context switch | warning |
+| `cwe-372` | each function | The code can mistake which state it is in | warning |
+| `cwe-374` | each function | Untrusted code receives a mutable object this code relies on and can change it | warning |
+| `cwe-375` | each function | The caller can modify internal state through the returned reference | warning |
+| `cwe-378` | each function | The temporary file is predictable or readable by others | error |
+| `cwe-379` | each function | The temporary file sits in a directory other users can access | warning |
+| `cwe-385` | each function | Secret information affects observable timing | info |
+| `cwe-386` | each function | The same name is looked up twice and could refer to different objects | warning |
+| `cwe-392` | each function | The function fails without telling its caller | warning |
+| `cwe-393` | each function | The returned status does not match what happened | warning |
+| `cwe-394` | each function | A valid but unexpected return value is not handled | warning |
+| `cwe-403` | each function | The child process inherits sensitive open handles | warning |
+| `cwe-408` | each function | Expensive work runs before the caller is authenticated | warning |
+| `cwe-409` | each function | Decompressing input has no size limit, so a small bomb can exhaust memory or disk | error |
+| `cwe-410` | each function | The resource pool can be exhausted by a burst of requests | info |
+| `cwe-412` | each function | An outside actor can take this lock and block the program | warning |
+| `cwe-413` | each function | A shared resource is used without the exclusive lock it needs | error |
+| `cwe-414` | each function | The lock is not checked before a sensitive operation | warning |
+| `cwe-419` | each function | Restricted functionality is reachable on an unprotected channel | error |
+| `cwe-420` | each function | An alternate path has weaker protection than the main one | error |
+| `cwe-421` | each function | Another actor can reach this secondary channel before the intended user | warning |
+| `cwe-425` | each function | A restricted resource is served without an authorisation check | error |
+| `cwe-428` | each function | An unquoted path with spaces can run the wrong program | warning |
+| `cwe-430` | each function | The handler is chosen from untrusted information and can be the wrong one | warning |
+| `cwe-431` | each function | A case, event or exception that can occur has no handler | warning |
+| `cwe-434` | each function | Uploaded files of any type are accepted and could be executed | error |
+| `cwe-437` | each function | This intermediary can interpret data differently from the endpoint | warning |
+| `cwe-439` | each function | This relies on behaviour that may change between versions | info |
+| `cwe-440` | each function | The function does not behave as specified | warning |
+| `cwe-444` | each function | Ambiguous HTTP framing could be read differently here and downstream, allowing request smuggling | error |
+| `cwe-447` | each function | A security feature appears to work but does nothing | warning |
+| `cwe-448` | each function | An obsolete feature is offered without warning | info |
+| `cwe-449` | each function | The action performed differs from what the user asked for | warning |
+| `cwe-454` | each function | Critical internal state is initialised from untrusted input | error |
+| `cwe-455` | each function | Startup continues after a security setup step fails | error |
+| `cwe-459` | each function | Temporary resources are not cleaned up on every path | warning |
+| `cwe-472` | each function | A value the client can change is trusted as fixed | error |
+| `cwe-474` | each function | This relies on a function that behaves differently across platforms or versions | info |
+| `cwe-475` | each function | The API is called with arguments that give undefined behaviour | warning |
+| `cwe-476` | each function | A value that can be null is used without checking | error |
+| `cwe-487` | each file | Package visibility is not a security boundary | warning |
+| `cwe-488` | each function | Data for one session is kept where another session can reach it | error |
+| `cwe-497` | each function | System details are exposed to people who should not see them | warning |
+| `cwe-501` | each function | Untrusted data is mixed into a trusted structure | warning |
+| `cwe-515` | each function | Information may leak through a covert storage channel | info |
+| `cwe-524` | each function | Sensitive data is cached where others can read it | warning |
+| `cwe-538` | each function | Sensitive data is written where others can read it | error |
+| `cwe-544` | each function | Errors are handled differently from the rest of the codebase | info |
+| `cwe-549` | each function | A password is shown on screen while being entered | warning |
+| `cwe-551` | each function | Authorisation checks the request before it is canonicalised, so encoded forms can bypass it | error |
+| `cwe-563` | each function | A value is assigned and never used | info |
+| `cwe-565` | each function | A security decision trusts a cookie the client can change | error |
+| `cwe-587` | each function | A pointer is set to a fixed address that will not be valid everywhere | error |
+| `cwe-603` | each function | Authentication happens only in the client, which a modified client can skip | error |
+| `cwe-605` | each function | Another process can bind the same port and intercept traffic | warning |
+| `cwe-606` | each function | Input controls how many times this loop runs | error |
+| `cwe-609` | each function | Double-checked locking without a volatile or atomic field can see a half-built object | error |
+| `cwe-617` | each function | Bad input from outside the program is rejected with an assertion, which crashes with a traceback and disappears when assertions are disabled | warning |
+| `cwe-618` | each function | Web content can call a dangerous method outside the sandbox | error |
+| `cwe-619` | each function | A database cursor can be left open | warning |
+| `cwe-620` | each function | The password can be changed without re-authenticating | error |
+| `cwe-628` | each function | A call passes the wrong arguments | error |
+| `cwe-639` | each function | Changing the ID in the request reaches another user's data | error |
+| `cwe-640` | each function | Password recovery is weak | error |
+| `cwe-641` | each function | A resource name built from input is not restricted | warning |
+| `cwe-645` | each function | The lockout is easy to trigger against other users | info |
+| `cwe-648` | each function | A privileged API is used incorrectly | error |
+| `cwe-649` | each function | Encrypted or obfuscated client data can be tampered with undetected | error |
+| `cwe-653` | each function | Operations needing different privileges are not isolated | warning |
+| `cwe-654` | each function | Access depends on a single condition | warning |
+| `cwe-656` | each function | Security relies on obscurity | warning |
+| `cwe-663` | each function | A non-reentrant function is used where calls can interleave | warning |
+| `cwe-681` | each function | This numeric conversion can lose data or change sign | error |
+| `cwe-694` | each function | The identifier may match more than one resource | warning |
+| `cwe-695` | each function | This bypasses the framework using forbidden low-level calls | warning |
+| `cwe-698` | each function | Code keeps running after the redirect | error |
+| `cwe-708` | each function | A resource is given to the wrong owner | warning |
+| `cwe-733` | each function | The compiler may remove this security-critical code | warning |
+| `cwe-749` | each function | A dangerous operation is exposed without restriction | error |
+| `cwe-756` | each function | Default error pages can expose internal details | warning |
+| `cwe-764` | each function | A lock can be taken twice | error |
+| `cwe-765` | each function | A lock can be released twice | error |
+| `cwe-766` | each file | A critical field is public | warning |
+| `cwe-767` | each function | A public method exposes critical private state | warning |
+| `cwe-771` | each function | A resource is allocated and then lost, so it cannot be released | warning |
+| `cwe-772` | each function | A resource is not released on every path | warning |
+| `cwe-778` | each function | A security-critical event is not logged, or is logged without key details | warning |
+| `cwe-779` | each function | This logs much more than needed | info |
+| `cwe-791` | each function | The filter misses some special elements | warning |
+| `cwe-804` | each function | The CAPTCHA can be solved automatically | warning |
+| `cwe-807` | each function | A security decision trusts input the caller can change | error |
+| `cwe-820` | each function | A shared resource is used concurrently without synchronisation | error |
+| `cwe-821` | each function | Synchronisation here does not fully protect the shared resource | error |
+| `cwe-826` | each function | A resource is released while still in use | error |
+| `cwe-832` | each function | A lock may be released when it is not held | error |
+| `cwe-833` | each function | Lock ordering here can deadlock | error |
+| `cwe-836` | each function | The stored hash works as a password | error |
+| `cwe-837` | each function | An action meant to happen once can be repeated | warning |
+| `cwe-841` | each function | A workflow step can be run out of order or skipped | error |
+| `cwe-842` | each function | The user is put in the wrong group | error |
+| `cwe-908` | each function | Something may be used before it is initialised | error |
+| `cwe-909` | each function | A critical resource is left partly uninitialised | warning |
+| `cwe-910` | each function | A file descriptor may be used after it is closed | error |
+| `cwe-911` | each function | The reference count can become wrong, leaking or freeing the resource early | error |
+| `cwe-914` | each function | Input chooses which variables are read or written | error |
+| `cwe-920` | each function | This keeps working in a way that drains power | info |
+| `cwe-921` | each function | Sensitive data is stored where any app or user can read it | warning |
+| `cwe-924` | each function | Messages are not protected against tampering in transit | error |
+| `cwe-939` | each function | Any app can invoke this handler | error |
+| `cwe-940` | each function | The source of the incoming channel is not verified | error |
+| `cwe-941` | each function | Outgoing requests may go to the wrong destination | error |
+| `cwe-1007` | each function | Look-alike characters can make one identifier pass for another | info |
+| `cwe-1024` | each function | Values of different types are compared, which can give wrong results | warning |
+| `cwe-1025` | each function | The comparison looks at the wrong properties | warning |
+| `cwe-1037` | each function | Speculative execution can bypass this security check | info |
+| `cwe-1043` | each file | A data structure here has too many non-primitive fields | info |
+| `cwe-1044` | each function | This function spans an unusual number of architectural layers | info |
+| `cwe-1046` | each function | Concatenating strings in a loop copies them each time | info |
+| `cwe-1047` | each file | This file is part of a circular dependency | info |
+| `cwe-1048` | each function | This function depends on too many outside functions | info |
+| `cwe-1049` | each function | This query has many joins or subqueries on large tables | info |
+| `cwe-1050` | each function | Platform resources are acquired in a loop | warning |
+| `cwe-1051` | each function | Network locations are hard coded | warning |
+| `cwe-1052` | each function | Data is initialised with an unnamed literal that is likely to change or is repeated | info |
+| `cwe-1053` | each file | This module does not document its design | info |
+| `cwe-1054` | each function | This skips a layer by calling a deeper layer directly | info |
+| `cwe-1055` | each file | A class inherits from more than one concrete class | info |
+| `cwe-1057` | each function | This bypasses the project's data access layer | warning |
+| `cwe-1058` | each function | Shared mutable static state is modified from multiple threads | error |
+| `cwe-1060` | each function | This makes many separate data queries | info |
+| `cwe-1062` | each file | A parent class depends on its child class | warning |
+| `cwe-1063` | each file | Instances are created in a static block or at import time | info |
+| `cwe-1065` | each function | Resources are managed directly instead of through the application server | warning |
+| `cwe-1066` | each file | A serialisable class has no serialisation control | info |
+| `cwe-1067` | each function | This query likely scans the whole table | info |
+| `cwe-1068` | each function | The implementation differs from its documented design | warning |
+| `cwe-1070` | each file | A serialisable class holds fields that cannot be serialised | warning |
+| `cwe-1072` | each function | A new database connection is opened for each operation | info |
+| `cwe-1073` | each function | This makes many separate data accesses | info |
+| `cwe-1074` | each file | A class in this file has too deep an inheritance chain | info |
+| `cwe-1083` | each function | Data is accessed outside the designated data manager | warning |
+| `cwe-1084` | each function | This function does many data or file operations | info |
+| `cwe-1085` | each function | The function contains a lot of commented-out code | info |
+| `cwe-1086` | each file | A class in this file has too many direct subclasses | info |
+| `cwe-1089` | each function | This large table has too many indexes, slowing writes | info |
+| `cwe-1090` | each function | This reaches into another class's internals | info |
+| `cwe-1092` | each function | The same function is used across several layers | info |
+| `cwe-1094` | each function | This query can scan a huge range of rows | info |
+| `cwe-1095` | each function | The loop body changes the value its condition depends on | warning |
+| `cwe-1097` | each file | A stored class cannot be compared correctly | info |
+| `cwe-1099` | each file | Names in this file follow inconsistent conventions | info |
+| `cwe-1100` | each file | System-dependent code is scattered through this file | info |
+| `cwe-1101` | each function | This depends on generated code that needs a special runtime | info |
+| `cwe-1102` | each function | This depends on how a particular machine represents data | warning |
+| `cwe-1103` | each function | A third-party component used here is not available on every target platform | info |
+| `cwe-1104` | each function | This relies on an unmaintained third-party component | warning |
+| `cwe-1105` | each file | Machine-dependent code is not encapsulated in this file | info |
+| `cwe-1106` | each function | A value likely to change is a bare literal | info |
+| `cwe-1107` | each file | Constants in this file are duplicated or scattered | info |
+| `cwe-1108` | each function | The function relies on global variables | warning |
+| `cwe-1109` | each function | One variable is used for several purposes | warning |
+| `cwe-1110` | each function | Important design aspects of this code are undocumented | info |
+| `cwe-1111` | each function | This interface does not document its inputs, outputs or errors | info |
+| `cwe-1112` | each function | Settings that control execution are undocumented | info |
+| `cwe-1113` | each file | Comments in this file use inconsistent styles | info |
+| `cwe-1114` | each file | Whitespace in this file is inconsistent | info |
+| `cwe-1115` | each file | This file has no standard header | info |
+| `cwe-1116` | each function | A comment does not match the code | warning |
+| `cwe-1117` | each function | The function's behaviour is not summarised | info |
+| `cwe-1118` | each function | How this code reports errors is undocumented | info |
+| `cwe-1119` | each function | Too many unconditional jumps make control flow hard to follow | warning |
+| `cwe-1122` | each function | The function is dense with operators and operands | info |
+| `cwe-1123` | each function | Code is changed at runtime, which makes behaviour hard to predict | warning |
+| `cwe-1125` | each function | This exposes more entry points than needed | info |
+| `cwe-1127` | the build and CI files | The build does not enable strict compiler warnings | warning |
+| `cwe-1173` | each function | Input validation bypasses or misuses the validation framework | warning |
+| `cwe-1220` | each function | Access control is too coarse | warning |
+| `cwe-1230` | each function | Metadata reveals information about a protected resource | warning |
+| `cwe-1235` | each function | Boxing in hot code is slow | info |
+| `cwe-1236` | each function | Values in this CSV can run as spreadsheet formulas | warning |
+| `cwe-1240` | each function | Cryptography is hand-rolled or non-standard | error |
+| `cwe-1241` | each function | The random number algorithm is predictable | error |
+| `cwe-1265` | each function | A nested call can re-enter code that is not reentrant | warning |
+| `cwe-1285` | each function | An index or offset from input is not checked against bounds | error |
+| `cwe-1286` | each function | External input is not checked for well-formed syntax | warning |
+| `cwe-1287` | each function | The type of an external value is assumed | warning |
+| `cwe-1288` | each function | Related fields in external input are not checked for consistency | warning |
+| `cwe-1289` | each function | Untrusted input equivalent to an unsafe value is not rejected | error |
+| `cwe-1322` | each function | Blocking work inside async code stalls the event loop | error |
+| `cwe-1327` | each function | The service listens on every interface | warning |
+| `cwe-1335` | each function | The shift amount can be negative or too large | error |
+| `cwe-1339` | each function | Floating point loses the precision this value needs | error |
+| `cwe-1341` | each function | A resource can be released twice | error |
+| `cwe-77` | each function | Input is written into a command without neutralising it | error |
+| `cwe-99` | each function | Input chooses which resource is used | error |
+| `cwe-129` | each function | An index from input is not checked | error |
+| `cwe-197` | each function | Casting to a smaller type can lose data | error |
+| `cwe-401` | each function | Allocated memory can leak | error |
+| `cwe-404` | each function | A resource is not released correctly | warning |
+| `cwe-407` | each function | The worst-case cost grows badly with input size | warning |
+| `cwe-424` | each function | An alternate path skips the protections on the main one | error |
+| `cwe-456` | each function | A critical variable is not initialised | warning |
+| `cwe-457` | each function | A variable can be read before it is assigned | error |
+| `cwe-543` | each function | Two threads can create the singleton at once | error |
+| `cwe-564` | each function | Input is concatenated into an ORM query | error |
+| `cwe-567` | each function | Shared data is accessed from several threads without synchronisation | error |
+| `cwe-652` | each function | Input is written into an XQuery expression | error |
+| `cwe-662` | each function | Exclusive access to a shared resource is not guaranteed | error |
+| `cwe-665` | each function | A resource is not initialised correctly | warning |
+| `cwe-667` | each function | Lock handling is incorrect | error |
+| `cwe-672` | each function | A resource is used after it expired or was released | error |
+| `cwe-682` | each function | This calculation gives the wrong result | error |
+| `cwe-703` | each function | A common failure of this operation is missed or ignored | warning |
+| `cwe-704` | each function | A type conversion here is incorrect | error |
+| `cwe-732` | each function | A critical resource gets permissions that are too broad | error |
+| `cwe-758` | each function | The code relies on behaviour that is not guaranteed | warning |
+| `cwe-775` | each function | A file or handle is not closed on every path | warning |
+| `cwe-1042` | each file | A mutable static member makes every instance share state | warning |
+| `cwe-1088` | each function | A remote call has no timeout and can hang forever | warning |
+| `cwe-1091` | each function | An object is not disposed after use | warning |
+| `cwe-1096` | each function | Singleton creation is not synchronised | error |
+| `ext-build-002` | each file | A name used here is never defined or imported | error |
+| `ext-build-003` | each function | A value breaks the declared type contract | error |
+| `ext-domain-001` | each function | A required case has no code path | warning |
+| `ext-domain-002` | each function | This business calculation disagrees with the domain rule it implements | error |
+| `ext-domain-003` | each function | A state change is allowed that the business state machine forbids | error |
+| `ext-domain-004` | each function | Values in different units are combined without converting | error |
+| `ext-distributed-001` | each function | A retry or duplicate delivery repeats a side effect that must happen once | error |
+| `ext-distributed-002` | each function | The code assumes consistency or ordering the storage does not guarantee | error |
+| `ext-distributed-003` | each function | A failure between writes to different systems leaves them inconsistent | error |
+| `ext-distributed-004` | each function | Work can continue after the lease is lost | error |
+| `ext-delivery-001` | each function | Old and new versions cannot both handle this change during rollout | warning |
+| `ext-delivery-002` | each function | This migration can lose or corrupt existing data | error |
+| `ext-delivery-003` | the build and CI files | Configuration settings contradict each other or their schema | warning |
+| `ext-delivery-004` | each function | The backup or artifact cannot be restored as it is | warning |
+| `ext-arch-001` | each file | This file depends across a forbidden architectural boundary | warning |
+| `ext-arch-002` | each file | A lower layer imports a higher one, creating a cycle between layers | warning |
+| `ext-arch-003` | each function | The code assumes behaviour not available on every target platform | warning |
+| `ext-arch-004` | each function | A public interface changes in a breaking way | warning |
+| `ext-verify-001` | each function | The expected value comes from the implementation, so the test repeats its mistakes | error |
+| `ext-obs-001` | each function | Success is recorded for an operation that may have failed | warning |
+| `ext-obs-002` | each function | The correlation identifier is lost at this handoff | warning |
+| `ext-obs-003` | each function | An operational failure happens silently | warning |
+| `ext-obs-004` | each function | Unbounded values are used as metric labels, which can explode storage | warning |
+| `ext-human-001` | each function | A required interaction is not accessible | warning |
+| `ext-human-002` | each function | The destructive action may not match what the user confirmed | error |
+| `ext-human-003` | each function | Unsafe combinations of actions are not prevented here | error |
+| `ext-human-004` | the build and CI files | An operational responsibility has no owner or procedure | info |

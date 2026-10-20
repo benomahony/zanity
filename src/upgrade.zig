@@ -54,8 +54,8 @@ pub fn parseRelease(arena: Allocator, json: []const u8) !Release {
 /// A version without the `v` its tag starts with.
 pub fn trimV(version: []const u8) []const u8 {
     const trimmed = if (std.mem.startsWith(u8, version, "v")) version[1..] else version;
-    if (trimmed.len + 1 < version.len) assert.panic("trimmed '{s}' to '{s}'; trimV() removes at most one character", .{ version, trimmed });
-    if (!std.mem.endsWith(u8, version, trimmed)) assert.panic("trimmed '{s}' to '{s}', which it does not end with", .{ version, trimmed });
+    if (trimmed.len + 1 < version.len) assert.panic("trimmed '{s}' to '{s}'; fix trimV() to remove at most one character", .{ version, trimmed });
+    if (!std.mem.endsWith(u8, version, trimmed)) assert.panic("trimmed '{s}' to '{s}', which it does not end with; fix trimV() to return a suffix", .{ version, trimmed });
     return trimmed;
 }
 
@@ -77,11 +77,11 @@ fn parseVersion(text: []const u8) ?[3]u32 {
     var it = std.mem.splitScalar(u8, text, '.');
     for (&parts) |*part| {
         const piece = it.next();
-        if (piece == null) assert.panic("'{s}' has two dots but fewer than three parts", .{text});
+        if (piece == null) assert.panic("'{s}' has two dots but fewer than three parts; fix parseVersion() to reject it before parsing", .{text});
         part.* = std.fmt.parseInt(u32, piece.?, 10) catch return null;
     }
     const rest = it.next();
-    if (rest != null) assert.panic("'{s}' has two dots but more than three parts", .{text});
+    if (rest != null) assert.panic("'{s}' has two dots but more than three parts; fix parseVersion() to reject it before parsing", .{text});
     return parts;
 }
 
@@ -98,11 +98,11 @@ pub fn releaseUrl(text: *std.Io.Writer, version: ?[]const u8) ![]const u8 {
 pub fn matches(bytes: []const u8, digest: []const u8) bool {
     const prefix = "sha256:";
     if (!std.mem.startsWith(u8, digest, prefix)) return false;
-    if (bytes.len > max_binary_bytes) assert.panic("hashing a {d}-byte download, past the {d} get() allows", .{ bytes.len, max_binary_bytes });
+    if (bytes.len > max_binary_bytes) assert.panic("hashing a {d}-byte download, past the {d} get() allows; reject it before calling matches()", .{ bytes.len, max_binary_bytes });
     var hash: [std.crypto.hash.sha2.Sha256.digest_length]u8 = undefined;
     std.crypto.hash.sha2.Sha256.hash(bytes, &hash, .{});
     const hex = std.fmt.bytesToHex(hash, .lower);
-    if (hex.len != 2 * hash.len) assert.panic("a SHA-256 is {d} hex digits, not {d}", .{ 2 * hash.len, hex.len });
+    if (hex.len != 2 * hash.len) assert.panic("a SHA-256 is {d} hex digits, not {d}; fix matches()'s hex encoding", .{ 2 * hash.len, hex.len });
     return std.ascii.eqlIgnoreCase(digest[prefix.len..], &hex);
 }
 

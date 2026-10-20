@@ -294,6 +294,7 @@ test "--agent puts the totals and the next command first, then findings up to --
     try std.testing.expectEqual(std.process.Child.Term{ .exited = 1 }, run.term);
     try std.testing.expect(std.mem.startsWith(u8, run.stdout, "zanity: 2 errors, 2 warnings in 1/1 file; 1 [--fix].\nNext: `zanity check a.py --fix`"));
     try expectOutput(run.stdout, &.{
+        "rerun the full check with --fail-on warning. Resolve every finding in code. If the code is correct, make that correctness explicit enough for the rule to verify; never suppress the finding, disable its rule or exclude its path.\n",
         "\n\nassertion-density [error] 2 in 1 file\n",
         "\n  +1 more: --rules assertion-density --limit 0\n",
         "\nAlso, to see with --rules <name>:\n  unbounded-loop [warning] 1 in 1 file\n  assertion-message [warning] 1 in 1 file\n",
@@ -469,9 +470,13 @@ fn startMock(arena: std.mem.Allocator, io: Io, dir: []const u8) !MockTypeSafe {
 /// and a pyproject.toml with a weakened check.
 fn writeInferProject(arena: std.mem.Allocator, io: Io, scratch: Io.Dir) !void {
     const service = try Io.Dir.cwd().readFileAlloc(io, "tests/infer/project/service.py", arena, .unlimited);
+    const support = try Io.Dir.cwd().readFileAlloc(io, "tests/infer/project/test_support.py", arena, .unlimited);
     if (service.len == 0) assert.panic("tests/infer/project/service.py is empty; restore it from git", .{});
+    if (support.len == 0) assert.panic("tests/infer/project/test_support.py is empty; restore it from git", .{});
     if (std.mem.indexOf(u8, service, "# judge: ") == null) assert.panic("tests/infer/project/service.py marks no rule with '# judge: <rule>', so the mock would answer no to everything; restore the markers", .{});
+    if (std.mem.indexOf(u8, support, "# judge: fixture-") == null) assert.panic("tests/infer/project/test_support.py marks no fixture rule, so the mock would answer no to both fixture questions; restore the markers", .{});
     try scratch.writeFile(io, .{ .sub_path = "service.py", .data = service });
+    try scratch.writeFile(io, .{ .sub_path = "test_support.py", .data = support });
     try scratch.writeFile(io, .{ .sub_path = "tsconfig.json", .data = "{\n  \"compilerOptions\": {\n    \"strict\": true\n  }\n}\n" });
     try scratch.writeFile(io, .{ .sub_path = "all_test.zig", .data = "test {\n    _ = @import(\"service_test.zig\");\n}\n" });
     try scratch.writeFile(io, .{ .sub_path = "pyproject.toml", .data = "[tool.ruff]\nline-length = 200  # judge: weakened-check\n# judge: unscheduled-analysis\n" });
@@ -542,7 +547,7 @@ test "--infer asks the System One server zanity.yaml names, with only the key it
     try expectOutput(keyed, &.{"\"authorization\": \"Bearer local\""}, &.{"Bearer test"});
 }
 
-test "--infer reports what the model is sure of, for functions, tests and project files" {
+test "--infer reports what the model is sure of, for functions, fixtures, tests and project files" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
     const arena = arena_state.allocator();
@@ -550,7 +555,64 @@ test "--infer reports what the model is sure of, for functions, tests and projec
     defer project.tmp.cleanup();
     defer project.mock.child.kill(std.testing.io);
     const run = try project.checkInferring(arena, std.testing.io);
-    try expectOutput(run.stdout, &.{ "rule=\"misleading-error\"", "rule=\"unconstructive-error\"", "'invalid input' doesn't say", "rule=\"hollow-test\"", "rule=\"weakened-check\"", "rule=\"unscheduled-analysis\"", "rule=\"repeated-mechanics\"", "between the first two, `\\\"alpha beta\\\"` becomes `\\\"ada lovelace\\\"`" }, &.{});
+    try expectOutput(run.stdout, &.{ "rule=\"misleading-error\"", "rule=\"unconstructive-error\"", "'invalid input' doesn't say", "rule=\"hollow-test\"", "rule=\"fixture-leaks-state\"", "rule=\"fixture-hides-behaviour\"", "rule=\"weakened-check\"", "rule=\"unscheduled-analysis\"", "rule=\"repeated-mechanics\"", "between the first two, `\\\"alpha beta\\\"` becomes `\\\"ada lovelace\\\"`" }, &.{});
+}
+
+test "--infer asks zanity.yaml's own questions, and holds a retuned one to its own threshold" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    const io = std.testing.io;
+    var project = try InferRun.initInferRun(arena, io);
+    defer project.tmp.cleanup();
+    defer project.mock.child.kill(io);
+    try project.tmp.dir.writeFile(io, .{ .sub_path = "zanity.yaml", .data =
+        \\questions:
+        \\  payment-without-key:
+        \\    question: Does the function charge a card without an idempotency key?
+        \\    finding: A card is charged without an idempotency key
+        \\    fix: Pass the order's id as the payment's idempotency key.
+        \\    severity: error
+        \\  misleading-error:
+        \\    threshold: 0.99
+        \\
+    });
+    try project.tmp.dir.writeFile(io, .{ .sub_path = "pay.py", .data = "def charge(card, amount):\n    # judge: payment-without-key\n    return card.charge(amount)\n" });
+    const run = try project.checkInferring(arena, io);
+    // The mock is 95% sure of every marked question: enough for the new one, short of the retuned 0.99.
+    try expectOutput(run.stdout, &.{ "rule=\"payment-without-key\"", "severity=\"error\"", "In 'charge': A card is charged without an idempotency key" }, &.{"rule=\"misleading-error\""});
+}
+
+test "zanity mark --not-a-problem stops --infer reporting that finding for that function" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    const io = std.testing.io;
+    var project = try InferRun.initInferRun(arena, io);
+    defer project.tmp.cleanup();
+    defer project.mock.child.kill(io);
+    const first = try project.checkInferring(arena, io);
+    const at = std.mem.indexOf(u8, first.stdout, "rule=\"misleading-error\"") orelse return error.TestExpectedFinding;
+    const record = first.stdout[(std.mem.lastIndexOfScalar(u8, first.stdout[0..at], '\n') orelse 0)..at];
+    const path = between(record, "path=\"", "\"") orelse return error.TestExpectedPath;
+    const line = between(record, "line=", "\t") orelse return error.TestExpectedLine;
+    const place = try std.fmt.allocPrint(arena, "{s}:{s}", .{ path, line });
+    const marked = try std.process.run(arena, io, .{ .argv = &.{ project.zanity, "mark", place, "misleading-error", "--not-a-problem", "--plain" }, .cwd = .{ .path = project.work }, .environ_map = &project.mock.env });
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, marked.term);
+    try expectOutput(marked.stdout, &.{"real=false"}, &.{});
+    const second = try project.checkInferring(arena, io);
+    try expectOutput(second.stdout, &.{}, &.{"rule=\"misleading-error\""});
+    const stats = try std.process.run(arena, io, .{ .argv = &.{ project.zanity, "stats", "--rule", "misleading-error", "--plain" }, .cwd = .{ .path = project.work }, .environ_map = &project.mock.env });
+    try expectOutput(stats.stdout, &.{"not_a_problem=1"}, &.{});
+}
+
+/// The text after `start` up to `end` in `record`.
+fn between(record: []const u8, start: []const u8, end: []const u8) ?[]const u8 {
+    if (start.len == 0 or end.len == 0) assert.panic("looking between an empty marker in '{s}'", .{record});
+    const from = (std.mem.indexOf(u8, record, start) orelse return null) + start.len;
+    const to = std.mem.indexOfPos(u8, record, from, end) orelse return null;
+    if (to < from) assert.panic("found '{s}' at {d}, before the text it ends, at {d}", .{ end, to, from });
+    return record[from..to];
 }
 
 test "--infer asks each unit only its own questions and skips what checks settled" {
@@ -562,14 +624,29 @@ test "--infer asks each unit only its own questions and skips what checks settle
     defer project.mock.child.kill(std.testing.io);
     _ = try project.checkInferring(arena, std.testing.io);
     const requests = try project.tmp.dir.readFileAlloc(std.testing.io, "requests.log", arena, .unlimited);
-    try std.testing.expectEqual(@as(usize, 15), std.mem.count(u8, requests, "\n"));
-    var lines = std.mem.tokenizeScalar(u8, requests, '\n');
-    while (lines.next()) |line| {
+    // Sixteen functions, tests, fixtures, settings and the project, each asked at least once; a
+    // unit with more questions than one request carries is asked in several.
+    try std.testing.expect(std.mem.count(u8, requests, "\n") >= 16);
+    // Every request a unit needed, joined, keyed by the unit's first line.
+    var asked: std.StringArrayHashMapUnmanaged(std.ArrayList(u8)) = .empty;
+    var requested = std.mem.tokenizeScalar(u8, requests, '\n');
+    while (requested.next()) |request| {
+        const logged = try std.json.parseFromSliceLeaky(struct { function: []const u8, questions: []const []const u8 }, arena, request, .{ .ignore_unknown_fields = true });
+        try std.testing.expect(logged.questions.len > 0 and logged.questions.len <= 64);
+        const entry = try asked.getOrPut(arena, logged.function);
+        if (!entry.found_existing) entry.value_ptr.* = .empty;
+        try entry.value_ptr.appendSlice(arena, request);
+    }
+    for (asked.values()) |joined| {
+        const line = joined.items;
         const fine = std.mem.indexOf(u8, line, "def fine") != null;
         const is_test = std.mem.indexOf(u8, line, "def test_") != null;
+        const is_fixture = std.mem.indexOf(u8, line, "@pytest.fixture") != null;
         if (fine or is_test) try expectOutput(line, &.{}, &.{"vague-error"});
         if (is_test) try expectOutput(line, &.{}, &.{"name-behaviour-mismatch"});
         if (!is_test) try expectOutput(line, &.{}, &.{"hollow-test"});
+        if (is_fixture) try expectOutput(line, &.{ "fixture-leaks-state", "fixture-hides-behaviour", "name-behaviour-mismatch" }, &.{"hollow-test"});
+        if (!is_fixture) try expectOutput(line, &.{}, &.{ "fixture-leaks-state", "fixture-hides-behaviour" });
         if (std.mem.indexOf(u8, line, "def test_waits") != null) try expectOutput(line, &.{}, &.{"flaky-test"});
         if (std.mem.indexOf(u8, line, "\"=== ") != null) try expectOutput(line, &.{"\"questions\": [\"repeated-mechanics\"]"}, &.{});
         const config_line = std.mem.indexOf(u8, line, "weakened-check") != null or std.mem.indexOf(u8, line, "unscheduled-analysis") != null;
@@ -602,9 +679,9 @@ test "a mistake in zanity.yaml stops the run and says where" {
 
 /// One LSP message, framed as the protocol sends it.
 fn frame(arena: std.mem.Allocator, body: []const u8) ![]const u8 {
-    if (body.len == 0 or body[0] != '{') assert.panic("framing '{s}', which is not a JSON object", .{body});
+    if (body.len == 0 or body[0] != '{') assert.panic("framing '{s}', which is not a JSON object; pass an LSP request object", .{body});
     const framed = try std.fmt.allocPrint(arena, "Content-Length: {d}\r\n\r\n{s}", .{ body.len, body });
-    if (!std.mem.endsWith(u8, framed, body)) assert.panic("the frame of '{s}' does not end with it", .{body});
+    if (!std.mem.endsWith(u8, framed, body)) assert.panic("the frame of '{s}' does not end with it; fix frame() to append the body after its header", .{body});
     return framed;
 }
 

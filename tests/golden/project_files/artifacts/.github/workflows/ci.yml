@@ -7,3 +7,11 @@ jobs:
       - run: curl -fsSL https://example.invalid/install.sh | sh
       - uses: owner/action@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb # v1.2.3
       - uses: owner/action@v1 # aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+permissions:
+  id-token: write
+  pull-requests: read
+  pages: write # publish the site to GitHub Pages
+  id-token: write # prove to Pages this run is allowed to deploy
+  deploy-token: hunter2 # staging
+  api-token: hunter2 # zanity: ignore[plaintext-config-secret]
+  persist-credentials: false

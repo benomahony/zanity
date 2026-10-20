@@ -57,3 +57,14 @@ jobs:
           python3 catalogue/sync.py
           python3 catalogue/triage.py
           git diff --exit-code -- catalogue || { echo "::error::The files above are out of date. Run: python3 catalogue/sync.py && python3 catalogue/triage.py, then commit the result."; exit 1; }
+
+  parity-ratchet:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - name: Feature parity and language coverage do not regress
+        run: |
+          python3 -m unittest bench.parity.test_page bench.parity.test_ratchet
+          python3 bench/parity/ratchet.py
+          python3 bench/parity/page.py
+          git diff --exit-code -- docs/content/comparison || { echo "::error::Comparison pages are stale. Run: python3 bench/parity/page.py"; exit 1; }

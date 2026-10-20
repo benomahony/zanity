@@ -1,0 +1,3 @@
+rules: undocumented-test
+exit: 0
+undocumented_test_rs.rs:2:4: warning [undocumented-test]

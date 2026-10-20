@@ -1,0 +1,415 @@
+---
+.title = "zanity",
+.description = "Fast, deterministic sanity checks for code written by people and agents.",
+.date = .date("2026-10-17T00:00:00"),
+.layout = "index.shtml",
+---
+
+
+
+zanity checks Python, Zig, Go, TypeScript, Rust, Java and C# for the mistakes that make code unsafe, untestable or hard to follow: unbounded loops, functions with no assertions, tests that sleep or touch the network, error messages that don't say what to do, and dozens more. It parses each file once with [tree-sitter](https://tree-sitter.github.io) and runs every rule in a single pass, so checking a whole repository takes moments. It is one static binary with no runtime to install, and checking never touches the network, unless you add `--infer` to have a language model judge what code structure can't, such as whether an error message misleads.
+
+```console
+$ zanity check src
+src/billing.py:12:5  error    assertion-density  'charge' has 0 assertions that can catch a bug; it needs at least 2
+src/billing.py:31:5  error    assertion-density  'refund' has 1 assertion that can catch a bug; it needs at least 2
+src/billing.py:40:9  warning  unbounded-loop     'while True' has no bound
+
+╭────────────────┬────────┬──────────┬───────────────────╮
+│ File           │ Errors │ Warnings │ Most common       │
+├────────────────┼────────┼──────────┼───────────────────┤
+│ src/billing.py │      2 │        1 │ assertion-density │
+├────────────────┼────────┼──────────┼───────────────────┤
+│ TOTAL          │      2 │        1 │ assertion-density │
+╰────────────────┴────────┴──────────┴───────────────────╯
+zanity: 2 errors and 1 warning in 1 of 14 files
+```
+
+# [Install]($heading.id('install'))
+
+On macOS or Linux:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/benomahony/zanity/main/install.sh | sh
+```
+
+It downloads the binary for your machine from the [latest release](https://github.com/benomahony/zanity/releases/latest), checks it against the SHA-256 GitHub lists for the release, and puts it in `~/.local/bin`, telling you if that isn't on your `PATH` yet. `ZANITY_VERSION=0.1.0` installs a particular release; `ZANITY_INSTALL_DIR` puts it somewhere else.
+
+On Windows, in PowerShell:
+
+```powershell
+New-Item -ItemType Directory -Force "$HOME\bin" | Out-Null
+Invoke-WebRequest -OutFile "$HOME\bin\zanity.exe" "https://github.com/benomahony/zanity/releases/latest/download/zanity-windows-x86_64.exe"
+```
+
+## [Upgrading]($heading.id('upgrading'))
+
+```sh
+zanity upgrade            # replace this zanity with the latest release
+zanity upgrade --dry-run  # say which release that would be, and change nothing
+zanity upgrade --to 0.1.4 # install that release instead, even an older one
+```
+
+It checks the download against the SHA-256 GitHub lists for the release before it replaces the running binary, and leaves it untouched if anything fails. Set `GITHUB_TOKEN` if GitHub's rate limit for anonymous requests gets in the way. A zanity installed by mise or Homebrew is left to that tool to upgrade, and one built from source needs `--to`, since `dev` is no release.
+
+If you use [mise](https://mise.jdx.dev), `mise use -g github:benomahony/zanity` installs and updates it, as does [eget](https://github.com/zyedidia/eget) with `eget benomahony/zanity`. Or download `zanity-<os>-<arch>` from the release page yourself: it is a single file with nothing else to install, and the Linux builds are static, so they run on any distribution.
+
+## [From source]($heading.id('from-source'))
+
+Building needs [Zig](https://ziglang.org/download/) at the version in `build.zig.zon`'s `minimum_zig_version`, currently a 0.17.0 nightly. Every grammar and library is vendored or fetched by the build.
+
+```sh
+git clone https://github.com/benomahony/zanity
+cd zanity
+zig build
+./zig-out/bin/zanity --version
+```
+
+`zig build` installs a ReleaseSafe zanity, as fast as a release; the tests build Debug, which compiles quickest. `-Doptimize=` sets both.
+To run it through the build, put arguments after `--`, for example
+`zig build -Doptimize=fast run -- check src`.
+
+# [Getting started in a project]($heading.id('getting-started-in-a-project'))
+
+Run it from the root of your repository:
+
+```sh
+zanity check .
+```
+
+It checks every file in a language it knows, skipping whatever `.gitignore` ignores, dot directories and build output. Each finding says what is wrong and how to fix it. Many can be fixed for you:
+
+```sh
+zanity check . --fix
+```
+
+`--fix` makes only changes that can't alter what the code does, such as moving a declaration into the block that uses it or adding a message to an assertion. Where only a person knows something, like why an assertion must hold, it leaves a `TODO` comment for you to fill in.
+
+Then write a `zanity.yaml` to say what zanity should check:
+
+```sh
+zanity init
+```
+
+It writes every setting with notes on what it does, excludes the vendored and fixture directories it finds, such as `vendor/` and `tests/fixtures/`, and ends with a `rules` section that turns on `select: [all]` and lists every rule with its severity and how to fix what it finds, ready to uncomment into `disable`. Delete or change what you don't need; `--force` replaces an existing file. `zanity init --minimal` writes the same settings with none of the notes or the rule list.
+
+Once `zanity check .` is clean, keep it that way with `--fail-on warning`, which fails on warnings as well as errors. That is what a pre-commit hook or CI should run.
+
+When the deterministic checks pass, try `--infer` to have a language model judge your error messages too; see [Judging what structure can't settle with `--infer`](#judging-what-structure-cant-settle-with---infer).
+
+## [Pre-commit]($heading.id('pre-commit'))
+
+With [pre-commit](https://pre-commit.com), add this to `.pre-commit-config.yaml` (zanity must be installed and on your `PATH`):
+
+```yaml
+repos:
+  - repo: https://github.com/benomahony/zanity
+    rev: v0.1.0  # the release you installed
+    hooks:
+      - id: zanity         # zanity check . --fail-on warning
+      # - id: zanity-fix   # applies fixes first, then fails on anything left
+```
+
+The hook checks the whole repository rather than only the staged files, because some rules compare files with each other (a name spelled two ways in two files, a function calling itself through another file).
+
+Without pre-commit, a plain git hook does the same:
+
+```sh
+printf '#!/bin/sh\nexec zanity check . --fail-on warning\n' > .git/hooks/pre-commit
+chmod +x .git/hooks/pre-commit
+```
+
+## [GitHub Actions]($heading.id('github-actions'))
+
+```yaml
+jobs:
+  zanity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: benomahony/zanity@v0.1.0
+        # with:
+        #   version: 0.1.0                   # default: the latest release
+        #   args: check src --fail-on warning  # default: check . --fail-on warning
+```
+
+The action downloads the release binary for the runner and fails the job on any finding. To include `--infer`, store your TypeSafe key as a repository secret and pass it in:
+
+```yaml
+      - uses: benomahony/zanity@v0.1.0
+        with:
+          args: check . --fail-on warning --infer
+        env:
+          TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+```
+
+# [Usage]($heading.id('usage'))
+
+```sh
+zanity init                                   # write a zanity.yaml with every setting explained
+zanity check                                  # check the current directory
+zanity check src tests                        # check some paths
+zanity check . --rules recursion,long-function   # run only these rules
+zanity check . --rules all                    # every rule, including those off by default
+zanity check . --strict                       # also the strict rules, such as assertion density
+zanity check . --fail-on warning              # exit 1 on warnings too
+zanity check . --fix                          # apply the fixes zanity can make, then report the rest
+zanity check . --watch                        # check again on every save, until Ctrl-C
+zanity check . --json                         # a JSON array, one object per finding
+zanity check . --plain                        # stable key=value lines for scripts
+zanity check . --agent                        # findings laid out for a coding agent to act on
+zanity check . --infer                        # also have a language model judge error messages
+zanity lsp                                    # serve findings and fixes to an editor
+zanity help check                             # every option
+```
+
+`check` exits 0 when nothing fired, 1 when an error-level rule fired (or any rule, with `--fail-on warning`), and 2 on a usage error such as a mistake in `zanity.yaml`. Findings go to stdout and the one-line summary to stderr, so output can be piped cleanly. On a terminal the report reads like a coverage report: the first ten findings, errors first, one line each, then a table of the files with the most errors and warnings and the rule that fired most in each, the rest of the files on one row, and a total. How to fix each finding is in `--agent`, `--plain` and `--json`; when zanity can make the fix itself, `--json` and `--plain` also give the edit, as `edit_start` and `edit_end` (byte offsets into the file) and `edit_text`, its replacement. A progress line shows how far a long run has got; `-q` hides it, and it never appears in piped output. `--no-color` or `NO_COLOR` turns colour off. `--watch` checks again whenever a file it checks, `zanity.yaml` or `ddd.yaml`, is saved, added or removed: the operating system reports the change (FSEvents on macOS, inotify on Linux, directory change notifications on Windows), so nothing is polled, and writes to ignored files such as build output don't start a check. The checker and its workers stay resident between saves, while the cache means only changed files are parsed again; whole-project rules are recomputed from all cached facts. Each check prints the `--agent` report, each finding's line, column and fix, unless `--json` or `--plain` is given. Each check reads `zanity.yaml` and `ddd.yaml` afresh, but which files are watched is settled when `--watch` starts, so restart it after changing `exclude`. `--infer` and `--fix` use isolated reruns because they have external or mutating state.
+
+`--agent` writes for a coding agent, in about 1% of the bytes of the terminal report once a run has more than a handful of findings: the totals and the command to run next, then the first findings in rule order, errors first, each as `line:column` and its own fix (or its message, without the explanation every finding of its rule shares), with `[--fix]` on those zanity can fix itself. It tells the agent to resolve every finding in code. When the behaviour is already correct, the agent must refactor it so that correctness is explicit enough for the rule to verify, rather than suppressing the finding, disabling its rule or excluding its path. `--limit N` sets how many findings it shows in all (10 by default, 0 for every one); the rules past them are listed by name and count, to look at with `--rules <name>`. It is on by default under Claude Code (when `CLAUDECODE` is set) unless `--json` or `--plain` is given; `ZANITY_AGENT=1` turns it on for any other agent.
+
+## [Deterministic cache]($heading.id('deterministic-cache'))
+
+Every language rule caches each source file's local findings and the facts needed by project-wide rules in `~/.cache/zanity/zanity.db`, or the file named by `ZANITY_STORE`. An unchanged file is not parsed again; recursion, naming, vocabulary, dead-symbol and the other cross-file rules are still recomputed from the cached facts together with facts from changed files. The key includes the source, path, language queries, selected rules and whether `--infer` needs function bodies, so changing any of them runs the checker again. An unavailable cache never stops a check.
+
+The `source_analyses` table keeps one row per path and analysis context, replacing it when that source changes. Its `result` column is JSON rather than an opaque blob, so agents and people can inspect the exact findings and facts zanity reused. Agent output says when rows were reused and names the database. For example:
+
+```sh
+sqlite3 ~/.cache/zanity/zanity.db "
+  SELECT path, language, hits,
+         json_array_length(result, '$.findings') AS findings,
+         json_array_length(result, '$.functions') AS functions
+  FROM source_analyses
+  ORDER BY used_at DESC, path
+  LIMIT 20;"
+```
+
+## [In an editor with `zanity lsp`]($heading.id('in-an-editor-with-zanity-lsp'))
+
+`zanity lsp` is a language server on stdin and stdout. It checks the workspace when the editor connects and again on every save, and shows each finding as a diagnostic, with its fix under the message. Its code actions are:
+
+- **zanity: fix &lt;rule&gt;**, the edit `--fix` would make, for each finding zanity can fix;
+- **zanity: fix all N in this file**, every such edit in the file at once (kind `source.fixAll.zanity`, so an editor can run it on save);
+- **zanity: flag &lt;rule&gt; here as a false positive**, for any deterministic finding that is wrong.
+
+`zanity lsp --infer` also asks the model on every check, as `zanity check --infer` does; its answers are cached, so after the first check only edited code is asked. A finding the model made offers **zanity: &lt;rule&gt; is not a problem here**, which hides it and stops it being reported for that function, and **zanity: confirm &lt;rule&gt; here**, the same marks `zanity mark` makes.
+
+A flag hides the finding for the rest of the session and keeps it, with the line of code it was about and the zanity version, in the `false_positives` table of `~/.cache/zanity/zanity.db`, so the rule can be made more precise:
+
+```sh
+sqlite3 ~/.cache/zanity/zanity.db "SELECT rule, path, line, code, message FROM false_positives ORDER BY flagged_at DESC"
+```
+
+A file edited since the last check offers no actions until it is saved, since its findings may have moved. In Neovim:
+
+```lua
+vim.lsp.config("zanity", { cmd = { "zanity", "lsp" }, root_markers = { "zanity.yaml", "ddd.yaml", ".git" }, filetypes = { "python", "zig", "go", "rust", "java", "cs", "javascript", "typescript" } })
+vim.lsp.enable("zanity")
+```
+
+**Telemetry.** Set `OTEL_EXPORTER_OTLP_ENDPOINT` and the server sends a trace span for each check (findings, fixable, hidden by a flag, files), each fix applied and each false positive flagged (rule, message, path, line and the line of code) as OTLP/HTTP JSON to `<endpoint>/v1/traces`, or to `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` as given. `OTEL_EXPORTER_OTLP_HEADERS` adds headers as `name=value` pairs, such as `Authorization=<write token>` for Logfire at `https://logfire-us.pydantic.dev`; `OTEL_SDK_DISABLED=true` turns it off. Nothing is sent without an endpoint, and a collector that can't be reached costs one warning, then telemetry is off for the session.
+
+## [Judging what structure can't settle with `--infer`]($heading.id('judging-what-structure-cant-settle-with---infer'))
+
+Whether an error message is vague, cryptic or unhelpful can often be decided from the code: a message that shows none of the values its condition reads is vague. zanity checks that deterministically on every run. What code structure can't settle, such as whether a message describes a different failure from the one that happened, `--infer` asks of a decision model through the [System One API](https://docs.typesafe.ai/api), after every deterministic check has run. By default that is TypeSafe's hosted Jev:
+
+```sh
+export TYPESAFE_API_KEY=...   # from your TypeSafe account
+zanity check . --infer
+```
+
+Any other System One server works too, such as [Kev](https://github.com/jaredpalmer/kev) running on your own machine, so no code leaves it. Point `infer` in `zanity.yaml` at it:
+
+```yaml
+infer:
+  url: http://127.0.0.1:8009    # default: TYPESAFE_BASE_URL, then https://api.typesafe.ai
+  model: kev-latest             # default: TYPESAFE_DEFAULT_MODEL, then jev-latest
+  api_key_env: KEV_API_KEY      # default: TYPESAFE_API_KEY
+```
+
+Only TypeSafe's own API needs a key. For any other server the key is optional, and zanity reads it only from the variable `api_key_env` names, so your TypeSafe key is never sent anywhere else. Answers are stored per model and server, so switching between them never mixes their answers.
+
+| Rule | Asks whether a function |
+|---|---|
+| `vague-error` | has an error message too vague to find the problem: it doesn't name the input or value that failed, or what was expected |
+| `cryptic-error` | has an error message that isn't in plain language: a code, an internal name or jargon |
+| `unconstructive-error` | has an error message that says what failed but not what to do about it |
+| `misleading-error` | has an error message that describes a different failure from the one that happened (*off* by default; `select = ["all"]` includes it) |
+
+Every function is also asked:
+
+| Rule | Asks whether a function |
+|---|---|
+| `name-behaviour-mismatch` | is named for something different from what its body does |
+| `comment-drift` | has a docstring or comment describing behaviour the code doesn't have |
+| `query-with-side-effect` | is named like a query (get, is, has, find) but also changes state |
+| `partial-failure` | makes several writes where a failure partway leaves data half updated |
+| `check-then-act` | checks shared state and then acts on it, though it can change in between |
+| `non-idempotent-retry` | retries an operation that isn't safe to repeat |
+| `unit-mismatch` | combines quantities in different units without converting |
+| `boundary-error` | has a range limit or comparison that looks wrong for its intent |
+| `missing-authorisation` | acts for a caller without checking the caller may |
+| `mixed-abstraction` | mixes high-level steps with low-level detail such as parsing or raw SQL |
+
+And every test case:
+
+| Rule | Asks whether a test | Not asked where this already reported |
+|---|---|---|
+| `order-dependent-test` | depends on which tests ran before it | `shared-state-in-test`, `filesystem-in-test`, `database-in-test`, `unmanaged-temp-in-test` |
+| `combinatorial-test` | varies several independent things at once | |
+| `flaky-test` | can pass or fail with no code change | `nondeterministic-test`, `sleep-in-test`, `network-in-test`, `polling-loop` |
+| `slow-test` | is likely to be slow | `sleep-in-test`, `polling-loop`, `network-in-test`, `database-in-test`, `process-in-test` |
+| `heavy-setup-test` | needs a lot of setup for what it checks | |
+| `unreadable-test` | doesn't let a reader tell what it checks or why | `vague-test-name` |
+| `hollow-test` | would still pass if the behaviour it names were broken | |
+| `implementation-coupled-test` | would fail after a refactor that keeps behaviour | `call-verification`, `storage-read-in-test` |
+| `manual-test` | needs a person to run or judge it | `stdin-in-test`, `debug-leftover` |
+| `unfocused-test` | wouldn't say why it failed | `eager-test` |
+| `self-mocking-test` | mocks the behaviour it claims to check | |
+| `trivial-test` | checks something trivial or only the easy path | |
+
+And each non-test function in a test file, including fixtures, setup and teardown hooks, and shared helpers:
+
+| Rule | Asks whether test support code |
+|---|---|
+| `fixture-leaks-state` | changes shared state without restoring it, so tests can affect each other |
+| `fixture-hides-behaviour` | replaces the behaviour its tests appear to check |
+
+Each cluster of three or more functions, or three or more tests, with the same structure is asked once:
+
+| Rule | Asks whether the cluster |
+|---|---|
+| `repeated-mechanics` | repeats the same mechanics, where a small domain language (a builder, a helper named in the domain's words, a table of cases) would say them more readably |
+
+Its fix names the members and what varies between them, which is what that builder or table would take.
+
+And for each family of the [engineering error catalogue](https://github.com/benomahony/zanity/tree/main/catalogue) that no deterministic rule detects, 327 in all, from CWE weaknesses such as `cwe-22` (a path built from input that can escape its directory) to engineering ones such as `ext-distributed-001` (a side effect a retry repeats), one question about each function, each whole file, or the project's build and CI files. Each is a rule named for its family, listed on the [rules page](https://benomahony.github.io/zanity/rules/#catalogue-questions); select or disable them by name like any rule. Families a rule already detects are never asked about, and families only C, C++, PHP or Perl can have are left out. They add hundreds of questions to each function the first time it is seen, so the first run costs more; after that only edited code is asked again.
+
+A finding is reported when the model is at least 80% sure, and says how sure it was. `threshold` under `infer` in `zanity.yaml` changes that: `threshold: 0.9` reports only what it is at least 90% sure of, and a lower value reports more.
+
+**What is sent**, to the server you chose: the source of each function, fixture or test, each source file for the catalogue's file questions, the first three bodies of each cluster, and only the questions that apply to it and that no deterministic check already answered there: the error-message questions only about functions that raise, return or log an error, and the fixture questions only about non-test functions in test files. Nothing else leaves your machine, and without `--infer` nothing does at all.
+
+**Cost and speed:** answers are cached in a SQLite file, `~/.cache/zanity/zanity.db` (or wherever `ZANITY_STORE` points), keyed by the function's source, so unchanged code is never asked about twice and a second run is instant. A progress line shows how many functions are answered and how long the rest will take. `concurrency` under `infer` in `zanity.yaml` sets how many requests run at once (default 8, up to 64).
+
+**Calibrating the questions:** `zanity mark app.py:12 cwe-15 --not-a-problem` says a finding is wrong for that function, so it is never reported there again, and `--confirm` says it is real. `zanity review cwe-15` lists unlabelled answers to mark, spread evenly from unsure to sure, so the labels cover what the model missed as well as what it found. `zanity stats` shows how often each question fires and how many of its answers are unsure (between 0.35 and 0.65; a well-posed question has few), and `zanity stats --thresholds` measures each marked question's precision and recall at a range of thresholds, to pick a `threshold` for it under its name in `questions`.
+
+**Querying what the model said:** each run also keeps every answer in the store, including the ones below the threshold, in `observations` (one row per question, function and place, with the probability, the threshold and whether it fired) and a row in `runs` with the tokens it used. Any SQLite client can read them; with [DuckDB](https://duckdb.org):
+
+```sh
+duckdb -c "ATTACH '~/.cache/zanity/zanity.db' AS z (TYPE sqlite, READ_ONLY);
+  SELECT rule, count(*) AS asked, sum(fired) AS fired, round(avg(probability), 2) AS mean
+  FROM z.observations GROUP BY rule ORDER BY fired DESC"
+```
+
+# [Configuration]($heading.id('configuration'))
+
+zanity reads the nearest folder at or above the directory it runs in, stopping at the repository root, that holds `zanity.yaml`, `ddd.yaml` or both. For completion, hover docs and errors as you type, make this its first line; editors with a YAML language server pick it up, such as VS Code's YAML extension, Neovim's yamlls, Helix and Zed:
+
+```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/benomahony/zanity/main/zanity.schema.json
+```
+
+Everything is optional:
+
+```yaml
+# Paths to skip, in .gitignore syntax, relative to this file.
+exclude: [vendor/, tests/fixtures/]
+
+infer:
+  # The System One server to ask, such as a local Kev (default: TypeSafe's API).
+  url: http://127.0.0.1:8009
+  # The model to ask (default: jev-latest).
+  model: kev-latest
+  # The variable holding the API key (default: TYPESAFE_API_KEY); optional except for TypeSafe.
+  api_key_env: KEV_API_KEY
+  # Requests sent to the model at once (1 to 64, default 8).
+  concurrency: 16
+  # How sure the model must be for a judgement to become a finding (above 0 up to 1, default 0.8).
+  threshold: 0.9
+
+# A question of your own for --infer: keyed by its rule's name, with the question, what a
+# finding says and how to fix it. severity (default warning), asks (default function; or
+# errors, fixture, test, file or project) and threshold are optional.
+questions:
+  payment-without-key:
+    question: Does the function charge a card without an idempotency key?
+    finding: A card is charged without an idempotency key
+    fix: Pass the order's id as the payment's idempotency key.
+    severity: error
+  # Naming one of zanity's questions retunes it instead: give only what changes.
+  cwe-15:
+    threshold: 0.95
+
+# Rules that don't report in some files: one entry per pattern, in .gitignore syntax, relative
+# to this file.
+paths:
+  - files: tests/e2e/
+    disable: [process-in-test, network-in-test]
+
+rules:
+  # Run only these rules; "all" is every rule, including those off by default, and "strict" the
+  # defaults and the strict rules. Leave it out to run the defaults.
+  select: [recursion, unbounded-loop, long-function]
+  # Rules to switch off, from the selection or the defaults.
+  disable: [duplicate-name]
+```
+
+`--rules` on the command line overrides `rules`. A mistake in the file stops the run with exit code 2 and names the line and what to write instead, for example `zanity.yaml:2: 'recursions' isn't a rule; ...`.
+
+zanity reads a strict part of YAML: every value is text, so `no` never turns into false, and a value that YAML would read as more than text, such as a pattern starting with `*`, must be quoted (`"*_test.py"`); zanity tells you where until it is.
+
+## [The project's words: `ddd.yaml`]($heading.id('the-projects-words-dddyaml'))
+
+The project's ubiquitous language lives in `ddd.yaml`, beside `zanity.yaml` or on its own, or under the same keys in `zanity.yaml` itself, but not in both. Put `# yaml-language-server: $schema=https://raw.githubusercontent.com/benomahony/zanity/main/ddd.schema.json` at the top of `ddd.yaml` for completion and checks as you type. It has the shape of a [Contextive](https://github.com/dev-cycles/contextive) glossary, so the same file gives your editor hover definitions and gives zanity a vocabulary to check names against. There is no settled standard for a machine-readable glossary; Contextive's is the nearest thing in use, and [Context Mapper](https://contextmapper.org)'s CML is the fuller model if you need context maps.
+
+```yaml
+# Words that give a name a direction, so us_to_uk and uk_to_us aren't name drift.
+directional: [to, from]
+contexts:
+  # A context with no paths holds the words of the whole project.
+  - name: Shared
+    # Words no name may use.
+    forbidden: [util, manager]
+    terms:
+      # Names using an alias are reported, with the name respelled with the term.
+      - name: customer
+        definition: Someone who buys from us.
+        aliases: [client, user]
+  - name: Billing
+    # context (the default) or domain; a context's words win over a domain's, and the same
+    # name may be defined once in each context.
+    kind: context
+    # The files it covers, in .gitignore syntax, relative to this file.
+    paths: ["src/billing/**"]
+    forbidden: [discount]
+    terms:
+      - name: invoice
+        definition: What a customer is asked to pay.
+        aliases: [bill, statement]
+```
+
+`kind`, `forbidden` and `directional` are zanity's additions; Contextive's own keys, such as `definition`, `examples`, `domainVisionStatement` and `meta`, are read past. A term whose name is several words, such as `Purchase Order`, stays in the glossary but can't be one word of a name, so zanity doesn't check its aliases. Quote a path that starts with `*`, as YAML reads a bare `*` as an alias.
+
+# [Suppressing a finding]($heading.id('suppressing-a-finding'))
+
+A comment on the line of the finding silences it, in any language:
+
+```python
+value = eval(text)  # zanity: ignore[forbidden-call]
+```
+
+`zanity: ignore` with no list silences every rule on that line. A rule can be named by its name or by its code, such as `NASA01-A`.
+
+# [Languages]($heading.id('languages'))
+
+| Language | Extensions |
+|---|---|
+| Python | `.py` `.pyi` |
+| Zig | `.zig` |
+| Go | `.go` |
+| TypeScript | `.ts` `.mts` `.cts` |
+| JavaScript | `.js` `.mjs` `.cjs` `.jsx` |
+| Rust | `.rs` |
+| Java | `.java` |
+| C# | `.cs` `.csx` |
+
+Every rule runs on every language where it means something; `dynamic-allocation`, for example, only applies where memory is managed by hand.

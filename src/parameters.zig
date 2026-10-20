@@ -9,6 +9,7 @@ const File = check.File;
 const Context = check.Context;
 const contains = check.contains;
 const memory = @import("memory.zig");
+const facts_module = @import("facts.zig");
 const strings = @import("strings.zig");
 const rules = @import("rules.zig");
 const naming = @import("naming.zig");
@@ -200,6 +201,7 @@ fn reportUnused(self: *File, ctx: Context, parameter: ts.Node, name: []const u8)
     if (!try self.report(parameter, "dead-parameter", try self.say("'{s}' is a parameter of '{s}' that its body never uses, so every caller passes a value for nothing.", .{ text, name }))) return;
     const calls = callsIn(self.source, name, ts.ts_node_start_byte(ctx.name orelse ctx.node));
     const finding = self.s.diagnostics.last().?;
+    finding.subject = facts_module.nameHash(name);
     finding.fix = if (calls == 0)
         try self.say("Remove '{s}' from '{s}', and its argument from the calls to '{s}' in other files; if the body was meant to use '{s}', that is the bug to fix instead.", .{ text, name, name, text })
     else
@@ -286,4 +288,22 @@ fn declaredBy(self: *File, function: ts.Node, name: ts.Node) bool {
     }
     if (current.eql(name)) assert.panic("{s}: climbing from {f} stayed on it; parent() must return the enclosing node", .{ self.work.facts.path, name.where() });
     return false;
+}
+
+/// Drops the findings about functions some file passes as a value, as `Calculator::cost` passes
+/// `cost`: the type it is passed as fixes its parameters, so an unused one is no reason to change it.
+pub fn dropPassed(facts: *const facts_module.Facts, findings: *memory.Bounded(facts_module.Finding)) void {
+    const passed = facts.passed.items();
+    if (passed.len == 0) return;
+    const before = findings.len;
+    if (before > findings.capacity()) assert.panic("{d} findings in room for {d}; Bounded.add() refuses to grow past its buffer", .{ before, findings.capacity() });
+    var kept: usize = 0;
+    for (findings.items()) |f| {
+        const cancelled = f.subject != 0 and std.mem.indexOfScalar(u64, passed, f.subject) != null;
+        if (cancelled) continue;
+        findings.items()[kept] = f;
+        kept += 1;
+    }
+    findings.len = kept;
+    if (findings.len > before) assert.panic("dropping passed functions' findings grew them from {d} to {d}; it only removes", .{ before, findings.len });
 }

@@ -22,4 +22,5 @@ test {
     _ = @import("telemetry.zig");
     _ = @import("twins.zig");
     _ = @import("passthrough.zig");
+    _ = @import("watch.zig");
 }

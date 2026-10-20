@@ -1,9 +1,12 @@
 rules: forbidden-term,non-canonical-term,misplaced-test,duplicate-name
 exit: 0
+src/billing/bill_util.py:1:1: warning [forbidden-term]
+src/billing/bill_util.py:1:1: warning [non-canonical-term]
+src/billing/invoices.py:13:7: warning [forbidden-term]
 src/billing/invoices.py:1:5: warning [non-canonical-term]
+src/billing/invoices.py:21:5: warning [misplaced-test]
 src/billing/invoices.py:5:5: warning [non-canonical-term]
 src/billing/invoices.py:9:5: warning [forbidden-term]
-src/billing/invoices.py:13:7: warning [forbidden-term]
-src/billing/invoices.py:21:5: warning [misplaced-test]
+src/client/orders.py:1:1: warning [non-canonical-term]
 src/shipping/parcels.py:9:7: warning [forbidden-term]
 src/shipping/parcels.py:9:7: warning [non-canonical-term]

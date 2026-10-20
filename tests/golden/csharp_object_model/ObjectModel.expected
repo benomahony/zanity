@@ -1,0 +1,12 @@
+rules: unsafe-jni,public-static-field,public-static-array,class-name-comparison,equals-without-hashcode,hashcode-without-equals
+exit: 1
+ObjectModel.cs:10:5: warning [public-static-field]
+ObjectModel.cs:15:5: warning [public-static-array]
+ObjectModel.cs:16:5: warning [public-static-array]
+ObjectModel.cs:20:36: error [class-name-comparison]
+ObjectModel.cs:21:40: error [class-name-comparison]
+ObjectModel.cs:25:1: error [equals-without-hashcode]
+ObjectModel.cs:30:1: error [hashcode-without-equals]
+ObjectModel.cs:41:1: error [equals-without-hashcode]
+ObjectModel.cs:6:5: warning [unsafe-jni]
+ObjectModel.cs:9:5: warning [public-static-field]

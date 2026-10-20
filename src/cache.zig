@@ -19,7 +19,7 @@ const memory = @import("memory.zig");
 const rules = @import("rules.zig");
 const store = @import("store.zig");
 
-const cache_format = "source-analysis-1";
+const cache_format = "source-analysis-2";
 
 /// The source code that produces local findings and facts. Its compile-time digest makes a rebuilt
 /// zanity miss old rows automatically when checker logic, name tables or parser revisions change.
@@ -82,10 +82,11 @@ pub const Snapshot = struct {
     functions: []const Function,
     calls: []const Edge,
     units: []const Unit,
-    references: []u64,
+    references: []facts_module.Reference,
     shapes: []const Shape,
     abstractions: []const Definition,
     implemented: []const u64,
+    passed: []const u64,
 };
 
 /// The cache key changes with the path, language queries, enabled rules, inference units and cache
@@ -129,6 +130,7 @@ pub fn encode(buffer: []u8, context: AnalysisContext, facts: *const Facts, findi
         .shapes = facts.shapes.items(),
         .abstractions = facts.abstractions.items(),
         .implemented = facts.implemented.items(),
+        .passed = facts.passed.items(),
     };
     var out: std.Io.Writer = .fixed(buffer);
     try std.json.Stringify.value(snapshot, .{}, &out);
@@ -232,8 +234,8 @@ fn commitFacts(snapshot: Snapshot, run: Replay) error{LimitExceeded}!void {
         .importable = definition.importable,
         .unmarked = try run.text.copy(definition.unmarked),
     });
-    for (snapshot.functions) |function| try facts.functions.add(.{ .path = run.path, .name = try run.text.copy(function.name), .method = function.method, .line = function.line, .column = function.column });
-    for (snapshot.calls) |call| try facts.calls.add(.{ .caller = @intCast(first + call.caller), .callee = try run.text.copy(call.callee), .reach = call.reach });
+    for (snapshot.functions) |function| try facts.functions.add(.{ .path = run.path, .name = try run.text.copy(function.name), .method = function.method, .line = function.line, .column = function.column, .parameters = function.parameters, .types = try run.text.copy(function.types) });
+    for (snapshot.calls) |call| try facts.calls.add(.{ .caller = @intCast(first + call.caller), .callee = try run.text.copy(call.callee), .reach = call.reach, .arguments = call.arguments, .types = try run.text.copy(call.types) });
     for (snapshot.shapes) |shape| {
         var kept = shape;
         kept.function = @intCast(first + shape.function);
@@ -253,13 +255,8 @@ fn commitFacts(snapshot: Snapshot, run: Replay) error{LimitExceeded}!void {
         .unmarked = try run.text.copy(abstraction.unmarked),
     });
     for (snapshot.implemented) |hash| try facts.implemented.add(hash);
-    std.mem.sort(u64, snapshot.references, {}, std.sort.asc(u64));
-    var previous: ?u64 = null;
-    for (snapshot.references) |hash| {
-        if (previous == hash) continue;
-        previous = hash;
-        try facts.references.add(hash);
-    }
+    for (snapshot.passed) |hash| try facts.passed.add(hash);
+    try facts.addReferences(snapshot.references);
     for (snapshot.units) |unit| try facts.units.add(.{ .kind = unit.kind, .reports_error = unit.reports_error, .path = run.path, .language = run.language, .name = try run.text.copy(unit.name), .line = unit.line, .column = unit.column, .end_line = unit.end_line, .source = try run.text.copy(unit.source), .fix = try run.text.copy(unit.fix) });
     if (facts.functions.len != first + snapshot.functions.len) assert.panic("replayed {d} functions from a cache row holding {d}; commitFacts must add each once", .{ facts.functions.len - first, snapshot.functions.len });
 }
@@ -270,7 +267,7 @@ fn commitFindings(snapshot: Snapshot, run: Replay) (ReplayError || error{LimitEx
     for (snapshot.findings) |diagnostic| {
         const rule = rules.find(diagnostic.rule) orelse return error.InvalidCache;
         const edit: ?facts_module.Edit = if (diagnostic.edit) |change| .{ .start = change.start, .end = change.end, .replacement = try run.text.copy(change.replacement) } else null;
-        try run.findings.add(.{ .path = run.path, .line = diagnostic.line, .column = diagnostic.column, .rule = rule.name, .message = try run.text.copy(diagnostic.message), .fix = try run.text.copy(diagnostic.fix), .edit = edit });
+        try run.findings.add(.{ .path = run.path, .line = diagnostic.line, .column = diagnostic.column, .rule = rule.name, .message = try run.text.copy(diagnostic.message), .fix = try run.text.copy(diagnostic.fix), .edit = edit, .subject = diagnostic.subject });
     }
     if (run.findings.len != before + snapshot.findings.len) assert.panic("replayed {d} findings from a cache row holding {d}; commitFindings must add each once", .{ run.findings.len - before, snapshot.findings.len });
 }
@@ -286,9 +283,9 @@ test "a cached analysis replays local findings and cross-file facts" {
     source_facts.language = loaded.adapter.name;
     try source_facts.define("answer", "function", .{ .at = .{ 2, 4 }, .public = true, .unmarked = "answer" });
     const function = try source_facts.function("answer", .{ 2, 4 }, false);
-    try source_facts.call(function, "helper", .functions);
-    try source_facts.references.add(7);
-    try source_facts.references.add(7);
+    try source_facts.call(.{ .caller = function, .callee = "helper", .reach = .functions });
+    try source_facts.references.add(.{ .name = 7 });
+    try source_facts.references.add(.{ .name = 7 });
     const checker = try check.Checker.initChecker(arena, loaded, rules.Set.defaults());
     const context: AnalysisContext = .{ .language = loaded.adapter.name, .query = loaded.adapter.query, .revision = loaded.adapter.revision, .enabled = checker.enabled, .collect_units = false };
     const diagnostic: Diagnostic = .{ .line = 2, .column = 4, .rule = "long-function", .message = "too long" };

@@ -141,7 +141,7 @@ fn choosePreview(findings: []const Finding) Preview {
         preview.where = @max(preview.where, f.path.len + 1 + locationWidth(f));
         preview.rule = @max(preview.rule, f.rule.len);
     }
-    if (preview.where < "a:1:1".len or preview.rule == 0) assert.panic("the preview's columns came out {d} and {d} wide; a location is at least 'a:1:1' and every finding names its rule", .{ preview.where, preview.rule });
+    if (preview.where < "a:1:1".len or preview.rule == 0) assert.panic("the preview's columns came out {d} and {d} wide; fix choosePreview() to measure every selected location and rule", .{ preview.where, preview.rule });
     if (preview.len > preview_findings) assert.panic("picked {d} findings to show, past the {d} the preview holds; the loops stop at preview_findings", .{ preview.len, preview_findings });
     return preview;
 }
@@ -357,7 +357,10 @@ pub fn renderAgent(out: *std.Io.Writer, report: AgentReport) !void {
         const scope: CheckedPaths = .{ .paths = paths };
         try out.print("; {d} [--fix].\nNext: `zanity check {f} --fix`, fix the rest", .{ fixable, scope });
     } else try out.writeAll(".\nNext: fix these");
-    try out.writeAll(", rerun with --fail-on warning. Don't silence rules.\n");
+    try out.writeAll(if (report.watching)
+        "; saving a file checks again. Resolve every finding in code. If the code is correct, make that correctness explicit enough for the rule to verify; never suppress the finding, disable its rule or exclude its path.\n"
+    else
+        ", rerun the full check with --fail-on warning. Resolve every finding in code. If the code is correct, make that correctness explicit enough for the rule to verify; never suppress the finding, disable its rule or exclude its path.\n");
     const fired = Fired.initFired(findings);
     var budget = report.limit;
     var listed = false;
@@ -404,7 +407,14 @@ fn brief(message: []const u8) []const u8 {
 
 /// What renderAgent() reports: the run's sorted findings and their counts, the paths it checked,
 /// and how many findings to show in all, 0 for every one; rules past that are listed by name.
-pub const AgentReport = struct { findings: []const Finding, counts: Counts, paths: []const []const u8, limit: u32 };
+pub const AgentReport = struct {
+    findings: []const Finding,
+    counts: Counts,
+    paths: []const []const u8,
+    limit: u32,
+    /// Whether `zanity check --watch` reruns this check when a file is saved.
+    watching: bool = false,
+};
 
 /// A rule that fired: its index in rules.all, its findings, and the files they are in.
 const RuleTally = struct { index: usize, total: u32, files: u32 };

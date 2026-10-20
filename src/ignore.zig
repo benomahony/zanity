@@ -23,6 +23,15 @@ pub const Ignore = struct {
     text: memory.Text,
     file: []u8,
 
+    /// How many patterns, and bytes of their text, an Ignore held at some point.
+    pub const Mark = struct { patterns: usize, bytes: usize };
+
+    pub fn mark(self: *const Ignore) Mark {
+        if (self.text.used > self.text.buffer.len) assert.panic("ignore text: {d} bytes used of {d}; only Text may move used", .{ self.text.used, self.text.buffer.len });
+        if (self.patterns.len > self.patterns.capacity()) assert.panic("{d} ignore patterns in room for {d}; only add() may grow the list", .{ self.patterns.len, self.patterns.capacity() });
+        return .{ .patterns = self.patterns.len, .bytes = self.text.used };
+    }
+
     pub fn initIgnore(gpa: Allocator, limits: memory.Limits) Allocator.Error!Ignore {
         if (limits.ignore_patterns == 0) assert.panic("memory.Limits.ignore_patterns is 0, so no .gitignore line could be honoured; set it above 0", .{});
         if (limits.ignore_bytes == 0) assert.panic("memory.Limits.ignore_bytes is 0, so no .gitignore file could be read; set it above 0", .{});
@@ -31,6 +40,14 @@ pub const Ignore = struct {
             .text = try .initText(gpa, limits.ignore_bytes),
             .file = try memory.reserve(gpa, u8, limits.ignore_bytes),
         };
+    }
+
+    /// For a new walk that reuses this allocation.
+    pub fn reset(self: *Ignore) void {
+        self.patterns.clear();
+        self.text.used = 0;
+        if (self.patterns.len != 0 or self.text.used != 0) assert.panic("resetting ignores left {d} patterns and {d} bytes; reset() must empty both", .{ self.patterns.len, self.text.used });
+        if (self.file.len == 0) assert.panic("resetting ignores lost the file buffer; reset() retains every allocation", .{});
     }
 
     /// Loads the ignore files that apply above `root`, an absolute directory:

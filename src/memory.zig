@@ -22,6 +22,8 @@ pub const Limits = struct {
     /// One cached JSON result plus the fixed-buffer arena used to parse it.
     analysis_bytes: u32 = 1 << 25,
     judgement_bytes: u32 = 1 << 26,
+    /// Questions --infer asks in one run, across every function.
+    questions: u32 = 1 << 22,
 };
 
 /// Which limit ran out, for the thread whose add() or copy() returned error.LimitExceeded.

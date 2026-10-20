@@ -1,0 +1,7 @@
+contexts:
+  - name: billing
+    kind: domain
+    paths: [billing/**]
+  - name: shipping
+    kind: domain
+    paths: [shipping/**]

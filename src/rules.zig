@@ -7,10 +7,10 @@ pub const Severity = enum {
     information,
 };
 
-/// What an inference question is asked about: functions that report errors, every function, every
-/// test, each line of a project file, the project files as a whole, or a cluster of functions or
-/// tests of one structure.
-pub const Asks = enum { errors, function, @"test", setting, project, cluster };
+/// What an inference question is asked about: functions that report errors, every function,
+/// fixtures and helpers in test files, every test, each line of a project file, the project files
+/// as a whole, a cluster of functions or tests of one structure, or each source file whole.
+pub const Asks = enum { errors, function, fixture, @"test", setting, project, cluster, file };
 
 /// When a rule runs: by default; with --strict, for what safety-critical code needs and most code
 /// doesn't, such as two assertions in every function; or only when named.
@@ -42,6 +42,8 @@ pub const Rule = struct {
     asks: Asks = .errors,
     /// Deterministic rules whose finding inside a unit already answers `question` there.
     settled_by: []const []const u8 = &.{},
+    /// How sure the model must be for `question` to report; infer threshold when null.
+    threshold: ?f64 = null,
 
     pub fn answers(rule: Rule, code: []const u8) bool {
         if (rule.name.len == 0) assert.panic("a rule in rules.all has no name (advice: '{s}'); give every entry in rules.all a .name", .{rule.advice});
@@ -50,13 +52,21 @@ pub const Rule = struct {
     }
 };
 
-pub const all = [_]Rule{
+pub const all = core ++ catalogue.questions;
+
+/// The --infer questions generated from the engineering error catalogue, one per family no
+/// deterministic rule detects; `all` holds them after the rules written here.
+pub const catalogue = @import("catalogue_questions.zig");
+
+/// The rules written here, which `zanity init` explains one by one.
+pub const core = [_]Rule{
     .{ .name = "parse-error", .advice = "Fix the syntax error, or report the construct if the code is valid.", .severity = .warning, .tier = .default, .catalogue = &.{"EXT-BUILD-001"} },
     .{ .name = "forbidden-call", .alias = "NASA01-A", .advice = "Call the code you need directly.", .severity = .warning, .tier = .default, .needs = &.{ "call.outer", "call.name" }, .catalogue = &.{ "CWE-94", "CWE-95", "CWE-470", "CWE-915" } },
     .{ .name = "recursion", .alias = "NASA01-B", .advice = "Rewrite it as a loop with a fixed bound.", .severity = .warning, .tier = .strict, .needs = &.{ "call.outer", "call.name", "call.receiver", "function.outer", "function.name" }, .catalogue = &.{"CWE-674"} },
     .{ .name = "unbounded-loop", .alias = "NASA02", .advice = "Loop over a collection or cap the number of iterations.", .severity = .warning, .tier = .strict, .needs = &.{ "loop.outer", "loop.condition", "loop.iterable", "literal.true" }, .catalogue = &.{"CWE-835"} },
     .{ .name = "eager-test", .advice = "Split it into tests that each check one behaviour, named for that behaviour.", .severity = .warning, .tier = .default, .needs = &.{ "function.outer", "function.name" } },
     .{ .name = "long-test", .advice = "Split it into tests that each check one behaviour, or move the setup into a helper.", .severity = .warning, .tier = .default, .needs = &.{ "function.outer", "function.name" } },
+    .{ .name = "undocumented-test", .advice = "Say which behaviour it checks and why it needs this many steps, in a docstring or a comment above it.", .severity = .warning, .tier = .default, .needs = &.{ "function.outer", "function.name", "assertion.outer", "test.check" } },
     .{ .name = "long-function", .alias = "NASA04", .advice = "Move a self-contained step into its own function.", .severity = .warning, .tier = .default, .needs = &.{ "function.outer", "function.name" } },
     .{ .name = "assertion-density", .alias = "NASA05", .advice = "Assert conditions a bug could actually break: what it needs from its inputs and what it guarantees about its result.", .severity = .@"error", .tier = .strict, .needs = &.{ "function.outer", "function.name", "assertion.outer" } },
     .{ .name = "assertion-message", .alias = "NASA05-A", .advice = "Add a message saying what must be true and why, so whoever fixes a failure can tell whether the code or the expectation is wrong.", .severity = .warning, .tier = .strict, .needs = &.{ "assertion.outer", "assertion.message" } },
@@ -101,6 +111,8 @@ pub const all = [_]Rule{
     .{ .name = "redundant-null-check", .alias = "NASA05-M3", .advice = "Remove this check.", .severity = .warning, .tier = .strict, .needs = &.{ "statement.outer", "compare.not_null", "compare.subject", "call.argument" }, .catalogue = &.{"EXT-VERIFY-002"} },
     .{ .name = "conversion-assertion", .alias = "NASA05-M4", .advice = "Assert the property you need it to have.", .severity = .information, .tier = .strict, .needs = &.{ "statement.outer", "assignment.lhs", "assignment.rhs", "string.format", "expression.path" }, .catalogue = &.{"EXT-VERIFY-002"} },
     .{ .name = "guaranteed-length", .alias = "NASA05-M5", .advice = "Assert the length you actually require.", .severity = .information, .tier = .strict, .needs = &.{ "statement.outer", "assignment.lhs", "assignment.rhs", "compare.non_negative", "compare.subject" }, .catalogue = &.{"EXT-VERIFY-002"} },
+    .{ .name = "variadic-parameter", .pattern = "'$code' takes any number of arguments, so a reader can't tell what it needs and a caller can pass what it doesn't expect.", .advice = "Take explicit parameters, or one collection parameter.", .severity = .information, .tier = .strict, .catalogue = &.{"CWE-1056"}, .needs = &.{"finding.variadic-parameter"} },
+    .{ .name = "goto-statement", .pattern = "'$code' jumps elsewhere in the function, so its control flow is hard to follow.", .advice = "Use a loop, a break or continue, or a function of its own instead.", .severity = .warning, .tier = .default, .catalogue = &.{"CWE-1075"}, .needs = &.{"finding.goto-statement"} },
     .{ .name = "empty-block", .pattern = "'$code' has an empty body, so it does nothing; that is usually unfinished work or a lost statement.", .advice = "Fill in the body, delete the block, or leave a comment saying why nothing happens here.", .severity = .warning, .tier = .default, .catalogue = &.{"CWE-1071"}, .needs = &.{"finding.empty-block"} },
     .{ .name = "constant-condition", .pattern = "'$code' tests a constant, so one branch always runs and the other never does.", .advice = "Delete the branch that can't run, or test the value that actually varies.", .severity = .warning, .tier = .default, .catalogue = &.{ "CWE-570", "CWE-571" }, .needs = &.{"finding.constant-condition"} },
     .{ .name = "divide-by-zero", .pattern = "'$code' divides by literal zero, so it fails or produces a non-finite value whenever it runs.", .advice = "Use the intended non-zero divisor, or validate a variable divisor before dividing.", .severity = .@"error", .tier = .default, .catalogue = &.{"CWE-369"}, .needs = &.{"finding.divide-by-zero"} },
@@ -111,16 +123,16 @@ pub const all = [_]Rule{
     .{ .name = "empty-synchronized", .pattern = "'$code' locks a monitor but protects no operation, so the synchronization has no effect.", .advice = "Move the shared-state operation inside the synchronized block, or remove the empty block.", .severity = .warning, .tier = .default, .catalogue = &.{"CWE-585"}, .needs = &.{"finding.empty-synchronized"} },
     .{ .name = "public-finalizer", .pattern = "'$code' exposes finalize as a public method, allowing callers to invalidate the object outside the runtime's lifecycle.", .advice = "Remove the public modifier and provide an explicit close method for resources.", .severity = .warning, .tier = .default, .catalogue = &.{"CWE-583"}, .needs = &.{"finding.public-finalizer"} },
     .{ .name = "direct-thread", .pattern = "'$code' creates a thread directly, bypassing the application's managed executor and lifecycle.", .advice = "Submit the task to a bounded, application-managed executor.", .severity = .warning, .tier = .default, .catalogue = &.{"CWE-383"}, .needs = &.{"finding.direct-thread"} },
-    .{ .name = "unsafe-jni", .pattern = "'$code' exposes a native JNI boundary, where memory and type safety require separate validation.", .advice = "Replace it with a safe Java API, or isolate and audit the native boundary with explicit input validation.", .severity = .warning, .tier = .default, .catalogue = &.{"CWE-111"}, .needs = &.{"finding.unsafe-jni"} },
-    .{ .name = "public-static-field", .pattern = "'$code' is public and static but not final, so any caller can replace shared process state.", .advice = "Make it private, expose behaviour instead of state, and make constants static final.", .severity = .warning, .tier = .default, .catalogue = &.{ "CWE-493", "CWE-500" }, .needs = &.{"finding.public-static-field"} },
-    .{ .name = "public-static-array", .pattern = "'$code' exposes a mutable array as public static final; final prevents replacement but not mutation.", .advice = "Keep the array private and return an immutable view or a defensive copy.", .severity = .warning, .tier = .default, .catalogue = &.{ "CWE-582", "CWE-607" }, .needs = &.{"finding.public-static-array"} },
+    .{ .name = "unsafe-jni", .pattern = "'$code' declares a native method, a boundary where the runtime no longer checks memory or types.", .advice = "Replace it with a safe library API, or isolate and audit the native boundary with explicit input validation.", .severity = .warning, .tier = .default, .catalogue = &.{"CWE-111"}, .needs = &.{"finding.unsafe-jni"} },
+    .{ .name = "public-static-field", .pattern = "'$code' is public and static but can be reassigned, so any caller can replace shared process state.", .advice = "Make it private and expose behaviour instead of state; make a constant unassignable, with final in Java or const or readonly in C#.", .severity = .warning, .tier = .default, .catalogue = &.{ "CWE-493", "CWE-500" }, .needs = &.{"finding.public-static-field"} },
+    .{ .name = "public-static-array", .pattern = "'$code' exposes a mutable array as a public constant, which stops the field being replaced but not the array being changed.", .advice = "Keep the array private and return an immutable view or a defensive copy.", .severity = .warning, .tier = .default, .catalogue = &.{ "CWE-582", "CWE-607" }, .needs = &.{"finding.public-static-array"} },
     .{ .name = "missing-super-finalizer", .pattern = "'$code' overrides finalize without calling super.finalize(), so superclass cleanup can be skipped.", .advice = "Remove finalization in favour of explicit resource ownership, or call super.finalize() in a finally block while legacy finalization remains.", .severity = .warning, .tier = .default, .catalogue = &.{"CWE-568"}, .needs = &.{ "finding.missing-super-finalizer", "unless.missing-super-finalizer" } },
     .{ .name = "missing-super-clone", .pattern = "'$code' implements clone without obtaining the copy from super.clone(), so inherited state can be copied incorrectly.", .advice = "Start with super.clone(), or replace Cloneable with an explicit copy constructor or factory.", .severity = .warning, .tier = .default, .catalogue = &.{"CWE-580"}, .needs = &.{ "finding.missing-super-clone", "unless.missing-super-clone" } },
     .{ .name = "public-clone-method", .pattern = "'$code' is a public clone method that subclasses can override, allowing construction to bypass the class's invariants.", .advice = "Make clone final, or replace Cloneable with an explicit copy constructor or factory.", .severity = .warning, .tier = .default, .catalogue = &.{"CWE-491"}, .needs = &.{ "finding.public-clone-method", "unless.public-clone-method" } },
     .{ .name = "thread-run", .pattern = "'$code' calls run() on a new Thread, so the work executes synchronously in the caller instead of starting that thread.", .advice = "Call start(), or submit the task to an application-managed executor.", .severity = .@"error", .tier = .default, .catalogue = &.{"CWE-572"}, .needs = &.{"finding.thread-run"} },
-    .{ .name = "class-name-comparison", .pattern = "'$code' compares class names, which can collide across packages and class loaders.", .advice = "Compare the Class objects directly, or use instanceof when subclasses are valid.", .severity = .@"error", .tier = .default, .catalogue = &.{"CWE-486"}, .needs = &.{"finding.class-name-comparison"} },
-    .{ .name = "equals-without-hashcode", .pattern = "'$code' defines equals but not hashCode, so equal objects can occupy different hash buckets.", .advice = "Implement hashCode from the same fields as equals, and test the equality/hash contract together.", .severity = .@"error", .tier = .default, .catalogue = &.{"CWE-581"}, .needs = &.{ "finding.equals-without-hashcode", "unless.equals-without-hashcode" } },
-    .{ .name = "hashcode-without-equals", .pattern = "'$code' defines hashCode but not equals, so objects with matching value state still compare by identity.", .advice = "Implement equals from the same fields as hashCode, and test the equality/hash contract together.", .severity = .@"error", .tier = .default, .catalogue = &.{"CWE-581"}, .needs = &.{ "finding.hashcode-without-equals", "unless.hashcode-without-equals" } },
+    .{ .name = "class-name-comparison", .pattern = "'$code' compares type names, which can collide across packages, namespaces and class loaders.", .advice = "Compare the types themselves, or test with instanceof or is when subclasses are valid.", .severity = .@"error", .tier = .default, .catalogue = &.{"CWE-486"}, .needs = &.{"finding.class-name-comparison"} },
+    .{ .name = "equals-without-hashcode", .pattern = "'$code' defines equality but not a hash code, so equal objects can occupy different hash buckets.", .advice = "Compute the hash code from the same fields as equality, and test the two together.", .severity = .@"error", .tier = .default, .catalogue = &.{"CWE-581"}, .needs = &.{ "finding.equals-without-hashcode", "unless.equals-without-hashcode" } },
+    .{ .name = "hashcode-without-equals", .pattern = "'$code' defines a hash code but not equality, so objects with matching value state still compare by identity.", .advice = "Define equality from the same fields as the hash code, and test the two together.", .severity = .@"error", .tier = .default, .catalogue = &.{"CWE-581"}, .needs = &.{ "finding.hashcode-without-equals", "unless.hashcode-without-equals" } },
     .{ .name = "struts-public-field", .pattern = "'$code' is a non-private field on a Struts ActionForm, so callers can bypass its accessors and validation.", .advice = "Make the field private and expose it only through the validated bean accessor.", .severity = .warning, .tier = .default, .catalogue = &.{"CWE-608"}, .needs = &.{ "finding.struts-public-field", "unless.struts-public-field" } },
     .{ .name = "suspicious-comment", .advice = "Resolve the defect or incomplete code the marker identifies, then remove the marker; track longer work in the issue system.", .severity = .warning, .tier = .default, .catalogue = &.{"CWE-546"}, .needs = &.{"comment.outer"} },
     .{ .name = "prototype-mutation", .pattern = "'$code' assigns through __proto__, changing inherited behaviour outside the object's declared properties.", .advice = "Use an own data property on an object with a fixed prototype; reject __proto__, constructor and prototype as externally supplied keys.", .severity = .warning, .tier = .default, .catalogue = &.{"CWE-1321"}, .needs = &.{"finding.prototype-mutation"} },
@@ -154,8 +166,10 @@ pub const all = [_]Rule{
     .{ .name = "unfocused-test", .judgement = "would not say why it failed, because it checks several things or one large opaque value", .advice = "Split it up, or assert only on the parts that matter.", .severity = .warning, .tier = .default, .asks = .@"test", .question = "Is this a test case itself, not a fixture, setup or teardown hook or helper, where a failure would not point to an obvious cause, because it checks several unrelated behaviours in one test or asserts on a large opaque value without saying what matters?", .settled_by = &.{"eager-test"} },
     .{ .name = "self-mocking-test", .judgement = "mocks the behaviour it claims to check, so it can pass while the real code fails", .advice = "Exercise the real code, and mock only its external dependencies.", .severity = .warning, .tier = .default, .asks = .@"test", .question = "Is this a test case itself, not a fixture, setup or teardown hook or helper, that could pass while the real code would fail in production, because it mocks or stubs out the very behaviour it claims to test or replaces it with a simplified fake?" },
     .{ .name = "trivial-test", .judgement = "checks something trivial or only the easy path, so passing it says little", .advice = "Test the risky behaviour and edge cases, and make the name match what is verified.", .severity = .warning, .tier = .default, .asks = .@"test", .question = "Is this a test case itself, not a fixture, setup or teardown hook or helper, that would give a reader little confidence the code works even when it passes, because it checks something trivial or incidental, exercises the framework or language rather than the code under test, covers only the easy path of risky behaviour, or claims in its name more than it actually verifies? A fuzz or property test over arbitrary input is not trivial." },
+    .{ .name = "fixture-leaks-state", .judgement = "changes shared state without restoring it, so tests that use it can affect each other", .advice = "Restore the state in teardown, or give each test a temporary copy of it.", .severity = .warning, .tier = .default, .asks = .fixture, .question = "Is this a test fixture, setup or teardown hook or shared test helper that changes global, module, environment, filesystem or database state without restoring it afterwards, so tests that use it can affect each other?" },
+    .{ .name = "fixture-hides-behaviour", .judgement = "replaces the behaviour its tests appear to check, so they pass without exercising it", .advice = "Use the real implementation, and stub only external dependencies.", .severity = .warning, .tier = .default, .asks = .fixture, .question = "Is this a test fixture, setup hook or shared test helper that replaces, mocks or patches the real behaviour that the tests using it appear to be checking, so they pass without exercising it?" },
     .{ .name = "repeated-mechanics", .judgement = "and the functions or tests shaped like it repeat the same mechanics, where a small domain language would say them more readably", .advice = "Write the shared steps once as a builder, helper or table of cases named in the domain's words, so each one says only what differs.", .severity = .information, .tier = .default, .asks = .cluster, .question = "These functions or tests share one structure and differ only in names and values. Would a small domain language, such as a builder, a helper named in the domain's words, a table of cases or a set of matchers, make them clearly more readable than repeating the same mechanics in each? Answer no when the repetition is short, or when each reads plainly as it is." },
-    .{ .name = "relaxed-check", .advice = "Remove it, or fix what the check reports and turn it back on at its strictest.", .severity = .warning, .tier = .default, .catalogue = &.{"EXT-VERIFY-004"} },
+    .{ .name = "relaxed-check", .pattern = "'$code' turns a compiler or analyser check off, so a problem it should catch passes.", .advice = "Remove it, or fix what the check reports and turn it back on at its strictest.", .severity = .warning, .tier = .default, .catalogue = &.{"EXT-VERIFY-004"} },
     .{ .name = "mutable-artifact-reference", .advice = "Pin the artifact by immutable digest or commit, and let an update tool propose reviewed changes.", .severity = .warning, .tier = .default, .catalogue = &.{ "EXT-BUILD-004", "EXT-SUPPLY-002" } },
     .{ .name = "download-execution", .advice = "Download a versioned artifact, verify its published digest or signature, then execute the verified local file.", .severity = .@"error", .tier = .default, .catalogue = &.{ "CWE-494", "CWE-829", "EXT-SUPPLY-004" } },
     .{ .name = "plaintext-config-secret", .advice = "Replace the literal with a reference to an environment variable or secret manager, and rotate any credential already committed.", .severity = .@"error", .tier = .default, .catalogue = &.{ "CWE-256", "CWE-257", "CWE-259", "CWE-260", "CWE-312", "CWE-313", "CWE-526", "CWE-798" } },
@@ -190,8 +204,8 @@ pub const all = [_]Rule{
     .{ .name = "weak-random", .advice = "Use the platform's cryptographically secure random generator for secrets, tokens, nonces and security decisions.", .severity = .@"error", .tier = .default, .catalogue = &.{ "CWE-331", "CWE-332", "CWE-338", "CWE-341" }, .needs = &.{ "call.outer", "call.name" } },
     .{ .name = "constant-random-seed", .advice = "Use an unpredictable operating-system seed for production randomness; keep fixed seeds inside tests or reproducible offline simulations.", .severity = .@"error", .tier = .default, .catalogue = &.{ "CWE-335", "CWE-336", "CWE-337" }, .needs = &.{ "call.outer", "call.name", "call.argument", "literal.constant" } },
     .{ .name = "nested-regex-quantifier", .advice = "Rewrite the repeated group so one input character has only one possible match, or use a linear-time regex engine.", .severity = .@"error", .tier = .default, .catalogue = &.{"CWE-1333"}, .needs = &.{ "call.outer", "call.name", "call.argument", "literal.string" } },
-    .{ .name = "constant-cbc-iv", .advice = "Generate a fresh unpredictable IV for every encryption and store it alongside the ciphertext.", .severity = .@"error", .tier = .default, .catalogue = &.{ "CWE-1204", "CWE-329" }, .needs = &.{ "call.outer", "call.name", "call.argument", "literal.string" } },
-    .{ .name = "constant-aead-nonce", .advice = "Generate a unique nonce for every encryption under a key; never embed or reuse one.", .severity = .@"error", .tier = .default, .catalogue = &.{"CWE-323"}, .needs = &.{ "call.outer", "call.name", "call.argument" } },
+    .{ .name = "constant-cbc-iv", .pattern = "'$code' is a fixed initialization vector, so encrypting with the same key repeats it and reveals relationships between messages.", .advice = "Generate a fresh unpredictable IV for every encryption and store it alongside the ciphertext.", .severity = .@"error", .tier = .default, .catalogue = &.{ "CWE-1204", "CWE-329" }, .needs = &.{ "call.outer", "call.name", "call.argument", "literal.string" } },
+    .{ .name = "constant-aead-nonce", .pattern = "'$code' is a fixed authenticated-encryption nonce, so reuse under the same key breaks confidentiality or authenticity.", .advice = "Generate a unique nonce for every encryption under a key; never embed or reuse one.", .severity = .@"error", .tier = .default, .catalogue = &.{"CWE-323"}, .needs = &.{ "call.outer", "call.name", "call.argument" } },
     .{ .name = "constant-password-salt", .advice = "Generate a unique random salt for each password and store it with that password's derived hash.", .severity = .@"error", .tier = .default, .catalogue = &.{"CWE-760"}, .needs = &.{ "call.outer", "call.name", "call.argument", "literal.string" } },
     .{ .name = "rsa-without-oaep", .advice = "Use RSA-OAEP with an explicit modern digest for RSA encryption, or prefer a modern hybrid-encryption construction.", .severity = .@"error", .tier = .default, .catalogue = &.{"CWE-780"}, .needs = &.{ "call.outer", "call.name", "call.argument" } },
     .{ .name = "parameter-format-string", .advice = "Use a fixed format string and pass the parameter as a value to format, never as the format itself.", .severity = .warning, .tier = .default, .catalogue = &.{"CWE-134"}, .needs = &.{ "call.outer", "call.name", "call.argument", "expression.path", "function.outer", "function.parameter" } },
@@ -216,7 +230,7 @@ pub const all = [_]Rule{
     .{ .name = "process-exit", .advice = "Return an error to the application boundary and let the owner decide how to stop or recover.", .severity = .warning, .tier = .default, .catalogue = &.{"CWE-382"}, .needs = &.{ "call.outer", "call.name" } },
     .{ .name = "obsolete-call", .advice = "Replace it with the supported standard-library API documented for the current language version.", .severity = .warning, .tier = .default, .catalogue = &.{"CWE-477"}, .needs = &.{ "call.outer", "call.name" } },
     .{ .name = "explicit-finalizer", .advice = "Release the resource explicitly with close/deinit, or leave finalization to the runtime.", .severity = .warning, .tier = .default, .catalogue = &.{"CWE-586"}, .needs = &.{ "call.outer", "call.name" } },
-    .{ .name = "shell-command", .advice = "Pass the program and its arguments as a list, without a shell, so no value is parsed as shell syntax.", .severity = .warning, .tier = .default, .catalogue = &.{ "CWE-78", "CWE-88" }, .needs = &.{ "call.outer", "call.name", "call.argument", "literal.string" } },
+    .{ .name = "shell-command", .pattern = "'$code' runs a command line built at runtime through a shell, so a crafted value in it can run other commands.", .advice = "Pass the program and its arguments as a list, without a shell, so no value is parsed as shell syntax.", .severity = .warning, .tier = .default, .catalogue = &.{ "CWE-78", "CWE-88" }, .needs = &.{ "call.outer", "call.name", "call.argument", "literal.string" } },
     .{ .name = "sql-built-from-strings", .advice = "Pass values as query parameters, such as ? or %s placeholders, instead of building the SQL text.", .severity = .@"error", .tier = .default, .catalogue = &.{"CWE-89"}, .needs = &.{ "call.outer", "call.name", "call.argument", "string.built" } },
     .{ .name = "secret-in-log", .advice = "Log that the secret was used, or a redacted form, never its value.", .severity = .@"error", .tier = .default, .catalogue = &.{ "CWE-209", "CWE-215", "CWE-532", "CWE-1295" }, .needs = &.{ "call.outer", "call.name", "expression.path" } },
     .{ .name = "parameter-log-message", .advice = "Use a fixed log message and record caller-controlled data in a structured field after removing line breaks and control characters.", .severity = .warning, .tier = .default, .catalogue = &.{"CWE-117"}, .needs = &.{ "call.outer", "call.name", "call.argument", "expression.path", "function.outer", "function.parameter" } },
@@ -228,11 +242,50 @@ pub const all = [_]Rule{
     .{ .name = "long-file", .advice = "Split the file by responsibility into modules of a few hundred lines.", .severity = .warning, .tier = .default, .catalogue = &.{"CWE-1080"} },
 };
 
+/// The questions zanity.yaml defines or retunes under questions, set once the file is
+/// read; a retuned question here takes the place of the one in `all`.
+pub var custom: []const Rule = &.{};
+
+/// The question zanity.yaml defines or retunes under `name`, if it does.
+pub fn customNamed(name: []const u8) ?*const Rule {
+    if (name.len == 0) assert.panic("looked up a question by an empty name", .{});
+    for (custom) |*rule| if (std.mem.eql(u8, rule.name, name)) return rule;
+    if (custom.len > 0 and custom[0].name.len == 0) assert.panic("the first of {d} questions from zanity.yaml has no name; the reader names each from its key", .{custom.len});
+    return null;
+}
+
 pub fn find(code: []const u8) ?Rule {
     if (code.len == 0) assert.panic("looked up a rule by an empty name; pass a rule name or alias such as 'unbounded-loop'", .{});
-    if (all.len == 0) assert.panic("rules.all is empty, so '{s}' can't be found", .{code});
-    for (all) |r| if (r.answers(code)) return r;
-    return null;
+    if (customNamed(code)) |rule| return rule.*;
+    const i = ruleIndex(code) orelse return null;
+    if (!all[i].answers(code)) assert.panic("'{s}' indexed rule {s}, which doesn't answer to it", .{ code, all[i].name });
+    return all[i];
+}
+
+/// Each rule's position in `all`, by name and by alias, so finding a rule and testing a set take
+/// one lookup however many rules there are.
+const positions = blk: {
+    @setEvalBranchQuota(1_000_000);
+    var count: usize = 0;
+    for (all) |r| count += if (r.alias.len > 0) 2 else 1;
+    var pairs: [count]struct { []const u8, u16 } = undefined;
+    var at: usize = 0;
+    for (all, 0..) |r, i| {
+        pairs[at] = .{ r.name, i };
+        at += 1;
+        if (r.alias.len > 0) {
+            pairs[at] = .{ r.alias, i };
+            at += 1;
+        }
+    }
+    break :blk std.StaticStringMap(u16).initComptime(pairs);
+};
+
+/// The position in `all` of the rule `code` names or aliases.
+pub fn ruleIndex(code: []const u8) ?u16 {
+    if (code.len == 0) assert.panic("looked up a rule by an empty name; pass a rule name or alias such as 'unbounded-loop'", .{});
+    if (all.len > std.math.maxInt(u16)) assert.panic("{d} rules outgrow the u16 positions", .{all.len});
+    return positions.get(code);
 }
 
 pub const max_needs = 8;
@@ -252,6 +305,8 @@ pub fn missing(rule: Rule, has: anytype, out: *[max_needs][]const u8) []const []
 pub const Set = struct {
     buffer: [all.len][]const u8 = undefined,
     len: usize = 0,
+    /// Which rules, by position in `all`, the set holds, so `enabled` is one lookup.
+    held: std.StaticBitSet(all.len) = .empty,
 
     /// Adds the rule `name` or `alias` answers to, every rule for `all`, including those off by
     /// default, or the defaults and the strict rules for `strict`. Returns false when no rule
@@ -293,10 +348,12 @@ pub const Set = struct {
     }
 
     pub fn include(self: *Set, name: []const u8) void {
-        if (find(name) == null) assert.panic("tried to enable '{s}', which is not a rule; check rules.all", .{name});
-        if (self.enabled(name)) return;
+        if (name.len == 0) assert.panic("enabling a rule with an empty name; pass a name from rules.all", .{});
+        const i = ruleIndex(name) orelse assert.panic("tried to enable '{s}', which is not a rule; check rules.all", .{name});
+        if (self.held.isSet(i)) return;
         if (self.len >= all.len) assert.panic("the rule set already holds all {d} rules, yet '{s}' was not among them; include() must check enabled() before adding", .{ all.len, name });
-        self.buffer[self.len] = name;
+        self.held.set(i);
+        self.buffer[self.len] = all[i].name;
         self.len += 1;
     }
 
@@ -306,17 +363,28 @@ pub const Set = struct {
         return self.buffer[0..self.len];
     }
 
+    pub fn same(self: *const Set, other: Set) bool {
+        if (self.len > all.len) assert.panic("the first rule set holds {d} rules but only {d} exist; fix Set.include() to enforce the bound", .{ self.len, all.len });
+        if (other.len > all.len) assert.panic("the second rule set holds {d} rules but only {d} exist; fix Set.include() to enforce the bound", .{ other.len, all.len });
+        if (self.len != other.len) return false;
+        for (self.names(), other.names()) |a, b| if (!std.mem.eql(u8, a, b)) return false;
+        return true;
+    }
+
     pub fn enabled(self: *const Set, name: []const u8) bool {
         if (name.len == 0) assert.panic("asked whether an empty rule name is enabled; pass a rule name", .{});
         if (self.len > all.len) assert.panic("the rule set holds {d} rules but only {d} exist; Set.include() must refuse to add past rules.all.len, so check it", .{ self.len, all.len });
-        for (self.buffer[0..self.len]) |n| if (std.mem.eql(u8, n, name)) return true;
-        return false;
+        // A question of zanity.yaml's own runs whenever --infer does; removing its entry stops it.
+        const i = ruleIndex(name) orelse return customNamed(name) != null;
+        return self.held.isSet(i);
     }
 };
 
 pub const max_function_lines = 60;
 /// A test is read to learn one behaviour, so it gets less room than a function.
 pub const max_test_lines = 50;
+/// A test this long takes reading to follow, so it should say what it checks.
+pub const max_undocumented_test_lines = 20;
 /// Past this many checks, a failing test no longer says which behaviour broke.
 pub const max_test_checks = 10;
 pub const min_asserts_per_function = 2;
@@ -358,3 +426,7 @@ pub const entry_points = [_][]const u8{ "main", "app", "cli", "setup", "teardown
 pub const secret_names = [_][]const u8{ "password", "passwd", "secret", "token", "apikey", "privatekey", "accesskey", "credentials" };
 pub const secret_placeholders = [_][]const u8{ "not-set", "not_set", "dummy", "placeholder", "changeme", "change-me", "xxx" };
 pub const secret_masks = "*xX#.";
+/// Other linters' rules that ban what zanity's own rules require, such as ruff's and bandit's ban
+/// on `assert`, which assertion-density contradicts: turning one off follows zanity, so it isn't a
+/// weakened check.
+pub const contradicted_codes = [_][]const u8{ "S101", "B101" };

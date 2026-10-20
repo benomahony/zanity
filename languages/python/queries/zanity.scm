@@ -208,6 +208,20 @@
     ]
     .)) @catch.swallowed
 
+; A function named as an error handler whose body is empty drops every error passed to it.
+; A decorated one, such as an abstract method, is wrapped in decorated_definition and left alone.
+([
+  (module
+    (function_definition
+      name: (identifier) @_handler
+      body: (block . (pass_statement) .)) @catch.swallowed)
+  (block
+    (function_definition
+      name: (identifier) @_handler
+      body: (block . (pass_statement) .)) @catch.swallowed)
+]
+  (#any-word? @_handler "except" "exception" "catch" "rescue" "error" "err"))
+
 (named_expression
   name: (_) @assignment.lhs
   value: (_) @assignment.rhs) @assignment.outer
@@ -659,4 +673,64 @@
       (function_definition) @visibility.public @method.override
       (decorated_definition
         definition: (function_definition) @visibility.public @method.override)
+    ]))
+
+; CWE-1056: a parameter that takes any number of arguments, in a function at module level or a
+; method of a class that extends nothing. A method of a class that extends another may override
+; one whose signature it must keep, and a function inside a function is usually a decorator's
+; wrapper, where *args and **kwargs pass every call through unchanged.
+(module
+  [
+    (function_definition
+    parameters: (parameters
+      [
+            (list_splat_pattern)
+            (dictionary_splat_pattern)
+            (typed_parameter
+              [
+                (list_splat_pattern)
+                (dictionary_splat_pattern)
+              ])
+          ] @finding.variadic-parameter))
+    (decorated_definition
+      definition: (function_definition
+        parameters: (parameters
+          [
+                (list_splat_pattern)
+                (dictionary_splat_pattern)
+                (typed_parameter
+                  [
+                    (list_splat_pattern)
+                    (dictionary_splat_pattern)
+                  ])
+              ] @finding.variadic-parameter)))
+  ])
+
+(class_definition
+  !superclasses
+  body: (block
+    [
+      (function_definition
+      parameters: (parameters
+        [
+              (list_splat_pattern)
+              (dictionary_splat_pattern)
+              (typed_parameter
+                [
+                  (list_splat_pattern)
+                  (dictionary_splat_pattern)
+                ])
+            ] @finding.variadic-parameter))
+      (decorated_definition
+        definition: (function_definition
+          parameters: (parameters
+            [
+                  (list_splat_pattern)
+                  (dictionary_splat_pattern)
+                  (typed_parameter
+                    [
+                      (list_splat_pattern)
+                      (dictionary_splat_pattern)
+                    ])
+                ] @finding.variadic-parameter)))
     ]))

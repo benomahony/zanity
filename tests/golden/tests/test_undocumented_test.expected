@@ -1,0 +1,3 @@
+rules: undocumented-test
+exit: 0
+test_undocumented_test.py:1:5: warning [undocumented-test]

@@ -1,0 +1,3 @@
+rules: undocumented-test
+exit: 0
+undocumented_test_ts.ts:27:1: warning [undocumented-test]

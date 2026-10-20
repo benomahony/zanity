@@ -81,6 +81,17 @@
     .)) @catch.swallowed
   (#eq? @_err "Err"))
 
+; A function named as an error handler whose body is empty drops every error passed to it.
+((function_item
+  name: (identifier) @_handler
+  body: (block
+    .
+    "{"
+    .
+    "}"
+    .)) @catch.swallowed
+  (#any-word? @_handler "except" "exception" "catch" "rescue" "error" "err"))
+
 (let_declaration
   pattern: "_"
   value: (call_expression)) @catch.swallowed
@@ -323,6 +334,24 @@
   (type_identifier)
 ] @reference.name
 
+; The type an impl block belongs to, which naming there doesn't keep alive, and the trait it
+; implements, which only that type, if reachable, keeps alive.
+(impl_item
+  type: [
+    (type_identifier) @reference.self
+    (generic_type
+      type: (type_identifier) @reference.self)
+  ])
+
+(impl_item
+  trait: [
+    (type_identifier) @reference.held
+    (generic_type
+      type: (type_identifier) @reference.held)
+    (scoped_type_identifier
+      name: (type_identifier) @reference.held)
+  ])
+
 ; Traits, and what types implement them, for single-impl-abstraction.
 (trait_item
   name: (type_identifier) @abstraction.name)
@@ -354,3 +383,29 @@
   operator: ["/" "%"]
   right: [(integer_literal) (float_literal)] @_zero_divisor) @finding.divide-by-zero
   (#any-of? @_zero_divisor "0" "00" "0.0" "0." "0x0" "0o0" "0b0"))
+
+; EXT-VERIFY-004: an attribute that turns a compiler or lint check off, directly or under cfg_attr.
+([
+  (attribute_item
+    (attribute
+      (identifier) @_lint_off))
+  (inner_attribute_item
+    (attribute
+      (identifier) @_lint_off))
+] @finding.relaxed-check
+  (#any-of? @_lint_off "allow" "expect"))
+
+([
+  (attribute_item
+    (attribute
+      (identifier) @_lint_when
+      arguments: (token_tree
+        (identifier) @_lint_off)))
+  (inner_attribute_item
+    (attribute
+      (identifier) @_lint_when
+      arguments: (token_tree
+        (identifier) @_lint_off)))
+] @finding.relaxed-check
+  (#eq? @_lint_when "cfg_attr")
+  (#any-of? @_lint_off "allow" "expect"))

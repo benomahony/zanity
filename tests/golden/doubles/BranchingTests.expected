@@ -1,0 +1,3 @@
+rules: branching-double
+exit: 0
+BranchingTests.cs:10:78: warning [branching-double]

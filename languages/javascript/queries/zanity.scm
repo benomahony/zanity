@@ -134,6 +134,27 @@
     "}"
     .)) @catch.swallowed
 
+; A function named as an error handler whose body is empty drops every error passed to it.
+([
+  (function_declaration
+    name: (identifier) @_handler
+    body: (statement_block
+    .
+    "{"
+    .
+    "}"
+    .))
+  (method_definition
+    name: (property_identifier) @_handler
+    body: (statement_block
+    .
+    "{"
+    .
+    "}"
+    .))
+] @catch.swallowed
+  (#any-word? @_handler "except" "exception" "catch" "rescue" "error" "err"))
+
 ((call_expression
   function: (identifier) @_test
   arguments: (arguments
@@ -619,6 +640,13 @@
 (class_declaration
   name: (identifier) @name) @definition.class
 
+; An ES module, which exports only what it says it does, rather than a script or CommonJS file.
+(program
+  [
+    (import_statement)
+    (export_statement)
+  ] @module.syntax)
+
 [
   (identifier)
   (property_identifier)
@@ -766,3 +794,7 @@
     property: (property_identifier) @_matcher)) @finding.opaque-check @opaque.negated
   (#eq? @_expect "expect")
   (#eq? @_matcher "toBeFalsy"))
+
+; CWE-1056: a parameter that takes any number of arguments.
+(formal_parameters
+  (rest_pattern) @finding.variadic-parameter)

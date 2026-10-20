@@ -2,6 +2,7 @@ const std = @import("std");
 const assert = @import("assert.zig");
 const strings = @import("strings.zig");
 const ts = @import("ts.zig");
+const captures = @import("captures.zig");
 const Allocator = std.mem.Allocator;
 const rules = @import("rules.zig");
 const memory = @import("memory.zig");
@@ -54,6 +55,13 @@ pub const ConceptScratch = struct {
             .words = try .initText(gpa, limits.text_bytes),
         };
     }
+
+    /// Restores configuration that may differ between watched checks.
+    pub fn reset(self: *ConceptScratch) void {
+        self.directional = &default_directional;
+        if (self.directional.len != default_directional.len) assert.panic("reset naming to {d} directional words, expected the {d} defaults", .{ self.directional.len, default_directional.len });
+        if (self.words.buffer.len == 0) assert.panic("reset naming lost its word buffer; reset() retains every allocation", .{});
+    }
 };
 
 pub fn crossCheck(s: *ConceptScratch, facts: *Facts, enabled: rules.Set, findings: *memory.Bounded(Finding)) error{LimitExceeded}!void {
@@ -105,8 +113,22 @@ pub fn closeDefinition(self: *File, ctx: Context) !void {
     const method = std.mem.eql(u8, ctx.kind, "function") and self.innermost(.function) != null and self.definedInClass();
     const member = method or std.mem.eql(u8, ctx.kind, "method") or heldByFunctionOrClass(self, ctx.node);
     const prefixes = self.tables.private_prefixes;
-    const importable = if (prefixes.len > 0) std.mem.indexOfScalar(u8, prefixes, name[0]) == null else public;
+    // A module exports names explicitly; elsewhere a name is importable unless marked private.
+    const importable = if (prefixes.len > 0 and !self.module) std.mem.indexOfScalar(u8, prefixes, name[0]) == null else public;
     try self.work.facts.define(name, if (method) "method" else ctx.kind, .{ .at = .{ at.row, at.column }, .public = public, .member = member, .importable = importable, .unmarked = try unmarkedName(self.work.facts.text, self.work.facts.path, self.tables, name) });
+}
+
+/// Whether any statement of the file is an `import` or `export`: whether `id`, the
+/// @module.syntax capture, is among the file's captures.
+pub fn usesModuleSyntax(id: ?captures.Id, found: []const captures.Triple, source: []const u8) bool {
+    const module = id orelse return false;
+    for (found) |t| {
+        if (t.id != module) continue;
+        if (ts.ts_node_end_byte(t.node) > source.len) assert.panic("an import or export ends at byte {d} of a {d}-byte file; pass the source its captures came from", .{ ts.ts_node_end_byte(t.node), source.len });
+        return true;
+    }
+    if (found.len > 0 and source.len == 0) assert.panic("{d} captures in an empty file; pass the source its captures came from", .{found.len});
+    return false;
 }
 
 fn heldByFunctionOrClass(self: *File, node: ts.Node) bool {

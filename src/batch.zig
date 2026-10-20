@@ -45,7 +45,7 @@ pub const Worker = struct {
     fn startFile(self: *Worker, path: []const u8, name: []const u8, collect_units: bool) void {
         if (path.len == 0 or name.len == 0) assert.panic("starting a worker on path '{s}' in language '{s}'; both must be known before checking", .{ path, name });
         self.text.used = 0;
-        inline for (.{ "definitions", "functions", "calls", "units", "references", "shapes", "abstractions", "implemented" }) |field| @field(self.facts, field).clear();
+        self.facts.reset();
         self.facts.path = path;
         self.facts.language = name;
         self.facts.collect_units = collect_units;
@@ -216,10 +216,11 @@ pub const Batch = struct {
         for (recorded.functions.items()) |f| {
             var kept = f;
             kept.name = try worker.retain(self.text, f.name);
+            kept.types = try worker.retain(self.text, f.types);
             try facts.functions.add(kept);
         }
         for (recorded.calls.items()) |c| {
-            try facts.calls.add(.{ .caller = @intCast(first + c.caller), .callee = try worker.retain(self.text, c.callee), .reach = c.reach });
+            try facts.calls.add(.{ .caller = @intCast(first + c.caller), .callee = try worker.retain(self.text, c.callee), .reach = c.reach, .arguments = c.arguments, .types = try worker.retain(self.text, c.types) });
         }
         for (recorded.shapes.items()) |shape| {
             var kept = shape;
@@ -232,14 +233,8 @@ pub const Batch = struct {
             try facts.abstractions.add(kept);
         }
         for (recorded.implemented.items()) |hash| try facts.implemented.add(hash);
-        const references = recorded.references.items();
-        std.mem.sort(u64, references, {}, std.sort.asc(u64));
-        var previous: ?u64 = null;
-        for (references) |hash| {
-            if (previous == hash) continue;
-            previous = hash;
-            try facts.references.add(hash);
-        }
+        for (recorded.passed.items()) |hash| try facts.passed.add(hash);
+        try facts.addReferences(recorded.references.items());
         for (recorded.units.items()) |u| {
             var kept = u;
             kept.name = try worker.retain(self.text, u.name);
@@ -248,7 +243,7 @@ pub const Batch = struct {
         }
         for (diagnostics) |d| {
             const edit: ?facts_module.Edit = if (d.edit) |e| .{ .start = e.start, .end = e.end, .replacement = try worker.retain(self.text, e.replacement) } else null;
-            try self.findings.add(.{ .path = path, .line = d.line, .column = d.column, .rule = d.rule, .message = try worker.retain(self.text, d.message), .fix = try worker.retain(self.text, d.fix), .edit = edit });
+            try self.findings.add(.{ .path = path, .line = d.line, .column = d.column, .rule = d.rule, .message = try worker.retain(self.text, d.message), .fix = try worker.retain(self.text, d.fix), .edit = edit, .subject = d.subject });
         }
         self.checked += 1;
         if (self.live) |live| live.update("Checking files", self.checked, self.files.len);

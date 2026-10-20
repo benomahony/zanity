@@ -132,7 +132,7 @@ test "the glossary may sit in zanity.yaml" {
 
 test "mistakes in zanity.yaml name the line and what to write" {
     try expectProblem("rules:\n  select: [recursions]\n", "zanity.yaml:2: 'recursions' isn't a rule; the rules are listed in the README, 'all' names every rule, 'strict' the defaults and the strict rules, and 'zanity check --rules' takes the same names.");
-    try expectProblem("\ndisabled: []\n", "zanity.yaml:2: 'disabled' isn't a setting; the settings are exclude, rules, infer and paths, and the glossary's contexts and directional.");
+    try expectProblem("\ndisabled: []\n", "zanity.yaml:2: 'disabled' isn't a setting; the settings are exclude, rules, infer, questions and paths, and the glossary's contexts and directional.");
     try expectProblem("[rules]\n", "zanity.yaml:1: expected a key such as 'name:'; write each setting as name: value.");
     try expectProblem("rules: [all]\n", "zanity.yaml:1: 'rules' takes its settings on the indented lines below it, one name: value per line.");
     try expectProblem("rules:\n  rules: [all]\n", "zanity.yaml:2: 'rules' isn't a rules setting; the settings are select and disable.");
@@ -148,6 +148,37 @@ test "mistakes in zanity.yaml name the line and what to write" {
     try expectProblem("infer:\n  model: \"\"\n", "zanity.yaml:2: 'model' is empty; name one, or remove the line to use the default.");
     try expectProblem("exclude: [\"a\" \"b\"]\n", "zanity.yaml:1: items in 'exclude' must be separated by commas, such as [a, b].");
     try expectProblem("exclude: [*.py]\n", "zanity.yaml:1: a value of 'exclude' starts with '*', which YAML reads as more than text; put the value in quotes.");
+}
+
+test "mistakes in a question name the line and what to write" {
+    try expectProblem("questions:\n  mine:\n    question: Does it?\n    finding: It does\n", "zanity.yaml:2: the question 'mine' has no fix; a question of your own needs a question, a finding and a fix.");
+    try expectProblem("questions:\n  long-function:\n    threshold: 0.9\n", "zanity.yaml:2: 'long-function' is a deterministic rule, not a question, so there is nothing to retune; give your question a name of its own.");
+    try expectProblem("questions:\n  cwe-15:\n    severity: fatal\n", "zanity.yaml:3: severity must be error, warning or information.");
+    try expectProblem("questions:\n  cwe-15:\n    weight: 2\n", "zanity.yaml:3: 'weight' isn't a question setting; the settings are question, finding, fix, severity, asks and threshold.");
+}
+
+test "questions adds a question, or retunes one of zanity's from what it asks" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const c = try parsed(arena_state.allocator(),
+        \\questions:
+        \\  payment-without-key:
+        \\    question: Does the function charge a card without an idempotency key?
+        \\    finding: A card is charged without an idempotency key
+        \\    fix: Pass the order's id as the idempotency key.
+        \\    severity: error
+        \\    threshold: 0.9
+        \\  cwe-15:
+        \\    threshold: 0.95
+        \\
+    );
+    const questions = c.questionRules();
+    try std.testing.expectEqual(@as(usize, 2), questions.len);
+    try std.testing.expectEqualStrings("payment-without-key", questions[0].name);
+    try std.testing.expectEqual(rules.Severity.@"error", questions[0].severity);
+    try std.testing.expectEqual(@as(?f64, 0.9), questions[0].threshold);
+    try std.testing.expectEqualStrings((rules.find("cwe-15") orelse unreachable).question, questions[1].question);
+    try std.testing.expectEqual(@as(?f64, 0.95), questions[1].threshold);
 }
 
 test "a paths entry turns rules off for the files its pattern matches" {

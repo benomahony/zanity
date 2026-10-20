@@ -5,6 +5,9 @@ pub const Entry = struct {
     scanner: bool,
     queries: []const []const u8,
     not_applicable: []const []const u8 = &.{},
+    /// The grammar's C symbol after `tree_sitter_`, when it differs from the name, as
+    /// tree-sitter-c-sharp's `c_sharp` differs from `csharp`.
+    symbol: []const u8 = "",
 };
 
 pub const Tables = struct {
@@ -184,8 +187,15 @@ pub const Tables = struct {
     assertion_value: []const u8 = "",
     /// Whether `$message` sits in a format string in `assertion_form`, where braces must be doubled.
     assertion_braces_doubled: bool = false,
+    /// The type each kind of literal in `types.literal_kinds` has, such as `string` for text.
+    literal_types: LiteralTypes = .{},
+    /// Comment markers that turn a linter's, type checker's or analyser's check off, such as a
+    /// marker naming the rules to ignore on that line.
+    suppression_markers: []const []const u8 = &.{},
     /// What starts a comment that runs to the end of the line; fixes leave TODOs with it.
     line_comment: []const u8 = "",
+    /// Where a test says which behaviour it checks, as the start of a sentence naming the test.
+    test_doc: []const u8 = "Add a comment above",
     /// An affix that marks names the language's protocol defines, such as Python's `__name__`.
     protocol_affix: []const u8 = "",
     /// Prefix bytes that mark a name private by convention, such as `_` in Python.
@@ -198,3 +208,17 @@ pub const SpecificCheck = struct { when: []const u8, check: []const u8, negated:
 
 pub const entries: []const Entry = @import("manifest.zon");
 pub const tables: []const Tables = @import("tables.zon");
+
+/// The type a literal of each kind has, empty where the language has no single such type.
+pub const LiteralTypes = struct {
+    /// A string.
+    text: []const u8 = "",
+    /// A single character.
+    letter: []const u8 = "",
+    /// A whole number without a suffix choosing its size.
+    whole: []const u8 = "",
+    /// A number with a fractional part or exponent, without a suffix choosing its precision.
+    fraction: []const u8 = "",
+    /// `true` or `false`.
+    truth: []const u8 = "",
+};

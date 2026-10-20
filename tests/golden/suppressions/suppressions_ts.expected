@@ -1,0 +1,8 @@
+rules: relaxed-check
+exit: 0
+suppressions_ts.ts:13:1: warning [relaxed-check]
+suppressions_ts.ts:16:1: warning [relaxed-check]
+suppressions_ts.ts:1:1: warning [relaxed-check]
+suppressions_ts.ts:3:3: warning [relaxed-check]
+suppressions_ts.ts:7:1: warning [relaxed-check]
+suppressions_ts.ts:9:3: warning [relaxed-check]

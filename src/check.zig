@@ -13,6 +13,7 @@ const rewrite = @import("rewrite.zig");
 const hazards = @import("hazards.zig");
 const weak = @import("weak.zig");
 const suppress = @import("suppress.zig");
+const types = @import("types.zig");
 const scope = @import("scope.zig");
 const test_quality = @import("test_quality.zig");
 const isolation = @import("isolation.zig");
@@ -36,6 +37,8 @@ pub const Diagnostic = struct {
     fix: []const u8 = "",
     /// The change that makes `fix` happen, when zanity can make it.
     edit: ?facts_module.Edit = null,
+    /// See `Finding.subject`.
+    subject: u64 = 0,
 
     /// Whether `a` is reported before `b`: by line, then column, then rule name.
     pub fn reportedBefore(_: void, a: Diagnostic, b: Diagnostic) bool {
@@ -111,7 +114,8 @@ pub const Context = struct {
     summary: Summary = .none,
 };
 
-const Owned = struct { owner: u32, text: []const u8 };
+/// Something a function owns, such as a local or an unqualified call and how many arguments it passes.
+pub const Owned = struct { owner: u32, text: []const u8, arguments: u32 = 0, types: []const u8 = "" };
 const Weak = struct { owner: u32, line: u32 };
 const Trail = struct { parent: ts.Node.Key, summary: Summary };
 const Suppression = struct { line: u32, start: usize, len: usize };
@@ -129,6 +133,9 @@ pub const FileScratch = struct {
     signature: memory.Bounded(Parameter),
     weak: memory.Bounded(Weak),
     locals: memory.Bounded(Owned),
+    declared: memory.Bounded(types.Declared),
+    /// A declared type waiting for the name it declares, which comes after it.
+    pending_type: ?ts.Node = null,
     bare_calls: memory.Bounded(Owned),
     async_names: memory.Bounded([]const u8),
     statement_calls: memory.Bounded(ts.Node),
@@ -157,6 +164,7 @@ pub const FileScratch = struct {
             .signature = try .initBounded(gpa, limits.per_file, "parameters in one file"),
             .weak = try .initBounded(gpa, limits.per_file, "weak assertions in one file"),
             .locals = try .initBounded(gpa, limits.per_file, "local names in one file"),
+            .declared = try .initBounded(gpa, limits.per_file, "declared names in one file"),
             .bare_calls = try .initBounded(gpa, limits.per_file, "unqualified calls in one file"),
             .async_names = try .initBounded(gpa, limits.per_file, "async functions in one file"),
             .statement_calls = try .initBounded(gpa, limits.per_file, "calls made as statements in one file"),
@@ -172,10 +180,11 @@ pub const FileScratch = struct {
     }
 
     pub fn clearFile(self: *FileScratch) void {
-        inline for (.{ "contexts", "opened", "diagnostics", "suppressions", "codes", "trail", "calls", "signature", "weak", "locals", "bare_calls", "async_names", "statement_calls", "repeats", "writes", "path", "ancestors" }) |field| {
+        inline for (.{ "contexts", "opened", "diagnostics", "suppressions", "codes", "trail", "calls", "signature", "weak", "locals", "declared", "bare_calls", "async_names", "statement_calls", "repeats", "writes", "path", "ancestors" }) |field| {
             @field(self, field).clear();
         }
         self.names.reset();
+        self.pending_type = null;
         if (self.contexts.len != 0) assert.panic("clearing the per-file scratch left {d} open constructs; clearFile() must clear contexts, so add it to the field list there", .{self.contexts.len});
         if (self.diagnostics.len != 0) assert.panic("clearing the per-file scratch left {d} findings; clearFile() must clear diagnostics, so add it to the field list there", .{self.diagnostics.len});
     }
@@ -189,6 +198,10 @@ pub const Work = struct {
 
 const Vocabulary = struct {
     comment: ?captures.Id,
+    /// A type naming the type of the expression it belongs to, such as a construction's.
+    type_of: ?captures.Id,
+    /// Literals of each of `types.literal_kinds`.
+    type_literals: [types.literal_kinds.len]?captures.Id,
     literal_true: ?captures.Id,
     literal_constant: ?captures.Id,
     literal_falsy: ?captures.Id,
@@ -222,6 +235,7 @@ const Vocabulary = struct {
     reference_name: ?captures.Id,
     abstraction_name: ?captures.Id,
     implementation_base: ?captures.Id,
+    reference_passed: ?captures.Id,
     visibility_public: ?captures.Id,
     opaque_negated: ?captures.Id,
     opaque_left: ?captures.Id,
@@ -229,6 +243,7 @@ const Vocabulary = struct {
     opaque_right: ?captures.Id,
     double_behaviour: ?captures.Id,
     double_branch: ?captures.Id,
+    call_verification: ?captures.Id,
     storage_read: ?captures.Id,
 
     fn lookup(c: captures.Compiled) Vocabulary {
@@ -236,6 +251,8 @@ const Vocabulary = struct {
         if (c.predicates.len == 0) assert.panic("the query has {d} captures but no patterns; check the language's query files listed in languages/manifest.zon", .{c.names.len});
         return .{
             .comment = c.id("comment.outer"),
+            .type_of = c.id("type.of"),
+            .type_literals = types.literalIds(c),
             .literal_true = c.id("literal.true"),
             .literal_constant = c.id("literal.constant"),
             .literal_falsy = c.id("literal.falsy"),
@@ -269,6 +286,7 @@ const Vocabulary = struct {
             .reference_name = c.id("reference.name"),
             .abstraction_name = c.id("abstraction.name"),
             .implementation_base = c.id("implementation.base"),
+            .reference_passed = c.id("reference.passed"),
             .visibility_public = c.id("visibility.public"),
             .opaque_negated = c.id("opaque.negated"),
             .opaque_left = c.id("opaque.left"),
@@ -276,6 +294,7 @@ const Vocabulary = struct {
             .opaque_right = c.id("opaque.right"),
             .double_behaviour = c.id("double.behaviour"),
             .double_branch = c.id("double.branch"),
+            .call_verification = c.id("call.verification"),
             .storage_read = c.id("storage.read"),
         };
     }
@@ -327,8 +346,9 @@ pub const Checker = struct {
             .index = try captures.index(&work.scratch.captures, self.compiled, root, source),
         };
         try suppress.collectSuppressions(&file);
-        try hazards.checkSuspiciousComments(&file);
+        try hazards.checkComments(&file);
         file.code_lines = file.codeLines();
+        file.module = naming.usesModuleSyntax(self.compiled.id("module.syntax"), file.index.triples, source);
         if (ts.ts_node_has_error(root)) {
             _ = try file.report(root, "parse-error", "zanity couldn't fully parse this file, so some findings may be missing.");
         }
@@ -354,6 +374,8 @@ pub const File = struct {
     source: []const u8,
     index: captures.Index,
     code_lines: []const bool = &.{},
+    /// Whether the file uses `import` or `export`, so only what it exports leaves it.
+    module: bool = false,
     serials: u32 = 0,
     /// Where the walk's capture lookups have reached in `index`.
     next_capture: usize = 0,
@@ -437,6 +459,7 @@ pub const File = struct {
         }
         if (std.mem.eql(u8, name.part, "outer")) return;
         if (std.mem.eql(u8, name.family, "parameter")) return self.parameter(name.part, node);
+        if (std.mem.eql(u8, name.family, "type")) return types.capture(self, name.part, node);
         if (std.mem.eql(u8, name.family, "local.definition") and (std.mem.eql(u8, name.part, "var") or std.mem.eql(u8, name.part, "parameter"))) {
             if (self.innermost(.function)) |function| try self.s.locals.add(.{ .owner = function.serial, .text = node.text(self.source) });
             if (std.mem.eql(u8, name.part, "parameter")) try self.parameter("name", node);
@@ -810,10 +833,10 @@ pub const File = struct {
         const caller = function.fact orelse return;
         if (ctx.receiver) |receiver| {
             if (!contains(self.tables.self_receivers, receiver.text(self.source))) return;
-            try self.work.facts.call(caller, name, .methods);
+            try self.work.facts.call(.{ .caller = caller, .callee = name, .reach = .methods, .arguments = ctx.argument_count, .types = try types.ofArguments(self, &ctx) });
             return;
         }
-        try self.s.bare_calls.add(.{ .owner = function.serial, .text = name });
+        try self.s.bare_calls.add(.{ .owner = function.serial, .text = name, .arguments = ctx.argument_count, .types = try types.ofArguments(self, &ctx) });
     }
 
     pub fn inAssertionCondition(self: *File, node: ts.Node) bool {
@@ -948,25 +971,9 @@ pub const File = struct {
         return false;
     }
 
-    pub fn resolveBareCalls(self: *File, ctx: Context) !void {
-        const caller = ctx.fact orelse return;
-        if (ctx.family != .function) assert.panic("{s}: resolving the calls of {f}, which is a {t}, not a function; call resolveBareCalls() only from closeFunction()", .{ self.work.facts.path, ctx.node.where(), ctx.family });
-        const reach: facts_module.Reach = if (self.tables.methods_need_receiver) .functions else .any;
-        const locals = self.s.locals.items();
-        const calls = self.s.bare_calls.items();
-        if (ctx.owned_start > calls.len or ctx.owned_start > locals.len) assert.panic("{s}: {f} owns calls and locals from {d}, but only {d} calls and {d} locals are recorded; open() must set owned_start from those lists' lengths when the function opens", .{ self.work.facts.path, ctx.node.where(), ctx.owned_start, calls.len, locals.len });
-        outer: for (calls[ctx.owned_start..]) |call| {
-            if (call.owner != ctx.serial) continue;
-            for (locals[ctx.owned_start..]) |local| {
-                if (local.owner == ctx.serial and sameText(local.text, call.text)) continue :outer;
-            }
-            try self.work.facts.call(caller, call.text, reach);
-        }
-    }
-
     pub fn closeFunction(self: *File, ctx: Context) !void {
         if (ctx.family != .function) assert.panic("{s}: closing {f} as a function, but it is a {t}; close() must dispatch each construct by its family, so check its switch", .{ self.work.facts.path, ctx.node.where(), ctx.family });
-        try self.resolveBareCalls(ctx);
+        try notes.resolveBareCalls(self, ctx);
         const name_node = ctx.name orelse return;
         const name = name_node.text(self.source);
         if (name.len == 0) assert.panic("{s}: @function.name matched the empty {f}; capture the function's identifier", .{ self.work.facts.path, name_node.where() });
@@ -984,7 +991,13 @@ pub const File = struct {
         }
         if (self.work.facts.collect_units and !self.index.marks(ctx.node, self.v.test_outer)) {
             const at = ts.ts_node_start_point(name_node);
-            try self.work.facts.unit(name, ctx.span.text(self.source), .{ .kind = if (ctx.is_test) .@"test" else .function, .reports_error = ctx.has_message, .at = .{ at.row, at.column, last } });
+            const kind: facts_module.UnitKind = if (ctx.is_test) .@"test" else if (self.inTestFile()) .fixture else .function;
+            var span = ctx.span;
+            if (kind == .fixture) if (self.parentOf(span)) |parent| {
+                const starts_before = ts.ts_node_start_byte(parent) < ts.ts_node_start_byte(span);
+                if (starts_before and ts.ts_node_end_byte(parent) == ts.ts_node_end_byte(span)) span = parent;
+            };
+            try self.work.facts.unit(name, span.text(self.source), .{ .kind = kind, .reports_error = ctx.has_message, .at = .{ at.row, at.column, last } });
         }
     }
 

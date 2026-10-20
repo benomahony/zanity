@@ -63,6 +63,17 @@
     "}"
     .)) @catch.swallowed
 
+; A function named as an error handler whose body is empty drops every error passed to it.
+((method_declaration
+  name: (identifier) @_handler
+  body: (block
+    .
+    "{"
+    .
+    "}"
+    .)) @catch.swallowed
+  (#any-word? @_handler "except" "exception" "catch" "rescue" "error" "err"))
+
 ((method_declaration
   (modifiers
     [
@@ -602,3 +613,106 @@
         .)))) @finding.opaque-check @opaque.negated
   (#eq? @_check "assertFalse")
   (#eq? @opaque.key "equals"))
+
+; CWE-1056: a parameter that takes any number of arguments.
+(spread_parameter) @finding.variadic-parameter
+
+; EXT-VERIFY-004: an annotation that turns a compiler or analyser check off.
+((annotation
+  name: [
+    (identifier) @_lint_off
+    (scoped_identifier
+      name: (identifier) @_lint_off)
+  ]) @finding.relaxed-check
+  (#any-of? @_lint_off "SuppressWarnings" "SuppressFBWarnings" "SuppressLint"))
+
+; Types evident in code, so a call can tell apart overloads taking as many parameters as it passes
+; arguments: each parameter's and local's declared type, `var`'s from a construction, and the type
+; a literal, construction or cast passed as an argument plainly has. An array construction's type
+; field holds only its element type, so it says nothing.
+(formal_parameter
+  type: (_) @type.declared
+  name: (identifier) @type.name)
+
+((local_variable_declaration
+  type: (_) @type.declared
+  declarator: (variable_declarator
+    name: (identifier) @type.name))
+  (#not-eq? @type.declared "var"))
+
+((local_variable_declaration
+  type: (type_identifier) @_var
+  declarator: (variable_declarator
+    name: (identifier) @type.name
+    value: (object_creation_expression
+      type: (_) @type.declared)))
+  (#eq? @_var "var"))
+
+(argument_list
+  [
+    (object_creation_expression
+      type: (_) @type.of)
+    (cast_expression
+      type: (_) @type.of)
+  ])
+
+(argument_list
+  (string_literal) @type.text)
+
+(argument_list
+  (character_literal) @type.letter)
+
+((argument_list
+  (decimal_integer_literal) @type.whole)
+  (#not-any-suffix? @type.whole "l" "L"))
+
+((argument_list
+  (decimal_floating_point_literal) @type.fraction)
+  (#not-any-suffix? @type.fraction "f" "F"))
+
+(argument_list
+  [
+    (true)
+    (false)
+  ] @type.truth)
+
+; Methods whose parameters something else decides, for dead-parameter: an interface's default
+; methods, public methods of a class, record or enum that extends or implements a type, which can
+; implement an interface method without @Override, and methods of an anonymous class.
+(interface_declaration
+  body: (interface_body
+    (method_declaration) @method.override))
+
+(class_declaration
+  [
+    (superclass)
+    (super_interfaces)
+  ]
+  body: (class_body
+    (method_declaration
+      (modifiers
+        "public")) @method.override))
+
+(record_declaration
+  (super_interfaces)
+  body: (class_body
+    (method_declaration
+      (modifiers
+        "public")) @method.override))
+
+(enum_declaration
+  (super_interfaces)
+  body: (enum_body
+    (enum_body_declarations
+      (method_declaration
+        (modifiers
+          "public")) @method.override)))
+
+(object_creation_expression
+  (class_body
+    (method_declaration) @method.override))
+
+; A method passed by reference, `Calculator::cost`: the functional interface it is passed as fixes
+; its parameters, so dead-parameter leaves it alone even when the reference is in another file.
+(method_reference
+  (identifier) @reference.passed .)

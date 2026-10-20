@@ -167,9 +167,36 @@ const Lookup = struct {
         return self.sorted[lo..hi];
     }
 
+    /// A call resolves as `placed` does, and among those candidates only to the ones that fit it
+    /// best: that take as many parameters as it passes arguments, so `Emit(event)` inside the
+    /// five-parameter overload `Emit` reaches the one-parameter `Emit`, not itself; and of those,
+    /// the ones whose parameter types its arguments plainly have, so `Sign("text")` reaches
+    /// `Sign(string)` and not `Sign(byte[])`. When none fit, as with default arguments, Python's
+    /// `self` or an argument of a subtype, it reaches them all.
+    fn accepts(self: Lookup, c: u32) bool {
+        if (c >= self.functions.len) assert.panic("call to '{s}' resolved to function {d}, but only {d} are recorded; resolve calls only against the recorded functions", .{ self.call.callee, c, self.functions.len });
+        if (!self.placed(c)) return false;
+        const own = self.fit(c);
+        for (self.candidates()) |other| {
+            if (other != c and self.fit(other) > own and self.placed(other)) return false;
+        }
+        if (own > 2) assert.panic("function {d} fits the call to '{s}' at level {d}; fit() has levels 0 to 2", .{ c, self.call.callee, own });
+        return true;
+    }
+
+    /// How well function `c` fits the call: 0 when it takes another number of parameters, 1 when
+    /// it takes as many as the call passes arguments, 2 when their types agree as well.
+    fn fit(self: Lookup, c: u32) u2 {
+        if (c >= self.functions.len) assert.panic("fitting function {d} to the call to '{s}', but only {d} are recorded; fit only candidates()", .{ c, self.call.callee, self.functions.len });
+        const function = self.functions[c];
+        if (!std.mem.eql(u8, function.name, self.call.callee)) assert.panic("fitting '{s}' to a call to '{s}'; fit only candidates(), which share the call's name", .{ function.name, self.call.callee });
+        if (function.parameters != self.call.arguments) return 0;
+        return if (facts_module.typesAgree(self.call.types, function.types)) 2 else 1;
+    }
+
     /// A call resolves to same-file candidates when there are any, and only
     /// to functions or methods when the call syntax says which it must be.
-    fn accepts(self: Lookup, c: u32) bool {
+    fn placed(self: Lookup, c: u32) bool {
         const caller_path = self.functions[self.call.caller].path;
         if (c >= self.functions.len) assert.panic("call to '{s}' resolved to function {d}, but only {d} are recorded; resolve calls only against the recorded functions", .{ self.call.callee, c, self.functions.len });
         if (!reaches(self.call.reach, self.functions[c].method)) return false;
@@ -235,4 +262,32 @@ test "cycles are found without recursion" {
     for (found) |c| members += c.members.len;
     try std.testing.expectEqual(@as(usize, 2), found.len);
     try std.testing.expectEqual(@as(usize, 3), members);
+}
+
+test "a call reaches the overload whose parameters fit its arguments, or every overload when none do" {
+    const functions = [_]Function{
+        .{ .path = "a.cs", .name = "Emit", .method = true, .line = 1, .column = 1, .parameters = 1 },
+        .{ .path = "a.cs", .name = "Emit", .method = true, .line = 9, .column = 1, .parameters = 5 },
+    };
+    const sorted = [_]u32{ 0, 1 };
+    const fitting: Lookup = .{ .functions = &functions, .sorted = &sorted, .call = .{ .caller = 1, .callee = "Emit", .reach = .any, .arguments = 1 } };
+    try std.testing.expectEqual(true, fitting.accepts(0));
+    try std.testing.expectEqual(false, fitting.accepts(1));
+    const unfitting: Lookup = .{ .functions = &functions, .sorted = &sorted, .call = .{ .caller = 1, .callee = "Emit", .reach = .any, .arguments = 3 } };
+    try std.testing.expectEqual(true, unfitting.accepts(0));
+    try std.testing.expectEqual(true, unfitting.accepts(1));
+}
+
+test "among overloads that fit its arguments, a call reaches the ones whose types they plainly have" {
+    const functions = [_]Function{
+        .{ .path = "a.cs", .name = "Sign", .method = true, .line = 1, .column = 1, .parameters = 1, .types = "string" },
+        .{ .path = "a.cs", .name = "Sign", .method = true, .line = 9, .column = 1, .parameters = 1, .types = "byte[]" },
+    };
+    const sorted = [_]u32{ 0, 1 };
+    const text: Lookup = .{ .functions = &functions, .sorted = &sorted, .call = .{ .caller = 1, .callee = "Sign", .reach = .any, .arguments = 1, .types = "string" } };
+    try std.testing.expectEqual(true, text.accepts(0));
+    try std.testing.expectEqual(false, text.accepts(1));
+    const unknown: Lookup = .{ .functions = &functions, .sorted = &sorted, .call = .{ .caller = 1, .callee = "Sign", .reach = .any, .arguments = 1 } };
+    try std.testing.expectEqual(true, unknown.accepts(0));
+    try std.testing.expectEqual(true, unknown.accepts(1));
 }

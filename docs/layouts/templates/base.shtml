@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head id="head">
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<title :text="$page.title.suffix(' · zanity')"></title>
+		<meta name="description" content="zanity: fast, deterministic sanity checks for code written by people and agents">
+		<link rel="stylesheet" href="$site.asset('style.css').link()">
+		<super>
+	</head>
+	<body>
+		<div class="layout">
+			<nav class="sidebar">
+				<a class="brand" href="$site.page('').link()">
+					<span class="logo">zanity</span>
+					<span class="tagline">sanity checks for code</span>
+				</a>
+				<ul>
+					<li><a href="$site.page('').link()">Introduction</a></li>
+					<li><a href="$site.page('rules').link()">Rules</a></li>
+					<li>
+						<a href="$site.page('comparison').link()">Comparisons</a>
+						<ul :loop="$site.page('comparison').subpages()">
+							<li><a href="$loop.it.link()" :text="$loop.it.title"></a></li>
+						</ul>
+					</li>
+				</ul>
+				<div class="external">
+					<a href="https://github.com/benomahony/zanity">Source</a>
+					<a href="https://github.com/benomahony/zanity/releases">Releases</a>
+				</div>
+			</nav>
+			<main id="main">
+				<super>
+			</main>
+		</div>
+	</body>
+</html>

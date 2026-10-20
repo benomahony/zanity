@@ -4,7 +4,7 @@
 
 Fast, deterministic sanity checks for code written by people and agents.
 
-zanity checks Python, Zig, Go, TypeScript, Rust and Java for the mistakes that make code unsafe, untestable or hard to follow: unbounded loops, functions with no assertions, tests that sleep or touch the network, error messages that don't say what to do, and dozens more. It parses each file once with [tree-sitter](https://tree-sitter.github.io) and runs every rule in a single pass, so checking a whole repository takes moments. It is one static binary with no runtime to install, and checking never touches the network, unless you add `--infer` to have a language model judge what code structure can't, such as whether an error message misleads.
+zanity checks Python, Zig, Go, TypeScript, Rust, Java and C# for the mistakes that make code unsafe, untestable or hard to follow: unbounded loops, functions with no assertions, tests that sleep or touch the network, error messages that don't say what to do, and dozens more. It parses each file once with [tree-sitter](https://tree-sitter.github.io) and runs every rule in a single pass, so checking a whole repository takes moments. It is one static binary with no runtime to install, and checking never touches the network, unless you add `--infer` to have a language model judge what code structure can't, such as whether an error message misleads.
 
 ```console
 $ zanity check src
@@ -92,7 +92,7 @@ It writes every setting with notes on what it does, excludes the vendored and fi
 
 Once `zanity check .` is clean, keep it that way with `--fail-on warning`, which fails on warnings as well as errors. That is what a pre-commit hook or CI should run.
 
-When the deterministic checks pass, try `--infer` to have a language model judge your error messages too; see [Judging error messages with `--infer`](#judging-error-messages-with---infer).
+When the deterministic checks pass, try `--infer` to have a language model judge your error messages too; see [Judging what structure can't settle with `--infer`](#judging-what-structure-cant-settle-with---infer).
 
 ### Pre-commit
 
@@ -151,6 +151,7 @@ zanity check . --rules all                    # every rule, including those off 
 zanity check . --strict                       # also the strict rules, such as assertion density
 zanity check . --fail-on warning              # exit 1 on warnings too
 zanity check . --fix                          # apply the fixes zanity can make, then report the rest
+zanity check . --watch                        # check again on every save, until Ctrl-C
 zanity check . --json                         # a JSON array, one object per finding
 zanity check . --plain                        # stable key=value lines for scripts
 zanity check . --agent                        # findings laid out for a coding agent to act on
@@ -159,9 +160,9 @@ zanity lsp                                    # serve findings and fixes to an e
 zanity help check                             # every option
 ```
 
-`check` exits 0 when nothing fired, 1 when an error-level rule fired (or any rule, with `--fail-on warning`), and 2 on a usage error such as a mistake in `zanity.yaml`. Findings go to stdout and the one-line summary to stderr, so output can be piped cleanly. On a terminal the report reads like a coverage report: the first ten findings, errors first, one line each, then a table of the files with the most errors and warnings and the rule that fired most in each, the rest of the files on one row, and a total. How to fix each finding is in `--agent`, `--plain` and `--json`; when zanity can make the fix itself, `--json` and `--plain` also give the edit, as `edit_start` and `edit_end` (byte offsets into the file) and `edit_text`, its replacement. A progress line shows how far a long run has got; `-q` hides it, and it never appears in piped output. `--no-color` or `NO_COLOR` turns colour off.
+`check` exits 0 when nothing fired, 1 when an error-level rule fired (or any rule, with `--fail-on warning`), and 2 on a usage error such as a mistake in `zanity.yaml`. Findings go to stdout and the one-line summary to stderr, so output can be piped cleanly. On a terminal the report reads like a coverage report: the first ten findings, errors first, one line each, then a table of the files with the most errors and warnings and the rule that fired most in each, the rest of the files on one row, and a total. How to fix each finding is in `--agent`, `--plain` and `--json`; when zanity can make the fix itself, `--json` and `--plain` also give the edit, as `edit_start` and `edit_end` (byte offsets into the file) and `edit_text`, its replacement. A progress line shows how far a long run has got; `-q` hides it, and it never appears in piped output. `--no-color` or `NO_COLOR` turns colour off. `--watch` checks again whenever a file it checks, `zanity.yaml` or `ddd.yaml`, is saved, added or removed: the operating system reports the change (FSEvents on macOS, inotify on Linux, directory change notifications on Windows), so nothing is polled, and writes to ignored files such as build output don't start a check. The checker and its workers stay resident between saves, while the cache means only changed files are parsed again; whole-project rules are recomputed from all cached facts. Each check prints the `--agent` report, each finding's line, column and fix, unless `--json` or `--plain` is given. Each check reads `zanity.yaml` and `ddd.yaml` afresh, but which files are watched is settled when `--watch` starts, so restart it after changing `exclude`. `--infer` and `--fix` use isolated reruns because they have external or mutating state.
 
-`--agent` writes for a coding agent, in about 1% of the bytes of the terminal report once a run has more than a handful of findings: the totals and the command to run next, then the first findings in rule order, errors first, each as `line:column` and its own fix (or its message, without the explanation every finding of its rule shares), with `[--fix]` on those zanity can fix itself. `--limit N` sets how many findings it shows in all (10 by default, 0 for every one); the rules past them are listed by name and count, to look at with `--rules <name>`. It is on by default under Claude Code (when `CLAUDECODE` is set) unless `--json` or `--plain` is given; `ZANITY_AGENT=1` turns it on for any other agent.
+`--agent` writes for a coding agent, in about 1% of the bytes of the terminal report once a run has more than a handful of findings: the totals and the command to run next, then the first findings in rule order, errors first, each as `line:column` and its own fix (or its message, without the explanation every finding of its rule shares), with `[--fix]` on those zanity can fix itself. It tells the agent to resolve every finding in code. When the behaviour is already correct, the agent must refactor it so that correctness is explicit enough for the rule to verify, rather than suppressing the finding, disabling its rule or excluding its path. `--limit N` sets how many findings it shows in all (10 by default, 0 for every one); the rules past them are listed by name and count, to look at with `--rules <name>`. It is on by default under Claude Code (when `CLAUDECODE` is set) unless `--json` or `--plain` is given; `ZANITY_AGENT=1` turns it on for any other agent.
 
 ### Deterministic cache
 
@@ -185,7 +186,9 @@ sqlite3 ~/.cache/zanity/zanity.db "
 
 - **zanity: fix &lt;rule&gt;**, the edit `--fix` would make, for each finding zanity can fix;
 - **zanity: fix all N in this file**, every such edit in the file at once (kind `source.fixAll.zanity`, so an editor can run it on save);
-- **zanity: flag &lt;rule&gt; here as a false positive**, for any finding that is wrong.
+- **zanity: flag &lt;rule&gt; here as a false positive**, for any deterministic finding that is wrong.
+
+`zanity lsp --infer` also asks the model on every check, as `zanity check --infer` does; its answers are cached, so after the first check only edited code is asked. A finding the model made offers **zanity: &lt;rule&gt; is not a problem here**, which hides it and stops it being reported for that function, and **zanity: confirm &lt;rule&gt; here**, the same marks `zanity mark` makes.
 
 A flag hides the finding for the rest of the session and keeps it, with the line of code it was about and the zanity version, in the `false_positives` table of `~/.cache/zanity/zanity.db`, so the rule can be made more precise:
 
@@ -196,7 +199,7 @@ sqlite3 ~/.cache/zanity/zanity.db "SELECT rule, path, line, code, message FROM f
 A file edited since the last check offers no actions until it is saved, since its findings may have moved. In Neovim:
 
 ```lua
-vim.lsp.config("zanity", { cmd = { "zanity", "lsp" }, root_markers = { "zanity.yaml", "ddd.yaml", ".git" }, filetypes = { "python", "zig", "go", "rust", "java", "javascript", "typescript" } })
+vim.lsp.config("zanity", { cmd = { "zanity", "lsp" }, root_markers = { "zanity.yaml", "ddd.yaml", ".git" }, filetypes = { "python", "zig", "go", "rust", "java", "cs", "javascript", "typescript" } })
 vim.lsp.enable("zanity")
 ```
 
@@ -261,6 +264,13 @@ And every test case:
 | `self-mocking-test` | mocks the behaviour it claims to check | |
 | `trivial-test` | checks something trivial or only the easy path | |
 
+And each non-test function in a test file, including fixtures, setup and teardown hooks, and shared helpers:
+
+| Rule | Asks whether test support code |
+|---|---|
+| `fixture-leaks-state` | changes shared state without restoring it, so tests can affect each other |
+| `fixture-hides-behaviour` | replaces the behaviour its tests appear to check |
+
 Each cluster of three or more functions, or three or more tests, with the same structure is asked once:
 
 | Rule | Asks whether the cluster |
@@ -269,11 +279,15 @@ Each cluster of three or more functions, or three or more tests, with the same s
 
 Its fix names the members and what varies between them, which is what that builder or table would take.
 
+And for each family of the [engineering error catalogue](https://github.com/benomahony/zanity/tree/main/catalogue) that no deterministic rule detects, 327 in all, from CWE weaknesses such as `cwe-22` (a path built from input that can escape its directory) to engineering ones such as `ext-distributed-001` (a side effect a retry repeats), one question about each function, each whole file, or the project's build and CI files. Each is a rule named for its family, listed on the [rules page](https://benomahony.github.io/zanity/rules/#catalogue-questions); select or disable them by name like any rule. Families a rule already detects are never asked about, and families only C, C++, PHP or Perl can have are left out. They add hundreds of questions to each function the first time it is seen, so the first run costs more; after that only edited code is asked again.
+
 A finding is reported when the model is at least 80% sure, and says how sure it was. `threshold` under `infer` in `zanity.yaml` changes that: `threshold: 0.9` reports only what it is at least 90% sure of, and a lower value reports more.
 
-**What is sent**, to the server you chose: the source of each function and test, the first three bodies of each cluster, and only the questions that apply to it and that no deterministic check already answered there: the error-message questions only about functions that raise, return or log an error. Nothing else leaves your machine, and without `--infer` nothing does at all.
+**What is sent**, to the server you chose: the source of each function, fixture or test, each source file for the catalogue's file questions, the first three bodies of each cluster, and only the questions that apply to it and that no deterministic check already answered there: the error-message questions only about functions that raise, return or log an error, and the fixture questions only about non-test functions in test files. Nothing else leaves your machine, and without `--infer` nothing does at all.
 
 **Cost and speed:** answers are cached in a SQLite file, `~/.cache/zanity/zanity.db` (or wherever `ZANITY_STORE` points), keyed by the function's source, so unchanged code is never asked about twice and a second run is instant. A progress line shows how many functions are answered and how long the rest will take. `concurrency` under `infer` in `zanity.yaml` sets how many requests run at once (default 8, up to 64).
+
+**Calibrating the questions:** `zanity mark app.py:12 cwe-15 --not-a-problem` says a finding is wrong for that function, so it is never reported there again, and `--confirm` says it is real. `zanity review cwe-15` lists unlabelled answers to mark, spread evenly from unsure to sure, so the labels cover what the model missed as well as what it found. `zanity stats` shows how often each question fires and how many of its answers are unsure (between 0.35 and 0.65; a well-posed question has few), and `zanity stats --thresholds` measures each marked question's precision and recall at a range of thresholds, to pick a `threshold` for it under its name in `questions`.
 
 **Querying what the model said:** each run also keeps every answer in the store, including the ones below the threshold, in `observations` (one row per question, function and place, with the probability, the threshold and whether it fired) and a row in `runs` with the tokens it used. Any SQLite client can read them; with [DuckDB](https://duckdb.org):
 
@@ -308,6 +322,19 @@ infer:
   concurrency: 16
   # How sure the model must be for a judgement to become a finding (above 0 up to 1, default 0.8).
   threshold: 0.9
+
+# A question of your own for --infer: keyed by its rule's name, with the question, what a
+# finding says and how to fix it. severity (default warning), asks (default function; or
+# errors, fixture, test, file or project) and threshold are optional.
+questions:
+  payment-without-key:
+    question: Does the function charge a card without an idempotency key?
+    finding: A card is charged without an idempotency key
+    fix: Pass the order's id as the payment's idempotency key.
+    severity: error
+  # Naming one of zanity's questions retunes it instead: give only what changes.
+  cwe-15:
+    threshold: 0.95
 
 # Rules that don't report in some files: one entry per pattern, in .gitignore syntax, relative
 # to this file.
@@ -380,6 +407,7 @@ value = eval(text)  # zanity: ignore[forbidden-call]
 | JavaScript | `.js` `.mjs` `.cjs` `.jsx` |
 | Rust | `.rs` |
 | Java | `.java` |
+| C# | `.cs` `.csx` |
 
 Every rule runs on every language where it means something; `dynamic-allocation`, for example, only applies where memory is managed by hand.
 
@@ -417,6 +445,8 @@ Rules marked *strict* hold code to what safety-critical software needs and most 
 | `extractable-block` | information | in a long function, the longest run of statements that reads at most four names from before it, sets at most one read after it, and doesn't return or break out, so it can become a function of its own; with long-function on, it becomes that finding's fix |
 | `swallowed-error` | warning | an error handler that does nothing |
 | `empty-block` | warning | an empty block where code was expected |
+| `goto-statement` | warning | a `goto`, which makes control flow hard to follow |
+| `variadic-parameter` | information, *strict* | a parameter that takes any number of arguments, outside decorator wrappers and methods that may override one |
 | `deep-nesting` | warning | code nested too deep to follow |
 | `complex-function` | warning | a function or test with too many paths through it |
 | `long-file` | warning | a file too long to hold in mind |
@@ -426,6 +456,7 @@ Rules marked *strict* hold code to what safety-critical software needs and most 
 | Rule | Severity | Flags |
 |---|---|---|
 | `long-test` | warning | a test with 50 or more lines of code, not counting blank and comment lines |
+| `undocumented-test` | warning | a test with 20 or more lines of code and no docstring, comment or sentence for a name saying which behaviour it checks |
 | `eager-test` | warning | a test that makes more than 10 checks, counting assertions and test-framework checks such as `expect` and `assertEquals` |
 | `sleep-in-test` | warning | a test that waits on the clock |
 | `polling-loop` | warning | a loop in a test that polls with a sleep |
@@ -461,7 +492,7 @@ Rules marked *strict* hold code to what safety-critical software needs and most 
 
 | Rule | Severity | Flags |
 |---|---|---|
-| `relaxed-check` | warning | a setting that lets a check pass when it should fail: `continue-on-error: true`, `\|\| true`, `--exit-zero`, `allow_failure: true`, `strict = false`, `ignore_missing_imports = true`, `"skipLibCheck": true` and the like |
+| `relaxed-check` | warning | a setting that lets a check pass when it should fail: `continue-on-error: true`, `\|\| true`, `--exit-zero`, `allow_failure: true`, `strict = false`, `ignore_missing_imports = true`, `"skipLibCheck": true` and the like; in source, a comment such as `# noqa`, `// eslint-disable` or `//nolint`, or an attribute or pragma such as `#[allow(...)]`, `@SuppressWarnings` or `#pragma warning disable` |
 | `weakened-check` | warning | any other setting line that weakens a check; needs `--infer` |
 | `unscheduled-analysis` | warning | project files that run no strict static analyser on every change, or daily, with zero warnings allowed; needs `--infer` |
 
@@ -519,7 +550,9 @@ zig build test-integration  # the built zanity on the golden fixtures, --fix, th
 zig build test --fuzz=100K  # fuzz the checker with arbitrary bytes in every language
 ```
 
-`git config core.hooksPath .githooks` turns on the repository's hooks. `pre-commit` runs the same format check as CI. `pre-push` refuses to test a dirty or different checkout, then runs the complete CI gate: formatting, unit and integration tests, zanity's strict self-check, every release build, and the generated catalogue check.
+`git config core.hooksPath .githooks` turns on the repository's hooks. `pre-commit` runs the same format check as CI. `pre-push` refuses to test a dirty or different checkout, then runs the complete CI gate: formatting, unit and integration tests, zanity's strict self-check, every release build, the generated catalogue check, and the feature-parity ratchet.
+
+`python3 bench/parity/ratchet.py` protects every covered comparison fixture, inference question, and language/rule match count in `bench/parity/results.json`. After the full parity benchmark improves coverage, run it with `--write` and commit the raised `bench/parity/floors.json`; it refuses to write over a regression.
 
 Zig does not prune `.zig-cache`; run `./scripts/zig-cache` when its old content is no longer worth keeping. The pre-push hook warns above 10 GB without deleting anything. Set `ZANITY_ZIG_CACHE_WARN_MB` to choose a different warning threshold.
 
