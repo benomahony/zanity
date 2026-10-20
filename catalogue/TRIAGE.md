@@ -5,8 +5,8 @@ unreviewed: a bucket is a starting point for review, not a claim about the weakn
 
 | Bucket | Families | Meaning |
 |---|---:|---|
-| mapped | 178 | Has a zanity rule |
-| static | 162 | Static analysis can find it (upstream says so); a candidate for a deterministic rule |
+| mapped | 180 | Has a zanity rule |
+| static | 160 | Static analysis can find it (upstream says so); a candidate for a deterministic rule |
 | inference | 381 | Visible in source but needs judgement; a candidate for a --infer question |
 | other-languages | 73 | Specific to languages zanity has no grammar for yet (C, C++, PHP, C#...) |
 | hardware | 58 | Hardware design weaknesses; not in software source |
@@ -170,8 +170,6 @@ Total: 1035 families.
 | EXT-RESILIENCE-002 | defect | Missing backpressure |
 | EXT-TIME-004 | defect | Ambiguous timestamp representation |
 | CWE-1055 | risk_indicator | Multiple Inheritance from Concrete Classes |
-| CWE-1056 | risk_indicator | Invokable Control Element with Variadic Parameters |
-| CWE-1075 | risk_indicator | Unconditional Control Flow Transfer outside of Switch Block |
 | CWE-1085 | risk_indicator | Invokable Control Element with Excessive Volume of Commented-out Code |
 | CWE-1099 | policy_violation | Inconsistent Naming Conventions for Identifiers |
 | CWE-1104 | risk_indicator | Use of Unmaintained Third Party Components |
