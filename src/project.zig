@@ -161,7 +161,7 @@ test "a zanity: ignore comment on a project file line turns off only the rules i
     const kept = try unsuppressed(enabled, "api-token: hunter2 # zanity: ignore[plaintext-config-secret]");
     try std.testing.expect(!kept.enabled("plaintext-config-secret"));
     try std.testing.expect(kept.enabled("relaxed-check"));
-    try std.testing.expect((try unsuppressed(enabled, "api-token: hunter2 # zanity: ignore")).len == 0);
+    try std.testing.expectEqual(0, (try unsuppressed(enabled, "api-token: hunter2 # zanity: ignore")).len);
 }
 
 /// Whether every rule code the setting names, before any comment, is one that bans what zanity
@@ -483,8 +483,8 @@ fn withoutComment(value: []const u8) []const u8 {
 }
 
 test "a secret setting holding a switch, an access level or a commented value stores no secret" {
-    try std.testing.expect(plaintextConfigSecret("persist-credentials: false", "persist-credentials: false") == null);
-    try std.testing.expect(plaintextConfigSecret("id-token: write # deploy to pages", "id-token: write # deploy to pages") == null);
+    try std.testing.expectEqual(null, plaintextConfigSecret("persist-credentials: false", "persist-credentials: false"));
+    try std.testing.expectEqual(null, plaintextConfigSecret("id-token: write # deploy to pages", "id-token: write # deploy to pages"));
     try std.testing.expect(plaintextConfigSecret("api_token = \"a#b\"", "api_token = \"a#b\"") != null);
     try std.testing.expect(plaintextConfigSecret("api-token: hunter2 # staging", "api-token: hunter2 # staging") != null);
 }

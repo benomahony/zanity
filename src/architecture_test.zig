@@ -46,9 +46,6 @@ fn violations(arena: std.mem.Allocator, checker: Probe, path: []const u8, source
     defer ts.ts_tree_delete(tree);
     var scratch = try captures.CaptureScratch.initCaptureScratch(arena, .{ .captures = 1 << 18, .per_file = 1 << 12 });
     const index = try captures.index(&scratch, checker.compiled, ts.ts_tree_root_node(tree), source);
-    const sees_trees = for (tree_imports) |import| {
-        if (std.mem.indexOf(u8, source, import) != null) break true;
-    } else false;
     var found: usize = 0;
     for (index.triples, 0..) |entry, i| {
         if (i > 0 and index.triples[i - 1].key.start == entry.key.start and index.triples[i - 1].key.id == entry.key.id) continue;
@@ -57,7 +54,7 @@ fn violations(arena: std.mem.Allocator, checker: Probe, path: []const u8, source
         const is_name = index.marks(entry.node, checker.path) and std.mem.indexOfScalar(u8, text, '.') == null;
         const word = if (is_string) text[1 .. text.len - 1] else if (is_name) text else continue;
         const names_language = k.languages.contains(word);
-        const names_kind = is_string and k.kinds.contains(word) and !k.vocabulary.contains(word) and (sees_trees or !private(entry.node, source));
+        const names_kind = is_string and namesKind(k, word, entry.node, source);
         if (!names_language and !names_kind) continue;
         found += 1;
         const at = ts.ts_node_start_point(entry.node);
@@ -70,9 +67,21 @@ fn violations(arena: std.mem.Allocator, checker: Probe, path: []const u8, source
 /// Imports that hand a file syntax trees; a file with none of them compares its strings to text.
 const tree_imports = [_][]const u8{ "@import(\"ts.zig\")", "@import(\"captures.zig\")", "@import(\"language.zig\")", "@import(\"adapters\")" };
 
+/// Whether the string `word` at `node` names a grammar node kind that a tree-reading file could
+/// compare against: one zanity's queries don't also use as a capture name.
+fn namesKind(k: Knowledge, word: []const u8, node: ts.Node, source: []const u8) bool {
+    if (word.len == 0) return false;
+    if (word.len + 2 > source.len) assert.panic("a {d}-byte string in a {d}-byte file; pass the file the string was read from", .{ word.len, source.len });
+    if (k.kinds.count() == 0) @panic("checking a string against no grammar node kinds; learn them from the grammars first");
+    if (!k.kinds.contains(word) or k.vocabulary.contains(word)) return false;
+    for (tree_imports) |import| if (std.mem.indexOf(u8, source, import) != null) return true;
+    return !private(node, source);
+}
+
 /// Whether `node` sits in a declaration its file keeps to itself, so no tree-reading file can
 /// compare a node's kind against it.
 fn private(node: ts.Node, source: []const u8) bool {
+    if (ts.ts_node_end_byte(node) > source.len) assert.panic("string ends at byte {d} of a {d}-byte file; pass the source the tree was parsed from", .{ ts.ts_node_end_byte(node), source.len });
     var top = node;
     var depth: usize = 0;
     while (top.parent()) |up| : (depth += 1) {
