@@ -1111,3 +1111,61 @@
       name: (identifier) @_lint_off)
   ]) @finding.relaxed-check
   (#any-of? @_lint_off "SuppressMessage" "SuppressMessageAttribute" "UnconditionalSuppressMessage" "UnconditionalSuppressMessageAttribute" "ExcludeFromCodeCoverage" "ExcludeFromCodeCoverageAttribute"))
+
+; Types evident in code, so a call can tell apart overloads taking as many parameters as it passes
+; arguments: each parameter's and local's declared type, `var`'s from a construction, and the type
+; a literal, construction, cast or default passed as an argument plainly has.
+(parameter
+  type: (_) @type.declared
+  name: (identifier) @type.name)
+
+(variable_declaration
+  type: (_) @type.declared
+  (variable_declarator
+    name: (identifier) @type.name)
+  (#not-kind-eq? @type.declared "implicit_type"))
+
+(variable_declaration
+  type: (implicit_type)
+  (variable_declarator
+    name: (identifier) @type.name
+    [
+      (object_creation_expression
+        type: (_) @type.declared)
+      (array_creation_expression
+        type: (_) @type.declared)
+    ]))
+
+(argument
+  [
+    (object_creation_expression
+      type: (_) @type.of)
+    (array_creation_expression
+      type: (_) @type.of)
+    (cast_expression
+      type: (_) @type.of)
+    (default_expression
+      type: (_) @type.of)
+  ])
+
+(argument
+  [
+    (string_literal)
+    (verbatim_string_literal)
+    (raw_string_literal)
+    (interpolated_string_expression)
+  ] @type.text)
+
+(argument
+  (character_literal) @type.letter)
+
+((argument
+  (integer_literal) @type.whole)
+  (#not-any-suffix? @type.whole "l" "L" "u" "U"))
+
+((argument
+  (real_literal) @type.fraction)
+  (#not-any-suffix? @type.fraction "f" "F" "m" "M"))
+
+(argument
+  (boolean_literal) @type.truth)

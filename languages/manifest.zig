@@ -187,6 +187,8 @@ pub const Tables = struct {
     assertion_value: []const u8 = "",
     /// Whether `$message` sits in a format string in `assertion_form`, where braces must be doubled.
     assertion_braces_doubled: bool = false,
+    /// The type each kind of literal in `types.literal_kinds` has, such as `string` for text.
+    literal_types: LiteralTypes = .{},
     /// Comment markers that turn a linter's, type checker's or analyser's check off, such as a
     /// marker naming the rules to ignore on that line.
     suppression_markers: []const []const u8 = &.{},
@@ -206,3 +208,17 @@ pub const SpecificCheck = struct { when: []const u8, check: []const u8, negated:
 
 pub const entries: []const Entry = @import("manifest.zon");
 pub const tables: []const Tables = @import("tables.zon");
+
+/// The type a literal of each kind has, empty where the language has no single such type.
+pub const LiteralTypes = struct {
+    /// A string.
+    text: []const u8 = "",
+    /// A single character.
+    letter: []const u8 = "",
+    /// A whole number without a suffix choosing its size.
+    whole: []const u8 = "",
+    /// A number with a fractional part or exponent, without a suffix choosing its precision.
+    fraction: []const u8 = "",
+    /// `true` or `false`.
+    truth: []const u8 = "",
+};

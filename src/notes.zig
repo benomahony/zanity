@@ -9,6 +9,7 @@ const check = @import("check.zig");
 const chains = @import("chains.zig");
 const repeats = @import("repeats.zig");
 const facts_module = @import("facts.zig");
+const types = @import("types.zig");
 const memory = @import("memory.zig");
 const File = check.File;
 
@@ -217,7 +218,7 @@ pub const NameCounts = struct {
 /// parameters it declares, for the cross-file call graph.
 pub fn resolveBareCalls(self: *File, ctx: check.Context) !void {
     const caller = ctx.fact orelse return;
-    self.work.facts.arity(caller, ctx.formal_parameters);
+    try self.work.facts.arity(caller, ctx.formal_parameters, try types.ofParameters(self, ctx));
     if (ctx.family != .function) assert.panic("{s}: resolving the calls of {f}, which is a {t}, not a function; call resolveBareCalls() only from closeFunction()", .{ self.work.facts.path, ctx.node.where(), ctx.family });
     const reach: facts_module.Reach = if (self.tables.methods_need_receiver) .functions else .any;
     const locals = self.s.locals.items();
@@ -228,6 +229,6 @@ pub fn resolveBareCalls(self: *File, ctx: check.Context) !void {
         for (locals[ctx.owned_start..]) |local| {
             if (local.owner == ctx.serial and check.sameText(local.text, call.text)) continue :outer;
         }
-        try self.work.facts.call(.{ .caller = caller, .callee = call.text, .reach = reach, .arguments = call.arguments });
+        try self.work.facts.call(.{ .caller = caller, .callee = call.text, .reach = reach, .arguments = call.arguments, .types = call.types });
     }
 }

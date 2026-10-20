@@ -42,6 +42,8 @@ pub const Function = struct {
     column: u32,
     /// How many parameters it declares, so a call can tell overloads of one name apart.
     parameters: u32 = 0,
+    /// Its parameters' declared types, separated by `;`, when every one declares one.
+    types: []const u8 = "",
 };
 
 /// A change that fixes a finding: bytes `start..end` of its file become `replacement`.
@@ -109,8 +111,29 @@ pub fn nameHash(name: []const u8) u64 {
     return hash;
 }
 
-/// A call from function `caller` to a function named `callee` with `arguments` arguments.
-pub const Edge = struct { caller: u32, callee: []const u8, reach: Reach, arguments: u32 = 0 };
+/// Separates one argument's or parameter's type from the next in `Function.types` and `Edge.types`.
+pub const type_separator = ';';
+
+/// Whether the call's argument types `arguments` match a function's parameter types `parameters`:
+/// both known, as many of each, and every argument whose type shows is of its parameter's type.
+pub fn typesAgree(arguments: []const u8, parameters: []const u8) bool {
+    if (arguments.len == 0 or parameters.len == 0) return false;
+    if (arguments.len > 1 << 16 or parameters.len > 1 << 16) assert.panic("comparing {d} bytes of argument types with {d} of parameter types; lists of types are bounded far below that", .{ arguments.len, parameters.len });
+    if (std.mem.count(u8, arguments, &.{type_separator}) != std.mem.count(u8, parameters, &.{type_separator})) return false;
+    var given = std.mem.splitScalar(u8, arguments, type_separator);
+    var taken = std.mem.splitScalar(u8, parameters, type_separator);
+    while (given.next()) |argument| {
+        const parameter = taken.next() orelse unreachable;
+        if (argument.len > 0 and !std.mem.eql(u8, argument, parameter)) return false;
+    }
+    const extra = taken.next();
+    if (extra != null) assert.panic("parameter types '{s}' outnumber argument types '{s}' after both counted alike; split both by type_separator", .{ parameters, arguments });
+    return true;
+}
+
+/// A call from function `caller` to a function named `callee` with `arguments` arguments, and
+/// the `types` they plainly have, separated by `;`, empty where one doesn't show.
+pub const Edge = struct { caller: u32, callee: []const u8, reach: Reach, arguments: u32 = 0, types: []const u8 = "" };
 
 /// What a unit of code is, which decides the questions `check --infer` asks about it.
 pub const UnitKind = enum { function, fixture, @"test", setting, project, cluster, file };
@@ -248,11 +271,14 @@ pub const Facts = struct {
         });
     }
 
-    /// Records how many parameters function `id` declares, known once its signature is read.
-    pub fn arity(self: *Facts, id: u32, parameters: u32) void {
+    /// Records how many parameters function `id` declares and their `types`, known once its
+    /// signature is read.
+    pub fn arity(self: *Facts, id: u32, parameters: u32, types: []const u8) error{LimitExceeded}!void {
         if (id >= self.functions.len) assert.panic("setting the arity of function {d}, but only {d} are recorded; record the function before closing it", .{ id, self.functions.len });
         if (parameters > 1 << 16) assert.panic("function {d} declares {d} parameters; count @function.parameter captures, not nodes inside them", .{ id, parameters });
-        self.functions.items()[id].parameters = parameters;
+        const recorded = &self.functions.items()[id];
+        recorded.parameters = parameters;
+        recorded.types = try self.text.copy(types);
     }
 
     /// Records `edge`, keeping its own copy of the callee's name.
@@ -263,6 +289,7 @@ pub const Facts = struct {
         if (callee.len == 0) assert.panic("function {d} calls something with an empty name; check the @call.name capture", .{caller});
         var kept = edge;
         kept.callee = try self.text.copy(callee);
+        kept.types = try self.text.copy(edge.types);
         try self.calls.add(kept);
     }
 };

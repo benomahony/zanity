@@ -1,0 +1,6 @@
+rules: recursion
+exit: 0
+Signer.cs:33:9: warning [recursion]
+Signer.cs:39:9: warning [recursion]
+Signer.cs:41:9: warning [recursion]
+Signer.cs:43:9: warning [recursion]

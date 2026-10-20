@@ -625,3 +625,53 @@
       name: (identifier) @_lint_off)
   ]) @finding.relaxed-check
   (#any-of? @_lint_off "SuppressWarnings" "SuppressFBWarnings" "SuppressLint"))
+
+; Types evident in code, so a call can tell apart overloads taking as many parameters as it passes
+; arguments: each parameter's and local's declared type, `var`'s from a construction, and the type
+; a literal, construction or cast passed as an argument plainly has. An array construction's type
+; field holds only its element type, so it says nothing.
+(formal_parameter
+  type: (_) @type.declared
+  name: (identifier) @type.name)
+
+((local_variable_declaration
+  type: (_) @type.declared
+  declarator: (variable_declarator
+    name: (identifier) @type.name))
+  (#not-eq? @type.declared "var"))
+
+((local_variable_declaration
+  type: (type_identifier) @_var
+  declarator: (variable_declarator
+    name: (identifier) @type.name
+    value: (object_creation_expression
+      type: (_) @type.declared)))
+  (#eq? @_var "var"))
+
+(argument_list
+  [
+    (object_creation_expression
+      type: (_) @type.of)
+    (cast_expression
+      type: (_) @type.of)
+  ])
+
+(argument_list
+  (string_literal) @type.text)
+
+(argument_list
+  (character_literal) @type.letter)
+
+((argument_list
+  (decimal_integer_literal) @type.whole)
+  (#not-any-suffix? @type.whole "l" "L"))
+
+((argument_list
+  (decimal_floating_point_literal) @type.fraction)
+  (#not-any-suffix? @type.fraction "f" "F"))
+
+(argument_list
+  [
+    (true)
+    (false)
+  ] @type.truth)

@@ -259,6 +259,7 @@
     },
     .{
         .ecosystem = "jvm",
+        .literal_types = .{ .text = "String", .letter = "char", .whole = "int", .fraction = "double", .truth = "boolean" },
         .suppression_markers = .{ "NOPMD", "CHECKSTYLE:OFF", "CHECKSTYLE.OFF", "CHECKSTYLE:SUPPRESS", "noinspection", "NOSONAR", "lgtm[", "codeql[" },
         .specific_checks = .{
             .{ .when = "equals", .check = "assertEquals($2, $1)", .negated = "assertNotEquals($2, $1)" },
@@ -303,6 +304,7 @@
     },
     .{
         .ecosystem = "dotnet",
+        .literal_types = .{ .text = "string", .letter = "char", .whole = "int", .fraction = "double", .truth = "bool" },
         .suppression_markers = .{ "ReSharper disable", "NOSONAR", "lgtm[", "codeql[" },
         .specific_checks = .{
             .{ .when = "==", .check = "Assert.Equal($2, $1)", .negated = "Assert.NotEqual($2, $1)" },

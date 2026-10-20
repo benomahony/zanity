@@ -13,6 +13,7 @@ const rewrite = @import("rewrite.zig");
 const hazards = @import("hazards.zig");
 const weak = @import("weak.zig");
 const suppress = @import("suppress.zig");
+const types = @import("types.zig");
 const scope = @import("scope.zig");
 const test_quality = @import("test_quality.zig");
 const isolation = @import("isolation.zig");
@@ -112,7 +113,7 @@ pub const Context = struct {
 };
 
 /// Something a function owns, such as a local or an unqualified call and how many arguments it passes.
-pub const Owned = struct { owner: u32, text: []const u8, arguments: u32 = 0 };
+pub const Owned = struct { owner: u32, text: []const u8, arguments: u32 = 0, types: []const u8 = "" };
 const Weak = struct { owner: u32, line: u32 };
 const Trail = struct { parent: ts.Node.Key, summary: Summary };
 const Suppression = struct { line: u32, start: usize, len: usize };
@@ -130,6 +131,9 @@ pub const FileScratch = struct {
     signature: memory.Bounded(Parameter),
     weak: memory.Bounded(Weak),
     locals: memory.Bounded(Owned),
+    declared: memory.Bounded(types.Declared),
+    /// A declared type waiting for the name it declares, which comes after it.
+    pending_type: ?ts.Node = null,
     bare_calls: memory.Bounded(Owned),
     async_names: memory.Bounded([]const u8),
     statement_calls: memory.Bounded(ts.Node),
@@ -158,6 +162,7 @@ pub const FileScratch = struct {
             .signature = try .initBounded(gpa, limits.per_file, "parameters in one file"),
             .weak = try .initBounded(gpa, limits.per_file, "weak assertions in one file"),
             .locals = try .initBounded(gpa, limits.per_file, "local names in one file"),
+            .declared = try .initBounded(gpa, limits.per_file, "declared names in one file"),
             .bare_calls = try .initBounded(gpa, limits.per_file, "unqualified calls in one file"),
             .async_names = try .initBounded(gpa, limits.per_file, "async functions in one file"),
             .statement_calls = try .initBounded(gpa, limits.per_file, "calls made as statements in one file"),
@@ -173,10 +178,11 @@ pub const FileScratch = struct {
     }
 
     pub fn clearFile(self: *FileScratch) void {
-        inline for (.{ "contexts", "opened", "diagnostics", "suppressions", "codes", "trail", "calls", "signature", "weak", "locals", "bare_calls", "async_names", "statement_calls", "repeats", "writes", "path", "ancestors" }) |field| {
+        inline for (.{ "contexts", "opened", "diagnostics", "suppressions", "codes", "trail", "calls", "signature", "weak", "locals", "declared", "bare_calls", "async_names", "statement_calls", "repeats", "writes", "path", "ancestors" }) |field| {
             @field(self, field).clear();
         }
         self.names.reset();
+        self.pending_type = null;
         if (self.contexts.len != 0) assert.panic("clearing the per-file scratch left {d} open constructs; clearFile() must clear contexts, so add it to the field list there", .{self.contexts.len});
         if (self.diagnostics.len != 0) assert.panic("clearing the per-file scratch left {d} findings; clearFile() must clear diagnostics, so add it to the field list there", .{self.diagnostics.len});
     }
@@ -190,6 +196,10 @@ pub const Work = struct {
 
 const Vocabulary = struct {
     comment: ?captures.Id,
+    /// A type naming the type of the expression it belongs to, such as a construction's.
+    type_of: ?captures.Id,
+    /// Literals of each of `types.literal_kinds`.
+    type_literals: [types.literal_kinds.len]?captures.Id,
     literal_true: ?captures.Id,
     literal_constant: ?captures.Id,
     literal_falsy: ?captures.Id,
@@ -238,6 +248,8 @@ const Vocabulary = struct {
         if (c.predicates.len == 0) assert.panic("the query has {d} captures but no patterns; check the language's query files listed in languages/manifest.zon", .{c.names.len});
         return .{
             .comment = c.id("comment.outer"),
+            .type_of = c.id("type.of"),
+            .type_literals = types.literalIds(c),
             .literal_true = c.id("literal.true"),
             .literal_constant = c.id("literal.constant"),
             .literal_falsy = c.id("literal.falsy"),
@@ -443,6 +455,7 @@ pub const File = struct {
         }
         if (std.mem.eql(u8, name.part, "outer")) return;
         if (std.mem.eql(u8, name.family, "parameter")) return self.parameter(name.part, node);
+        if (std.mem.eql(u8, name.family, "type")) return types.capture(self, name.part, node);
         if (std.mem.eql(u8, name.family, "local.definition") and (std.mem.eql(u8, name.part, "var") or std.mem.eql(u8, name.part, "parameter"))) {
             if (self.innermost(.function)) |function| try self.s.locals.add(.{ .owner = function.serial, .text = node.text(self.source) });
             if (std.mem.eql(u8, name.part, "parameter")) try self.parameter("name", node);
@@ -816,10 +829,10 @@ pub const File = struct {
         const caller = function.fact orelse return;
         if (ctx.receiver) |receiver| {
             if (!contains(self.tables.self_receivers, receiver.text(self.source))) return;
-            try self.work.facts.call(.{ .caller = caller, .callee = name, .reach = .methods, .arguments = ctx.argument_count });
+            try self.work.facts.call(.{ .caller = caller, .callee = name, .reach = .methods, .arguments = ctx.argument_count, .types = try types.ofArguments(self, &ctx) });
             return;
         }
-        try self.s.bare_calls.add(.{ .owner = function.serial, .text = name, .arguments = ctx.argument_count });
+        try self.s.bare_calls.add(.{ .owner = function.serial, .text = name, .arguments = ctx.argument_count, .types = try types.ofArguments(self, &ctx) });
     }
 
     pub fn inAssertionCondition(self: *File, node: ts.Node) bool {

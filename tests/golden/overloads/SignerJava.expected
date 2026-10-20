@@ -1,0 +1,4 @@
+rules: recursion
+exit: 0
+SignerJava.java:38:7: warning [recursion]
+SignerJava.java:43:7: warning [recursion]

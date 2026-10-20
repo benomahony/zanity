@@ -216,10 +216,11 @@ pub const Batch = struct {
         for (recorded.functions.items()) |f| {
             var kept = f;
             kept.name = try worker.retain(self.text, f.name);
+            kept.types = try worker.retain(self.text, f.types);
             try facts.functions.add(kept);
         }
         for (recorded.calls.items()) |c| {
-            try facts.calls.add(.{ .caller = @intCast(first + c.caller), .callee = try worker.retain(self.text, c.callee), .reach = c.reach, .arguments = c.arguments });
+            try facts.calls.add(.{ .caller = @intCast(first + c.caller), .callee = try worker.retain(self.text, c.callee), .reach = c.reach, .arguments = c.arguments, .types = try worker.retain(self.text, c.types) });
         }
         for (recorded.shapes.items()) |shape| {
             var kept = shape;
