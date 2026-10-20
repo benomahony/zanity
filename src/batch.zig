@@ -233,6 +233,7 @@ pub const Batch = struct {
             try facts.abstractions.add(kept);
         }
         for (recorded.implemented.items()) |hash| try facts.implemented.add(hash);
+        for (recorded.passed.items()) |hash| try facts.passed.add(hash);
         try facts.addReferences(recorded.references.items());
         for (recorded.units.items()) |u| {
             var kept = u;
@@ -242,7 +243,7 @@ pub const Batch = struct {
         }
         for (diagnostics) |d| {
             const edit: ?facts_module.Edit = if (d.edit) |e| .{ .start = e.start, .end = e.end, .replacement = try worker.retain(self.text, e.replacement) } else null;
-            try self.findings.add(.{ .path = path, .line = d.line, .column = d.column, .rule = d.rule, .message = try worker.retain(self.text, d.message), .fix = try worker.retain(self.text, d.fix), .edit = edit });
+            try self.findings.add(.{ .path = path, .line = d.line, .column = d.column, .rule = d.rule, .message = try worker.retain(self.text, d.message), .fix = try worker.retain(self.text, d.fix), .edit = edit, .subject = d.subject });
         }
         self.checked += 1;
         if (self.live) |live| live.update("Checking files", self.checked, self.files.len);

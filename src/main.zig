@@ -13,6 +13,7 @@ const rules = @import("rules.zig");
 const report = @import("report.zig");
 const naming = @import("naming.zig");
 const graph = @import("graph.zig");
+const parameters = @import("parameters.zig");
 const structure = @import("structure.zig");
 const vocabulary = @import("vocabulary.zig");
 const project = @import("project.zig");
@@ -869,6 +870,7 @@ fn checkFiles(ctx: *zcli.Context, ws: *Workspace, selected: rules.Set) !void {
     try naming.crossCheck(&ws.naming, &ws.facts, selected, &ws.findings);
     if (anchor) |a| try vocabulary.checkVocabulary(.{ .anchor = a, .text = ws.facts.text, .enabled = selected, .findings = &ws.findings }, &ws.facts, ws.files.items());
     if (selected.enabled("recursion")) try graph.recursion(&ws.graph, &ws.facts, &ws.findings);
+    if (selected.enabled("dead-parameter")) parameters.dropPassed(&ws.facts, &ws.findings);
     const sources: structure.Sources = .{ .io = ws.io, .mine = ws.source, .theirs = ws.fixed };
     try structure.checkStructure(&ws.facts, selected, &ws.findings, .{ .sources = sources, .live = &ws.liveness });
     if (ws.facts.collect_units and selected.enabled("repeated-mechanics")) try structure.clusterUnits(&ws.facts, sources);

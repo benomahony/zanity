@@ -37,6 +37,8 @@ pub fn note(self: *File, node: ts.Node, id: captures.Id) !bool {
         if (enabled.enabled("single-impl-abstraction")) try facts.abstraction(text, .{ at.row, at.column });
     } else if (v.implementation_base == id) {
         if (enabled.enabled("single-impl-abstraction")) try facts.implemented.add(facts_module.typeHash(facts.language, text));
+    } else if (v.reference_passed == id) {
+        if (enabled.enabled("dead-parameter")) try facts.passed.add(facts_module.nameHash(text));
     } else return false;
     const names = &self.s.names;
     if (names.distinct() > names.room()) assert.panic("{s}: {d} names in room for {d}; Bounded.add() must refuse to grow past its buffer", .{ facts.path, names.distinct(), names.room() });

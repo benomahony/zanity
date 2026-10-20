@@ -56,6 +56,7 @@ pub const looked_up = [_][]const u8{
     "reference.held",
     "reference.name",
     "reference.self",
+    "reference.passed",
     "storage.read",
     "local.reference",
     "local.scope",

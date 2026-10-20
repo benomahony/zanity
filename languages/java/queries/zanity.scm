@@ -675,3 +675,44 @@
     (true)
     (false)
   ] @type.truth)
+
+; Methods whose parameters something else decides, for dead-parameter: an interface's default
+; methods, public methods of a class, record or enum that extends or implements a type, which can
+; implement an interface method without @Override, and methods of an anonymous class.
+(interface_declaration
+  body: (interface_body
+    (method_declaration) @method.override))
+
+(class_declaration
+  [
+    (superclass)
+    (super_interfaces)
+  ]
+  body: (class_body
+    (method_declaration
+      (modifiers
+        "public")) @method.override))
+
+(record_declaration
+  (super_interfaces)
+  body: (class_body
+    (method_declaration
+      (modifiers
+        "public")) @method.override))
+
+(enum_declaration
+  (super_interfaces)
+  body: (enum_body
+    (enum_body_declarations
+      (method_declaration
+        (modifiers
+          "public")) @method.override)))
+
+(object_creation_expression
+  (class_body
+    (method_declaration) @method.override))
+
+; A method passed by reference, `Calculator::cost`: the functional interface it is passed as fixes
+; its parameters, so dead-parameter leaves it alone even when the reference is in another file.
+(method_reference
+  (identifier) @reference.passed .)

@@ -37,6 +37,8 @@ pub const Diagnostic = struct {
     fix: []const u8 = "",
     /// The change that makes `fix` happen, when zanity can make it.
     edit: ?facts_module.Edit = null,
+    /// See `Finding.subject`.
+    subject: u64 = 0,
 
     /// Whether `a` is reported before `b`: by line, then column, then rule name.
     pub fn reportedBefore(_: void, a: Diagnostic, b: Diagnostic) bool {
@@ -233,6 +235,7 @@ const Vocabulary = struct {
     reference_name: ?captures.Id,
     abstraction_name: ?captures.Id,
     implementation_base: ?captures.Id,
+    reference_passed: ?captures.Id,
     visibility_public: ?captures.Id,
     opaque_negated: ?captures.Id,
     opaque_left: ?captures.Id,
@@ -283,6 +286,7 @@ const Vocabulary = struct {
             .reference_name = c.id("reference.name"),
             .abstraction_name = c.id("abstraction.name"),
             .implementation_base = c.id("implementation.base"),
+            .reference_passed = c.id("reference.passed"),
             .visibility_public = c.id("visibility.public"),
             .opaque_negated = c.id("opaque.negated"),
             .opaque_left = c.id("opaque.left"),

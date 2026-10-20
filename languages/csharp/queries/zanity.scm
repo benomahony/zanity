@@ -1169,3 +1169,52 @@
 
 (argument
   (boolean_literal) @type.truth)
+
+; Methods whose parameters something else decides, for dead-parameter: overrides and the virtual
+; and interface methods they override, interface members implemented explicitly or by a public
+; method of a type with bases, and event handlers, whose `(object sender, EventArgs e)` the event's
+; delegate fixes.
+((method_declaration
+  (modifier) @_override) @method.override
+  (#any-of? @_override "override" "virtual"))
+
+(interface_declaration
+  body: (declaration_list
+    (method_declaration) @method.override))
+
+(method_declaration
+  (explicit_interface_specifier)) @method.override
+
+([
+  (class_declaration
+    (base_list)
+    body: (declaration_list
+      (method_declaration
+        (modifier) @_public) @method.override))
+  (struct_declaration
+    (base_list)
+    body: (declaration_list
+      (method_declaration
+        (modifier) @_public) @method.override))
+  (record_declaration
+    (base_list)
+    body: (declaration_list
+      (method_declaration
+        (modifier) @_public) @method.override))
+]
+  (#eq? @_public "public"))
+
+((method_declaration
+  parameters: (parameter_list
+    .
+    (parameter
+      type: [
+        (predefined_type)
+        (nullable_type)
+      ] @_sender)
+    .
+    (parameter
+      type: (_) @_event)
+    .)) @method.override
+  (#any-of? @_sender "object" "object?")
+  (#any-suffix? @_event "EventArgs" "EventArgs?"))

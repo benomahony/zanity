@@ -62,6 +62,9 @@ pub const Finding = struct {
     message: []const u8,
     fix: []const u8 = "",
     edit: ?Edit = null,
+    /// The hash of a function name that cancels the finding when any file passes the function as
+    /// a value, as an unused parameter whose signature a callback type fixes; 0 for none.
+    subject: u64 = 0,
     /// Set once `--fix` has applied `edit`, so the finding is no longer reported.
     fixed: bool = false,
 
@@ -170,6 +173,8 @@ pub const Facts = struct {
     abstractions: memory.Bounded(Definition),
     /// Hashes of the names types implement or extend, once per implementing type.
     implemented: memory.Bounded(u64),
+    /// Hashes of the functions passed as values, such as Java's `Calculator::cost`.
+    passed: memory.Bounded(u64),
     /// Whether to keep `units`; only `check --infer` needs them.
     collect_units: bool = false,
 
@@ -186,12 +191,13 @@ pub const Facts = struct {
             .shapes = try .initBounded(gpa, limits.functions, "function shapes across all files"),
             .abstractions = try .initBounded(gpa, limits.definitions, "interfaces and abstract types across all files"),
             .implemented = try .initBounded(gpa, limits.definitions, "implemented interfaces across all files"),
+            .passed = try .initBounded(gpa, limits.references, "functions passed as values across all files"),
         };
     }
 
     /// Empties one run's facts while retaining their allocations.
     pub fn reset(self: *Facts) void {
-        inline for (.{ "definitions", "functions", "calls", "units", "references", "shapes", "abstractions", "implemented" }) |field| @field(self, field).clear();
+        inline for (.{ "definitions", "functions", "calls", "units", "references", "shapes", "abstractions", "implemented", "passed" }) |field| @field(self, field).clear();
         self.path = "";
         self.language = "";
         self.collect_units = false;

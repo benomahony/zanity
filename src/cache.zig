@@ -86,6 +86,7 @@ pub const Snapshot = struct {
     shapes: []const Shape,
     abstractions: []const Definition,
     implemented: []const u64,
+    passed: []const u64,
 };
 
 /// The cache key changes with the path, language queries, enabled rules, inference units and cache
@@ -129,6 +130,7 @@ pub fn encode(buffer: []u8, context: AnalysisContext, facts: *const Facts, findi
         .shapes = facts.shapes.items(),
         .abstractions = facts.abstractions.items(),
         .implemented = facts.implemented.items(),
+        .passed = facts.passed.items(),
     };
     var out: std.Io.Writer = .fixed(buffer);
     try std.json.Stringify.value(snapshot, .{}, &out);
@@ -253,6 +255,7 @@ fn commitFacts(snapshot: Snapshot, run: Replay) error{LimitExceeded}!void {
         .unmarked = try run.text.copy(abstraction.unmarked),
     });
     for (snapshot.implemented) |hash| try facts.implemented.add(hash);
+    for (snapshot.passed) |hash| try facts.passed.add(hash);
     try facts.addReferences(snapshot.references);
     for (snapshot.units) |unit| try facts.units.add(.{ .kind = unit.kind, .reports_error = unit.reports_error, .path = run.path, .language = run.language, .name = try run.text.copy(unit.name), .line = unit.line, .column = unit.column, .end_line = unit.end_line, .source = try run.text.copy(unit.source), .fix = try run.text.copy(unit.fix) });
     if (facts.functions.len != first + snapshot.functions.len) assert.panic("replayed {d} functions from a cache row holding {d}; commitFacts must add each once", .{ facts.functions.len - first, snapshot.functions.len });
@@ -264,7 +267,7 @@ fn commitFindings(snapshot: Snapshot, run: Replay) (ReplayError || error{LimitEx
     for (snapshot.findings) |diagnostic| {
         const rule = rules.find(diagnostic.rule) orelse return error.InvalidCache;
         const edit: ?facts_module.Edit = if (diagnostic.edit) |change| .{ .start = change.start, .end = change.end, .replacement = try run.text.copy(change.replacement) } else null;
-        try run.findings.add(.{ .path = run.path, .line = diagnostic.line, .column = diagnostic.column, .rule = rule.name, .message = try run.text.copy(diagnostic.message), .fix = try run.text.copy(diagnostic.fix), .edit = edit });
+        try run.findings.add(.{ .path = run.path, .line = diagnostic.line, .column = diagnostic.column, .rule = rule.name, .message = try run.text.copy(diagnostic.message), .fix = try run.text.copy(diagnostic.fix), .edit = edit, .subject = diagnostic.subject });
     }
     if (run.findings.len != before + snapshot.findings.len) assert.panic("replayed {d} findings from a cache row holding {d}; commitFindings must add each once", .{ run.findings.len - before, snapshot.findings.len });
 }
