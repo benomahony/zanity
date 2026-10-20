@@ -58,7 +58,7 @@
     .{
         .name = "csharp",
         .symbol = "c_sharp",
-        .not_applicable = .{ "branching-double", "dynamic-allocation", "restated-type", "redundant-null-check", "conversion-assertion", "guaranteed-length", "discarded-comparison", "no-effect-statement", "return-in-finally", "identity-comparison", "switch-fallthrough", "constant-cbc-iv", "constant-aead-nonce", "shell-command", "public-finalizer", "unsafe-jni", "public-static-field", "public-static-array", "missing-super-finalizer", "missing-super-clone", "public-clone-method", "thread-run", "class-name-comparison", "equals-without-hashcode", "hashcode-without-equals", "struts-public-field", "prototype-mutation", "cwe-487", "cwe-609", "cwe-1235", "cwe-567" },
+        .not_applicable = .{ "branching-double", "dynamic-allocation", "restated-type", "redundant-null-check", "conversion-assertion", "guaranteed-length", "discarded-comparison", "no-effect-statement", "return-in-finally", "identity-comparison", "switch-fallthrough", "constant-cbc-iv", "constant-aead-nonce", "shell-command", "public-finalizer", "missing-super-finalizer", "missing-super-clone", "public-clone-method", "thread-run", "struts-public-field", "prototype-mutation", "cwe-487", "cwe-609", "cwe-1235", "cwe-567" },
         .extensions = .{ "cs", "csx" },
         .ecosystem = "dotnet",
         .scanner = true,

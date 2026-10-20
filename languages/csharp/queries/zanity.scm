@@ -807,3 +807,100 @@
   name: (identifier) @call.name) @call.outer
   (#any-of? @call.receiver "DateTime" "DateTimeOffset")
   (#any-of? @call.name "Now" "UtcNow"))
+
+; CWE-111: a method implemented in native code through P/Invoke.
+((method_declaration
+  (modifier) @_extern) @finding.unsafe-jni
+  (#eq? @_extern "extern"))
+
+; CWE-493, CWE-500: a public static field that any caller can reassign. Modifiers may come in any
+; order, so each is matched by its text.
+((field_declaration
+  (modifier) @_first
+  (modifier) @_second) @finding.public-static-field
+  (#any-of? @_first "public" "static")
+  (#any-of? @_second "public" "static")
+  (#not-eq? @_first @_second))
+
+((field_declaration
+  (modifier) @unless.public-static-field)
+  (#any-of? @unless.public-static-field "readonly" "const"))
+
+; CWE-582, CWE-607: a public static readonly array, whose elements anyone can still change.
+((field_declaration
+  (modifier) @_first
+  (modifier) @_second
+  (modifier) @_third
+  (variable_declaration
+    type: (array_type))) @finding.public-static-array
+  (#any-of? @_first "public" "static" "readonly")
+  (#any-of? @_second "public" "static" "readonly")
+  (#any-of? @_third "public" "static" "readonly")
+  (#not-eq? @_first @_second)
+  (#not-eq? @_first @_third)
+  (#not-eq? @_second @_third))
+
+; CWE-486: comparing types by name, `a.GetType().Name == b.GetType().Name`.
+((binary_expression
+  left: (member_access_expression
+    expression: (invocation_expression
+      function: [
+        (identifier) @_left_get_type
+        (member_access_expression
+          name: (identifier) @_left_get_type)
+      ])
+    name: (identifier) @_left_name)
+  operator: ["==" "!="]
+  right: (member_access_expression
+    expression: (invocation_expression
+      function: [
+        (identifier) @_right_get_type
+        (member_access_expression
+          name: (identifier) @_right_get_type)
+      ])
+    name: (identifier) @_right_name)) @finding.class-name-comparison
+  (#eq? @_left_get_type "GetType")
+  (#eq? @_right_get_type "GetType")
+  (#any-of? @_left_name "Name" "FullName")
+  (#any-of? @_right_name "Name" "FullName"))
+
+; CWE-581: a class or struct that defines only one side of the Equals/GetHashCode contract.
+(([
+  (class_declaration
+    body: (declaration_list
+      (method_declaration
+        name: (identifier) @_equals_method
+        parameters: (parameter_list
+          .
+          (parameter)
+          .))))
+  (struct_declaration
+    body: (declaration_list
+      (method_declaration
+        name: (identifier) @_equals_method
+        parameters: (parameter_list
+          .
+          (parameter)
+          .))))
+] @finding.equals-without-hashcode)
+  (#eq? @_equals_method "Equals"))
+
+((method_declaration
+  name: (identifier) @_hash_for_equals) @unless.equals-without-hashcode
+  (#eq? @_hash_for_equals "GetHashCode"))
+
+(([
+  (class_declaration
+    body: (declaration_list
+      (method_declaration
+        name: (identifier) @_hash_method)))
+  (struct_declaration
+    body: (declaration_list
+      (method_declaration
+        name: (identifier) @_hash_method)))
+] @finding.hashcode-without-equals)
+  (#eq? @_hash_method "GetHashCode"))
+
+((method_declaration
+  name: (identifier) @_equals_for_hash) @unless.hashcode-without-equals
+  (#eq? @_equals_for_hash "Equals"))

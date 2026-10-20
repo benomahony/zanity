@@ -133,16 +133,16 @@ disable = [
   # "empty-synchronized",              # warning, on by default. Move the shared-state operation inside the synchronized block, or remove the empty block.
   # "public-finalizer",                # warning, on by default. Remove the public modifier and provide an explicit close method for resources.
   # "direct-thread",                   # warning, on by default. Submit the task to a bounded, application-managed executor.
-  # "unsafe-jni",                      # warning, on by default. Replace it with a safe Java API, or isolate and audit the native boundary with explicit input validation.
-  # "public-static-field",             # warning, on by default. Make it private, expose behaviour instead of state, and make constants static final.
+  # "unsafe-jni",                      # warning, on by default. Replace it with a safe library API, or isolate and audit the native boundary with explicit input validation.
+  # "public-static-field",             # warning, on by default. Make it private and expose behaviour instead of state; make a constant unassignable, with final in Java or const or readonly in C#.
   # "public-static-array",             # warning, on by default. Keep the array private and return an immutable view or a defensive copy.
   # "missing-super-finalizer",         # warning, on by default. Remove finalization in favour of explicit resource ownership, or call super.finalize() in a finally block while legacy finalization remains.
   # "missing-super-clone",             # warning, on by default. Start with super.clone(), or replace Cloneable with an explicit copy constructor or factory.
   # "public-clone-method",             # warning, on by default. Make clone final, or replace Cloneable with an explicit copy constructor or factory.
   # "thread-run",                      # error, on by default. Call start(), or submit the task to an application-managed executor.
-  # "class-name-comparison",           # error, on by default. Compare the Class objects directly, or use instanceof when subclasses are valid.
-  # "equals-without-hashcode",         # error, on by default. Implement hashCode from the same fields as equals, and test the equality/hash contract together.
-  # "hashcode-without-equals",         # error, on by default. Implement equals from the same fields as hashCode, and test the equality/hash contract together.
+  # "class-name-comparison",           # error, on by default. Compare the types themselves, or test with instanceof or is when subclasses are valid.
+  # "equals-without-hashcode",         # error, on by default. Compute the hash code from the same fields as equality, and test the two together.
+  # "hashcode-without-equals",         # error, on by default. Define equality from the same fields as the hash code, and test the two together.
   # "struts-public-field",             # warning, on by default. Make the field private and expose it only through the validated bean accessor.
   # "suspicious-comment",              # warning, on by default. Resolve the defect or incomplete code the marker identifies, then remove the marker; track longer work in the issue system.
   # "prototype-mutation",              # warning, on by default. Use an own data property on an object with a fixed prototype; reject __proto__, constructor and prototype as externally supplied keys.
