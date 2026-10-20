@@ -147,6 +147,7 @@ test "mistakes in zanity.yaml name the line and what to write" {
     try expectProblem("infer:\n  url: localhost:8009\n", "zanity.yaml:2: url is 'localhost:8009'; it must start with http:// or https://, such as http://127.0.0.1:8009.");
     try expectProblem("infer:\n  model: \"\"\n", "zanity.yaml:2: 'model' is empty; name one, or remove the line to use the default.");
     try expectProblem("exclude: [\"a\" \"b\"]\n", "zanity.yaml:1: items in 'exclude' must be separated by commas, such as [a, b].");
+    try expectProblem("exclude:\n  -vendor/\n", "zanity.yaml:2: a list item needs a space after its dash, as in '- v'; without one YAML reads the line as text.");
     try expectProblem("exclude: [*.py]\n", "zanity.yaml:1: a value of 'exclude' starts with '*', which YAML reads as more than text; put the value in quotes.");
 }
 

@@ -192,6 +192,7 @@ pub const Reader = struct {
         if (self.peek() != '-') return self.fail("expected '- ' to start an item of the list; begin each item with a dash.", .{});
         const item_line = self.line();
         self.at += 1;
+        if (self.peek()) |c| if (c != ' ' and c != '\t' and c != '\n' and c != '\r') return self.fail("a list item needs a space after its dash, as in '- {c}'; without one YAML reads the line as text.", .{c});
         self.skipBlank();
         if (dash_column < list.indent) assert.panic("an item's dash at column {d} is left of its key at {d}; childOf() accepts only lines at or past the key", .{ dash_column, list.indent });
         if (self.at == self.bytes.len or self.column() <= dash_column) return self.failAt(item_line, "an item of the list is empty; write it after the dash.", .{});

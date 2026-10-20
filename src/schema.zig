@@ -50,8 +50,8 @@ pub fn renderSchema(w: *std.Io.Writer) !void {
         \\          "items": {{ "$ref": "#/definitions/ruleOrAll" }}
         \\        }},
         \\        "disable": {{
-        \\          "description": "Rules to leave out of the selection, such as [duplicate-name].",
-        \\          "type": "array",
+        \\          "description": "Rules to leave out of the selection, such as [duplicate-name]; nothing, as zanity init writes it, leaves none out.",
+        \\          "type": ["array", "null"],
         \\          "uniqueItems": true,
         \\          "items": {{ "$ref": "#/definitions/rule" }}
         \\        }}
