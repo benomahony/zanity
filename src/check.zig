@@ -230,6 +230,7 @@ const Vocabulary = struct {
     opaque_right: ?captures.Id,
     double_behaviour: ?captures.Id,
     double_branch: ?captures.Id,
+    call_verification: ?captures.Id,
     storage_read: ?captures.Id,
 
     fn lookup(c: captures.Compiled) Vocabulary {
@@ -277,6 +278,7 @@ const Vocabulary = struct {
             .opaque_right = c.id("opaque.right"),
             .double_behaviour = c.id("double.behaviour"),
             .double_branch = c.id("double.branch"),
+            .call_verification = c.id("call.verification"),
             .storage_read = c.id("storage.read"),
         };
     }

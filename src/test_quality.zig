@@ -225,8 +225,9 @@ pub fn checkTestCall(self: *File, ctx: Context, name: []const u8) !void {
     try checkTestDouble(self, ctx, name);
     try checkBranchingDouble(self, ctx, name);
     try checkStorageRead(self, ctx, name);
+    const by_shape = self.index.marks(ctx.node, self.v.call_verification);
     const verification = self.calleeIn(ctx, name, self.tables.verification_calls) orelse
-        (if (ctx.receiver != null and contains(self.tables.verification_methods, name)) name else null);
+        (if (by_shape or (ctx.receiver != null and contains(self.tables.verification_methods, name))) name else null);
     if (verification) |callee| {
         _ = try self.report(ctx.callee orelse ctx.name.?, "call-verification", try self.say("'{s}' checks how the code was called rather than what it did, so a change that keeps the behaviour breaks the test.", .{callee}));
     }

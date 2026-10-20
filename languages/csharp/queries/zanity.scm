@@ -904,3 +904,32 @@
 ((method_declaration
   name: (identifier) @_equals_for_hash) @unless.hashcode-without-equals
   (#eq? @_equals_for_hash "Equals"))
+
+; Moq's `mock.Verify(m => m.Save(order), Times.Once())` checks how a double was called. Its first
+; argument is a lambda describing the call, which tells it from a signature's `Verify(data, sig)`.
+((invocation_expression
+  function: (member_access_expression
+    name: (identifier) @_verify)
+  arguments: (argument_list
+    .
+    (argument
+      (lambda_expression)))) @call.verification
+  (#any-of? @_verify "Verify" "VerifyGet" "VerifySet" "VerifyAdd" "VerifyRemove"))
+
+; A lambda that takes arguments, given to a test double as its behaviour, as in
+; `.Returns((int id) => ...)`, and the branches in it: a stand-in that picks its answer by what it
+; was called with re-implements what it replaces.
+[
+  (lambda_expression
+    parameters: (implicit_parameter))
+  (lambda_expression
+    parameters: (parameter_list
+      (parameter)))
+] @double.behaviour
+
+[
+  (if_statement)
+  (switch_statement)
+  (switch_expression)
+  (conditional_expression)
+] @double.branch

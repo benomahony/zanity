@@ -1,0 +1,4 @@
+rules: call-verification
+exit: 0
+VerificationTests.cs:11:15: warning [call-verification]
+VerificationTests.cs:12:15: warning [call-verification]

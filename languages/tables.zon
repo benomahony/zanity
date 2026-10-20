@@ -335,6 +335,7 @@
         .database_calls = .{ "SqlConnection", "NpgsqlConnection", "MySqlConnection", "SqliteConnection", "MongoClient", "ConnectionMultiplexer.Connect" },
         .in_memory_databases = .{ ":memory:", "Mode=Memory" },
         .process_calls = .{"Process.Start"},
+        .double_behaviour_methods = .{ "Returns", "ReturnsAsync", "Callback", "ReturnsLazily", "Invokes", "AndDoes", "Do" },
         .test_doubles = .{ "Mock", "Mock.Of", "Substitute.For", "Substitute.ForPartsOf", "A.Fake" },
         .verification_methods = .{ "VerifyAll", "VerifyNoOtherCalls", "Received", "DidNotReceive", "MustHaveHappened", "MustHaveHappenedOnceExactly", "MustNotHaveHappened" },
         .test_file_suffixes = .{ "Tests.cs", "Test.cs", "Spec.cs", "Specs.cs" },
