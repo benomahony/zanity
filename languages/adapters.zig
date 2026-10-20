@@ -61,7 +61,7 @@ pub const all: []const Adapter = blk: {
             .revision = @embedFile(entry.name ++ "/grammar/REVISION") ++ @embedFile("tables.zon"),
             .extensions = entry.extensions,
             .ecosystem = entry.ecosystem,
-            .grammar = @extern(*const Grammar, .{ .name = "tree_sitter_" ++ entry.name }),
+            .grammar = @extern(*const Grammar, .{ .name = "tree_sitter_" ++ if (entry.symbol.len > 0) entry.symbol else entry.name }),
             .families = families(entry),
             .query = querySource(entry),
             .tables = tablesFor(entry.ecosystem),

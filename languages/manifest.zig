@@ -5,6 +5,9 @@ pub const Entry = struct {
     scanner: bool,
     queries: []const []const u8,
     not_applicable: []const []const u8 = &.{},
+    /// The grammar's C symbol after `tree_sitter_`, when it differs from the name, as
+    /// tree-sitter-c-sharp's `c_sharp` differs from `csharp`.
+    symbol: []const u8 = "",
 };
 
 pub const Tables = struct {
