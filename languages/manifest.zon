@@ -58,7 +58,7 @@
     .{
         .name = "csharp",
         .symbol = "c_sharp",
-        .not_applicable = .{ "dynamic-allocation", "restated-type", "redundant-null-check", "conversion-assertion", "guaranteed-length", "discarded-comparison", "no-effect-statement", "return-in-finally", "identity-comparison", "switch-fallthrough", "public-finalizer", "missing-super-finalizer", "missing-super-clone", "public-clone-method", "thread-run", "struts-public-field", "prototype-mutation", "cwe-487", "cwe-609", "cwe-1235", "cwe-567" },
+        .not_applicable = .{ "dynamic-allocation", "restated-type", "redundant-null-check", "conversion-assertion", "guaranteed-length", "discarded-comparison", "no-effect-statement", "return-in-finally", "identity-comparison", "switch-fallthrough", "public-finalizer", "missing-super-finalizer", "missing-super-clone", "public-clone-method", "thread-run", "struts-public-field", "prototype-mutation", "cwe-487" },
         .extensions = .{ "cs", "csx" },
         .ecosystem = "dotnet",
         .scanner = true,

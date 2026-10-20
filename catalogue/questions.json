@@ -954,7 +954,8 @@
   "severity": "error",
   "scope": "function",
   "languages": [
-   "java"
+   "java",
+   "csharp"
   ]
  },
  {
@@ -1806,12 +1807,13 @@
  },
  {
   "id": "CWE-1235",
-  "question": "Does the function use boxed numbers, such as Integer or Double, in a performance-critical loop or collection where primitives would do?",
+  "question": "Does the function box numbers in a performance-critical loop or collection where primitives would do, such as Java's Integer or Double, or a C# int held as an object or in an ArrayList?",
   "message": "Boxing in hot code is slow. Use primitive types or primitive collections",
   "severity": "info",
   "scope": "function",
   "languages": [
-   "java"
+   "java",
+   "csharp"
   ]
  },
  {
@@ -1998,12 +2000,13 @@
  },
  {
   "id": "CWE-567",
-  "question": "Does the function read or modify shared static or instance data in a multi-threaded context, such as a servlet or request handler, without synchronisation?",
+  "question": "Does the function read or modify shared static or instance data in a multi-threaded context, such as a servlet, controller or request handler, without synchronisation?",
   "message": "Shared data is accessed from several threads without synchronisation. Synchronise it, or keep the data per request",
   "severity": "error",
   "scope": "function",
   "languages": [
-   "java"
+   "java",
+   "csharp"
   ]
  },
  {
