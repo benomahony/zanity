@@ -42,7 +42,7 @@ pub const Rule = struct {
     asks: Asks = .errors,
     /// Deterministic rules whose finding inside a unit already answers `question` there.
     settled_by: []const []const u8 = &.{},
-    /// How sure the model must be for `question` to report; [infer] threshold when null.
+    /// How sure the model must be for `question` to report; infer threshold when null.
     threshold: ?f64 = null,
 
     pub fn answers(rule: Rule, code: []const u8) bool {
@@ -101,9 +101,9 @@ pub const core = [_]Rule{
     .{ .name = "skipped-test", .pattern = "'$code' turns a test off, so it can't catch the failure it was written for, and nothing says when it comes back.", .advice = "Fix the test and turn it back on, or delete it; to skip only where it can't run, put the skip under a condition (skipif, an if around t.Skip), or use xfail(strict=True).", .severity = .warning, .tier = .default, .needs = &.{"finding.skipped-test"} },
     .{ .name = "vague-test-name", .advice = "Name the behaviour it expects, such as test_rejects_expired_token or it(\"returns 404 for an unknown id\").", .severity = .warning, .tier = .default, .needs = &.{ "function.outer", "function.name" } },
     .{ .name = "forbidden-term", .advice = "Rename it to say what it is or does, without the banned word.", .severity = .warning, .tier = .default, .needs = &.{"name"} },
-    .{ .name = "non-canonical-term", .advice = "Rename it with the project's word, as zanity.toml's synonyms give it.", .severity = .warning, .tier = .default, .needs = &.{"name"} },
+    .{ .name = "non-canonical-term", .advice = "Rename it with the project's word, as the glossary's terms give it.", .severity = .warning, .tier = .default, .needs = &.{"name"} },
     .{ .name = "misplaced-test", .advice = "Move the test next to the code it tests, or move the code to the domain the test is in.", .severity = .warning, .tier = .default, .needs = &.{"name"} },
-    .{ .name = "vocabulary-conflict", .advice = "Make the vocabulary in zanity.toml agree with itself: one word per meaning, and none both banned and canonical.", .severity = .@"error", .tier = .default },
+    .{ .name = "vocabulary-conflict", .advice = "Make the glossary agree with itself: one word per meaning, and none both banned and canonical.", .severity = .@"error", .tier = .default },
     .{ .name = "name-drift", .advice = "Pick one spelling and use it everywhere.", .severity = .warning, .tier = .default, .needs = &.{"name"} },
     .{ .name = "duplicate-name", .advice = "Give each a name that says how it differs.", .severity = .warning, .tier = .default, .needs = &.{"name"} },
     .{ .name = "restated-type", .alias = "NASA05-M1", .advice = "Assert something about its value instead.", .severity = .warning, .tier = .strict, .needs = &.{ "assertion.condition", "call.argument", "parameter.name", "parameter.type" }, .catalogue = &.{"EXT-VERIFY-002"} },
@@ -242,15 +242,15 @@ pub const core = [_]Rule{
     .{ .name = "long-file", .advice = "Split the file by responsibility into modules of a few hundred lines.", .severity = .warning, .tier = .default, .catalogue = &.{"CWE-1080"} },
 };
 
-/// The questions zanity.toml defines or retunes under [questions."<name>"], set once the file is
+/// The questions zanity.yaml defines or retunes under questions, set once the file is
 /// read; a retuned question here takes the place of the one in `all`.
 pub var custom: []const Rule = &.{};
 
-/// The question zanity.toml defines or retunes under `name`, if it does.
+/// The question zanity.yaml defines or retunes under `name`, if it does.
 pub fn customNamed(name: []const u8) ?*const Rule {
     if (name.len == 0) assert.panic("looked up a question by an empty name", .{});
     for (custom) |*rule| if (std.mem.eql(u8, rule.name, name)) return rule;
-    if (custom.len > 0 and custom[0].name.len == 0) assert.panic("the first of {d} questions from zanity.toml has no name; the reader names each from its table", .{custom.len});
+    if (custom.len > 0 and custom[0].name.len == 0) assert.panic("the first of {d} questions from zanity.yaml has no name; the reader names each from its key", .{custom.len});
     return null;
 }
 
@@ -374,7 +374,7 @@ pub const Set = struct {
     pub fn enabled(self: *const Set, name: []const u8) bool {
         if (name.len == 0) assert.panic("asked whether an empty rule name is enabled; pass a rule name", .{});
         if (self.len > all.len) assert.panic("the rule set holds {d} rules but only {d} exist; Set.include() must refuse to add past rules.all.len, so check it", .{ self.len, all.len });
-        // A question of zanity.toml's own runs whenever --infer does; removing its table stops it.
+        // A question of zanity.yaml's own runs whenever --infer does; removing its entry stops it.
         const i = ruleIndex(name) orelse return customNamed(name) != null;
         return self.held.isSet(i);
     }

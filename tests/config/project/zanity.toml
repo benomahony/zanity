@@ -1,2 +1,0 @@
-disable = ["long-parameter-list"]
-exclude = ["vendor/"]

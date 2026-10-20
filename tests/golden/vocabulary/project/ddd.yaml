@@ -1,0 +1,18 @@
+contexts:
+  - name: Project
+    forbidden: [util, manager]
+    terms:
+      - name: customer
+        aliases: [client, user]
+  - name: commerce
+    kind: domain
+    paths: [src/**]
+  - name: billing
+    paths: [src/billing/**]
+    forbidden: [discount]
+    terms:
+      - name: invoice
+        definition: What a customer is asked to pay.
+        aliases: [bill]
+  - name: shipping
+    paths: [src/shipping/**]

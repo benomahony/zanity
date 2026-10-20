@@ -1,0 +1,45 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/benomahony/zanity/main/ddd.schema.json",
+  "title": "ddd.yaml",
+  "description": "The project's words for things, in the shape of a Contextive glossary: bounded contexts, the files each covers, and its terms.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "directional": { "$ref": "#/definitions/words", "description": "Words that give a name a direction, so us_to_uk and uk_to_us aren't name drift.", "maxItems": 32 },
+    "contexts": {
+      "description": "The project's words for things, in the shape of a Contextive glossary. A context with no paths holds the words of the whole project. The glossary sits in zanity.yaml or in ddd.yaml, not both.",
+      "type": "array",
+      "items": { "$ref": "#/definitions/context" }
+    },
+    "imports": { "description": "Contextive's imports of other glossaries; zanity reads past them." }
+  },
+  "definitions": {
+    "words": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+    "context": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "description": "What the context is called; a context with paths needs one." },
+        "kind": { "enum": ["context", "domain"], "default": "context", "description": "A context's words win over a domain's, and the same name may be defined once in each context." },
+        "paths": { "$ref": "#/definitions/words", "maxItems": 16, "description": "The files it covers, in .gitignore syntax, relative to this file. Quote a pattern that starts with *." },
+        "forbidden": { "$ref": "#/definitions/words", "description": "Words no name in it may use, such as [util, manager]." },
+        "terms": { "type": "array", "items": { "$ref": "#/definitions/term" } },
+        "domainVisionStatement": { "type": "string", "description": "Contextive's summary of the context; zanity reads past it." },
+        "meta": { "description": "Contextive's details about the context; zanity reads past them." }
+      }
+    },
+    "term": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "description": "The project's word; a name using one of its aliases is respelled with it." },
+        "aliases": { "$ref": "#/definitions/words", "description": "The words it replaces, such as [client, user]." },
+        "definition": { "type": "string", "description": "What it means, for Contextive's hovers." },
+        "examples": { "type": "array", "items": { "type": "string" }, "description": "Sentences using it, for Contextive's hovers." },
+        "meta": { "description": "Contextive's details about the term; zanity reads past them." }
+      }
+    }
+  }
+}

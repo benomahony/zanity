@@ -1,8 +1,0 @@
-[vocabulary.synonyms]
-customer = ["client"]
-
-[contexts.sales]
-include = ["sales/**"]
-
-[contexts.sales.synonyms]
-buyer = ["client"]

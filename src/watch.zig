@@ -10,6 +10,7 @@ const assert = @import("assert.zig");
 const language = @import("language.zig");
 const project = @import("project.zig");
 const config = @import("config.zig");
+const ddd = @import("ddd.zig");
 const memory = @import("memory.zig");
 const Ignore = @import("ignore.zig").Ignore;
 const Io = std.Io;
@@ -23,7 +24,7 @@ pub const env_var = "ZANITY_WATCH";
 /// Each wait answers one change, so this many is far more than any session makes.
 const max_waits = 1 << 40;
 
-/// Which changed paths are worth a rerun: a source file, a project file, zanity.toml or a
+/// Which changed paths are worth a rerun: a source file, a project file, zanity.yaml, ddd.yaml or a
 /// .gitignore under one of the paths `check` was given, outside the directories the walk skips
 /// and the files .gitignore and `exclude` leave out.
 pub const ChangeFilter = struct {
@@ -66,7 +67,7 @@ fn readByCheck(name: []const u8, relative: []const u8) bool {
     if (name.len == 0) assert.panic("asked whether check reads a file with no name at '{s}'; pass a file's base name", .{relative});
     if (relative.len > 0 and !std.mem.endsWith(u8, relative, name)) assert.panic("'{s}' is not the name at the end of '{s}'; pass the base name of the same path", .{ name, relative });
     if (language.forPath(name) != null) return true;
-    if (std.mem.eql(u8, name, config.file_name) or std.mem.eql(u8, name, ".gitignore")) return true;
+    if (std.mem.eql(u8, name, config.file_name) or std.mem.eql(u8, name, ddd.glossary_file) or std.mem.eql(u8, name, ".gitignore")) return true;
     return relative.len > 0 and project.isProjectFile(relative);
 }
 
@@ -433,7 +434,8 @@ test "only files check reads, outside skipped and ignored directories, are worth
     try ignore.exclude("/repo", "vendor/");
     const scope: ChangeFilter = .{ .roots = &.{"/repo"}, .ignore = &ignore };
     try std.testing.expect(scope.relevant("/repo/src/app.py"));
-    try std.testing.expect(scope.relevant("/repo/zanity.toml"));
+    try std.testing.expect(scope.relevant("/repo/zanity.yaml"));
+    try std.testing.expect(scope.relevant("/repo/ddd.yaml"));
     try std.testing.expect(!scope.relevant("/repo/notes.txt"));
     try std.testing.expect(!scope.relevant("/repo/.zig-cache/o/app.py"));
     try std.testing.expect(!scope.relevant("/repo/node_modules/x/index.ts"));

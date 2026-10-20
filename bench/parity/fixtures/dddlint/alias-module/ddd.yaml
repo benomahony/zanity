@@ -1,0 +1,5 @@
+contexts:
+  - name: Project
+    terms:
+      - name: customer
+        aliases: [client]

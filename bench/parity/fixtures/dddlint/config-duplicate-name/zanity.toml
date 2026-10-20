@@ -1,5 +1,0 @@
-[contexts.billing]
-include = ["billing/**"]
-
-[contexts.billings]
-include = ["billings/**"]

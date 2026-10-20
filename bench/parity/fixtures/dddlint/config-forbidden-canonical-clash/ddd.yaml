@@ -1,0 +1,6 @@
+contexts:
+  - name: Project
+    forbidden: [customer]
+    terms:
+      - name: customer
+        aliases: [client]

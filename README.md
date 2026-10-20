@@ -82,13 +82,13 @@ zanity check . --fix
 
 `--fix` makes only changes that can't alter what the code does, such as moving a declaration into the block that uses it or adding a message to an assertion. Where only a person knows something, like why an assertion must hold, it leaves a `TODO` comment for you to fill in.
 
-Then write a `zanity.toml` to say what zanity should check:
+Then write a `zanity.yaml` to say what zanity should check:
 
 ```sh
 zanity init
 ```
 
-It writes every setting with notes on what it does, excludes the vendored and fixture directories it finds, such as `vendor/` and `tests/fixtures/`, and ends with a `[rules]` table that turns on `select = ["all"]` and lists every rule with its severity and how to fix what it finds, ready to uncomment into `disable`. Delete or change what you don't need; `--force` replaces an existing file. `zanity init --minimal` writes the same settings with none of the notes or the rule list.
+It writes every setting with notes on what it does, excludes the vendored and fixture directories it finds, such as `vendor/` and `tests/fixtures/`, and ends with a `rules` section that turns on `select: [all]` and lists every rule with its severity and how to fix what it finds, ready to uncomment into `disable`. Delete or change what you don't need; `--force` replaces an existing file. `zanity init --minimal` writes the same settings with none of the notes or the rule list.
 
 Once `zanity check .` is clean, keep it that way with `--fail-on warning`, which fails on warnings as well as errors. That is what a pre-commit hook or CI should run.
 
@@ -143,7 +143,7 @@ The action downloads the release binary for the runner and fails the job on any 
 ## Usage
 
 ```sh
-zanity init                                   # write a zanity.toml with every setting explained
+zanity init                                   # write a zanity.yaml with every setting explained
 zanity check                                  # check the current directory
 zanity check src tests                        # check some paths
 zanity check . --rules recursion,long-function   # run only these rules
@@ -160,7 +160,7 @@ zanity lsp                                    # serve findings and fixes to an e
 zanity help check                             # every option
 ```
 
-`check` exits 0 when nothing fired, 1 when an error-level rule fired (or any rule, with `--fail-on warning`), and 2 on a usage error such as a mistake in `zanity.toml`. Findings go to stdout and the one-line summary to stderr, so output can be piped cleanly. On a terminal the report reads like a coverage report: the first ten findings, errors first, one line each, then a table of the files with the most errors and warnings and the rule that fired most in each, the rest of the files on one row, and a total. How to fix each finding is in `--agent`, `--plain` and `--json`; when zanity can make the fix itself, `--json` and `--plain` also give the edit, as `edit_start` and `edit_end` (byte offsets into the file) and `edit_text`, its replacement. A progress line shows how far a long run has got; `-q` hides it, and it never appears in piped output. `--no-color` or `NO_COLOR` turns colour off. `--watch` checks again whenever a file it checks, or `zanity.toml`, is saved, added or removed: the operating system reports the change (FSEvents on macOS, inotify on Linux, directory change notifications on Windows), so nothing is polled, and writes to ignored files such as build output don't start a check. The checker and its workers stay resident between saves, while the cache means only changed files are parsed again; whole-project rules are recomputed from all cached facts. Each check prints the `--agent` report, each finding's line, column and fix, unless `--json` or `--plain` is given. Each check reads `zanity.toml` afresh, but which files are watched is settled when `--watch` starts, so restart it after changing `exclude`. `--infer` and `--fix` use isolated reruns because they have external or mutating state.
+`check` exits 0 when nothing fired, 1 when an error-level rule fired (or any rule, with `--fail-on warning`), and 2 on a usage error such as a mistake in `zanity.yaml`. Findings go to stdout and the one-line summary to stderr, so output can be piped cleanly. On a terminal the report reads like a coverage report: the first ten findings, errors first, one line each, then a table of the files with the most errors and warnings and the rule that fired most in each, the rest of the files on one row, and a total. How to fix each finding is in `--agent`, `--plain` and `--json`; when zanity can make the fix itself, `--json` and `--plain` also give the edit, as `edit_start` and `edit_end` (byte offsets into the file) and `edit_text`, its replacement. A progress line shows how far a long run has got; `-q` hides it, and it never appears in piped output. `--no-color` or `NO_COLOR` turns colour off. `--watch` checks again whenever a file it checks, `zanity.yaml` or `ddd.yaml`, is saved, added or removed: the operating system reports the change (FSEvents on macOS, inotify on Linux, directory change notifications on Windows), so nothing is polled, and writes to ignored files such as build output don't start a check. The checker and its workers stay resident between saves, while the cache means only changed files are parsed again; whole-project rules are recomputed from all cached facts. Each check prints the `--agent` report, each finding's line, column and fix, unless `--json` or `--plain` is given. Each check reads `zanity.yaml` and `ddd.yaml` afresh, but which files are watched is settled when `--watch` starts, so restart it after changing `exclude`. `--infer` and `--fix` use isolated reruns because they have external or mutating state.
 
 `--agent` writes for a coding agent, in about 1% of the bytes of the terminal report once a run has more than a handful of findings: the totals and the command to run next, then the first findings in rule order, errors first, each as `line:column` and its own fix (or its message, without the explanation every finding of its rule shares), with `[--fix]` on those zanity can fix itself. It tells the agent to resolve every finding in code. When the behaviour is already correct, the agent must refactor it so that correctness is explicit enough for the rule to verify, rather than suppressing the finding, disabling its rule or excluding its path. `--limit N` sets how many findings it shows in all (10 by default, 0 for every one); the rules past them are listed by name and count, to look at with `--rules <name>`. It is on by default under Claude Code (when `CLAUDECODE` is set) unless `--json` or `--plain` is given; `ZANITY_AGENT=1` turns it on for any other agent.
 
@@ -199,7 +199,7 @@ sqlite3 ~/.cache/zanity/zanity.db "SELECT rule, path, line, code, message FROM f
 A file edited since the last check offers no actions until it is saved, since its findings may have moved. In Neovim:
 
 ```lua
-vim.lsp.config("zanity", { cmd = { "zanity", "lsp" }, root_markers = { "zanity.toml", ".git" }, filetypes = { "python", "zig", "go", "rust", "java", "cs", "javascript", "typescript" } })
+vim.lsp.config("zanity", { cmd = { "zanity", "lsp" }, root_markers = { "zanity.yaml", "ddd.yaml", ".git" }, filetypes = { "python", "zig", "go", "rust", "java", "cs", "javascript", "typescript" } })
 vim.lsp.enable("zanity")
 ```
 
@@ -214,13 +214,13 @@ export TYPESAFE_API_KEY=...   # from your TypeSafe account
 zanity check . --infer
 ```
 
-Any other System One server works too, such as [Kev](https://github.com/jaredpalmer/kev) running on your own machine, so no code leaves it. Point `[infer]` in `zanity.toml` at it:
+Any other System One server works too, such as [Kev](https://github.com/jaredpalmer/kev) running on your own machine, so no code leaves it. Point `infer` in `zanity.yaml` at it:
 
-```toml
-[infer]
-url = "http://127.0.0.1:8009"   # default: TYPESAFE_BASE_URL, then https://api.typesafe.ai
-model = "kev-latest"            # default: TYPESAFE_DEFAULT_MODEL, then jev-latest
-api_key_env = "KEV_API_KEY"     # default: TYPESAFE_API_KEY
+```yaml
+infer:
+  url: http://127.0.0.1:8009    # default: TYPESAFE_BASE_URL, then https://api.typesafe.ai
+  model: kev-latest             # default: TYPESAFE_DEFAULT_MODEL, then jev-latest
+  api_key_env: KEV_API_KEY      # default: TYPESAFE_API_KEY
 ```
 
 Only TypeSafe's own API needs a key. For any other server the key is optional, and zanity reads it only from the variable `api_key_env` names, so your TypeSafe key is never sent anywhere else. Answers are stored per model and server, so switching between them never mixes their answers.
@@ -281,13 +281,13 @@ Its fix names the members and what varies between them, which is what that build
 
 And for each family of the [engineering error catalogue](https://github.com/benomahony/zanity/tree/main/catalogue) that no deterministic rule detects, 327 in all, from CWE weaknesses such as `cwe-22` (a path built from input that can escape its directory) to engineering ones such as `ext-distributed-001` (a side effect a retry repeats), one question about each function, each whole file, or the project's build and CI files. Each is a rule named for its family, listed on the [rules page](https://benomahony.github.io/zanity/rules/#catalogue-questions); select or disable them by name like any rule. Families a rule already detects are never asked about, and families only C, C++, PHP or Perl can have are left out. They add hundreds of questions to each function the first time it is seen, so the first run costs more; after that only edited code is asked again.
 
-A finding is reported when the model is at least 80% sure, and says how sure it was. `threshold` under `[infer]` in `zanity.toml` changes that: `threshold = 0.9` reports only what it is at least 90% sure of, and a lower value reports more.
+A finding is reported when the model is at least 80% sure, and says how sure it was. `threshold` under `infer` in `zanity.yaml` changes that: `threshold: 0.9` reports only what it is at least 90% sure of, and a lower value reports more.
 
 **What is sent**, to the server you chose: the source of each function, fixture or test, each source file for the catalogue's file questions, the first three bodies of each cluster, and only the questions that apply to it and that no deterministic check already answered there: the error-message questions only about functions that raise, return or log an error, and the fixture questions only about non-test functions in test files. Nothing else leaves your machine, and without `--infer` nothing does at all.
 
-**Cost and speed:** answers are cached in a SQLite file, `~/.cache/zanity/zanity.db` (or wherever `ZANITY_STORE` points), keyed by the function's source, so unchanged code is never asked about twice and a second run is instant. A progress line shows how many functions are answered and how long the rest will take. `[infer] concurrency` in `zanity.toml` sets how many requests run at once (default 8, up to 64).
+**Cost and speed:** answers are cached in a SQLite file, `~/.cache/zanity/zanity.db` (or wherever `ZANITY_STORE` points), keyed by the function's source, so unchanged code is never asked about twice and a second run is instant. A progress line shows how many functions are answered and how long the rest will take. `concurrency` under `infer` in `zanity.yaml` sets how many requests run at once (default 8, up to 64).
 
-**Calibrating the questions:** `zanity mark app.py:12 cwe-15 --not-a-problem` says a finding is wrong for that function, so it is never reported there again, and `--confirm` says it is real. `zanity review cwe-15` lists unlabelled answers to mark, spread evenly from unsure to sure, so the labels cover what the model missed as well as what it found. `zanity stats` shows how often each question fires and how many of its answers are unsure (between 0.35 and 0.65; a well-posed question has few), and `zanity stats --thresholds` measures each marked question's precision and recall at a range of thresholds, to pick a `threshold` for it under `[questions."<name>"]`.
+**Calibrating the questions:** `zanity mark app.py:12 cwe-15 --not-a-problem` says a finding is wrong for that function, so it is never reported there again, and `--confirm` says it is real. `zanity review cwe-15` lists unlabelled answers to mark, spread evenly from unsure to sure, so the labels cover what the model missed as well as what it found. `zanity stats` shows how often each question fires and how many of its answers are unsure (between 0.35 and 0.65; a well-posed question has few), and `zanity stats --thresholds` measures each marked question's precision and recall at a range of thresholds, to pick a `threshold` for it under its name in `questions`.
 
 **Querying what the model said:** each run also keeps every answer in the store, including the ones below the threshold, in `observations` (one row per question, function and place, with the probability, the threshold and whether it fired) and a row in `runs` with the tokens it used. Any SQLite client can read them; with [DuckDB](https://duckdb.org):
 
@@ -299,77 +299,92 @@ duckdb -c "ATTACH '~/.cache/zanity/zanity.db' AS z (TYPE sqlite, READ_ONLY);
 
 ## Configuration
 
-zanity reads the nearest `zanity.toml` at or above the directory it runs in, stopping at the repository root. For completion, hover docs and errors as you type, make this its first line; editors with a TOML language server, such as VS Code's Even Better TOML, pick it up:
+zanity reads the nearest folder at or above the directory it runs in, stopping at the repository root, that holds `zanity.yaml`, `ddd.yaml` or both. For completion, hover docs and errors as you type, make this its first line; editors with a YAML language server pick it up, such as VS Code's YAML extension, Neovim's yamlls, Helix and Zed:
 
-```toml
-#:schema https://raw.githubusercontent.com/benomahony/zanity/main/zanity.schema.json
+```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/benomahony/zanity/main/zanity.schema.json
 ```
 
 Everything is optional:
 
-```toml
+```yaml
 # Paths to skip, in .gitignore syntax, relative to this file.
-exclude = ["vendor/", "tests/fixtures/**"]
+exclude: [vendor/, tests/fixtures/]
 
-[infer]
-# The System One server to ask, such as a local Kev (default: TypeSafe's API).
-url = "http://127.0.0.1:8009"
-# The model to ask (default: jev-latest).
-model = "kev-latest"
-# The variable holding the API key (default: TYPESAFE_API_KEY); optional except for TypeSafe.
-api_key_env = "KEV_API_KEY"
-# Requests sent to the model at once (1 to 64, default 8).
-concurrency = 16
-# How sure the model must be for a judgement to become a finding (above 0 up to 1, default 0.8).
-threshold = 0.9
+infer:
+  # The System One server to ask, such as a local Kev (default: TypeSafe's API).
+  url: http://127.0.0.1:8009
+  # The model to ask (default: jev-latest).
+  model: kev-latest
+  # The variable holding the API key (default: TYPESAFE_API_KEY); optional except for TypeSafe.
+  api_key_env: KEV_API_KEY
+  # Requests sent to the model at once (1 to 64, default 8).
+  concurrency: 16
+  # How sure the model must be for a judgement to become a finding (above 0 up to 1, default 0.8).
+  threshold: 0.9
 
-# A question of your own for --infer: a table named for its rule, with the question, what a
-# finding says and how to fix it. severity (default "warning"), asks (default "function"; or
-# "errors", "fixture", "test", "file" or "project") and threshold are optional.
-[questions."payment-without-key"]
-question = "Does the function charge a card without an idempotency key?"
-finding = "A card is charged without an idempotency key"
-fix = "Pass the order's id as the payment's idempotency key."
-severity = "error"
+# A question of your own for --infer: keyed by its rule's name, with the question, what a
+# finding says and how to fix it. severity (default warning), asks (default function; or
+# errors, fixture, test, file or project) and threshold are optional.
+questions:
+  payment-without-key:
+    question: Does the function charge a card without an idempotency key?
+    finding: A card is charged without an idempotency key
+    fix: Pass the order's id as the payment's idempotency key.
+    severity: error
+  # Naming one of zanity's questions retunes it instead: give only what changes.
+  cwe-15:
+    threshold: 0.95
 
-# Naming one of zanity's questions retunes it instead: give only what changes.
-[questions."cwe-15"]
-threshold = 0.95
+# Rules that don't report in some files: one entry per pattern, in .gitignore syntax, relative
+# to this file.
+paths:
+  - files: tests/e2e/
+    disable: [process-in-test, network-in-test]
 
-# Rules that don't report in some files. The pattern is .gitignore syntax, relative to this
-# file; add a section per pattern.
-[paths."tests/e2e/"]
-disable = ["process-in-test", "network-in-test"]
-
-# The project's words for things: names using a banned word, or an alias of the word the
-# project settled on, are reported, with the name respelled.
-[vocabulary]
-forbidden = ["util", "manager"]
-# Words that give a name a direction, so us_to_uk and uk_to_us aren't name drift.
-directional = ["to", "from"]
-
-[vocabulary.synonyms]
-customer = ["client", "user"]
-
-# Parts of the code with words of their own: [domains.<name>] and [contexts.<name>] take
-# include (.gitignore patterns), forbidden and a synonyms table. A context applies after a
-# domain, and the same name may be defined once in each context.
-[contexts.billing]
-include = ["src/billing/**"]
-forbidden = ["discount"]
-
-[contexts.billing.synonyms]
-invoice = ["bill", "statement"]
-
-[rules]
-# Run only these rules; "all" is every rule, including those off by default, and "strict" the
-# defaults and the strict rules. Leave it out to run the defaults.
-select = ["recursion", "unbounded-loop", "long-function"]
-# Rules to switch off, from the selection or the defaults.
-disable = ["duplicate-name"]
+rules:
+  # Run only these rules; "all" is every rule, including those off by default, and "strict" the
+  # defaults and the strict rules. Leave it out to run the defaults.
+  select: [recursion, unbounded-loop, long-function]
+  # Rules to switch off, from the selection or the defaults.
+  disable: [duplicate-name]
 ```
 
-`--rules` on the command line overrides `[rules]`. Files written before the `[rules]` table, with `rules` and `disable` at the top, still work. A mistake in the file stops the run with exit code 2 and names the line and what to write instead, for example `zanity.toml:1: 'recursions' isn't a rule; ...`.
+`--rules` on the command line overrides `rules`. A mistake in the file stops the run with exit code 2 and names the line and what to write instead, for example `zanity.yaml:2: 'recursions' isn't a rule; ...`.
+
+zanity reads a strict part of YAML: every value is text, so `no` never turns into false, and a value that YAML would read as more than text, such as a pattern starting with `*`, must be quoted (`"*_test.py"`); zanity tells you where until it is.
+
+### The project's words: `ddd.yaml`
+
+The project's ubiquitous language lives in `ddd.yaml`, beside `zanity.yaml` or on its own, or under the same keys in `zanity.yaml` itself, but not in both. Put `# yaml-language-server: $schema=https://raw.githubusercontent.com/benomahony/zanity/main/ddd.schema.json` at the top of `ddd.yaml` for completion and checks as you type. It has the shape of a [Contextive](https://github.com/dev-cycles/contextive) glossary, so the same file gives your editor hover definitions and gives zanity a vocabulary to check names against. There is no settled standard for a machine-readable glossary; Contextive's is the nearest thing in use, and [Context Mapper](https://contextmapper.org)'s CML is the fuller model if you need context maps.
+
+```yaml
+# Words that give a name a direction, so us_to_uk and uk_to_us aren't name drift.
+directional: [to, from]
+contexts:
+  # A context with no paths holds the words of the whole project.
+  - name: Shared
+    # Words no name may use.
+    forbidden: [util, manager]
+    terms:
+      # Names using an alias are reported, with the name respelled with the term.
+      - name: customer
+        definition: Someone who buys from us.
+        aliases: [client, user]
+  - name: Billing
+    # context (the default) or domain; a context's words win over a domain's, and the same
+    # name may be defined once in each context.
+    kind: context
+    # The files it covers, in .gitignore syntax, relative to this file.
+    paths: ["src/billing/**"]
+    forbidden: [discount]
+    terms:
+      - name: invoice
+        definition: What a customer is asked to pay.
+        aliases: [bill, statement]
+```
+
+`kind`, `forbidden` and `directional` are zanity's additions; Contextive's own keys, such as `definition`, `examples`, `domainVisionStatement` and `meta`, are read past. A term whose name is several words, such as `Purchase Order`, stays in the glossary but can't be one word of a name, so zanity doesn't check its aliases. Quote a path that starts with `*`, as YAML reads a bare `*` as an alias.
 
 ## Suppressing a finding
 
@@ -468,7 +483,7 @@ Rules marked *strict* hold code to what safety-critical software needs and most 
 |---|---|---|
 | `name-drift` | warning | one concept spelled several ways, such as `order_total` and `total_order`; not the same words written by convention, such as a class `FallbackModel` and its instance `fallback_model`, or a private `_now` beside `now`. Its fix names the spelling most definitions use |
 | `duplicate-name` | warning | the same name defined more than once in one language and one domain or context, where another file could use either: not methods, nested functions, tests, or names private to their module |
-| `forbidden-term` | warning | a name using a word `[vocabulary]` or its domain or context bans |
+| `forbidden-term` | warning | a name using a word `ddd.yaml` bans for the project or for its domain or context |
 | `non-canonical-term` | warning | a name using an alias where the project has settled on another word, with the name respelled |
 | `misplaced-test` | warning | a test in one domain or context whose subject lives in exactly one other |
 | `vocabulary-conflict` | error | a vocabulary that contradicts itself: a word both banned and canonical, an alias mapped two ways, or two domains or contexts with nearly the same name |
@@ -525,7 +540,7 @@ No Zig code changes. Add:
 
 ### The config schema
 
-`zanity.schema.json` is written from the rules and limits in the code by `zig build schema`; a test fails when it is out of date, so run that after adding a rule or a setting.
+`zanity.schema.json` and `ddd.schema.json` are written from the rules and limits in the code by `zig build schema`; a test fails when either is out of date, so run that after adding a rule or a setting.
 
 ### Testing
 

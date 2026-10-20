@@ -1,0 +1,10 @@
+contexts:
+  - name: Project
+    terms:
+      - name: customer
+        aliases: [client]
+  - name: sales
+    paths: [sales/**]
+    terms:
+      - name: buyer
+        aliases: [client]

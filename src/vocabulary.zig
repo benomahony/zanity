@@ -1,4 +1,4 @@
-//! The project's own words, from zanity.toml: names that use a banned word or an alias of the
+//! The project's own words, from the glossary in ddd.yaml or zanity.yaml: names that use a banned word or an alias of the
 //! word the project settled on, tests filed in a different domain from the code they test, and
 //! vocabularies that contradict themselves.
 const std = @import("std");
@@ -22,7 +22,7 @@ const max_words = 16;
 /// here can tell bounded contexts apart.
 pub fn assignScopes(anchor: Anchor, facts: *Facts) void {
     const settings = anchor.config;
-    if (settings.dir.len == 0) assert.panic("assigning scopes with no zanity.toml; anchorOf() returns null without one", .{});
+    if (settings.dir.len == 0) assert.panic("assigning scopes with no zanity.yaml or ddd.yaml; anchorOf() returns null without one", .{});
     const scopes = settings.domainsAndContexts();
     if (scopes.len == 0) return;
     var buffer: [std.fs.max_path_bytes]u8 = undefined;
@@ -45,7 +45,7 @@ pub fn checkVocabulary(run: Run, facts: *Facts, files: []const []const u8) error
     if (settings.dir.len == 0) return;
     if (enabled.len == 0) assert.panic("vocabulary checks ran with no rules enabled; runCheck always enables at least one", .{});
     const before = findings.len;
-    if (enabled.enabled("vocabulary-conflict")) try conflicts(run);
+    if (enabled.enabled("vocabulary-conflict") and settings.glossary_file.len > 0) try conflicts(run);
     if (settings.terms_len > 0) {
         for (facts.definitions.items()) |d| try checkName(run, .{ .name = d.name, .path = d.path, .line = d.line, .column = d.column, .scope = d.scope });
         try checkPaths(run, files);
@@ -91,7 +91,7 @@ fn checkPaths(run: Run, files: []const []const u8) error{LimitExceeded}!void {
 /// How strongly `term` applies to the definition: 0 when it doesn't, 1 for the whole project,
 /// 2 for its domain and 3 for its context, so the most specific word wins.
 fn reach(settings: *const Config, term: Term, scope: []const u8) u8 {
-    if (term.word.len == 0) assert.panic("weighing an empty vocabulary word; TomlReader must reject an empty term, so check where it adds terms", .{});
+    if (term.word.len == 0) assert.panic("weighing an empty vocabulary word; the ddd.yaml reader must reject an empty word, so check addTerm()", .{});
     if (term.scope == 0) return 1;
     if (term.scope > settings.scopes_len) assert.panic("a term belongs to scope {d} of {d}; the reader numbers scopes from 1", .{ term.scope, settings.scopes_len });
     const owner = settings.scopes[term.scope - 1];
@@ -142,7 +142,7 @@ fn reportTerm(run: Run, d: Named, word: []const u8, term: Term) error{LimitExcee
     if (term.canonical.len == 0) {
         const settings = run.anchor.config;
         const where = if (term.scope == 0) "" else settings.scopes[term.scope - 1].name;
-        if (run.enabled.enabled("forbidden-term")) try run.findings.add(.{ .path = d.path, .line = d.line, .column = d.column, .rule = "forbidden-term", .message = try text.format("{s}'{s}' uses '{s}', a word zanity.toml bans{s}{s}, so the name says less than it should.", .{ what, d.name, word, if (where.len > 0) " in " else "", where }) });
+        if (run.enabled.enabled("forbidden-term")) try run.findings.add(.{ .path = d.path, .line = d.line, .column = d.column, .rule = "forbidden-term", .message = try text.format("{s}'{s}' uses '{s}', a word {s} bans{s}{s}, so the name says less than it should.", .{ what, d.name, word, settings.glossary_file, if (where.len > 0) " in " else "", where }) });
         return;
     }
     if (!run.enabled.enabled("non-canonical-term")) return;
@@ -185,7 +185,7 @@ fn conflicts(run: Run) error{LimitExceeded}!void {
     const findings = run.findings;
     const before = findings.len;
     var buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const path = try text.copy(anchor.configPath(&buffer));
+    const path = try text.copy(anchor.configPath(anchor.config.glossary_file, &buffer));
     const settings = anchor.config;
     const terms = settings.vocabulary();
     for (terms, 0..) |a, i| for (terms[i + 1 ..]) |b| {
@@ -209,7 +209,7 @@ fn conflicts(run: Run) error{LimitExceeded}!void {
 /// How alike two names are, from 0 to 1: one less the share of the longer that must change,
 /// counting edits ignoring case.
 fn similarity(a: []const u8, b: []const u8) f64 {
-    if (a.len == 0 or b.len == 0) assert.panic("comparing '{s}' with '{s}', and one is empty; TomlReader must reject an empty domain or context name, so check where it reads table headers", .{ a, b });
+    if (a.len == 0 or b.len == 0) assert.panic("comparing '{s}' with '{s}', and one is empty; the ddd.yaml reader must reject a context with paths and no name, so check addScope()", .{ a, b });
     if (a.len > 64 or b.len > 64) return if (std.ascii.eqlIgnoreCase(a, b)) 1 else 0;
     var row: [65]usize = undefined;
     for (0..b.len + 1) |j| row[j] = j;

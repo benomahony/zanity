@@ -1,6 +1,7 @@
-//! The JSON Schema for zanity.toml, so an editor can check the file and explain each setting as
-//! you type. It is written from the rules and limits in the code, never by hand: `zig build
-//! schema` writes zanity.schema.json, and a test fails when that file has fallen behind.
+//! The JSON Schemas for zanity.yaml and ddd.yaml, so an editor can check each file and explain
+//! each setting as you type. They are written from the rules and limits in the code, never by
+//! hand: `zig build schema` writes zanity.schema.json and ddd.schema.json, and a test fails when
+//! either has fallen behind.
 const std = @import("std");
 const assert = @import("assert.zig");
 const rules = @import("rules.zig");
@@ -8,18 +9,22 @@ const config = @import("config.zig");
 const infer = @import("infer.zig");
 
 pub const url = "https://raw.githubusercontent.com/benomahony/zanity/main/zanity.schema.json";
+pub const glossary_url = "https://raw.githubusercontent.com/benomahony/zanity/main/ddd.schema.json";
 
+/// Writes zanity.schema.json, or ddd.schema.json when the argument is `ddd`.
 pub fn main(init: std.process.Init) !void {
+    const minimal = init.minimal;
+    const args = try minimal.args.toSlice(init.arena.allocator());
     // Room for the whole schema, so renderSchema() writes it before anything is flushed.
     var buffer: [1024 * 1024]u8 = undefined;
     var out: std.Io.File.Writer = .initStreaming(.stdout(), init.io, &buffer);
-    try renderSchema(&out.interface);
+    if (args.len > 1 and std.mem.eql(u8, args[1], "ddd")) try renderGlossarySchema(&out.interface) else try renderSchema(&out.interface);
     if (out.interface.end == 0) assert.panic("the schema came out empty; renderSchema() must write the whole schema", .{});
     try out.interface.flush();
     if (out.interface.end != 0) assert.panic("flushing the schema left {d} bytes unwritten; check that stdout is writable", .{out.interface.end});
 }
 
-/// Writes the whole schema.
+/// Writes the whole schema for zanity.yaml.
 pub fn renderSchema(w: *std.Io.Writer) !void {
     if (rules.all.len == 0) assert.panic("rules.all is empty, so the schema would accept no rule names; add the rules back to src/rules.zig", .{});
     if (!(infer.default_threshold > 0 and infer.default_threshold <= 1)) assert.panic("infer.default_threshold is {d}, outside the (0, 1] the schema allows; set it between 0 and 1 in src/infer.zig", .{infer.default_threshold});
@@ -27,49 +32,33 @@ pub fn renderSchema(w: *std.Io.Writer) !void {
         \\{{
         \\  "$schema": "http://json-schema.org/draft-07/schema#",
         \\  "$id": "{s}",
-        \\  "title": "zanity.toml",
-        \\  "description": "Settings for zanity check: which rules run, which files are skipped, and which model --infer asks.",
+        \\  "title": "zanity.yaml",
+        \\  "description": "Settings for zanity check: which rules run, which files are skipped, which model --infer asks, and optionally the project's glossary.",
         \\  "type": "object",
         \\  "additionalProperties": false,
         \\  "properties": {{
         \\    "rules": {{
-        \\      "description": "Which rules run: a [rules] table with select and disable. A list here, the older form, works as select.",
-        \\      "oneOf": [
-        \\        {{
-        \\          "type": "object",
-        \\          "additionalProperties": false,
-        \\          "properties": {{
-        \\            "select": {{
-        \\              "description": "Run only these rules instead of the defaults. \"all\" is every rule, including those off by default, and \"strict\" the defaults and the strict rules. --rules on the command line overrides it.",
-        \\              "type": "array",
-        \\              "minItems": 1,
-        \\              "uniqueItems": true,
-        \\              "items": {{ "$ref": "#/definitions/ruleOrAll" }}
-        \\            }},
-        \\            "disable": {{
-        \\              "description": "Rules to leave out of the selection, such as [\"duplicate-name\"].",
-        \\              "type": "array",
-        \\              "uniqueItems": true,
-        \\              "items": {{ "$ref": "#/definitions/rule" }}
-        \\            }}
-        \\          }}
-        \\        }},
-        \\        {{
+        \\      "description": "Which rules run.",
+        \\      "type": "object",
+        \\      "additionalProperties": false,
+        \\      "properties": {{
+        \\        "select": {{
+        \\          "description": "Run only these rules instead of the defaults. \"all\" is every rule, including those off by default, and \"strict\" the defaults and the strict rules. --rules on the command line overrides it.",
         \\          "type": "array",
         \\          "minItems": 1,
         \\          "uniqueItems": true,
         \\          "items": {{ "$ref": "#/definitions/ruleOrAll" }}
+        \\        }},
+        \\        "disable": {{
+        \\          "description": "Rules to leave out of the selection, such as [duplicate-name]; nothing, as zanity init writes it, leaves none out.",
+        \\          "type": ["array", "null"],
+        \\          "uniqueItems": true,
+        \\          "items": {{ "$ref": "#/definitions/rule" }}
         \\        }}
-        \\      ]
-        \\    }},
-        \\    "disable": {{
-        \\      "description": "Rules to leave out of the selection, such as [\"duplicate-name\"]; the older form of [rules] disable.",
-        \\      "type": "array",
-        \\      "uniqueItems": true,
-        \\      "items": {{ "$ref": "#/definitions/rule" }}
+        \\      }}
         \\    }},
         \\    "exclude": {{
-        \\      "description": "Paths to skip, in .gitignore syntax, relative to this file, such as [\"vendor/\", \"tests/fixtures/**\"].",
+        \\      "description": "Paths to skip, in .gitignore syntax, relative to this file, such as [vendor/, tests/fixtures/].",
         \\      "type": "array",
         \\      "maxItems": {d},
         \\      "items": {{ "type": "string", "minLength": 1 }}
@@ -77,24 +66,111 @@ pub fn renderSchema(w: *std.Io.Writer) !void {
         \\
     , .{ url, config.max_excludes });
     try renderInferAndPaths(w);
+    try renderGlossaryProperties(w);
+    try w.writeAll(
+        \\  },
+        \\  "definitions": {
+        \\
+    );
+    try renderGlossaryDefinitions(w);
+    try w.writeAll(",\n");
     try renderDefinitions(w);
 }
 
-/// The [infer] table and the [paths."<pattern>"] tables.
+/// Writes the schema for ddd.yaml: the glossary alone.
+pub fn renderGlossarySchema(w: *std.Io.Writer) !void {
+    if (config.max_scopes == 0) assert.panic("config.max_scopes is 0, so no context could have paths; raise it in src/config.zig", .{});
+    const start = w.end;
+    try w.print(
+        \\{{
+        \\  "$schema": "http://json-schema.org/draft-07/schema#",
+        \\  "$id": "{s}",
+        \\  "title": "ddd.yaml",
+        \\  "description": "The project's words for things, in the shape of a Contextive glossary: bounded contexts, the files each covers, and its terms.",
+        \\  "type": "object",
+        \\  "additionalProperties": false,
+        \\  "properties": {{
+        \\
+    , .{glossary_url});
+    try renderGlossaryProperties(w);
+    try w.writeAll(
+        \\  },
+        \\  "definitions": {
+        \\
+    );
+    try renderGlossaryDefinitions(w);
+    try w.writeAll("\n  }\n}\n");
+    if (w.end <= start) assert.panic("the glossary schema ends at byte {d}, where it started at {d}; renderGlossarySchema() must write it", .{ w.end, start });
+}
+
+/// The glossary's top-level keys, which zanity.yaml and ddd.yaml share.
+fn renderGlossaryProperties(w: *std.Io.Writer) !void {
+    if (config.max_directional == 0) assert.panic("config.max_directional is 0, so no directional word could be written; raise it in src/config.zig", .{});
+    const start = w.end;
+    try w.print(
+        \\    "directional": {{ "$ref": "#/definitions/words", "description": "Words that give a name a direction, so us_to_uk and uk_to_us aren't name drift.", "maxItems": {d} }},
+        \\    "contexts": {{
+        \\      "description": "The project's words for things, in the shape of a Contextive glossary. A context with no paths holds the words of the whole project. The glossary sits in zanity.yaml or in ddd.yaml, not both.",
+        \\      "type": "array",
+        \\      "items": {{ "$ref": "#/definitions/context" }}
+        \\    }},
+        \\    "imports": {{ "description": "Contextive's imports of other glossaries; zanity reads past them." }}
+        \\
+    , .{config.max_directional});
+    if (w.end <= start) assert.panic("the glossary's keys end at byte {d}, where they started at {d}; renderGlossaryProperties() must write them", .{ w.end, start });
+}
+
+/// A context and a term of the glossary, and the word lists they hold.
+fn renderGlossaryDefinitions(w: *std.Io.Writer) !void {
+    if (config.max_scope_globs == 0) assert.panic("config.max_scope_globs is 0, so a context could cover no files; raise it in src/config.zig", .{});
+    const start = w.end;
+    try w.print(
+        \\    "words": {{ "type": "array", "uniqueItems": true, "items": {{ "type": "string", "minLength": 1 }} }},
+        \\    "context": {{
+        \\      "type": "object",
+        \\      "additionalProperties": false,
+        \\      "properties": {{
+        \\        "name": {{ "type": "string", "minLength": 1, "description": "What the context is called; a context with paths needs one." }},
+        \\        "kind": {{ "enum": ["context", "domain"], "default": "context", "description": "A context's words win over a domain's, and the same name may be defined once in each context." }},
+        \\        "paths": {{ "$ref": "#/definitions/words", "maxItems": {d}, "description": "The files it covers, in .gitignore syntax, relative to this file. Quote a pattern that starts with *." }},
+        \\        "forbidden": {{ "$ref": "#/definitions/words", "description": "Words no name in it may use, such as [util, manager]." }},
+        \\        "terms": {{ "type": "array", "items": {{ "$ref": "#/definitions/term" }} }},
+        \\        "domainVisionStatement": {{ "type": "string", "description": "Contextive's summary of the context; zanity reads past it." }},
+        \\        "meta": {{ "description": "Contextive's details about the context; zanity reads past them." }}
+        \\      }}
+        \\    }},
+        \\    "term": {{
+        \\      "type": "object",
+        \\      "additionalProperties": false,
+        \\      "required": ["name"],
+        \\      "properties": {{
+        \\        "name": {{ "type": "string", "minLength": 1, "description": "The project's word; a name using one of its aliases is respelled with it." }},
+        \\        "aliases": {{ "$ref": "#/definitions/words", "description": "The words it replaces, such as [client, user]." }},
+        \\        "definition": {{ "type": "string", "description": "What it means, for Contextive's hovers." }},
+        \\        "examples": {{ "type": "array", "items": {{ "type": "string" }}, "description": "Sentences using it, for Contextive's hovers." }},
+        \\        "meta": {{ "description": "Contextive's details about the term; zanity reads past them." }}
+        \\      }}
+        \\    }}
+    , .{config.max_scope_globs});
+    if (w.end <= start) assert.panic("the glossary's definitions end at byte {d}, where they started at {d}; renderGlossaryDefinitions() must write them", .{ w.end, start });
+}
+
+/// The infer settings and the paths list.
 fn renderInferAndPaths(w: *std.Io.Writer) !void {
-    if (config.max_path_sections == 0) assert.panic("config.max_path_sections is 0, so no [paths] table could be written; raise it in src/config.zig", .{});
+    if (config.max_path_sections == 0) assert.panic("config.max_path_sections is 0, so no paths entry could be written; raise it in src/config.zig", .{});
     try renderInfer(w);
     try renderQuestions(w);
     try w.print(
         \\    "paths": {{
-        \\      "description": "Rules that don't report in some files, one table per pattern, such as [paths.\"tests/e2e/\"]. Patterns are .gitignore syntax, relative to this file.",
-        \\      "type": "object",
-        \\      "maxProperties": {d},
-        \\      "propertyNames": {{ "minLength": 1 }},
-        \\      "additionalProperties": {{
+        \\      "description": "Rules that don't report in some files, one entry per pattern.",
+        \\      "type": "array",
+        \\      "maxItems": {d},
+        \\      "items": {{
         \\        "type": "object",
         \\        "additionalProperties": false,
+        \\        "required": ["files"],
         \\        "properties": {{
+        \\          "files": {{ "type": "string", "minLength": 1, "description": "The files it covers, in .gitignore syntax, relative to this file, such as tests/e2e/. Quote a pattern that starts with *." }},
         \\          "disable": {{
         \\            "description": "Rules that don't report in the files this pattern matches.",
         \\            "type": "array",
@@ -106,11 +182,10 @@ fn renderInferAndPaths(w: *std.Io.Writer) !void {
         \\    }},
         \\
     , .{config.max_path_sections});
-    try renderVocabulary(w);
-    if (w.end == 0) assert.panic("rendered the [infer] and [paths] tables into an empty writer; renderInfer() and the [paths] text must write", .{});
+    if (w.end == 0) assert.panic("rendered the infer and paths settings into an empty writer; renderInfer() and the paths text must write", .{});
 }
 
-/// The [infer] table: which System One server --infer asks, and how hard.
+/// The infer settings: which System One server --infer asks, and how hard.
 fn renderInfer(w: *std.Io.Writer) !void {
     if (config.max_concurrency < infer.default_concurrency) assert.panic("the default concurrency {d} is above the most config allows, {d}; lower infer.default_concurrency or raise config.max_concurrency", .{ infer.default_concurrency, config.max_concurrency });
     if (!(infer.default_threshold > 0 and infer.default_threshold <= 1)) assert.panic("infer.default_threshold is {d}, outside the (0, 1] the schema allows; set it between 0 and 1 in src/infer.zig", .{infer.default_threshold});
@@ -156,13 +231,13 @@ fn renderInfer(w: *std.Io.Writer) !void {
     , .{ config.max_concurrency, infer.default_concurrency, infer.default_threshold });
 }
 
-/// The [questions."<name>"] tables: questions --infer asks besides zanity's own, or retunes.
+/// The `questions:` settings: questions --infer asks besides zanity's own, or retunes.
 fn renderQuestions(w: *std.Io.Writer) !void {
-    if (config.max_questions == 0) assert.panic("config.max_questions is 0, so no [questions] table could be written; raise it in src/config.zig", .{});
+    if (config.max_questions == 0) assert.panic("config.max_questions is 0, so no question could be written; raise it in src/config.zig", .{});
     const start = w.end;
     try w.print(
         \\    "questions": {{
-        \\      "description": "Questions check --infer asks besides zanity's own, each a table named for its rule. Naming one of zanity's questions, such as cwe-15, retunes it instead: give only what changes.",
+        \\      "description": "Questions check --infer asks besides zanity's own, each keyed by its rule's name. Naming one of zanity's questions, such as cwe-15, retunes it instead: give only what changes.",
         \\      "type": "object",
         \\      "maxProperties": {d},
         \\      "additionalProperties": {{
@@ -174,54 +249,12 @@ fn renderQuestions(w: *std.Io.Writer) !void {
         \\          "fix": {{ "description": "How to fix what it finds.", "type": "string", "minLength": 1 }},
         \\          "severity": {{ "description": "How serious a finding is.", "enum": ["error", "warning", "information"], "default": "warning" }},
         \\          "asks": {{ "description": "What it is asked about: every function, functions that report errors, test fixtures and helpers, tests, each whole file, or the project's build and CI files.", "enum": ["function", "errors", "fixture", "test", "file", "project"], "default": "function" }},
-        \\          "threshold": {{ "description": "How sure the model must be for this question to report; [infer] threshold when unset.", "type": "number", "exclusiveMinimum": 0, "maximum": 1 }}
+        \\          "threshold": {{ "description": "How sure the model must be for this question to report; infer threshold when unset.", "type": "number", "exclusiveMinimum": 0, "maximum": 1 }}
         \\        }}
         \\      }}
         \\    }},
     , .{config.max_questions});
-    if (w.end <= start) assert.panic("rendering the [questions] tables left the writer at byte {d}, where it started at {d}; renderQuestions() must write them", .{ w.end, start });
-}
-
-/// The [vocabulary] table and the [domains.<name>] and [contexts.<name>] tables.
-fn renderVocabulary(w: *std.Io.Writer) !void {
-    if (config.max_scopes == 0) assert.panic("config.max_scopes is 0, so no domain or context could be written; raise it in src/config.zig", .{});
-    if (config.max_scope_globs == 0) assert.panic("config.max_scope_globs is 0, so a domain could include no files; raise it in src/config.zig", .{});
-    try w.print(
-        \\    "vocabulary": {{
-        \\      "description": "The project's words for things: names using a banned word, or an alias of the word the project settled on, are reported.",
-        \\      "type": "object",
-        \\      "additionalProperties": false,
-        \\      "properties": {{
-        \\        "forbidden": {{ "$ref": "#/definitions/words", "description": "Words no name may use, such as [\"util\", \"manager\"]." }},
-        \\        "directional": {{ "$ref": "#/definitions/words", "description": "Words that give a name a direction, so us_to_uk and uk_to_us aren't name drift.", "maxItems": {d} }},
-        \\        "synonyms": {{ "$ref": "#/definitions/synonyms" }}
-        \\      }}
-        \\    }},
-        \\    "domains": {{ "$ref": "#/definitions/scopes", "description": "Parts of the code with words of their own, such as [domains.commerce]; contexts apply after them." }},
-        \\    "contexts": {{ "$ref": "#/definitions/scopes", "description": "Bounded contexts with words of their own, such as [contexts.billing]; they apply after domains, and each may define its own Customer." }}
-        \\  }},
-        \\  "definitions": {{
-        \\    "words": {{ "type": "array", "uniqueItems": true, "items": {{ "type": "string", "minLength": 1 }} }},
-        \\    "synonyms": {{
-        \\      "description": "The canonical word = the aliases it replaces, such as customer = [\"client\", \"user\"].",
-        \\      "type": "object",
-        \\      "additionalProperties": {{ "$ref": "#/definitions/words" }}
-        \\    }},
-        \\    "scopes": {{
-        \\      "type": "object",
-        \\      "maxProperties": {d},
-        \\      "additionalProperties": {{
-        \\        "type": "object",
-        \\        "additionalProperties": false,
-        \\        "properties": {{
-        \\          "include": {{ "$ref": "#/definitions/words", "description": "The files it covers, in .gitignore syntax, relative to this file.", "maxItems": {d} }},
-        \\          "forbidden": {{ "$ref": "#/definitions/words", "description": "Words no name in it may use." }},
-        \\          "synonyms": {{ "$ref": "#/definitions/synonyms" }}
-        \\        }}
-        \\      }}
-        \\    }},
-        \\
-    , .{ config.max_directional, config.max_scopes, config.max_scope_globs });
+    if (w.end <= start) assert.panic("rendering the questions left the writer at byte {d}, where it started at {d}; renderQuestions() must write them", .{ w.end, start });
 }
 
 /// The names a rule list may hold: every rule, by name or NASA code, and "all".

@@ -1,0 +1,3 @@
+exclude: [vendor/]
+rules:
+  disable: [long-parameter-list]

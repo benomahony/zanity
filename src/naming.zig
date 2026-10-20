@@ -15,7 +15,7 @@ const check = @import("check.zig");
 const Context = check.Context;
 const File = check.File;
 
-/// Words that give a name its direction, unless zanity.toml lists its own.
+/// Words that give a name its direction, unless the glossary lists its own.
 const default_directional = [_][]const u8{ "to", "from", "before", "after", "src", "dst" };
 
 const max_tokens = 64;

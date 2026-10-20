@@ -1,6 +1,6 @@
 //! The inference tier. For each function and test, `check --infer` asks a decision model the
 //! questions of the rules that no deterministic check can settle, skipping any a deterministic
-//! check already answered there. The model is TypeSafe's Jev unless [infer] in zanity.toml names
+//! check already answered there. The model is TypeSafe's Jev unless infer in zanity.yaml names
 //! another System One server, such as a local Kev. Answers are kept in a store by model, function
 //! and question, so unchanged code is never asked about twice.
 const std = @import("std");
@@ -19,7 +19,7 @@ const language = @import("language.zig");
 
 /// How sure the model must be before a judgement becomes a finding.
 pub const default_threshold = 0.8;
-/// Requests to the model at once when zanity.toml doesn't say.
+/// Requests to the model at once when zanity.yaml doesn't say.
 pub const default_concurrency = 8;
 /// Questions sent in one request; a unit with more is asked in several, each with the same state.
 const max_request_questions = 64;
@@ -52,7 +52,7 @@ pub const Stats = struct { functions: usize = 0, asked: usize = 0, seconds: i64 
 /// Why the last `judge` failed, with the detail the server returned.
 pub var failure: []const u8 = "";
 
-/// Which System One server to ask, from [infer] in zanity.toml. Each unset field falls back to
+/// Which System One server to ask, from infer in zanity.yaml. Each unset field falls back to
 /// TypeSafe's variable in `environ`, then to TypeSafe's API and model.
 pub const Server = struct {
     environ: *const std.process.Environ.Map,
@@ -63,7 +63,7 @@ pub const Server = struct {
 
     pub fn keyVariable(server: Server) []const u8 {
         const name = server.api_key_env orelse tai.Client.env.api_key;
-        if (name.len == 0) assert.panic("[infer] api_key_env is empty; config refuses an empty name", .{});
+        if (name.len == 0) assert.panic("infer api_key_env is empty; config refuses an empty name", .{});
         if (server.api_key_env != null and !std.mem.eql(u8, name, server.api_key_env.?)) assert.panic("reading the key from {s} instead of api_key_env", .{name});
         return name;
     }
@@ -80,7 +80,7 @@ pub const Inference = struct {
     json: memory.Text,
     reporter: ?Reporter = null,
     concurrency: usize = default_concurrency,
-    /// How sure the model must be for a judgement to become a finding; [infer] threshold sets it.
+    /// How sure the model must be for a judgement to become a finding; infer threshold sets it.
     threshold: f64 = default_threshold,
     answered: std.atomic.Value(usize) = .init(0),
     stats: Stats = .{},
@@ -131,7 +131,7 @@ pub const Inference = struct {
         var job: Job = .{ .unit = unit, .unit_hash = self.unitHash(unit), .first = self.slots.len };
         const target: Target = .{ .unit = unit, .unit_hash = job.unit_hash, .settled = settled, .enabled = enabled, .adapter = language.named(unit.language) };
         for (&rules.all) |*builtin| {
-            // zanity.toml may retune the question; its own questions follow zanity's.
+            // zanity.yaml may retune the question; its own questions follow zanity's.
             const rule = rules.customNamed(builtin.name) orelse builtin;
             try self.queue(target, rule);
         }
@@ -177,7 +177,7 @@ pub const Inference = struct {
         self.stats = .{ .functions = self.jobs.len, .asked = waiting };
         if (pending == 0) return;
         self.answered.store(0, .monotonic);
-        if (self.concurrency == 0) assert.panic("--infer would ask the model with no requests allowed at once; set [infer] concurrency in zanity.toml to at least 1", .{});
+        if (self.concurrency == 0) assert.panic("--infer would ask the model with no requests allowed at once; set infer concurrency in zanity.yaml to at least 1", .{});
         var semaphore: Io.Semaphore = .{ .permits = self.concurrency };
         var group: Io.Group = .init;
         // The watcher needs its own thread from the start: `async` may defer a task until `await`,

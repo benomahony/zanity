@@ -24,11 +24,15 @@ pub fn build(b: *std.Build) void {
 
     addRelease(b, build_info);
 
-    // `zig build schema` writes zanity.schema.json from the rules and limits in the code.
+    // `zig build schema` writes zanity.schema.json and ddd.schema.json from the rules and limits
+    // in the code.
     const schema = b.addExecutable(.{ .name = "schema", .root_module = module(b, "src/schema.zig", b.graph.host, .Debug) });
     const write_schema = b.addUpdateSourceFiles();
     write_schema.addCopyFileToSource(b.addRunArtifact(schema).captureStdOut(.{}), "zanity.schema.json");
-    b.step("schema", "Write zanity.schema.json, the schema editors check zanity.toml against").dependOn(&write_schema.step);
+    const glossary_schema = b.addRunArtifact(schema);
+    glossary_schema.addArg("ddd");
+    write_schema.addCopyFileToSource(glossary_schema.captureStdOut(.{}), "ddd.schema.json");
+    b.step("schema", "Write zanity.schema.json and ddd.schema.json, the schemas editors check zanity.yaml and ddd.yaml against").dependOn(&write_schema.step);
 
     const run = b.addRunArtifact(exe);
     run.step.dependOn(b.getInstallStep());
