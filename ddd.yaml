@@ -1,0 +1,131 @@
+# yaml-language-server: $schema=https://benomahony.github.io/ddd-spec/v0.1/ddd.schema.json
+ddd_spec_version: "0.1"
+id: benomahony.zanity
+name: zanity
+contexts:
+  checking:
+    purpose: Find the mistakes that make code unsafe, untestable or hard to follow, deterministically and in one pass per file.
+    classification: { domain: core }
+    scope:
+      includes:
+        - Parsing each file once and running every rule over it
+        - Saying what is wrong and how to fix it, and fixing it when asked
+        - The project's own words, domains and contexts from zanity.toml
+      excludes:
+        - Judgements that need a language model
+        - Talking to editors
+    code:
+      - languages/**
+      - src/**
+      - "!src/infer.zig"
+      - "!src/calibrate.zig"
+      - "!src/catalogue_questions.zig"
+      - "!src/catalogue_test.zig"
+      - "!src/lsp.zig"
+      - "!src/watch.zig"
+      - "!src/live.zig"
+      - "!src/telemetry.zig"
+      - "!src/upgrade.zig"
+    language:
+      finding:
+        means: One place where a rule found a mistake, with what is wrong and how to fix it.
+        not: [violation]
+        code: [src/facts.zig#Finding]
+      rule:
+        means: A named check that produces findings, on by default, strict, or off.
+      severity:
+        means: How much a finding matters, error, warning or information.
+        code: [src/rules.zig#Severity]
+      fix:
+        means: An edit that removes a finding, applied by check --fix only over the bytes it was made against.
+      suppression:
+        means: A comment that silences named rules on one line.
+    invariants:
+      fixes-apply-only-where-made:
+        statement: A fix is written only over the bytes it was made against.
+        status: implemented
+        verified_by:
+          - 'src/main.zig#"a fix is written only over the bytes it was made against"'
+      fixes-converge:
+        statement: After check --fix, checking the fixed file finds nothing more to fix.
+        status: implemented
+        verified_by:
+          - 'src/golden_test.zig#"--fix rewrites each fixture into its .fixed file and leaves nothing more to fix"'
+      findings-say-how-to-fix:
+        statement: Every finding a query pattern captures names a rule with a message.
+        status: implemented
+        verified_by:
+          - 'src/language.zig#"every @finding capture names a rule with a pattern message"'
+      offline-by-default:
+        statement: Checking never touches the network unless --infer is given.
+        status: implemented
+    provides:
+      check-json:
+        kind: query
+        means: The findings of zanity check --json.
+    partners: [editor]
+  inference:
+    purpose: Judge what code structure can't, such as whether an error message misleads, by asking a model true or false questions.
+    classification: { domain: supporting }
+    code:
+      - src/infer.zig
+      - src/calibrate.zig
+      - src/catalogue_questions.zig
+      - src/catalogue_test.zig
+      - catalogue/**
+    language:
+      question:
+        means: A true or false question the model is asked about one function, test or project file.
+      judgement:
+        means: The model's true or false answer to a question, with how sure it is.
+      calibration:
+        means: Comparing judgements with what people marked real or false, to set how sure the model must be.
+    uses:
+      system-one: { model: translate, contracts: [decide] }
+  editor:
+    purpose: Bring findings and their fixes into editors as they change files.
+    classification: { domain: generic }
+    code:
+      - src/lsp.zig
+      - src/watch.zig
+      - src/live.zig
+      - src/telemetry.zig
+    language:
+      diagnostic:
+        means: A finding as the Language Server Protocol carries it to an editor.
+        from: checking#finding
+    uses:
+      checking: { model: conform, contracts: [check-json] }
+      otlp-collector: { model: conform, contracts: [export-traces] }
+    partners: [checking]
+  distribution:
+    purpose: Get zanity onto machines and keep it current.
+    classification: { domain: generic }
+    code:
+      - src/upgrade.zig
+      - install.sh
+      - action.yml
+      - .pre-commit-hooks.yaml
+    invariants:
+      verified-downloads:
+        statement: A downloaded release replaces zanity only if it hashes to the digest GitHub lists for it.
+        status: implemented
+        verified_by:
+          - 'src/upgrade.zig#"the download must hash to the release''s digest"'
+    uses:
+      github-releases: { model: translate, contracts: [release] }
+  system-one:
+    purpose: Answer questions about code as a decision model, through zig-typesafe-ai.
+    external: true
+    provides:
+      decide: { kind: query, published: true, version: "1" }
+  otlp-collector:
+    purpose: Receive the traces the language server records.
+    external: true
+    provides:
+      export-traces: { kind: command, published: true, version: "1", defined_in: "https://opentelemetry.io/docs/specs/otlp/" }
+  github-releases:
+    purpose: Publish zanity's builds and their digests.
+    external: true
+    provides:
+      release: { kind: query, published: true, version: "2022-11-28", defined_in: "https://docs.github.com/en/rest/releases/releases" }
