@@ -933,3 +933,166 @@
   (switch_expression)
   (conditional_expression)
 ] @double.branch
+
+; CWE-329: a fixed IV, set on the cipher or passed to CreateEncryptor, EncryptCbc and the like.
+; Fixed bytes are `new byte[16]`, an array or collection of literals, or the bytes of a literal.
+((assignment_expression
+  left: (member_access_expression
+    name: (identifier) @_iv)
+  right: [
+    (array_creation_expression
+      .
+      type: (array_type
+        rank: (array_rank_specifier
+          (integer_literal)))
+      .)
+    (array_creation_expression
+      (initializer_expression
+        .
+        (integer_literal)))
+    (collection_expression
+      .
+      (collection_element
+        (expression_element
+          (integer_literal))))
+    (invocation_expression
+      function: (member_access_expression
+        name: (identifier) @_iv_decode)
+      arguments: (argument_list
+        .
+        (argument
+          [
+            (string_literal)
+            (verbatim_string_literal)
+          ])
+        .))
+  ] @finding.constant-cbc-iv)
+  (#eq? @_iv "IV")
+  (#any-of? @_iv_decode "GetBytes" "FromBase64String" "FromHexString"))
+
+((invocation_expression
+  function: (member_access_expression
+    name: (identifier) @_cipher)
+  arguments: (argument_list
+    .
+    (argument)
+    .
+    (argument
+      [
+        (array_creation_expression
+          .
+          type: (array_type
+            rank: (array_rank_specifier
+              (integer_literal)))
+          .)
+        (array_creation_expression
+          (initializer_expression
+            .
+            (integer_literal)))
+        (collection_expression
+          .
+          (collection_element
+            (expression_element
+              (integer_literal))))
+        (invocation_expression
+          function: (member_access_expression
+            name: (identifier) @_cbc_decode)
+          arguments: (argument_list
+            .
+            (argument
+              [
+                (string_literal)
+                (verbatim_string_literal)
+              ])
+            .))
+      ] @finding.constant-cbc-iv)))
+  (#any-of? @_cipher "CreateEncryptor" "CreateDecryptor" "EncryptCbc" "DecryptCbc" "EncryptCfb" "DecryptCfb")
+  (#any-of? @_cbc_decode "GetBytes" "FromBase64String" "FromHexString"))
+
+; CWE-323: a fixed nonce given to AesGcm, AesCcm or ChaCha20Poly1305's Encrypt, which takes the
+; nonce, plaintext, ciphertext and tag; RSA's two-argument Encrypt takes no nonce.
+((invocation_expression
+  function: (member_access_expression
+    name: (identifier) @_encrypt)
+  arguments: (argument_list
+    .
+    (argument
+      [
+        (array_creation_expression
+          .
+          type: (array_type
+            rank: (array_rank_specifier
+              (integer_literal)))
+          .)
+        (array_creation_expression
+          (initializer_expression
+            .
+            (integer_literal)))
+        (collection_expression
+          .
+          (collection_element
+            (expression_element
+              (integer_literal))))
+        (invocation_expression
+          function: (member_access_expression
+            name: (identifier) @_nonce_decode)
+          arguments: (argument_list
+            .
+            (argument
+              [
+                (string_literal)
+                (verbatim_string_literal)
+              ])
+            .))
+      ] @finding.constant-aead-nonce)
+    (argument)
+    (argument)
+    (argument)))
+  (#eq? @_encrypt "Encrypt")
+  (#any-of? @_nonce_decode "GetBytes" "FromBase64String" "FromHexString"))
+
+; CWE-78: a shell started with a command line built at runtime, by Process.Start or a
+; ProcessStartInfo; a command line that is all literal can't be changed by a caller.
+((invocation_expression
+  function: (member_access_expression
+    expression: (identifier) @_process
+    name: (identifier) @_start)
+  arguments: (argument_list
+    .
+    (argument
+      (string_literal) @_shell)
+    .
+    (argument
+      (_) @_command))) @finding.shell-command
+  (#eq? @_process "Process")
+  (#eq? @_start "Start")
+  (#any-of? @_shell "\"cmd\"" "\"cmd.exe\"" "\"sh\"" "\"bash\"" "\"zsh\"" "\"/bin/sh\"" "\"/bin/bash\"" "\"/bin/zsh\"" "\"powershell\"" "\"powershell.exe\"" "\"pwsh\"")
+  (#not-kind-eq? @_command "string_literal" "verbatim_string_literal" "raw_string_literal"))
+
+((object_creation_expression
+  type: (identifier) @_info
+  arguments: (argument_list
+    .
+    (argument
+      (string_literal) @_shell)
+    .
+    (argument
+      (_) @_command))) @finding.shell-command
+  (#eq? @_info "ProcessStartInfo")
+  (#any-of? @_shell "\"cmd\"" "\"cmd.exe\"" "\"sh\"" "\"bash\"" "\"zsh\"" "\"/bin/sh\"" "\"/bin/bash\"" "\"/bin/zsh\"" "\"powershell\"" "\"powershell.exe\"" "\"pwsh\"")
+  (#not-kind-eq? @_command "string_literal" "verbatim_string_literal" "raw_string_literal"))
+
+((object_creation_expression
+  type: (identifier) @_info
+  initializer: (initializer_expression
+    (assignment_expression
+      left: (identifier) @_file
+      right: (string_literal) @_shell)
+    (assignment_expression
+      left: (identifier) @_arguments
+      right: (_) @_command))) @finding.shell-command
+  (#eq? @_info "ProcessStartInfo")
+  (#eq? @_file "FileName")
+  (#eq? @_arguments "Arguments")
+  (#any-of? @_shell "\"cmd\"" "\"cmd.exe\"" "\"sh\"" "\"bash\"" "\"zsh\"" "\"/bin/sh\"" "\"/bin/bash\"" "\"/bin/zsh\"" "\"powershell\"" "\"powershell.exe\"" "\"pwsh\"")
+  (#not-kind-eq? @_command "string_literal" "verbatim_string_literal" "raw_string_literal"))

@@ -1,0 +1,11 @@
+rules: constant-cbc-iv,constant-aead-nonce,shell-command
+exit: 1
+Crypto.cs:10:18: error [constant-cbc-iv]
+Crypto.cs:12:34: error [constant-cbc-iv]
+Crypto.cs:14:30: error [constant-cbc-iv]
+Crypto.cs:20:21: error [constant-aead-nonce]
+Crypto.cs:27:9: warning [shell-command]
+Crypto.cs:28:9: warning [shell-command]
+Crypto.cs:31:9: warning [shell-command]
+Crypto.cs:32:9: warning [shell-command]
+Crypto.cs:9:18: error [constant-cbc-iv]
