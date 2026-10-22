@@ -11,6 +11,7 @@ test {
     _ = @import("config_test.zig");
     _ = @import("ignore.zig");
     _ = @import("catalogue_test.zig");
+    _ = @import("docs_test.zig");
     _ = @import("infer.zig");
     _ = @import("scope.zig");
     _ = @import("schema.zig");

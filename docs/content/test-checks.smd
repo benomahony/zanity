@@ -1,0 +1,58 @@
+---
+.title = "Test checks",
+.description = "Every check zanity makes of tests, fixtures and test helpers.",
+.date = .date("2026-10-17T00:00:03"),
+.layout = "page.shtml",
+---
+
+zanity has 36 checks of test code, written out here from `src/rules.zig`, so this page always matches the binary. The [rules page]($link.page('rules')) says more about each.
+
+# [Found in the code]($heading.id('found-in-the-code'))
+
+These 22 are found in the syntax tree, with no model.
+
+| Rule | Severity | Fix |
+|---|---|---|
+| `eager-test` | warning, on by default | Split it into tests that each check one behaviour, named for that behaviour. |
+| `long-test` | warning, on by default | Split it into tests that each check one behaviour, or move the setup into a helper. |
+| `undocumented-test` | warning, on by default | Say which behaviour it checks and why it needs this many steps, in a docstring or a comment above it. |
+| `sleep-in-test` | warning, on by default | Wait for the event itself, or use a fake clock. |
+| `polling-loop` | warning, on by default | Wait on an event or callback, or inject a clock. |
+| `shared-state-in-test` | warning, on by default | Set it for this test only and restore it after, with the framework's fixture (monkeypatch, t.Setenv, a try/finally), or pass the value in. |
+| `filesystem-in-test` | warning, on by default | Work in the test framework's temporary directory, or pass the code a reader and writer instead of a path. |
+| `network-in-test` | warning, on by default | Stub the service at its boundary with a fake that answers like it, or move this to an integration suite. |
+| `database-in-test` | warning, on by default | Use an in-memory database or a fake repository, or move this to an integration suite. |
+| `unmanaged-temp-in-test` | warning, on by default | Use the framework's temporary directory (tmp_path, t.TempDir(), @TempDir, std.testing.tmpDir), which it cleans up. |
+| `stdin-in-test` | warning, on by default | Pass the input in as a value, or as a reader the test controls. |
+| `process-in-test` | warning, on by default | Call the code the process would run directly, or move this to an end-to-end suite. |
+| `nondeterministic-test` | warning, on by default | Inject a seeded generator or a fixed value. |
+| `test-double` | warning, on by default | Use the real object, or a fake that behaves like it. |
+| `call-verification` | warning, on by default | Assert on the result, or the state the code leaves behind; check a call only where the call is the behaviour, such as a message sent to another system. |
+| `branching-double` | warning, on by default | Give each operation the code makes its own fake that returns one answer, such as a port with one method per call, instead of one function that routes on its arguments. |
+| `storage-read-in-test` | warning, on by default | Check the outcome through the code's own interface, such as the query or endpoint that reads it back; read storage directly only to test the storage layer itself. |
+| `broad-expected-error` | warning, on by default | Expect the specific error type, and match its message where the type is shared, such as pytest.raises(ValueError, match=...) or #[should_panic(expected = "...")]. |
+| `opaque-check` | warning, on by default | Use the framework's specific check for the comparison, which shows both values when it fails. |
+| `skipped-test` | warning, on by default | Fix the test and turn it back on, or delete it; to skip only where it can't run, put the skip under a condition (skipif, an if around t.Skip), or use xfail(strict=True). |
+| `vague-test-name` | warning, on by default | Name the behaviour it expects, such as test_rejects_expired_token or it("returns 404 for an unknown id"). |
+| `misplaced-test` | warning, on by default | Move the test next to the code it tests, or move the code to the domain the test is in. |
+
+# [Asked with --infer]($heading.id('asked-with-infer'))
+
+With `--infer`, zanity asks the model these 14 questions of each test, or of each fixture and helper in a test file, except where a rule in the last column already reported there.
+
+| Rule | Severity | Question | Not asked where this reported | Fix |
+|---|---|---|---|---|
+| `order-dependent-test` | warning, on by default | Is this a test case itself, not a fixture, setup or teardown hook or helper, whose result could change depending on which other tests ran before it, for example because it reads or mutates module level, class level, database or filesystem state that other tests also touch without resetting it? | `shared-state-in-test`, `filesystem-in-test`, `database-in-test`, `unmanaged-temp-in-test` | Give it its own state, or reset the shared state before it runs. |
+| `combinatorial-test` | information, on by default | Is this a test case itself, not a fixture, setup or teardown hook or helper, that varies several independent dimensions of behaviour at once, so they cannot be checked separately and combined, for example one test covering every combination of inputs, formats and error modes? |  | Split it into one test per dimension, or parametrise it. |
+| `flaky-test` | error, on by default | Is this a test case itself, not a fixture, setup or teardown hook or helper, whose result could change between runs with no code change, because it depends on the current time, unseeded randomness, real network calls, sleeps or timing, thread scheduling or unordered iteration? | `nondeterministic-test`, `sleep-in-test`, `network-in-test`, `polling-loop` | Inject a fixed clock, seed or fake, or sort before comparing. |
+| `slow-test` | warning, on by default | Is this a test case itself, not a fixture, setup or teardown hook or helper, that would run slowly, because it sleeps, waits on timeouts, calls real external services or databases, or loops over far more data than the behaviour needs? | `sleep-in-test`, `polling-loop`, `network-in-test`, `database-in-test`, `process-in-test` | Replace the wait or service with a fake, and shrink the data. |
+| `heavy-setup-test` | information, on by default | Is this a test case itself, not a fixture, setup or teardown hook or helper, whose setup is large or elaborate relative to the behaviour it checks, such as many mocks, long object construction or copied fixtures, suggesting the code under test is expensive to test? |  | Simplify the code's dependencies, or move shared setup into a small builder. |
+| `unreadable-test` | information, on by default | Is this a test case itself, not a fixture, setup or teardown hook or helper, where a reader could not tell from its name and body what behaviour it checks and why, for example a vague name, unexplained magic values or no clear arrange, act and assert steps? | `vague-test-name` | Name it after the behaviour, name the magic values, and separate arrange, act and assert. |
+| `hollow-test` | error, on by default | Is this a test case itself, not a fixture, setup or teardown hook or helper, that would still pass if the behaviour it claims to check were broken, for example because it asserts nothing, asserts only that no exception was raised when the behaviour is more than not failing, or asserts on values it set up itself? A test whose behaviour is that something compiles, loads or never breaks an invariant, such as a fuzz or smoke test, checks it through the error or assertion failure that would fail it. |  | Assert on the output or effect of that behaviour. |
+| `implementation-coupled-test` | warning, on by default | Is this a test case itself, not a fixture, setup or teardown hook or helper, that would fail after a refactoring that keeps behaviour the same, because it asserts on private attributes, internal call order, mock call counts of internal collaborators or other implementation details? | `call-verification`, `storage-read-in-test` | Assert on public results instead of private state or internal calls. |
+| `manual-test` | error, on by default | Is this a test case itself, not a fixture, setup or teardown hook or helper, that needs human intervention, for example reading input, printing output for someone to inspect instead of asserting, opening a browser or depending on manual setup steps? | `stdin-in-test`, `debug-leftover` | Replace manual input, printing or setup with assertions and automated fixtures. |
+| `unfocused-test` | warning, on by default | Is this a test case itself, not a fixture, setup or teardown hook or helper, where a failure would not point to an obvious cause, because it checks several unrelated behaviours in one test or asserts on a large opaque value without saying what matters? | `eager-test` | Split it up, or assert only on the parts that matter. |
+| `self-mocking-test` | warning, on by default | Is this a test case itself, not a fixture, setup or teardown hook or helper, that could pass while the real code would fail in production, because it mocks or stubs out the very behaviour it claims to test or replaces it with a simplified fake? |  | Exercise the real code, and mock only its external dependencies. |
+| `trivial-test` | warning, on by default | Is this a test case itself, not a fixture, setup or teardown hook or helper, that would give a reader little confidence the code works even when it passes, because it checks something trivial or incidental, exercises the framework or language rather than the code under test, covers only the easy path of risky behaviour, or claims in its name more than it actually verifies? A fuzz or property test over arbitrary input is not trivial. |  | Test the risky behaviour and edge cases, and make the name match what is verified. |
+| `fixture-leaks-state` | warning, on by default | Is this a test fixture, setup or teardown hook or shared test helper that changes global, module, environment, filesystem or database state without restoring it afterwards, so tests that use it can affect each other? |  | Restore the state in teardown, or give each test a temporary copy of it. |
+| `fixture-hides-behaviour` | warning, on by default | Is this a test fixture, setup hook or shared test helper that replaces, mocks or patches the real behaviour that the tests using it appear to be checking, so they pass without exercising it? |  | Use the real implementation, and stub only external dependencies. |

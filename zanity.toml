@@ -50,6 +50,9 @@ disable = ["filesystem-in-test"]
 [paths."src/catalogue_test.zig"]
 disable = ["filesystem-in-test"]
 
+[paths."src/docs_test.zig"]
+disable = ["filesystem-in-test"]
+
 # The project's words for things. Names that use a banned word, or an alias of a word the
 # project settled on, are reported. Domains and contexts carry their own words; a context
 # applies after a domain, and a definition can share its name with one in another context.
