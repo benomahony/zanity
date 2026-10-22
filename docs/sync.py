@@ -117,6 +117,8 @@ def zig_rules() -> list[dict[str, str]]:
             fields.setdefault(name, text.replace('\\"', '"') or tag or items.replace('"', "") or flag)
         rules.append(fields)
     assert rules, "found no rules in src/rules.zig; is each still written on one line as .{ .name = ... }?"
+    unparsed = [r["name"] for r in rules if not {"severity", "tier", "advice"} <= r.keys()]
+    assert not unparsed, f"read no severity, tier or advice for {unparsed[:3]} in src/rules.zig; check RULE_FIELD"
     return rules
 
 
@@ -126,16 +128,19 @@ def tiers() -> dict[str, str]:
     block = text[text.index("pub const tier_descriptions") :].partition("});")[0]
     found = dict(re.findall(r'\.(\w+) = "([^"]+)"', block))
     assert found, "found no tier_descriptions in src/rules.zig; check the pattern in tiers()"
+    assert "default" in found, f"tier_descriptions in src/rules.zig has {list(found)} but no default; check the pattern in tiers()"
     return found
 
 
-def test_checks() -> list[str]:
+def checks_of_tests() -> list[str]:
     """The test checks page: the rules that check tests, in found and asked tables."""
     when = tiers()
     rules = [r for r in zig_rules() if r.get("tests") == "true" or r.get("asks") in ("test", "fixture")]
     found = [r for r in rules if "question" not in r]
     asked = [r for r in rules if "question" in r]
     assert found and asked, "src/rules.zig marks no test rules; mark them .tests = true"
+    untiered = [r["name"] for r in rules if r["tier"] not in when]
+    assert not untiered, f"{untiered[:3]} in src/rules.zig have a tier tier_descriptions doesn't describe; describe it there"
     rows = []
     for rule in found:
         rows.append(f"| `{rule['name']}` | {rule['severity']}, {when[rule['tier']]} | {rule['advice']} |")
@@ -176,7 +181,7 @@ def main() -> None:
         if name == "rules.smd":
             body += undescribed("\n".join(body)) + catalogue_questions()
         written[name] = page((title, description, layout), body, order)
-    written["test-checks.smd"] = page(("Test checks", "Every check zanity makes of tests, fixtures and test helpers.", "page.shtml"), test_checks(), 3)
+    written["test-checks.smd"] = page(("Test checks", "Every check zanity makes of tests, fixtures and test helpers.", "page.shtml"), checks_of_tests(), 3)
     for name, text in written.items():
         (CONTENT / name).write_text(text)
         print(CONTENT / name)

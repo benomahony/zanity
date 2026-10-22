@@ -7,6 +7,7 @@ const rules = @import("rules.zig");
 
 fn checksTests(rule: rules.Rule) bool {
     if (rule.name.len == 0) assert.panic("a rule in rules.all has no name (advice: '{s}'); give every entry in rules.all a .name", .{rule.advice});
+    if (rule.tests and rule.question.len > 0) assert.panic("rule {s} is marked .tests and has an --infer question; .tests marks the rules found in the code, and the question's .asks already says it checks tests", .{rule.name});
     return rule.tests or (rule.question.len > 0 and (rule.asks == .@"test" or rule.asks == .fixture));
 }
 
@@ -14,6 +15,7 @@ fn rowName(line: []const u8) ?[]const u8 {
     if (!std.mem.startsWith(u8, line, "| `")) return null;
     const end = std.mem.indexOfScalarPos(u8, line, 3, '`') orelse assert.panic("the table row '{s}' opens a rule name it never closes; run python3 docs/sync.py", .{line});
     if (end == 3) assert.panic("the table row '{s}' has an empty rule name; run python3 docs/sync.py", .{line});
+    if (std.mem.indexOfAny(u8, line[3..end], " |") != null) assert.panic("the table row '{s}' has a rule name with a space or bar in it; run python3 docs/sync.py", .{line});
     return line[3..end];
 }
 
