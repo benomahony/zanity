@@ -22,7 +22,7 @@ pub fn build(b: *std.Build) void {
     exe.root_module.addOptions("build_info", build_info);
     b.installArtifact(exe);
 
-    addRelease(b, build_info);
+    const release = addRelease(b, build_info);
 
     // `zig build schema` writes zanity.schema.json from the rules and limits in the code.
     const schema = b.addExecutable(.{ .name = "schema", .root_module = module(b, "src/schema.zig", b.graph.host, .Debug) });
@@ -58,14 +58,14 @@ pub fn build(b: *std.Build) void {
 
     // `zig build test-integration` runs the built zanity: the golden fixtures, the CLI, and
     // zanity checking its own source, which must pass every rule. CI passes -Dzanity, so the
-    // binary it tests is the release binary it ships, and nothing is built twice.
-    const tested = b.option([]const u8, "zanity", "Run test-integration on this zanity, a path in the repository such as zig-out/release/zanity-linux-x86_64, instead of building one");
+    // binary it tests is the release binary it ships, built alongside the tests themselves.
+    const tested = b.option([]const u8, "zanity", "Run test-integration on this release binary, such as zig-out/release/zanity-linux-x86_64, building the release step (narrowed by -Dplatform) first");
     const integration_module = module(b, "src/golden_test.zig", target, test_optimize);
     const options = b.addOptions();
     options.addOptionPathUntracked("zanity", if (tested) |path| b.path(path) else .{ .relative = .{ .base = .install_bin, .sub_path = b.fmt("zanity{s}", .{target.result.exeFileExt()}) } });
     integration_module.addOptions("paths", options);
     const integration = b.addRunArtifact(b.addTest(.{ .root_module = integration_module }));
-    if (tested == null) integration.step.dependOn(b.getInstallStep());
+    integration.step.dependOn(if (tested == null) b.getInstallStep() else release);
     integration.setCwd(b.path("."));
     integration.has_side_effects = true;
     // Under a coding agent, check would speak to it; the tests expect the output anyone else gets.
@@ -88,7 +88,7 @@ const release_targets = [_]struct { name: []const u8, query: std.Target.Query }{
 /// zig-out/release as zanity-<os>-<arch>. The names carry no version, so the latest release always
 /// has the same download URLs. ReleaseSafe keeps bounds and overflow checks, so a bug stops with a
 /// message instead of silently checking the wrong thing.
-fn addRelease(b: *std.Build, build_info: *std.Build.Step.Options) void {
+fn addRelease(b: *std.Build, build_info: *std.Build.Step.Options) *std.Build.Step {
     const only = b.option([]const u8, "platform", "Build only this release platform, such as linux-x86_64; CI builds each on its own runner");
     const release = b.step("release", "Build every released platform into zig-out/release");
     for (release_targets) |platform| {
@@ -110,6 +110,7 @@ fn addRelease(b: *std.Build, build_info: *std.Build.Step.Options) void {
     const installs = release.dependencies.items;
     if (only) |name| if (installs.len != 1) std.debug.panic("-Dplatform={s} matches {d} release platforms; name one from release_targets, such as linux-x86_64", .{ name, installs.len });
     if (only == null and installs.len != release_targets.len) std.debug.panic("the release step builds {d} binaries for {d} platforms; add each platform's install step once", .{ installs.len, release_targets.len });
+    return release;
 }
 
 /// Vendored C (tree-sitter and the grammars) is built optimised and without UBSan in every mode:

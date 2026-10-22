@@ -1,8 +1,9 @@
 name: CI
 
 # One pipeline from commit to release. Every platform's release binary is built once, the
-# integration tests and the self-check run against those exact binaries, and on main the same
-# binaries are published, one patch version up from the latest v* tag (0.1.0 if there is none).
+# integration tests and the self-check run against each one a runner can execute, and on main
+# the same binaries are published, one patch version up from the latest v* tag (0.1.0 if
+# there is none).
 # To raise the minor or major version instead, run this by hand on main:
 #   gh workflow run ci -f bump=minor
 on:
@@ -92,41 +93,11 @@ jobs:
             echo "::warning::The Zig cache is ${used} MB, past its ${ZIG_CACHE_LIMIT_MB} MB limit, so it is emptied and the next run builds from scratch. If this shows on every run, one build needs more: raise ZIG_CACHE_LIMIT_MB in .github/workflows/ci.yml."
           fi
 
-  # The release binaries, cross-compiled on Linux, each platform with its own cache.
-  build:
-    needs: version
-    strategy:
-      fail-fast: false
-      matrix:
-        platform: [linux-x86_64, linux-aarch64, macos-x86_64, macos-aarch64, windows-x86_64]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
-      - uses: xyzzylabs/setup-zig@7e5af686da64007a0797898801de180e5f4d3762 # v1.0.5
-        with:
-          cache-key: ${{ matrix.platform }}
-          cache-size-limit: ${{ env.ZIG_CACHE_LIMIT_MB }}
-      - name: Build ${{ matrix.platform }}
-        run: zig build release -Dplatform=${{ matrix.platform }} -Dversion=${{ needs.version.outputs.version }} --summary all
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: zanity-${{ matrix.platform }}
-          path: zig-out/release/*
-          if-no-files-found: error
-      - name: Zig cache size
-        if: always() && env.ZIG_GLOBAL_CACHE_DIR != ''
-        run: |
-          bytes=$(python3 -c 'import os, sys; print(sum(os.path.getsize(os.path.join(d, f)) for d, _, fs in os.walk(sys.argv[1]) for f in fs if os.path.isfile(os.path.join(d, f))))' "$ZIG_GLOBAL_CACHE_DIR")
-          used=$((bytes / 1048576))
-          echo "Zig cache: ${used} MB of ${ZIG_CACHE_LIMIT_MB} MB" >> "$GITHUB_STEP_SUMMARY"
-          if [ "$bytes" -gt $((ZIG_CACHE_LIMIT_MB * 1048576)) ]; then
-            echo "::warning::The Zig cache is ${used} MB, past its ${ZIG_CACHE_LIMIT_MB} MB limit, so it is emptied and the next run builds from scratch. If this shows on every run, one build needs more: raise ZIG_CACHE_LIMIT_MB in .github/workflows/ci.yml."
-          fi
-
-  # The golden fixtures, the CLI and the self-check, run against the release binary itself on
-  # each platform a runner can execute it on.
+  # Each platform a runner can execute: its release binary and the integration tests, built
+  # in one zig build so they compile in parallel, then the golden fixtures, the CLI and the
+  # self-check run against that exact binary, which is what gets published.
   integration:
-    needs: [version, build]
+    needs: version
     strategy:
       fail-fast: false
       matrix:
@@ -143,33 +114,46 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - uses: xyzzylabs/setup-zig@7e5af686da64007a0797898801de180e5f4d3762 # v1.0.5
         with:
-          cache-key: integration-${{ matrix.platform }}
+          cache-key: ${{ matrix.platform }}
           cache-size-limit: ${{ env.ZIG_CACHE_LIMIT_MB }}
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: zanity-${{ matrix.platform }}
-          path: zig-out/release
+      - run: zig build test-integration -Dplatform=${{ matrix.platform }} -Dversion="$VERSION" -Dzanity="$ZANITY" --summary all
       - name: Check the version it reports
         run: |
-          chmod +x "$ZANITY"
           built=$("$ZANITY" --version)
           if [ "$built" != "zanity $VERSION" ]; then
             echo "::error::The release binary reports '$built', not zanity $VERSION; check that build.zig passes -Dversion into build_info."
             exit 1
           fi
-      - run: zig build test-integration -Dzanity="$ZANITY" --summary all
       # Every file in the repository, every rule, warnings included, as a user's CI would run it.
       - name: zanity check . --fail-on warning
         run: '"$ZANITY" check . --fail-on warning'
-      - name: Zig cache size
-        if: always() && env.ZIG_GLOBAL_CACHE_DIR != ''
-        run: |
-          bytes=$(python3 -c 'import os, sys; print(sum(os.path.getsize(os.path.join(d, f)) for d, _, fs in os.walk(sys.argv[1]) for f in fs if os.path.isfile(os.path.join(d, f))))' "$ZIG_GLOBAL_CACHE_DIR")
-          used=$((bytes / 1048576))
-          echo "Zig cache: ${used} MB of ${ZIG_CACHE_LIMIT_MB} MB" >> "$GITHUB_STEP_SUMMARY"
-          if [ "$bytes" -gt $((ZIG_CACHE_LIMIT_MB * 1048576)) ]; then
-            echo "::warning::The Zig cache is ${used} MB, past its ${ZIG_CACHE_LIMIT_MB} MB limit, so it is emptied and the next run builds from scratch. If this shows on every run, one build needs more: raise ZIG_CACHE_LIMIT_MB in .github/workflows/ci.yml."
-          fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: zanity-${{ matrix.platform }}
+          path: zig-out/release/*
+          if-no-files-found: error
+
+  # The release binaries no runner here can execute, cross-compiled on Linux.
+  build:
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [linux-aarch64, macos-x86_64, windows-x86_64]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: xyzzylabs/setup-zig@7e5af686da64007a0797898801de180e5f4d3762 # v1.0.5
+        with:
+          cache-key: ${{ matrix.platform }}
+          cache-size-limit: ${{ env.ZIG_CACHE_LIMIT_MB }}
+      - name: Build ${{ matrix.platform }}
+        run: zig build release -Dplatform=${{ matrix.platform }} -Dversion=${{ needs.version.outputs.version }} --summary all
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: zanity-${{ matrix.platform }}
+          path: zig-out/release/*
+          if-no-files-found: error
 
   catalogue:
     runs-on: ubuntu-latest
