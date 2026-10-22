@@ -19,8 +19,8 @@ jobs:
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
-      # The introduction and rules pages come from README.md; a README change must regenerate them.
-      - name: Check the pages match README.md
+      # The introduction and rules pages come from README.md, and the test checks page from src/rules.zig; a change to either must regenerate them.
+      - name: Check the pages match README.md and src/rules.zig
         run: |
           python3 docs/sync.py
           git diff --exit-code docs/content

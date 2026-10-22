@@ -1,7 +1,9 @@
-"""Write the site's introduction and rules pages from README.md, which stays the one source.
+"""Write the site's introduction and rules pages from README.md, which stays the one source,
+and its test checks page from src/rules.zig.
 
 The introduction is the README from its first paragraph to its rules; the rules page is its
-rules section. Every rule in zanity.schema.json must appear on the rules page.
+rules section. Every rule in zanity.schema.json must appear on the rules page. The test checks
+page lists every rule marked `.tests` or asked of tests and fixtures, as rules.zig defines it.
 
 Usage: python3 docs/sync.py
 """
@@ -100,6 +102,68 @@ def undescribed(rules_page: str) -> list[str]:
     return ["", "# More rules", "", "What the schema says of the rules described above only by name, or not yet.", "", "| Rule | Severity | Fix |", "|---|---|---|", *rows]
 
 
+RULE_FIELD = re.compile(r'\.(\w+) = (?:"((?:[^"\\]|\\.)*)"|\.@?"?(\w+)"?|&\.\{([^}]*)\}|(true))')
+
+
+def zig_rules() -> list[dict[str, str]]:
+    """The rules src/rules.zig writes out, one per line, each as its fields."""
+    lines = (REPO / "src" / "rules.zig").read_text().splitlines()
+    rules = []
+    for line in lines:
+        if not line.startswith('    .{ .name = "'):
+            continue
+        fields = {}
+        for name, text, tag, items, flag in RULE_FIELD.findall(line):
+            fields.setdefault(name, text.replace('\\"', '"') or tag or items.replace('"', "") or flag)
+        rules.append(fields)
+    assert rules, "found no rules in src/rules.zig; is each still written on one line as .{ .name = ... }?"
+    return rules
+
+
+def tiers() -> dict[str, str]:
+    """When a rule in each tier runs, as rules.zig's tier_descriptions says it."""
+    text = (REPO / "src" / "rules.zig").read_text()
+    block = text[text.index("pub const tier_descriptions") :].partition("});")[0]
+    found = dict(re.findall(r'\.(\w+) = "([^"]+)"', block))
+    assert found, "found no tier_descriptions in src/rules.zig; check the pattern in tiers()"
+    return found
+
+
+def test_checks() -> list[str]:
+    """The test checks page: the rules that check tests, in found and asked tables."""
+    when = tiers()
+    rules = [r for r in zig_rules() if r.get("tests") == "true" or r.get("asks") in ("test", "fixture")]
+    found = [r for r in rules if "question" not in r]
+    asked = [r for r in rules if "question" in r]
+    assert found and asked, "src/rules.zig marks no test rules; mark them .tests = true"
+    rows = []
+    for rule in found:
+        rows.append(f"| `{rule['name']}` | {rule['severity']}, {when[rule['tier']]} | {rule['advice']} |")
+    questions = []
+    for rule in asked:
+        settled = ", ".join(f"`{name.strip()}`" for name in rule.get("settled_by", "").split(",") if name.strip())
+        questions.append(f"| `{rule['name']}` | {rule['severity']}, {when[rule['tier']]} | {rule['question']} | {settled} | {rule['advice']} |")
+    return [
+        f"zanity has {len(rules)} checks of test code, written out here from `src/rules.zig`, so this page always matches the binary. The [rules page]($link.page('rules')) says more about each.",
+        "",
+        "# [Found in the code]($heading.id('found-in-the-code'))",
+        "",
+        f"These {len(found)} are found in the syntax tree, with no model.",
+        "",
+        "| Rule | Severity | Fix |",
+        "|---|---|---|",
+        *rows,
+        "",
+        "# [Asked with --infer]($heading.id('asked-with-infer'))",
+        "",
+        f"With `--infer`, zanity asks the model these {len(asked)} questions of each test, or of each fixture and helper in a test file, except where a rule in the last column already reported there.",
+        "",
+        "| Rule | Severity | Question | Not asked where this reported | Fix |",
+        "|---|---|---|---|---|",
+        *questions,
+    ]
+
+
 def main() -> None:
     readme = (REPO / "README.md").read_text().splitlines()
     assert "# zanity" in readme, "README.md must start with its '# zanity' title"
@@ -112,6 +176,7 @@ def main() -> None:
         if name == "rules.smd":
             body += undescribed("\n".join(body)) + catalogue_questions()
         written[name] = page((title, description, layout), body, order)
+    written["test-checks.smd"] = page(("Test checks", "Every check zanity makes of tests, fixtures and test helpers.", "page.shtml"), test_checks(), 3)
     for name, text in written.items():
         (CONTENT / name).write_text(text)
         print(CONTENT / name)

@@ -18,6 +18,7 @@
 				<ul>
 					<li><a href="$site.page('').link()">Introduction</a></li>
 					<li><a href="$site.page('rules').link()">Rules</a></li>
+					<li><a href="$site.page('test-checks').link()">Test checks</a></li>
 					<li>
 						<a href="$site.page('comparison').link()">Comparisons</a>
 						<ul :loop="$site.page('comparison').subpages()">
