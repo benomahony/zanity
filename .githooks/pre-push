@@ -22,11 +22,20 @@ if ! git diff --quiet --ignore-submodules -- || ! git diff --cached --quiet --ig
 fi
 
 echo "pre-push: running the full CI gate" >&2
-zig fmt --check build.zig build.zig.zon src languages/*.zig languages/*.zon
-zig build test test-integration --summary all
-zig build
-./zig-out/bin/zanity check . --fail-on warning
+zig build test --summary all
 zig build release
+case "$(uname -s)-$(uname -m)" in
+    Linux-x86_64) zanity=zig-out/release/zanity-linux-x86_64 ;;
+    Linux-aarch64 | Linux-arm64) zanity=zig-out/release/zanity-linux-aarch64 ;;
+    Darwin-x86_64) zanity=zig-out/release/zanity-macos-x86_64 ;;
+    Darwin-arm64) zanity=zig-out/release/zanity-macos-aarch64 ;;
+    *)
+        echo "pre-push: no release binary runs on $(uname -s)-$(uname -m); run zig build test-integration instead" >&2
+        exit 1
+        ;;
+esac
+zig build test-integration -Dzanity="$zanity" --summary all
+"$zanity" check . --fail-on warning
 uv run --with 'PyYAML==6.0.3' python catalogue/sync.py
 python3 catalogue/triage.py
 git diff --exit-code -- catalogue

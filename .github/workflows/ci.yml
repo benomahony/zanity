@@ -1,42 +1,166 @@
 name: CI
 
+# One pipeline from commit to release. Every platform's release binary is built once, the
+# integration tests and the self-check run against those exact binaries, and on main the same
+# binaries are published, one patch version up from the latest v* tag (0.1.0 if there is none).
+# To raise the minor or major version instead, run this by hand on main:
+#   gh workflow run ci -f bump=minor
 on:
   push:
     branches: [main]
   pull_request:
-  # The release workflow runs this first, so nothing is released that fails it.
-  workflow_call:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Which part of the version to raise
+        type: choice
+        options: [patch, minor, major]
+        default: minor
 
 permissions:
   contents: read
 
-# A newer push to the same branch or pull request makes an older run pointless.
+# A newer push to a pull request makes an older run pointless. Runs on main queue rather than
+# race, so two never take the same version.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  ZIG_CACHE_LIMIT_MB: 2048
 
 jobs:
-  test:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
-    env:
-      ZIG_CACHE_LIMIT_MB: 2048
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      release: ${{ steps.version.outputs.release }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 0
+      - name: Choose the version
+        id: version
+        env:
+          BUMP: ${{ inputs.bump || 'patch' }}
+        run: |
+          if [ "$GITHUB_REF" != refs/heads/main ]; then
+            echo "Not main: building zanity dev, releasing nothing."
+            echo "version=dev" >> "$GITHUB_OUTPUT"
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$GITHUB_EVENT_NAME" = push ] && git tag --points-at HEAD | grep -q '^v'; then
+            echo "::notice::$GITHUB_SHA is already released as $(git tag --points-at HEAD | head -n1)."
+            echo "version=dev" >> "$GITHUB_OUTPUT"
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          latest=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1)
+          if [ -z "$latest" ]; then
+            next=0.1.0
+          else
+            v=${latest#v}; major=${v%%.*}; rest=${v#*.}; minor=${rest%%.*}; patch=${rest#*.}
+            case "$BUMP" in
+              major) next=$((major + 1)).0.0 ;;
+              minor) next=$major.$((minor + 1)).0 ;;
+              *) next=$major.$minor.$((patch + 1)) ;;
+            esac
+          fi
+          echo "Releasing v$next (after ${latest:-no release})."
+          echo "version=$next" >> "$GITHUB_OUTPUT"
+          echo "release=true" >> "$GITHUB_OUTPUT"
+
+  # Formatting, then unit, architecture and catalogue tests. Debug on x86_64-linux uses Zig's
+  # own backend, which compiles far faster than LLVM; the integration job covers macOS.
+  unit:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       # Installs the Zig in build.zig.zon's minimum_zig_version.
       - uses: xyzzylabs/setup-zig@7e5af686da64007a0797898801de180e5f4d3762 # v1.0.5
         with:
           cache-size-limit: ${{ env.ZIG_CACHE_LIMIT_MB }}
-      - name: Formatting
-        run: zig fmt --check build.zig build.zig.zon src languages/*.zig languages/*.zon
-      # Unit, golden, architecture and catalogue tests, and zanity checking its own Zig source.
-      - run: zig build test test-integration --summary all
+      - run: zig build test --summary all
+      - name: Zig cache size
+        if: always() && env.ZIG_GLOBAL_CACHE_DIR != ''
+        run: |
+          bytes=$(python3 -c 'import os, sys; print(sum(os.path.getsize(os.path.join(d, f)) for d, _, fs in os.walk(sys.argv[1]) for f in fs if os.path.isfile(os.path.join(d, f))))' "$ZIG_GLOBAL_CACHE_DIR")
+          used=$((bytes / 1048576))
+          echo "Zig cache: ${used} MB of ${ZIG_CACHE_LIMIT_MB} MB" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$bytes" -gt $((ZIG_CACHE_LIMIT_MB * 1048576)) ]; then
+            echo "::warning::The Zig cache is ${used} MB, past its ${ZIG_CACHE_LIMIT_MB} MB limit, so it is emptied and the next run builds from scratch. If this shows on every run, one build needs more: raise ZIG_CACHE_LIMIT_MB in .github/workflows/ci.yml."
+          fi
+
+  # The release binaries, cross-compiled on Linux, each platform with its own cache.
+  build:
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [linux-x86_64, linux-aarch64, macos-x86_64, macos-aarch64, windows-x86_64]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: xyzzylabs/setup-zig@7e5af686da64007a0797898801de180e5f4d3762 # v1.0.5
+        with:
+          cache-key: ${{ matrix.platform }}
+          cache-size-limit: ${{ env.ZIG_CACHE_LIMIT_MB }}
+      - name: Build ${{ matrix.platform }}
+        run: zig build release -Dplatform=${{ matrix.platform }} -Dversion=${{ needs.version.outputs.version }} --summary all
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: zanity-${{ matrix.platform }}
+          path: zig-out/release/*
+          if-no-files-found: error
+      - name: Zig cache size
+        if: always() && env.ZIG_GLOBAL_CACHE_DIR != ''
+        run: |
+          bytes=$(python3 -c 'import os, sys; print(sum(os.path.getsize(os.path.join(d, f)) for d, _, fs in os.walk(sys.argv[1]) for f in fs if os.path.isfile(os.path.join(d, f))))' "$ZIG_GLOBAL_CACHE_DIR")
+          used=$((bytes / 1048576))
+          echo "Zig cache: ${used} MB of ${ZIG_CACHE_LIMIT_MB} MB" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$bytes" -gt $((ZIG_CACHE_LIMIT_MB * 1048576)) ]; then
+            echo "::warning::The Zig cache is ${used} MB, past its ${ZIG_CACHE_LIMIT_MB} MB limit, so it is emptied and the next run builds from scratch. If this shows on every run, one build needs more: raise ZIG_CACHE_LIMIT_MB in .github/workflows/ci.yml."
+          fi
+
+  # The golden fixtures, the CLI and the self-check, run against the release binary itself on
+  # each platform a runner can execute it on.
+  integration:
+    needs: [version, build]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-x86_64
+            os: ubuntu-latest
+          - platform: macos-aarch64
+            os: macos-latest
+    runs-on: ${{ matrix.os }}
+    env:
+      ZANITY: zig-out/release/zanity-${{ matrix.platform }}
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: xyzzylabs/setup-zig@7e5af686da64007a0797898801de180e5f4d3762 # v1.0.5
+        with:
+          cache-key: integration-${{ matrix.platform }}
+          cache-size-limit: ${{ env.ZIG_CACHE_LIMIT_MB }}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: zanity-${{ matrix.platform }}
+          path: zig-out/release
+      - name: Check the version it reports
+        run: |
+          chmod +x "$ZANITY"
+          built=$("$ZANITY" --version)
+          if [ "$built" != "zanity $VERSION" ]; then
+            echo "::error::The release binary reports '$built', not zanity $VERSION; check that build.zig passes -Dversion into build_info."
+            exit 1
+          fi
+      - run: zig build test-integration -Dzanity="$ZANITY" --summary all
       # Every file in the repository, every rule, warnings included, as a user's CI would run it.
       - name: zanity check . --fail-on warning
-        run: zig build && ./zig-out/bin/zanity check . --fail-on warning
+        run: '"$ZANITY" check . --fail-on warning'
       - name: Zig cache size
         if: always() && env.ZIG_GLOBAL_CACHE_DIR != ''
         run: |
@@ -68,3 +192,27 @@ jobs:
           python3 bench/parity/ratchet.py
           python3 bench/parity/page.py
           git diff --exit-code -- docs/content/comparison || { echo "::error::Comparison pages are stale. Run: python3 bench/parity/page.py"; exit 1; }
+
+  # Publishes the binaries the jobs above built and tested, tagging the commit they came from.
+  publish:
+    needs: [version, unit, build, integration, catalogue, parity-ratchet]
+    if: needs.version.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: zanity-*
+          path: release
+          merge-multiple: true
+      # GitHub lists each binary's SHA-256 on the release.
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "v$VERSION" release/*
+          --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA"
+          --title "zanity v$VERSION" --generate-notes

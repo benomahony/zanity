@@ -12,7 +12,7 @@ pub fn build(b: *std.Build) void {
     const test_optimize = chosen orelse .debug;
 
     const strip = b.option(bool, "strip", "Leave debug info out of the binary, as release builds do") orelse false;
-    // The release workflow passes the version it is about to tag; any other build is a dev build.
+    // CI passes the version a commit on main is released as; any other build is a dev build.
     const version = b.option([]const u8, "version", "The version zanity --version reports, as a release sets it") orelse "dev";
 
     const exe = b.addExecutable(.{ .name = "zanity", .root_module = module(b, "src/main.zig", target, optimize) });
@@ -57,13 +57,15 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&unit.step);
 
     // `zig build test-integration` runs the built zanity: the golden fixtures, the CLI, and
-    // zanity checking its own source, which must pass every rule.
+    // zanity checking its own source, which must pass every rule. CI passes -Dzanity, so the
+    // binary it tests is the release binary it ships, and nothing is built twice.
+    const tested = b.option([]const u8, "zanity", "Run test-integration on this zanity, a path in the repository such as zig-out/release/zanity-linux-x86_64, instead of building one");
     const integration_module = module(b, "src/golden_test.zig", target, test_optimize);
     const options = b.addOptions();
-    options.addOptionPathUntracked("zanity", .{ .relative = .{ .base = .install_bin, .sub_path = b.fmt("zanity{s}", .{target.result.exeFileExt()}) } });
+    options.addOptionPathUntracked("zanity", if (tested) |path| b.path(path) else .{ .relative = .{ .base = .install_bin, .sub_path = b.fmt("zanity{s}", .{target.result.exeFileExt()}) } });
     integration_module.addOptions("paths", options);
     const integration = b.addRunArtifact(b.addTest(.{ .root_module = integration_module }));
-    integration.step.dependOn(b.getInstallStep());
+    if (tested == null) integration.step.dependOn(b.getInstallStep());
     integration.setCwd(b.path("."));
     integration.has_side_effects = true;
     // Under a coding agent, check would speak to it; the tests expect the output anyone else gets.
@@ -87,7 +89,7 @@ const release_targets = [_]struct { name: []const u8, query: std.Target.Query }{
 /// has the same download URLs. ReleaseSafe keeps bounds and overflow checks, so a bug stops with a
 /// message instead of silently checking the wrong thing.
 fn addRelease(b: *std.Build, build_info: *std.Build.Step.Options) void {
-    const only = b.option([]const u8, "platform", "Build only this release platform, such as linux-x86_64; the release workflow builds each on its own runner");
+    const only = b.option([]const u8, "platform", "Build only this release platform, such as linux-x86_64; CI builds each on its own runner");
     const release = b.step("release", "Build every released platform into zig-out/release");
     for (release_targets) |platform| {
         if (only) |name| if (!std.mem.eql(u8, name, platform.name)) continue;
