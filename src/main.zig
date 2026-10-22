@@ -33,20 +33,8 @@ const Telemetry = @import("telemetry.zig").Telemetry;
 const Facts = @import("facts.zig").Facts;
 const Finding = @import("facts.zig").Finding;
 
-const CheckOptions = struct {
-    paths: []const []const u8,
-    rules: ?[]const u8 = null,
-    fix: bool = false,
-    infer: bool = false,
-    strict: bool = false,
-    watch: bool = false,
-    @"fail-on": FailOn = .@"error",
-    agent: bool = false,
-    limit: u32 = 10,
-};
-
-/// The least severe finding that makes `check` exit 1.
-const FailOn = enum { @"error", warning };
+const CheckOptions = triage.CheckOptions;
+const triage = @import("triage.zig");
 
 const InitOptions = struct {
     paths: []const []const u8,
@@ -83,18 +71,8 @@ const LspRow = struct { messages: usize };
 
 /// One finding as `--json` and `--plain` publish it. Lines and columns count from 1. When zanity
 /// can fix it, the edit replaces bytes `edit_start` to `edit_end` of the file with `edit_text`.
-const Row = struct {
-    path: []const u8,
-    line: u32,
-    column: u32,
-    severity: []const u8,
-    rule: []const u8,
-    message: []const u8,
-    fix: []const u8,
-    edit_start: ?u32 = null,
-    edit_end: ?u32 = null,
-    edit_text: ?[]const u8 = null,
-};
+const baseline = @import("baseline.zig");
+const Row = baseline.Row;
 
 const app: zcli.App = .{
     .name = "zanity",
@@ -106,16 +84,7 @@ const app: zcli.App = .{
         .examples = &.{ "zanity check .", "zanity check src tests --rules unbounded-loop,long-function", "zanity check . --json", "zanity check . --fix", "zanity check . --fail-on warning", "zanity check . --strict", "zanity check . --watch" },
         .result_title = "Findings",
         .positional = .{ .name = "paths", .metavar = "PATH", .help = "Files or directories to check.", .default = &.{"."} },
-        .options = &.{
-            .{ .name = "rules", .metavar = "RULES", .help = "Comma-separated rules to run instead of the defaults.", .example = "unbounded-loop,long-function" },
-            .{ .name = "fix", .help = "Apply the fixes zanity can make, then report what is left." },
-            .{ .name = "strict", .help = "Also run the strict rules, for what safety-critical code needs and most code doesn't, such as two assertions in every function." },
-            .{ .name = "watch", .help = "Check again each time a file it checks, or zanity.toml, changes, until Ctrl-C." },
-            .{ .name = "fail-on", .metavar = "SEVERITY", .help = "Exit 1 on findings this severe or worse: error, or warning as a pre-commit hook or CI should.", .example = "warning" },
-            .{ .name = "agent", .help = "Print findings for a coding agent: totals and the next command first, then each finding with its fix. On by default when CLAUDECODE is set and neither --json nor --plain is given.", .env = "ZANITY_AGENT" },
-            .{ .name = "limit", .metavar = "N", .help = "With --agent, show at most N findings in all, rules first to last, and list the other rules by name; 0 shows them all.", .example = "0" },
-            .{ .name = "infer", .help = "Also ask a decision model what no deterministic check can decide, such as whether an error message misleads: TypeSafe's Jev, which needs TYPESAFE_API_KEY, or the System One server [infer] in zanity.toml names, such as a local Kev." },
-        },
+        .options = triage.check_options,
     }, .{ .run = runCheck, .human = renderHuman }), zcli.command(InitOptions, InitRow, .{
         .name = "init",
         .description = "Write a zanity.toml with every setting and rule explained, ready to trim.",
@@ -216,6 +185,9 @@ const Workspace = struct {
     worker_view: [batch.max_workers]*batch.Worker = undefined,
     checked: usize = 0,
     io: Io = undefined,
+    review: baseline.Review = .{},
+    baseline_buffer: []u8,
+    history: @import("history.zig").History,
 
     fn initWorkspace(gpa: Allocator, limits: memory.Limits) Allocator.Error!*Workspace {
         if (limits.files == 0) assert.panic("memory.Limits.files is 0, so zanity could not check any file", .{});
@@ -233,8 +205,10 @@ const Workspace = struct {
             .project_files = try .initBounded(gpa, 1024, "project files"),
             .dirs = try .initBounded(gpa, limits.files, "directories"),
             .order = try memory.reserve(gpa, batch.Sized, limits.files),
-            .rows = try .initBounded(gpa, limits.findings, "findings across all files"),
+            .rows = try .initBounded(gpa, 2 * limits.findings, "findings and resolved baseline entries"),
             .table = try .initTableScratch(gpa, limits.files),
+            .history = try .initHistory(gpa, limits.findings),
+            .baseline_buffer = try memory.reserve(gpa, u8, 1 << 28),
             .source = try memory.reserve(gpa, u8, limits.file_bytes + 1),
             .fixed = try memory.reserve(gpa, u8, 2 * limits.file_bytes),
             .analysis = try memory.reserve(gpa, u8, limits.analysis_bytes),
@@ -319,6 +293,7 @@ pub fn workspaceOf(ctx: *zcli.Context) *Workspace {
 fn runCheck(ctx: *zcli.Context, options: CheckOptions) ![]const Row {
     if (options.paths.len == 0) assert.panic("check ran with no paths; zcli supplies '.' when none are given", .{});
     const ws = workspaceOf(ctx);
+    try baseline.validateOptions(ctx, ws, options);
     const agent = try speaksToAgent(ctx, ws, options.agent);
     const settings = try loadSettings(ctx, ws, std.heap.page_allocator);
     if (options.watch) return watchCheck(ctx, ws, options, agent);
@@ -340,8 +315,13 @@ fn runCheck(ctx: *zcli.Context, options: CheckOptions) ![]const Row {
         error.LimitExceeded => return ctx.fail(.usage, try ws.text.format("This run has more {s} than zanity is built to hold.", .{memory.exceeded}), "Check fewer files at once, or report it if the input is ordinary."),
         else => return e,
     };
-    if (fails(counts, options.@"fail-on")) ctx.status = .failure;
-    if (ws.rows.len != counts.errors + counts.warnings) assert.panic("{d} output rows for {d} errors and {d} warnings; runCheck() must add one row per error or warning", .{ ws.rows.len, counts.errors, counts.warnings });
+    if (triage.failsReview(options, counts, ws.review)) ctx.status = .failure;
+    if (!triage.special(options) and ws.rows.len != counts.errors + counts.warnings) assert.panic("{d} output rows for {d} errors and {d} warnings; runCheck() must add one row per error or warning", .{ ws.rows.len, counts.errors, counts.warnings });
+    if (triage.special(options)) {
+        try triage.renderOutput(ctx, ws, options, agent);
+        ctx.format = .plain;
+        return &.{};
+    }
     if (agent) return reportToAgent(ctx, ws, options, counts);
     if (ctx.format != .human) try report.summarise(console(ctx, ctx.runtime.err), counts);
     return ws.rows.items();
@@ -379,7 +359,8 @@ fn initRerun(rerun: *Rerun, ctx: *zcli.Context, ws: *Workspace) !void {
 
 /// Runs `zanity check` without --watch, then again each time the operating system reports that a
 /// file it checks under `paths`, or zanity.toml, changed. Stops only when Ctrl-C ends the process.
-fn spawnedWatchCheck(ctx: *zcli.Context, ws: *Workspace, paths: []const []const u8) ![]const Row {
+fn spawnedWatchCheck(ctx: *zcli.Context, ws: *Workspace, options: CheckOptions) ![]const Row {
+    const paths = options.paths;
     if (paths.len == 0) assert.panic("watching no paths; zcli supplies '.' when none are given", .{});
     if (paths.len > ws.args.len) assert.panic("watching {d} paths from a command line of {d} arguments; each path is an argument", .{ paths.len, ws.args.len });
     var rerun: Rerun = undefined;
@@ -395,10 +376,15 @@ fn spawnedWatchCheck(ctx: *zcli.Context, ws: *Workspace, paths: []const []const 
     for (0..max_watch_runs) |_| {
         if (terminal) try out.writer.writeAll(watch.clear_screen);
         try out.writer.flush();
-        var child = std.process.spawn(ws.io, .{ .argv = rerun.argv, .environ_map = rerun.environ }) catch |e| {
-            return ctx.fail(.io, try ws.text.format("Could not rerun {s}: {t}.", .{ rerun.argv[0], e }), "Reinstall it with install.sh, as the README describes.");
-        };
-        _ = try child.wait(ws.io);
+        if (options.baseline != null) {
+            try @import("watch_review.zig").isolatedCheck(ctx, ws, &rerun, options);
+            try out.writer.flush();
+        } else {
+            var child = std.process.spawn(ws.io, .{ .argv = rerun.argv, .environ_map = rerun.environ }) catch |e| {
+                return ctx.fail(.io, try ws.text.format("Could not rerun {s}: {t}.", .{ rerun.argv[0], e }), "Reinstall it with install.sh, as the README describes.");
+            };
+            _ = try child.wait(ws.io);
+        }
         if (!ctx.quiet) try err.writer.writeAll("zanity: watching for changes; save a file to check again, Ctrl-C to stop.\n");
         try err.writer.flush();
         watcher.wait() catch |e| return ctx.fail(.io, try ws.text.format("Lost track of changes to the files: {t}.", .{e}), "Run zanity check --watch again.");
@@ -410,7 +396,7 @@ fn spawnedWatchCheck(ctx: *zcli.Context, ws: *Workspace, paths: []const []const 
 /// cross-file rules remain correct; unchanged source analysis comes from the cache.
 fn watchCheck(ctx: *zcli.Context, ws: *Workspace, options: CheckOptions, asked_for_agent: bool) ![]const Row {
     const paths = options.paths;
-    if (options.infer or options.fix) return spawnedWatchCheck(ctx, ws, paths);
+    if (options.infer or options.fix) return spawnedWatchCheck(ctx, ws, options);
     if (paths.len == 0) assert.panic("watching no paths; zcli supplies '.' when none are given", .{});
     if (paths.len > ws.args.len) assert.panic("watching {d} paths from a command line of {d} arguments; each path is an argument", .{ paths.len, ws.args.len });
     var watcher: watch.Watcher = undefined;
@@ -447,7 +433,7 @@ fn watchCheck(ctx: *zcli.Context, ws: *Workspace, options: CheckOptions, asked_f
             error.LimitExceeded => return ctx.fail(.usage, try checks.text.format("This run has more {s} than zanity is built to hold.", .{memory.exceeded}), "Check fewer files at once, or report it if the input is ordinary."),
             else => return e,
         };
-        if (fails(counts, options.@"fail-on")) ctx.status = .failure;
+        if (triage.failsReview(options, counts, checks.review)) ctx.status = .failure;
         try renderWatched(ctx, checks, .{ .options = options, .counts = counts, .agent = agent });
         try out.writer.flush();
         if (!ctx.quiet) try err.writer.writeAll("zanity: watching for changes; save a file to check again, Ctrl-C to stop.\n");
@@ -463,11 +449,16 @@ fn renderWatched(ctx: *zcli.Context, ws: *Workspace, output: WatchOutput) !void 
     const options = output.options;
     const counts = output.counts;
     if (options.paths.len == 0) assert.panic("rendering a watched check with no paths; zcli supplies '.' when none are given", .{});
-    if (ws.rows.len != counts.errors + counts.warnings) assert.panic("rendering {d} watched rows for {d} errors and {d} warnings; checkPaths makes one row per finding", .{ ws.rows.len, counts.errors, counts.warnings });
+    if (!triage.special(options) and ws.rows.len != counts.errors + counts.warnings) assert.panic("rendering {d} watched rows for {d} errors and {d} warnings; checkPaths makes one row per finding", .{ ws.rows.len, counts.errors, counts.warnings });
+    if (triage.special(options)) {
+        try triage.renderOutput(ctx, ws, options, output.agent);
+        return;
+    }
     const out = ctx.runtime.out;
     const err = ctx.runtime.err;
     if (output.agent) {
         try report.renderAgent(out.writer, .{ .findings = ws.findings.items(), .counts = counts, .paths = options.paths, .limit = options.limit, .watching = true });
+        try triage.continuation(out.writer, ws.args, 0, 10000);
         if (ws.cache_hits > 0) try err.writer.print("zanity: reused cached deterministic analysis for {d} of {d} source files; query {s}'s source_analyses table for the cached facts and findings.\n", .{ ws.cache_hits, ws.checked, ws.source_cache.?.path });
         return;
     }
@@ -535,6 +526,7 @@ fn reportToAgent(ctx: *zcli.Context, ws: *Workspace, options: CheckOptions, coun
     if (ws.findings.len != counts.errors + counts.warnings) assert.panic("{d} findings for {d} errors and {d} warnings; count the findings being reported", .{ ws.findings.len, counts.errors, counts.warnings });
     const out = ctx.runtime.out;
     try report.renderAgent(out.writer, .{ .findings = ws.findings.items(), .counts = counts, .paths = paths, .limit = options.limit, .watching = watching(ws) });
+    try triage.continuation(out.writer, ws.args, 0, 10000);
     if (ws.cache_hits > 0) {
         const err = ctx.runtime.err;
         try err.writer.print("zanity: reused cached deterministic analysis for {d} of {d} source files; query {s}'s source_analyses table for the cached facts and findings.\n", .{ ws.cache_hits, ws.checked, ws.source_cache.?.path });
@@ -765,13 +757,6 @@ fn console(ctx: *zcli.Context, stream: zcli.Stream) zrich.Console {
     return .{ .writer = stream.writer, .allocator = ctx.allocator, .options = stream.capabilities };
 }
 
-/// Whether `counts` holds a finding as severe as `fail_on`, or more.
-fn fails(counts: report.Counts, fail_on: FailOn) bool {
-    if (counts.flagged > counts.files) assert.panic("{d} files flagged out of {d} checked; count() must count a file at most once", .{ counts.flagged, counts.files });
-    if (counts.flagged > counts.errors + counts.warnings) assert.panic("{d} files flagged by {d} errors and {d} warnings; a file is flagged only for a finding in it", .{ counts.flagged, counts.errors, counts.warnings });
-    return counts.errors > 0 or (fail_on == .warning and counts.warnings > 0);
-}
-
 fn parseRules(ctx: *zcli.Context, ws: *Workspace, list: []const u8) !rules.Set {
     var set: rules.Set = .{};
     var it = std.mem.tokenizeScalar(u8, list, ',');
@@ -832,6 +817,7 @@ fn checkPaths(ctx: *zcli.Context, ws: *Workspace, options: CheckOptions, selecte
             .edit_text = if (f.edit) |e| e.replacement else null,
         });
     }
+    try baseline.prepare(ctx, ws, options);
     return report.count(findings, ws.checked + ws.project_files.len);
 }
 

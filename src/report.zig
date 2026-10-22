@@ -353,14 +353,14 @@ pub fn renderAgent(out: *std.Io.Writer, report: AgentReport) !void {
     var fixable: usize = 0;
     for (findings) |f| fixable += @intFromBool(f.edit != null);
     try out.print("zanity: {d} {s}, {d} {s} in {d}/{d} {s}", .{ counts.errors, if (counts.errors == 1) "error" else "errors", counts.warnings, if (counts.warnings == 1) "warning" else "warnings", counts.flagged, counts.files, files });
-    if (fixable > 0) {
-        const scope: CheckedPaths = .{ .paths = paths };
-        try out.print("; {d} [--fix].\nNext: `zanity check {f} --fix`, fix the rest", .{ fixable, scope });
-    } else try out.writeAll(".\nNext: fix these");
+    if (fixable > 0) try out.print("; {d} [--fix]", .{fixable});
+    try out.writeAll(".\nNext: fix this displayed batch");
     try out.writeAll(if (report.watching)
-        "; saving a file checks again. Resolve every finding in code. If the code is correct, make that correctness explicit enough for the rule to verify; never suppress the finding, disable its rule or exclude its path.\n"
+        "; saving a file checks again. This is a selected batch. Resolve the displayed findings in code. If the code is correct, make that correctness explicit enough for the rule to verify; never suppress the finding, disable its rule or exclude its path.\n"
     else
-        ", rerun the full check with --fail-on warning. Resolve every finding in code. If the code is correct, make that correctness explicit enough for the rule to verify; never suppress the finding, disable its rule or exclude its path.\n");
+        ", rerun the full check with --fail-on warning. This is a selected batch. Resolve the displayed findings in code. If the code is correct, make that correctness explicit enough for the rule to verify; never suppress the finding, disable its rule or exclude its path.\n");
+    const shown = if (report.limit == 0) findings.len else @min(report.limit, findings.len);
+    try out.print("Shown {d} of {d}; omitted {d}.\n", .{ shown, findings.len, findings.len - shown });
     const fired = Fired.initFired(findings);
     var budget = report.limit;
     var listed = false;
@@ -446,20 +446,6 @@ fn renderAgentRule(out: *std.Io.Writer, report: AgentReport, tally: RuleTally) !
     if (shown > tally.total) assert.panic("showed {d} {s} findings of {d}; show only the rule's own findings", .{ shown, rule.name, tally.total });
     return shown;
 }
-
-/// The paths a run checked, written as they would be typed after `zanity check`.
-const CheckedPaths = struct {
-    paths: []const []const u8,
-
-    pub fn format(self: CheckedPaths, w: *std.Io.Writer) std.Io.Writer.Error!void {
-        if (self.paths.len == 0) assert.panic("writing a command with no paths; renderAgent() refuses an empty list", .{});
-        for (self.paths, 0..) |path, i| {
-            if (path.len == 0) assert.panic("path {d} of {d} is empty; zcli passes each path as typed, and none can be empty", .{ i + 1, self.paths.len });
-            if (i > 0) try w.writeByte(' ');
-            try w.writeAll(path);
-        }
-    }
-};
 
 pub fn summarise(console: zrich.Console, counts: Counts) !void {
     if (counts.flagged > counts.files) assert.panic("{d} files flagged out of {d} checked; summarise() must count a file at most once", .{ counts.flagged, counts.files });

@@ -290,9 +290,9 @@ test "--agent puts the totals and the next command first, then findings up to --
     var plain = std.process.Environ.Map.init(arena);
     const run = try checkForAgent(arena, std.testing.io, &plain, &.{ "--agent", "--limit=1" });
     try std.testing.expectEqual(std.process.Child.Term{ .exited = 1 }, run.term);
-    try std.testing.expect(std.mem.startsWith(u8, run.stdout, "zanity: 2 errors, 2 warnings in 1/1 file; 1 [--fix].\nNext: `zanity check a.py --fix`"));
+    try std.testing.expect(std.mem.startsWith(u8, run.stdout, "zanity: 2 errors, 2 warnings in 1/1 file; 1 [--fix].\nNext: fix this displayed batch"));
     try expectOutput(run.stdout, &.{
-        "rerun the full check with --fail-on warning. Resolve every finding in code. If the code is correct, make that correctness explicit enough for the rule to verify; never suppress the finding, disable its rule or exclude its path.\n",
+        "rerun the full check with --fail-on warning. This is a selected batch. Resolve the displayed findings in code. If the code is correct, make that correctness explicit enough for the rule to verify; never suppress the finding, disable its rule or exclude its path.\n",
         "\n\nassertion-density [error] 2 in 1 file\n",
         "\n  +1 more: --rules assertion-density --limit 0\n",
         "\nAlso, to see with --rules <name>:\n  unbounded-loop [warning] 1 in 1 file\n  assertion-message [warning] 1 in 1 file\n",
@@ -714,4 +714,8 @@ test "zanity lsp publishes findings and offers their fixes and a false-positive 
     const output = try reader.interface.allocRemaining(arena, .unlimited);
     try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, try child.wait(io));
     try expectOutput(output, &.{ "\"method\":\"textDocument/publishDiagnostics\"", "\"code\":\"redundant-null-check\"", "\"title\":\"zanity: fix redundant-null-check\"", "\"command\":\"zanity.flagFalsePositive\"", "\"id\":3,\"result\":null" }, &.{});
+}
+
+test {
+    _ = @import("baseline_test.zig");
 }

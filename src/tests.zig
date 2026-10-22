@@ -23,4 +23,7 @@ test {
     _ = @import("twins.zig");
     _ = @import("passthrough.zig");
     _ = @import("watch.zig");
+    _ = @import("history.zig");
+    _ = @import("triage.zig");
+    _ = @import("watch_review.zig");
 }
