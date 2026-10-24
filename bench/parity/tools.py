@@ -131,7 +131,7 @@ TOOLS = [
         },
         unfixtured={"FST003": "it reads test durations from a JUnit report, not the source"},
         notes={
-            "FST003": "zanity asks slow-test with --infer, and reads no JUnit timings",
+            "FST003": "zanity measures slow-test from --junit reports; source-only fixtures cannot establish elapsed time",
             "ISO003": "zanity reports reads and writes of real paths, not of the test's own temporary directory",
         },
     ),

@@ -228,6 +228,7 @@ const Vocabulary = struct {
     decision_point: ?captures.Id,
     test_outer: ?captures.Id,
     test_check: ?captures.Id,
+    test_constant: ?captures.Id,
     test_shared_state: ?captures.Id,
     chain_link: ?captures.Id,
     expression_repeatable: ?captures.Id,
@@ -279,6 +280,7 @@ const Vocabulary = struct {
             .decision_point = c.id("decision.point"),
             .test_outer = c.id("test.outer"),
             .test_check = c.id("test.check"),
+            .test_constant = c.id("test.constant"),
             .test_shared_state = c.id("test.shared_state"),
             .chain_link = c.id("chain.link"),
             .expression_repeatable = c.id("expression.repeatable"),
@@ -434,6 +436,8 @@ pub const File = struct {
             };
         } else if (v.test_shared_state == id) {
             try isolation.checkSharedStatement(self, node);
+        } else if (v.test_constant == id) {
+            try test_quality.checkConstantCheck(self, node);
         } else if (v.test_check == id) {
             if (test_quality.enclosingTest(self)) |unit| unit.checks += 1;
         } else if (v.async_name == id) {
@@ -931,13 +935,9 @@ pub const File = struct {
 
     pub fn closeAssertion(self: *File, ctx: Context) !void {
         if (ctx.family != .assertion) assert.panic("{s}: closing {f} as an assertion, but it is a {t}; close() must dispatch each construct by its family, so check its switch", .{ self.work.facts.path, ctx.node.where(), ctx.family });
-        if (ctx.message == null) {
-            if (try self.report(ctx.node, "assertion-message", try self.say("This assertion has no message, so when it fails nobody will know which invariant broke, why it must hold, or with what values.", .{}))) {
-                if (ctx.condition) |condition| try rewrite.explainAssertion(self, ctx.node, condition);
-            }
-        }
-        if (ctx.message) |message| try messages.checkMessage(self, message, ctx.condition);
+        try messages.checkAssertion(self, ctx);
         const condition = ctx.condition orelse return;
+        try test_quality.checkConstantAssertion(self, ctx.node, condition);
         if (ctx.message != null and ts.ts_node_start_byte(condition) > ts.ts_node_start_byte(ctx.message.?)) assert.panic("{s}: in the assertion {f}, @assertion.message {f} comes before @assertion.condition {f}; the query captured them the wrong way round", .{ self.work.facts.path, ctx.node.where(), ctx.message.?.where(), condition.where() });
         const function = self.enclosingFunction() orelse return;
         try weak.restatedType(self, function, ctx.node, condition);

@@ -1,0 +1,10 @@
+rules: sleep-in-test,polling-loop,nondeterministic-test,filesystem-in-test,network-in-test,process-in-test,stdin-in-test
+exit: 0
+CoreCSharpTest.cs:4:9: warning [sleep-in-test]
+CoreCSharpTest.cs:5:9: warning [polling-loop]
+CoreCSharpTest.cs:6:13: warning [sleep-in-test]
+CoreCSharpTest.cs:8:9: warning [nondeterministic-test]
+CoreCSharpTest.cs:9:14: warning [filesystem-in-test]
+CoreCSharpTest.cs:10:20: warning [network-in-test]
+CoreCSharpTest.cs:11:17: warning [process-in-test]
+CoreCSharpTest.cs:12:17: warning [stdin-in-test]

@@ -1,0 +1,5 @@
+rules: constant-test-assertion
+exit: 0
+constant_go_test.go:4:5: warning [constant-test-assertion]
+constant_go_test.go:5:5: warning [constant-test-assertion]
+constant_go_test.go:6:5: warning [constant-test-assertion]

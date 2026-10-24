@@ -293,6 +293,15 @@ Every function is also asked:
 | `missing-authorisation` | acts for a caller without checking the caller may |
 | `mixed-abstraction` | mixes high-level steps with low-level detail such as parsing or raw SQL |
 
+Slow tests are measured from a test runner's JUnit XML report, without inference:
+
+```sh
+pytest --junitxml=test-results.xml
+zanity check . --junit test-results.xml --slow-test-ms 1000
+```
+
+`slow-test` reports each measured test exceeding the threshold (default 1000 ms), at its line in the report. Missing durations and skipped tests are excluded. Reports describe that run; regenerate them after changing tests. Zanity does not execute tests itself. `constant-test-assertion` deterministically flags assertions containing only constants and operators; broader judgments about test value remain inference questions.
+
 And every test case:
 
 | Rule | Asks whether a test | Not asked where this already reported |
@@ -300,7 +309,6 @@ And every test case:
 | `order-dependent-test` | depends on which tests ran before it | `shared-state-in-test`, `filesystem-in-test`, `database-in-test`, `unmanaged-temp-in-test` |
 | `combinatorial-test` | varies several independent things at once | |
 | `flaky-test` | can pass or fail with no code change | `nondeterministic-test`, `sleep-in-test`, `network-in-test`, `polling-loop` |
-| `slow-test` | is likely to be slow | `sleep-in-test`, `polling-loop`, `network-in-test`, `database-in-test`, `process-in-test` |
 | `heavy-setup-test` | needs a lot of setup for what it checks | |
 | `unreadable-test` | doesn't let a reader tell what it checks or why | `vague-test-name` |
 | `hollow-test` | would still pass if the behaviour it names were broken | |
@@ -308,7 +316,7 @@ And every test case:
 | `manual-test` | needs a person to run or judge it | `stdin-in-test`, `debug-leftover` |
 | `unfocused-test` | wouldn't say why it failed | `eager-test` |
 | `self-mocking-test` | mocks the behaviour it claims to check | |
-| `trivial-test` | checks something trivial or only the easy path | |
+| `trivial-test` | checks something trivial or only the easy path | `constant-test-assertion` |
 
 And each non-test function in a test file, including fixtures, setup and teardown hooks, and shared helpers:
 
@@ -586,6 +594,8 @@ zig build test --fuzz=100K  # fuzz the checker with arbitrary bytes in every lan
 `python3 bench/parity/ratchet.py` protects every covered comparison fixture, inference question, and language/rule match count in `bench/parity/results.json`. After the full parity benchmark improves coverage, run it with `--write` and commit the raised `bench/parity/floors.json`; it refuses to write over a regression.
 
 Zig does not prune `.zig-cache`; run `./scripts/zig-cache` when its old content is no longer worth keeping. The pre-push hook warns above 10 GB without deleting anything. Set `ZANITY_ZIG_CACHE_WARN_MB` to choose a different warning threshold.
+
+Native test parity covers all eight adapters, including Zig and C#. `zig build test` requires a positive golden case for each of 12 common deterministic test checks in every language; `zig build test-integration` runs those cases through the binary and verifies the exact findings, including negative controls. Framework assertions include Zig's `std.testing.expect`, equality, string, slice and approximate comparisons. This native gate is independent of the six-language bonsai comparison, whose reference tool does not support Zig or C#.
 
 Golden cases in `tests/golden/` run through the real binary and compare where each finding lands, its rule, its severity and the exit code, not the wording. The self-check runs zanity over its own source with every rule and fails on any finding.
 

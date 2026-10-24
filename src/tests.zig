@@ -1,4 +1,6 @@
 test {
+    _ = @import("test_timings.zig");
+    _ = @import("test_parity.zig");
     _ = @import("language.zig");
     _ = @import("fuzz_test.zig");
     _ = @import("architecture_test.zig");

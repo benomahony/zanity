@@ -1,0 +1,7 @@
+rules: constant-test-assertion
+exit: 0
+constant_zig_test.zig:4:9: warning [constant-test-assertion]
+constant_zig_test.zig:5:9: warning [constant-test-assertion]
+constant_zig_test.zig:6:9: warning [constant-test-assertion]
+constant_zig_test.zig:7:9: warning [constant-test-assertion]
+constant_zig_test.zig:8:9: warning [constant-test-assertion]

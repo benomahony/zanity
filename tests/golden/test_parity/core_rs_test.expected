@@ -1,0 +1,10 @@
+rules: sleep-in-test,polling-loop,nondeterministic-test,filesystem-in-test,network-in-test,process-in-test,stdin-in-test
+exit: 0
+core_rs_test.rs:3:5: warning [sleep-in-test]
+core_rs_test.rs:4:5: warning [polling-loop]
+core_rs_test.rs:5:9: warning [sleep-in-test]
+core_rs_test.rs:7:5: warning [nondeterministic-test]
+core_rs_test.rs:8:5: warning [filesystem-in-test]
+core_rs_test.rs:9:5: warning [network-in-test]
+core_rs_test.rs:10:5: warning [process-in-test]
+core_rs_test.rs:11:5: warning [stdin-in-test]

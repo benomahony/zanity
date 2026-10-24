@@ -1,0 +1,10 @@
+rules: sleep-in-test,polling-loop,nondeterministic-test,filesystem-in-test,network-in-test,process-in-test,stdin-in-test
+exit: 0
+core_test.py:2:5: warning [sleep-in-test]
+core_test.py:3:5: warning [polling-loop]
+core_test.py:4:9: warning [sleep-in-test]
+core_test.py:5:5: warning [nondeterministic-test]
+core_test.py:6:5: warning [filesystem-in-test]
+core_test.py:7:5: warning [network-in-test]
+core_test.py:8:5: warning [process-in-test]
+core_test.py:9:5: warning [stdin-in-test]

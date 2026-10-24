@@ -1218,3 +1218,16 @@
     .)) @method.override
   (#any-of? @_sender "object" "object?")
   (#any-suffix? @_event "EventArgs" "EventArgs?"))
+
+; Values checked by common test frameworks, for deterministic test-quality checks.
+
+((invocation_expression
+  function: (member_access_expression expression: (identifier) @_assert name: (identifier) @_check)
+  arguments: (argument_list . (argument (_) @test.value))) @test.constant
+  (#any-of? @_assert "Assert" "ClassicAssert")
+  (#any-of? @_check "True" "False" "IsTrue" "IsFalse" "Null" "NotNull" "IsNull" "IsNotNull"))
+((invocation_expression
+  function: (member_access_expression expression: (identifier) @_assert name: (identifier) @_check)
+  arguments: (argument_list . (argument (_) @test.value) . (argument (_) @test.value) .)) @test.constant
+  (#any-of? @_assert "Assert" "ClassicAssert")
+  (#any-of? @_check "Equal" "NotEqual" "AreEqual" "AreNotEqual" "Same" "NotSame"))

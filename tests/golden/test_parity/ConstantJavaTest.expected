@@ -1,0 +1,5 @@
+rules: constant-test-assertion
+exit: 0
+ConstantJavaTest.java:4:9: warning [constant-test-assertion]
+ConstantJavaTest.java:5:9: warning [constant-test-assertion]
+ConstantJavaTest.java:6:9: warning [constant-test-assertion]

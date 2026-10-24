@@ -1,0 +1,3 @@
+rules: vague-test-name
+exit: 0
+names_js.test.js:1:4: warning [vague-test-name]

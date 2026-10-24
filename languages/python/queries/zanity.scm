@@ -734,3 +734,16 @@
                     ])
                 ] @finding.variadic-parameter)))
     ]))
+
+; Values checked by common test frameworks, for deterministic test-quality checks.
+
+((call
+  function: (attribute object: (identifier) @_self attribute: (identifier) @_check)
+  arguments: (argument_list . (_) @test.value)) @test.constant
+  (#eq? @_self "self")
+  (#any-of? @_check "assertTrue" "assertFalse" "assertIsNone" "assertIsNotNone"))
+((call
+  function: (attribute object: (identifier) @_self attribute: (identifier) @_check)
+  arguments: (argument_list . (_) @test.value (_) @test.value)) @test.constant
+  (#eq? @_self "self")
+  (#any-of? @_check "assertEqual" "assertNotEqual" "assertGreater" "assertGreaterEqual" "assertLess" "assertLessEqual"))

@@ -81,7 +81,8 @@ def score_inference_live(zanity: Zanity, server: Server) -> list[dict]:
     """Both tools' answers, from the same server, to each named question about the fixture that
     has the problem it asks about: how sure each was, and whether each reported it."""
     root = FIXTURES / "nouls"
-    named = {q: z for q, z in QUESTIONS.items() if (root / f"{q}.py").exists() or (root / f"test_{q}.py").exists()}
+    # Elapsed time is measured from JUnit reports, not judged from source by a model.
+    named = {q: z for q, z in QUESTIONS.items() if q != "test_slow" and ((root / f"{q}.py").exists() or (root / f"test_{q}.py").exists())}
     adapter = [str(SOURCES / "nouls" / ".venv" / "bin" / "python"), str(HERE / "adapters" / "run_nouls.py"), str(root)]
     theirs = json.loads(subprocess.run(adapter, env=server.env(os.environ | {"NOULS_PARITY_RULES": ",".join(named)}), capture_output=True, text=True, check=True).stdout)
     settles = settled_by()
@@ -330,10 +331,12 @@ def score_inference(rules: dict[str, dict]) -> dict:
     unmapped = sorted(set(named) - set(QUESTIONS))
     assert not unmapped, f"nouls asks {unmapped}, which QUESTIONS in tools.py doesn't map"
     assert catalogue, "nouls listed no catalogue questions; check its config"
-    questions = [
-        {"rule": rule, "zanity": QUESTIONS[rule], "present": rules.get(QUESTIONS[rule], {}).get("question", False)}
-        for rule in named
-    ]
+    # A measured slow-test rule covers this question without asking a model.
+    questions = []
+    for rule in named:
+        code = QUESTIONS[rule]
+        present = rules.get(code, {}).get("question", False) or (rule == "test_slow" and code in rules)
+        questions.append({"rule": rule, "zanity": code, "present": present})
     detected = Counter(rule for family in catalogue for rule in family.get("rule_ids", []))
     asked = {q["id"] for q in json.loads((REPO / "catalogue" / "questions.json").read_text())}
     return {

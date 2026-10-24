@@ -1,0 +1,4 @@
+rules: vague-test-name,skipped-test
+exit: 0
+NamesCSharpTest.cs:3:10: warning [vague-test-name]
+NamesCSharpTest.cs:4:6: warning [skipped-test]

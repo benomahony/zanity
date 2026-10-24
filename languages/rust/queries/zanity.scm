@@ -409,3 +409,10 @@
 ] @finding.relaxed-check
   (#eq? @_lint_when "cfg_attr")
   (#any-of? @_lint_off "allow" "expect"))
+
+; Values checked by common test frameworks, for deterministic test-quality checks.
+
+((macro_invocation
+  macro: (identifier) @_assert
+  (token_tree) @test.value) @test.constant
+  (#any-of? @_assert "assert" "debug_assert" "assert_eq" "assert_ne" "debug_assert_eq" "debug_assert_ne"))

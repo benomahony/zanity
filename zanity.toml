@@ -53,6 +53,10 @@ disable = ["filesystem-in-test"]
 [paths."src/docs_test.zig"]
 disable = ["filesystem-in-test"]
 
+# The parity test reads the golden fixtures it verifies, as the other repository tests do.
+[paths."src/test_parity.zig"]
+disable = ["filesystem-in-test"]
+
 # The project's words for things. Names that use a banned word, or an alias of a word the
 # project settled on, are reported. Domains and contexts carry their own words; a context
 # applies after a domain, and a definition can share its name with one in another context.

@@ -411,3 +411,61 @@ fn fillerWord(word: []const u8) bool {
     }
     return false;
 }
+
+/// Report only assertions whose expression leaves are constants and operators.
+/// Names, calls, interpolated strings and unfamiliar syntax leave this to inference.
+pub fn checkConstantAssertion(self: *File, node: ts.Node, condition: ts.Node) !void {
+    if (enclosingTest(self) == null) return;
+    if (self.index.marks(node, self.v.test_constant)) return;
+    // A constant failure inside a branch can be a guard against reaching that branch.
+    if (self.innermost(.control) != null or self.innermost(.loop) != null) return;
+    if (ts.ts_node_end_byte(condition) > self.source.len) assert.panic("constant assertion ends at {d}, beyond its {d}-byte source", .{ ts.ts_node_end_byte(condition), self.source.len });
+    if (ts.ts_node_start_byte(condition) < ts.ts_node_start_byte(node)) assert.panic("assertion condition starts at {d}, before its assertion at {d}", .{ ts.ts_node_start_byte(condition), ts.ts_node_start_byte(node) });
+    if (constantExpression(self, condition)) _ = try self.report(node, "constant-test-assertion", "This assertion checks only constants and operators, so it exercises no code under test.");
+}
+
+/// Framework checks capture every compared value; all must be constant before reporting.
+pub fn checkConstantCheck(self: *File, node: ts.Node) !void {
+    if (enclosingTest(self) == null) return;
+    if (self.innermost(.control) != null or self.innermost(.loop) != null) return;
+    const start = ts.ts_node_start_byte(node);
+    const end = ts.ts_node_end_byte(node);
+    if (end > self.source.len) assert.panic("framework check ends at {d}, beyond {d} source bytes", .{ end, self.source.len });
+    if (start >= end) assert.panic("framework check has empty span {d}..{d}", .{ start, end });
+    const value = self.checker.compiled.id("test.value") orelse return;
+    const first = std.sort.lowerBound(captures.Triple, self.index.triples, start, @import("hazards.zig").startsBefore);
+    var count: usize = 0;
+    for (self.index.triples[first..]) |entry| {
+        if (entry.key.start >= end) break;
+        if (entry.id != value or ts.ts_node_end_byte(entry.node) > end) continue;
+        if (!constantExpression(self, entry.node)) return;
+        count += 1;
+    }
+    if (count > 0) _ = try self.report(node, "constant-test-assertion", "This check compares only constants and operators, so it exercises no code under test.");
+}
+
+fn constantExpression(self: *File, condition: ts.Node) bool {
+    if (ts.ts_node_end_byte(condition) > self.source.len) assert.panic("constant expression ends at {d}, beyond {d} source bytes", .{ ts.ts_node_end_byte(condition), self.source.len });
+    if (ts.ts_node_is_null(condition)) assert.panic("cannot inspect a null expression in {s}", .{self.work.facts.path});
+    var cursor = ts.ts_tree_cursor_new(condition);
+    defer ts.ts_tree_cursor_delete(&cursor);
+    var literals: usize = 0;
+    var visited: usize = 0;
+    while (visited < 256) : (visited += 1) {
+        const current = ts.ts_tree_cursor_current_node(&cursor);
+        const literal = (self.index.marks(current, self.v.literal_constant) or self.index.marks(current, self.v.literal_string)) and self.index.within(current, self.v.string_format) == null and self.index.within(current, self.v.reference_name) == null;
+        if (!literal and ts.ts_tree_cursor_goto_first_child(&cursor)) continue;
+        if (literal) {
+            literals += 1;
+        } else {
+            const token = std.mem.trim(u8, current.text(self.source), " \t\r\n");
+            if (!contains(&.{ "+", "-", "*", "/", "%", "**", "//", "==", "!=", "<", ">", "<=", ">=", "!", "~", "&", "|", "^", "&&", "||", "and", "or", "not", "(", ")", "," }, token)) return false;
+        }
+        while (!ts.ts_tree_cursor_goto_next_sibling(&cursor)) {
+            if (!ts.ts_tree_cursor_goto_parent(&cursor)) {
+                return literals > 0;
+            }
+        }
+    }
+    return false;
+}

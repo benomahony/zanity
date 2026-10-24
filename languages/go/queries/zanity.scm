@@ -163,6 +163,9 @@
   (float_literal)
   (imaginary_literal)
   (rune_literal)
+  (true)
+  (false)
+  (nil)
 ] @literal.constant
 
 ; CWE-1071: an empty body with not even a comment.
@@ -399,3 +402,16 @@
 
 ; CWE-1075: a goto.
 (goto_statement) @finding.goto-statement
+
+; Values checked by common test frameworks, for deterministic test-quality checks.
+
+((call_expression
+  function: (selector_expression operand: (identifier) @_assert field: (field_identifier) @_check)
+  arguments: (argument_list . (_) (_) @test.value)) @test.constant
+  (#any-of? @_assert "assert" "require")
+  (#any-of? @_check "True" "False" "Nil" "NotNil"))
+((call_expression
+  function: (selector_expression operand: (identifier) @_assert field: (field_identifier) @_check)
+  arguments: (argument_list . (_) (_) @test.value (_) @test.value)) @test.constant
+  (#any-of? @_assert "assert" "require")
+  (#any-of? @_check "Equal" "NotEqual" "EqualValues" "Greater" "Less"))

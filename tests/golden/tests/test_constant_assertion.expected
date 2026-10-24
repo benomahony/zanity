@@ -1,0 +1,4 @@
+rules: constant-test-assertion
+exit: 0
+test_constant_assertion.py:2:5: warning [constant-test-assertion]
+test_constant_assertion.py:3:5: warning [constant-test-assertion]

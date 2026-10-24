@@ -1,0 +1,3 @@
+rules: undocumented-test
+exit: 0
+UndocumentedTest_cs.cs:4:10: warning [undocumented-test]

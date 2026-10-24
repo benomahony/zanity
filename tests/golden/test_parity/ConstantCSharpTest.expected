@@ -1,0 +1,5 @@
+rules: constant-test-assertion
+exit: 0
+ConstantCSharpTest.cs:4:9: warning [constant-test-assertion]
+ConstantCSharpTest.cs:5:9: warning [constant-test-assertion]
+ConstantCSharpTest.cs:6:9: warning [constant-test-assertion]

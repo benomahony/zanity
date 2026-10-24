@@ -1,0 +1,10 @@
+rules: sleep-in-test,polling-loop,nondeterministic-test,filesystem-in-test,network-in-test,process-in-test,stdin-in-test
+exit: 0
+core_go_test.go:3:5: warning [sleep-in-test]
+core_go_test.go:4:5: warning [polling-loop]
+core_go_test.go:5:9: warning [sleep-in-test]
+core_go_test.go:7:5: warning [nondeterministic-test]
+core_go_test.go:8:5: warning [filesystem-in-test]
+core_go_test.go:9:5: warning [network-in-test]
+core_go_test.go:10:5: warning [process-in-test]
+core_go_test.go:11:5: warning [stdin-in-test]

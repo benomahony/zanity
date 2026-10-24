@@ -494,3 +494,29 @@
   operator: ["/" "%"]
   right: [(integer) (float)] @_zero_divisor) @finding.divide-by-zero
   (#any-of? @_zero_divisor "0" "00" "0.0" "0." "0x0" "0o0" "0b0"))
+
+; Values checked by common test frameworks, for deterministic test-quality checks.
+
+; Constant-only std.testing checks: capture both sides, never just the expected value.
+((call_expression
+  function: (field_expression object: (_) @_testing member: (identifier) @_check)
+  arguments: (arguments . (_) @test.value .)) @test.constant
+  (#any-of? @_testing "std.testing" "testing")
+  (#eq? @_check "expect"))
+((call_expression
+  function: (field_expression object: (_) @_testing member: (identifier) @_check)
+  arguments: (arguments . (_) @test.value . (_) @test.value .)) @test.constant
+  (#any-of? @_testing "std.testing" "testing")
+  (#any-of? @_check "expectEqual" "expectEqualDeep" "expectEqualStrings"))
+
+((call_expression
+  function: (field_expression object: (_) @_testing member: (identifier) @_check)
+  arguments: (arguments . (_) (_) @test.value . (_) @test.value .)) @test.constant
+  (#any-of? @_testing "std.testing" "testing")
+  (#eq? @_check "expectEqualSlices"))
+
+((call_expression
+  function: (field_expression object: (_) @_testing member: (identifier) @_check)
+  arguments: (arguments . (_) @test.value . (_) @test.value . (_) @test.value .)) @test.constant
+  (#any-of? @_testing "std.testing" "testing")
+  (#any-of? @_check "expectApproxEqAbs" "expectApproxEqRel"))

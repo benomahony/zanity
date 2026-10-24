@@ -143,7 +143,7 @@ What the schema says of the rules described above only by name, or not yet.
 | `order-dependent-test` | warning, on by default | Give it its own state, or reset the shared state before it runs. |
 | `combinatorial-test` | information, on by default | Split it into one test per dimension, or parametrise it. |
 | `flaky-test` | error, on by default | Inject a fixed clock, seed or fake, or sort before comparing. |
-| `slow-test` | warning, on by default | Replace the wait or service with a fake, and shrink the data. |
+| `slow-test` | warning, on by default | Profile this test, reduce unnecessary work, or move it to a suite with an appropriate time budget. |
 | `heavy-setup-test` | information, on by default | Simplify the code's dependencies, or move shared setup into a small builder. |
 | `unreadable-test` | information, on by default | Name it after the behaviour, name the magic values, and separate arrange, act and assert. |
 | `hollow-test` | error, on by default | Assert on the output or effect of that behaviour. |
@@ -151,6 +151,7 @@ What the schema says of the rules described above only by name, or not yet.
 | `manual-test` | error, on by default | Replace manual input, printing or setup with assertions and automated fixtures. |
 | `unfocused-test` | warning, on by default | Split it up, or assert only on the parts that matter. |
 | `self-mocking-test` | warning, on by default | Exercise the real code, and mock only its external dependencies. |
+| `constant-test-assertion` | warning, on by default | Assert on a result produced by the code under test. |
 | `trivial-test` | warning, on by default | Test the risky behaviour and edge cases, and make the name match what is verified. |
 | `fixture-leaks-state` | warning, on by default | Restore the state in teardown, or give each test a temporary copy of it. |
 | `fixture-hides-behaviour` | warning, on by default | Use the real implementation, and stub only external dependencies. |

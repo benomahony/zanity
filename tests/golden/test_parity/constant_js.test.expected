@@ -1,0 +1,5 @@
+rules: constant-test-assertion
+exit: 0
+constant_js.test.js:2:5: warning [constant-test-assertion]
+constant_js.test.js:3:5: warning [constant-test-assertion]
+constant_js.test.js:4:5: warning [constant-test-assertion]

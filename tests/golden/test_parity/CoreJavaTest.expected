@@ -1,0 +1,10 @@
+rules: sleep-in-test,polling-loop,nondeterministic-test,filesystem-in-test,network-in-test,process-in-test,stdin-in-test
+exit: 0
+CoreJavaTest.java:4:9: warning [sleep-in-test]
+CoreJavaTest.java:5:9: warning [polling-loop]
+CoreJavaTest.java:6:13: warning [sleep-in-test]
+CoreJavaTest.java:8:9: warning [nondeterministic-test]
+CoreJavaTest.java:9:15: warning [filesystem-in-test]
+CoreJavaTest.java:10:20: warning [network-in-test]
+CoreJavaTest.java:11:30: warning [process-in-test]
+CoreJavaTest.java:12:16: warning [stdin-in-test]

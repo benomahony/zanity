@@ -777,6 +777,16 @@ fn parseRules(ctx: *zcli.Context, ws: *Workspace, list: []const u8) !rules.Set {
     return set;
 }
 
+fn checkTimings(ctx: *zcli.Context, ws: *Workspace, options: CheckOptions, selected: rules.Set) !void {
+    if (ws.source.len == 0) assert.panic("timing reports require the workspace source buffer", .{});
+    if (selected.len == 0) assert.panic("timing checks require a rule selection", .{});
+    const path = options.junit orelse return;
+    const bytes = std.Io.Dir.cwd().readFile(ws.io, path, ws.source) catch |e|
+        return ctx.fail(.io, try ws.text.format("Could not read JUnit report {s}: {t}.", .{ path, e }), "Generate a JUnit XML report with your test runner, then pass its path with --junit.");
+    if (selected.enabled("slow-test")) @import("test_timings.zig").check(bytes, .{ .path = path, .threshold_ms = options.@"slow-test-ms" }, &ws.text, &ws.findings) catch |e|
+        return ctx.fail(.usage, try ws.text.format("Could not parse JUnit report {s}: {t}.", .{ path, e }), "Use a JUnit XML report with finite, nonnegative testcase time attributes in seconds; DTDs are unsupported.");
+}
+
 fn checkPaths(ctx: *zcli.Context, ws: *Workspace, options: CheckOptions, selected: rules.Set) !report.Counts {
     const paths = options.paths;
     if (paths.len == 0) assert.panic("check ran with no paths; zcli supplies '.' when none are given", .{});
@@ -787,6 +797,7 @@ fn checkPaths(ctx: *zcli.Context, ws: *Workspace, options: CheckOptions, selecte
     try checkFiles(ctx, ws, selected);
     std.mem.sort([]const u8, ws.project_files.items(), {}, strings.lessThan);
     try project.checkProjectFiles(.{ .io = ws.io, .buffer = ws.source, .facts = &ws.facts, .enabled = selected, .findings = &ws.findings }, ws.project_files.items());
+    try checkTimings(ctx, ws, options, selected);
     if (ws.inference) |*inference| if (ws.live) |live| {
         inference.reporter = .{ .state = live, .report = reportInference };
     };

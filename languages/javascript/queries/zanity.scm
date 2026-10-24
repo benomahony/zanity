@@ -798,3 +798,26 @@
 ; CWE-1056: a parameter that takes any number of arguments.
 (formal_parameters
   (rest_pattern) @finding.variadic-parameter)
+
+; Values checked by common test frameworks, for deterministic test-quality checks.
+
+((call_expression
+  function: (member_expression object: (identifier) @_assert property: (property_identifier) @_check)
+  arguments: (arguments . (_) @test.value (_) @test.value)) @test.constant
+  (#eq? @_assert "assert")
+  (#any-of? @_check "equal" "notEqual" "strictEqual" "notStrictEqual" "deepEqual" "deepStrictEqual"))
+((call_expression
+  function: (member_expression
+    object: (call_expression function: (identifier) @_expect arguments: (arguments . (_) @test.value .))
+    property: (property_identifier) @_matcher)
+  arguments: (arguments . (_) @test.value .)) @test.constant
+  (#eq? @_expect "expect")
+  (#any-of? @_matcher "toBe" "toEqual" "toStrictEqual" "toBeGreaterThan" "toBeLessThan"))
+((call_expression
+  function: (member_expression
+    object: (call_expression function: (identifier) @_expect arguments: (arguments . (_) @test.value .))
+    property: (property_identifier) @_matcher)
+  arguments: (arguments) @_constant_empty) @test.constant
+  (#empty? @_constant_empty)
+  (#eq? @_expect "expect")
+  (#any-of? @_matcher "toBeTruthy" "toBeFalsy" "toBeNull" "toBeDefined" "toBeUndefined"))

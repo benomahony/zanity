@@ -719,3 +719,19 @@ test "zanity lsp publishes findings and offers their fixes and a false-positive 
 test {
     _ = @import("baseline_test.zig");
 }
+
+test "slow-test uses measured JUnit durations without inference and honors the time budget" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    const io = std.testing.io;
+    const zanity = try Io.Dir.cwd().realPathFileAlloc(io, paths.zanity, arena);
+    const source = "tests/golden/tests/test_constant_assertion.py";
+    const measured = try std.process.run(arena, io, .{ .argv = &.{ zanity, "check", source, "--rules", "slow-test", "--junit", "tests/timings/junit.xml", "--fail-on", "warning", "--json" } });
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 1 }, measured.term);
+    try std.testing.expectEqualStrings("tests/timings/junit.xml:4:1: warning [slow-test]\n", try behaviourOfJson(arena, measured.stdout));
+    try std.testing.expect(std.mem.indexOf(u8, measured.stdout, "2.500 seconds") != null);
+    const relaxed = try std.process.run(arena, io, .{ .argv = &.{ zanity, "check", source, "--rules", "slow-test", "--junit", "tests/timings/junit.xml", "--slow-test-ms", "2500", "--fail-on", "warning", "--json" } });
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, relaxed.term);
+    try std.testing.expectEqualStrings("", try behaviourOfJson(arena, relaxed.stdout));
+}

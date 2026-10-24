@@ -153,7 +153,7 @@ def checks_of_tests() -> list[str]:
         "",
         "# [Found in the code]($heading.id('found-in-the-code'))",
         "",
-        f"These {len(found)} are found in the syntax tree, with no model.",
+        f"These {len(found)} use syntax trees or measured test durations, with no model.",
         "",
         "| Rule | Severity | Fix |",
         "|---|---|---|",

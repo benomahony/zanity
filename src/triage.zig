@@ -7,6 +7,8 @@ pub const CheckOptions = struct {
     rules: ?[]const u8 = null,
     fix: bool = false,
     infer: bool = false,
+    junit: ?[]const u8 = null,
+    @"slow-test-ms": u32 = 1000,
     strict: bool = false,
     watch: bool = false,
     @"fail-on": FailOn = .@"error",
@@ -201,6 +203,8 @@ pub fn failsReview(options: anytype, counts: @import("report.zig").Counts, revie
 }
 
 pub const check_options: []const @import("zcli").OptionInfo = &.{
+    .{ .name = "junit", .metavar = "PATH", .help = "Read measured test durations from this JUnit XML report; slow-test findings point to the report." },
+    .{ .name = "slow-test-ms", .metavar = "MS", .help = "Report measured tests exceeding this many milliseconds (default 1000); requires --junit." },
     .{ .name = "baseline", .metavar = "PATH", .help = "Compare against this explicit baseline file." },
     .{ .name = "capture-baseline", .help = "Explicitly create --baseline from all current findings; refuses to overwrite." },
     .{ .name = "update-baseline", .help = "Explicitly replace --baseline with all current findings and report changes." },

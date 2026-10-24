@@ -716,3 +716,18 @@
 ; its parameters, so dead-parameter leaves it alone even when the reference is in another file.
 (method_reference
   (identifier) @reference.passed .)
+
+; Values checked by common test frameworks, for deterministic test-quality checks.
+; Capture every argument: JUnit 4 puts the message first, JUnit 5 puts it last.
+((method_invocation
+  name: (identifier) @_check
+  arguments: (argument_list . (_) @test.value .)) @test.constant
+  (#any-of? @_check "assertTrue" "assertFalse" "assertNull" "assertNotNull"))
+((method_invocation
+  name: (identifier) @_check
+  arguments: (argument_list . (_) @test.value . (_) @test.value .)) @test.constant
+  (#any-of? @_check "assertEquals" "assertNotEquals" "assertSame" "assertNotSame" "assertTrue" "assertFalse" "assertNull" "assertNotNull"))
+((method_invocation
+  name: (identifier) @_check
+  arguments: (argument_list . (_) @test.value . (_) @test.value . (_) @test.value .)) @test.constant
+  (#any-of? @_check "assertEquals" "assertNotEquals" "assertSame" "assertNotSame"))
