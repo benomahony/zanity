@@ -589,7 +589,7 @@ zig build test-integration  # the built zanity on the golden fixtures, --fix, th
 zig build test --fuzz=100K  # fuzz the checker with arbitrary bytes in every language
 ```
 
-`git config core.hooksPath .githooks` turns on the repository's hooks. `pre-commit` runs the same format check as CI. `pre-push` refuses to test a dirty or different checkout, then runs the complete CI gate: formatting, unit and integration tests, zanity's strict self-check, every release build, the generated catalogue check, and the feature-parity ratchet.
+`git config core.hooksPath .githooks` turns on the repository's hooks. `pre-commit` runs the same format check as CI. `pre-push` refuses to test a dirty or different checkout, then runs the complete CI gate: formatting and unit tests, every release build, the integration tests and zanity's strict self-check against this machine's release binary, the generated catalogue check, and the feature-parity ratchet.
 
 `python3 bench/parity/ratchet.py` protects every covered comparison fixture, inference question, and language/rule match count in `bench/parity/results.json`. After the full parity benchmark improves coverage, run it with `--write` and commit the raised `bench/parity/floors.json`; it refuses to write over a regression.
 
@@ -601,10 +601,10 @@ Golden cases in `tests/golden/` run through the real binary and compare where ea
 
 ### Releasing
 
-Every commit that passes CI on `main` is released automatically, one patch version up from the latest release: the workflow builds each platform on its own runner with `zig build release -Dplatform=<platform> -Dversion=<version>` and publishes the binaries as a GitHub release, tagging that commit. To raise the minor or major version instead, run the release workflow by hand:
+Every commit that passes CI on `main` is released automatically, one patch version up from the latest release. CI builds each platform once with `zig build release -Dplatform=<platform> -Dversion=<version>`, runs the integration tests and the self-check against those binaries on Linux and macOS with `zig build test-integration -Dzanity=<binary>`, and publishes the same binaries as a GitHub release, tagging that commit. Pull requests run the same pipeline as `zanity dev` and publish nothing. To raise the minor or major version instead, run CI by hand on `main`:
 
 ```sh
-gh workflow run release -f bump=minor   # or bump=major
+gh workflow run ci -f bump=minor   # or bump=major
 ```
 
 `zig build release` works locally too; the binaries land in `zig-out/release/` and report themselves as `zanity dev` unless you pass `-Dversion`.
