@@ -165,7 +165,53 @@ zanity help check                             # every option
 
 `check` exits 0 when nothing fired, 1 when an error-level rule fired (or any rule, with `--fail-on warning`), and 2 on a usage error such as a mistake in `zanity.toml`. Findings go to stdout and the one-line summary to stderr, so output can be piped cleanly. On a terminal the report reads like a coverage report: the first ten findings, errors first, one line each, then a table of the files with the most errors and warnings and the rule that fired most in each, the rest of the files on one row, and a total. How to fix each finding is in `--agent`, `--plain` and `--json`; when zanity can make the fix itself, `--json` and `--plain` also give the edit, as `edit_start` and `edit_end` (byte offsets into the file) and `edit_text`, its replacement. A progress line shows how far a long run has got; `-q` hides it, and it never appears in piped output. `--no-color` or `NO_COLOR` turns colour off. `--watch` checks again whenever a file it checks, or `zanity.toml`, is saved, added or removed: the operating system reports the change (FSEvents on macOS, inotify on Linux, directory change notifications on Windows), so nothing is polled, and writes to ignored files such as build output don't start a check. The checker and its workers stay resident between saves, while the cache means only changed files are parsed again; whole-project rules are recomputed from all cached facts. Each check prints the `--agent` report, each finding's line, column and fix, unless `--json` or `--plain` is given. Each check reads `zanity.toml` afresh, but which files are watched is settled when `--watch` starts, so restart it after changing `exclude`. `--infer` and `--fix` use isolated reruns because they have external or mutating state.
 
-`--agent` writes for a coding agent, in about 1% of the bytes of the terminal report once a run has more than a handful of findings: the totals and the command to run next, then the first findings in rule order, errors first, each as `line:column` and its own fix (or its message, without the explanation every finding of its rule shares), with `[--fix]` on those zanity can fix itself. It tells the agent to resolve every finding in code. When the behaviour is already correct, the agent must refactor it so that correctness is explicit enough for the rule to verify, rather than suppressing the finding, disabling its rule or excluding its path. `--limit N` sets how many findings it shows in all (10 by default, 0 for every one); the rules past them are listed by name and count, to look at with `--rules <name>`. It is on by default under Claude Code (when `CLAUDECODE` is set) unless `--json` or `--plain` is given; `ZANITY_AGENT=1` turns it on for any other agent.
+`--agent` writes for a coding agent, in about 1% of the bytes of the terminal report once a run has more than a handful of findings: the totals and the command to run next, then the first findings in rule order, errors first, each as `line:column` and its own fix (or its message, without the explanation every finding of its rule shares), with `[--fix]` on those zanity can fix itself. Without a baseline it assigns only the displayed batch, explicitly says when the display is abbreviated, and provides an exact inspection/export command. With a baseline it separates new findings from inherited backlog and assigns new findings only, or the batch explicitly selected with triage filters or pagination. When the behaviour is already correct, the agent must refactor it so that correctness is explicit enough for the rule to verify, rather than suppressing the finding, disabling its rule or excluding its path. `--limit N` sets how many findings it shows in an automatic agent preview (10 by default, 0 for every one); the rules past them are listed by name and count, to look at with `--rules <name>`. It is on by default under Claude Code (when `CLAUDECODE` is set) unless `--json` or `--plain` is given; `ZANITY_AGENT=1` turns it on for any other agent.
+
+## [Baselines and legacy-code triage]($heading.id('baselines-and-legacy-code-triage'))
+
+Capture and acceptance are deliberate actions:
+
+```sh
+zanity check . --baseline zanity-baseline.json --capture-baseline
+zanity check . --baseline zanity-baseline.json --new-only --fail-on warning
+zanity check . --baseline zanity-baseline.json --update-baseline
+```
+
+Capture records **all** current findings, regardless of display limits or report filters, and refuses to overwrite an existing file. Update first loads and compares the old baseline, reports added, retained and resolved counts, then atomically replaces it with all current findings. Ordinary checks never write it. Commit the baseline if the team wants to share acceptance. Invalid JSON, duplicate/missing identities, incompatible schema/identity versions, missing files and write failures produce explicit nonzero errors; no baseline is silently replaced. Capture and update cannot run with `--watch`.
+
+Comparison labels current findings `new` or `existing`, and returns baseline findings no longer present as `resolved` with their last recorded details. Resolved locations and edits are historical, **not edits to apply**. Baselines never change rule selection or hide existing findings from full reports. Use the same repository working directory, checked paths, rule selection, configuration and inference settings for capture and comparison: changing the analysis scope can make findings appear resolved without fixing them. `--rule` and `--file` below filter reporting only; `--rules` selects which analysis runs.
+
+`--new-only` requires `--baseline` and makes exit status depend only on new findings at `--fail-on` severity. New warnings remain in reports even with the default error-only threshold. Without `--new-only`, existing findings still affect exit status. Without baseline/triage options the existing terminal layout, JSON array, plain records and severity-based exit behavior remain available.
+
+Select bounded batches, grouped by rule and file:
+
+```sh
+zanity check . --baseline zanity-baseline.json --triage
+zanity check . --baseline zanity-baseline.json --triage --offset 20
+zanity check . --baseline zanity-baseline.json --triage --rule long-function --file src/server.py --json > batch.json
+```
+
+Triage defaults to 20 findings per page. `--page-size N` accepts 1–10000; `--offset N` skips matching findings. Exact `--rule`, `--file` and `--classification new|existing|resolved|unclassified` filters combine. Ordering is rule, path, line, column, then ID. Unchanged input yields repeatable pages without gaps or duplicates. Reports state the matching total and continuation offset; human and agent reports include a shell-quoted command preserving the scan and filters. Explicit agent batches show the whole selected page. `--limit` affects automatic agent previews only. Unrestricted machine output is complete; neither the agent preview limit nor baselines silently truncate it.
+
+Each machine finding has a 64-character SHA-256 `id`. Identity version 1 hashes length-delimited reported path, rule and source line with surrounding whitespace trimmed, plus the occurrence ordinal among identical anchors in source order. Line numbers, columns, messages, severities and fixes are excluded. Unrelated inserted lines and changes to diagnostic wording preserve IDs; changing the anchor text produces a resolved/new pair. Moving unchanged code within the same file preserves identity, unless it reorders identical anchors. Renaming a containing function preserves unchanged finding anchors. Renaming/moving a file changes its path and therefore all its IDs. Paths use their reported spelling, so use consistent path arguments across runs. Identical anchors have distinct, repeatable IDs, but inserting/deleting/reordering indistinguishable copies can reassign their ordinals. Code changes outside the anchor can retain an ID if the same rule still reports at that anchor; identities are not semantic equivalence proofs.
+
+With baseline or triage/report filters, `--json` returns a versioned object:
+
+```json
+{
+  "schema_version": 1,
+  "identity_version": 1,
+  "summary": {"new": 2, "existing": 10000, "resolved": 0},
+  "resolved_since_previous": [],
+  "pagination": {"matching_total": 10002, "returned": 10002, "offset": 0, "next_offset": null, "next_command": null},
+  "findings": []
+}
+```
+
+`findings` contains the returned full records: ID, classification, rule, severity, message, fix advice, path, one-based line/column and optional byte edits. The empty array above is schematic. Summary counts describe the full comparison before report filters; pagination counts describe the matching selection, including resolved records. Without a baseline findings are `unclassified`. A baseline file separately carries `schema_version`, `identity_version` and the complete `findings` snapshot. Consumers such as Overwatch can use IDs and classifications directly, without parsing prose.
+
+`--watch` applies the same baseline comparison on every save and keeps the baseline unchanged. Its automatic agent report assigns only new findings, never the inherited backlog. Watch reporting also lists the IDs of previously new findings that disappeared since the preceding check in `resolved_since_previous`; baseline-relative `resolved` remains a separate count. Zanity reports diagnostics and transitions only; agent sessions and Stop enforcement remain in Overwatch.
+
 
 ## [Deterministic cache]($heading.id('deterministic-cache'))
 
@@ -250,6 +296,15 @@ Every function is also asked:
 | `missing-authorisation` | acts for a caller without checking the caller may |
 | `mixed-abstraction` | mixes high-level steps with low-level detail such as parsing or raw SQL |
 
+Slow tests are measured from a test runner's JUnit XML report, without inference:
+
+```sh
+pytest --junitxml=test-results.xml
+zanity check . --junit test-results.xml --slow-test-ms 1000
+```
+
+`slow-test` reports each measured test exceeding the threshold (default 1000 ms), at its line in the report. Missing durations and skipped tests are excluded. Reports describe that run; regenerate them after changing tests. Zanity does not execute tests itself. `constant-test-assertion` deterministically flags assertions containing only constants and operators; broader judgments about test value remain inference questions.
+
 And every test case:
 
 | Rule | Asks whether a test | Not asked where this already reported |
@@ -257,7 +312,6 @@ And every test case:
 | `order-dependent-test` | depends on which tests ran before it | `shared-state-in-test`, `filesystem-in-test`, `database-in-test`, `unmanaged-temp-in-test` |
 | `combinatorial-test` | varies several independent things at once | |
 | `flaky-test` | can pass or fail with no code change | `nondeterministic-test`, `sleep-in-test`, `network-in-test`, `polling-loop` |
-| `slow-test` | is likely to be slow | `sleep-in-test`, `polling-loop`, `network-in-test`, `database-in-test`, `process-in-test` |
 | `heavy-setup-test` | needs a lot of setup for what it checks | |
 | `unreadable-test` | doesn't let a reader tell what it checks or why | `vague-test-name` |
 | `hollow-test` | would still pass if the behaviour it names were broken | |
@@ -265,7 +319,7 @@ And every test case:
 | `manual-test` | needs a person to run or judge it | `stdin-in-test`, `debug-leftover` |
 | `unfocused-test` | wouldn't say why it failed | `eager-test` |
 | `self-mocking-test` | mocks the behaviour it claims to check | |
-| `trivial-test` | checks something trivial or only the easy path | |
+| `trivial-test` | checks something trivial or only the easy path | `constant-test-assertion` |
 
 And each non-test function in a test file, including fixtures, setup and teardown hooks, and shared helpers:
 
