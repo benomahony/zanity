@@ -1,0 +1,6 @@
+rules: broad-expected-error
+exit: 0
+ExpectedErrorsTests.swift:19:5: warning [broad-expected-error]
+ExpectedErrorsTests.swift:20:5: warning [broad-expected-error]
+ExpectedErrorsTests.swift:6:9: warning [broad-expected-error]
+ExpectedErrorsTests.swift:7:9: warning [broad-expected-error]

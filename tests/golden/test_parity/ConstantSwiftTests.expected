@@ -1,0 +1,6 @@
+rules: constant-test-assertion
+exit: 0
+ConstantSwiftTests.swift:21:5: warning [constant-test-assertion]
+ConstantSwiftTests.swift:6:9: warning [constant-test-assertion]
+ConstantSwiftTests.swift:7:9: warning [constant-test-assertion]
+ConstantSwiftTests.swift:8:9: warning [constant-test-assertion]

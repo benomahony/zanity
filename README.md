@@ -4,7 +4,7 @@
 
 Fast, deterministic sanity checks for code written by people and agents.
 
-zanity checks Python, Zig, Go, TypeScript, Rust, Java and C# for the mistakes that make code unsafe, untestable or hard to follow: unbounded loops, functions with no assertions, tests that sleep or touch the network, error messages that don't say what to do, and dozens more. It parses each file once with [tree-sitter](https://tree-sitter.github.io) and runs every rule in a single pass, so checking a whole repository takes moments. It is one static binary with no runtime to install, and checking never touches the network, unless you add `--infer` to have a language model judge what code structure can't, such as whether an error message misleads.
+zanity checks Python, Zig, Go, TypeScript, Rust, Java, C# and Swift for the mistakes that make code unsafe, untestable or hard to follow: unbounded loops, functions with no assertions, tests that sleep or touch the network, error messages that don't say what to do, and dozens more. It parses each file once with [tree-sitter](https://tree-sitter.github.io) and runs every rule in a single pass, so checking a whole repository takes moments. It is one static binary with no runtime to install, and checking never touches the network, unless you add `--infer` to have a language model judge what code structure can't, such as whether an error message misleads.
 
 ```console
 $ zanity check src
@@ -245,7 +245,7 @@ sqlite3 ~/.cache/zanity/zanity.db "SELECT rule, path, line, code, message FROM f
 A file edited since the last check offers no actions until it is saved, since its findings may have moved. In Neovim:
 
 ```lua
-vim.lsp.config("zanity", { cmd = { "zanity", "lsp" }, root_markers = { "zanity.toml", ".git" }, filetypes = { "python", "zig", "go", "rust", "java", "cs", "javascript", "typescript" } })
+vim.lsp.config("zanity", { cmd = { "zanity", "lsp" }, root_markers = { "zanity.toml", ".git" }, filetypes = { "python", "zig", "go", "rust", "java", "cs", "swift", "javascript", "typescript" } })
 vim.lsp.enable("zanity")
 ```
 
@@ -447,6 +447,7 @@ value = eval(text)  # zanity: ignore[forbidden-call]
 | Rust | `.rs` |
 | Java | `.java` |
 | C# | `.cs` `.csx` |
+| Swift | `.swift` |
 
 Every rule runs on every language where it means something; `dynamic-allocation`, for example, only applies where memory is managed by hand.
 
@@ -595,7 +596,7 @@ zig build test --fuzz=100K  # fuzz the checker with arbitrary bytes in every lan
 
 Zig does not prune `.zig-cache`; run `./scripts/zig-cache` when its old content is no longer worth keeping. The pre-push hook warns above 10 GB without deleting anything. Set `ZANITY_ZIG_CACHE_WARN_MB` to choose a different warning threshold.
 
-Native test parity covers all eight adapters, including Zig and C#. `zig build test` requires a positive golden case for each of 12 common deterministic test checks in every language; `zig build test-integration` runs those cases through the binary and verifies the exact findings, including negative controls. Framework assertions include Zig's `std.testing.expect`, equality, string, slice and approximate comparisons. This native gate is independent of the six-language bonsai comparison, whose reference tool does not support Zig or C#.
+Native test parity covers all nine adapters, including Zig, C# and Swift. `zig build test` requires a positive golden case for each of 12 common deterministic test checks in every language; `zig build test-integration` runs those cases through the binary and verifies the exact findings, including negative controls. Framework assertions include Zig's `std.testing.expect`, equality, string, slice and approximate comparisons. This native gate is independent of the six-language bonsai comparison, whose reference tool does not support Zig, C# or Swift.
 
 Golden cases in `tests/golden/` run through the real binary and compare where each finding lands, its rule, its severity and the exit code, not the wording. The self-check runs zanity over its own source with every rule and fails on any finding.
 

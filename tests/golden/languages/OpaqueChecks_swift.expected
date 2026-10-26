@@ -1,0 +1,7 @@
+rules: opaque-check
+exit: 0
+OpaqueChecks_swift.swift:10:9: warning [opaque-check]
+OpaqueChecks_swift.swift:6:9: warning [opaque-check]
+OpaqueChecks_swift.swift:7:9: warning [opaque-check]
+OpaqueChecks_swift.swift:8:9: warning [opaque-check]
+OpaqueChecks_swift.swift:9:9: warning [opaque-check]

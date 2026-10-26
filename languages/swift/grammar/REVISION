@@ -1,0 +1,2 @@
+https://github.com/alex-pinkus/tree-sitter-swift 82bb3a533e0801fd2bbaa11dc49676e10bf41948 (0.7.4-with-generated-files)
+patched with reserved-comparisons.patch (the scanner lexed != !== <= >= as custom operators, so no comparison using them was an equality_expression or comparison_expression)

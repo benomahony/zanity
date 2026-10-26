@@ -1,0 +1,22 @@
+--- a/src/scanner.c	2026-10-26 13:47:01
++++ b/src/scanner.c	2026-10-26 13:47:01
+@@ -188,7 +188,7 @@
+         0, // ASYNC_KEYWORD
+ };
+ 
+-#define RESERVED_OP_COUNT 31
++#define RESERVED_OP_COUNT 35
+ 
+ const char* RESERVED_OPS[RESERVED_OP_COUNT] = {
+     "/",
+@@ -220,6 +220,10 @@
+     "++",
+     "--",
+     "===",
++    "!=",
++    "!==",
++    "<=",
++    ">=",
+     "...",
+     "..<"
+ };

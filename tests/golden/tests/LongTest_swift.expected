@@ -1,0 +1,3 @@
+rules: long-test,long-function
+exit: 0
+LongTest_swift.swift:4:10: warning [long-test]

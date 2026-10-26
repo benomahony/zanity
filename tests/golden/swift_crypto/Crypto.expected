@@ -1,0 +1,10 @@
+rules: hardcoded-secret,constant-cbc-iv,constant-aead-nonce,rsa-without-oaep,constant-password-salt,nested-regex-quantifier,parameter-format-string
+exit: 1
+Crypto.swift:11:46: error [constant-cbc-iv]
+Crypto.swift:16:71: error [constant-aead-nonce]
+Crypto.swift:21:41: error [rsa-without-oaep]
+Crypto.swift:26:50: error [constant-password-salt]
+Crypto.swift:31:42: error [nested-regex-quantifier]
+Crypto.swift:33:11: warning [parameter-format-string]
+Crypto.swift:38:71: error [constant-aead-nonce]
+Crypto.swift:6:1: error [hardcoded-secret]

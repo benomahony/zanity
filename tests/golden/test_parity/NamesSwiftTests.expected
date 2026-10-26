@@ -1,0 +1,7 @@
+rules: vague-test-name,skipped-test
+exit: 0
+NamesSwiftTests.swift:24:9: warning [skipped-test]
+NamesSwiftTests.swift:29:7: warning [skipped-test]
+NamesSwiftTests.swift:32:7: warning [skipped-test]
+NamesSwiftTests.swift:5:10: warning [vague-test-name]
+NamesSwiftTests.swift:7:9: warning [skipped-test]

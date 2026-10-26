@@ -2,3 +2,4 @@ textobjects.scm: https://github.com/nvim-treesitter/nvim-treesitter-textobjects 
 locals.scm: https://github.com/nvim-treesitter/nvim-treesitter 25a9b06 (Apache-2.0)
 javascript: tags.scm from tree-sitter-javascript 58404d8; locals.scm is nvim-treesitter 25a9b06 ecma + javascript flattened; textobjects.scm and zanity.scm start from typescript's, without its type-only patterns
 csharp: textobjects.scm and locals.scm start from the commits above, locals with method, loop and catch scopes and only methods' parameters as parameters; tags.scm and zanity.scm are zanity's own
+swift: tags.scm from tree-sitter-swift 82bb3a5 (MIT); textobjects.scm and locals.scm start from the commits above, textobjects with whole functions, loops, conditionals, returns, statements and assignments, locals without the property and guard scopes, whose names belong to the enclosing scope, and with variables, parameters and references; zanity.scm is zanity's own

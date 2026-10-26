@@ -1,0 +1,10 @@
+rules: public-static-field,equals-without-hashcode,relaxed-check,direct-thread
+exit: 1
+ObjectModel.swift:12:1: error [equals-without-hashcode]
+ObjectModel.swift:1:1: warning [relaxed-check]
+ObjectModel.swift:34:18: warning [relaxed-check]
+ObjectModel.swift:35:5: warning [relaxed-check]
+ObjectModel.swift:40:5: warning [direct-thread]
+ObjectModel.swift:41:5: warning [direct-thread]
+ObjectModel.swift:42:18: warning [direct-thread]
+ObjectModel.swift:5:5: warning [public-static-field]

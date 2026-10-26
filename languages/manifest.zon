@@ -64,4 +64,12 @@
         .scanner = true,
         .queries = .{ "tags", "locals", "textobjects", "zanity" },
     },
+    .{
+        .name = "swift",
+        .not_applicable = .{ "dynamic-allocation", "restated-type", "redundant-null-check", "conversion-assertion", "guaranteed-length", "discarded-comparison", "no-effect-statement", "branching-double", "return-in-finally", "identity-comparison", "precedence-trap", "generic-throw", "generic-catch", "switch-fallthrough", "missing-default", "unawaited-call", "assignment-in-condition", "null-catch", "empty-synchronized", "public-finalizer", "unsafe-jni", "public-static-array", "missing-super-finalizer", "missing-super-clone", "public-clone-method", "thread-run", "explicit-finalizer", "class-name-comparison", "hashcode-without-equals", "struts-public-field", "prototype-mutation", "goto-statement", "missing-integer-radix", "unmanaged-temp-in-test", "xml-entity-expansion", "parameter-xpath-expression", "parameter-ldap-filter", "parameter-header-value", "parameter-template-source", "parameter-expression-language", "parameter-raw-html", "parameter-window-opener", "cwe-487", "cwe-609", "cwe-1235", "cwe-567" },
+        .extensions = .{"swift"},
+        .ecosystem = "swift",
+        .scanner = true,
+        .queries = .{ "tags", "locals", "textobjects", "zanity" },
+    },
 }

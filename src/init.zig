@@ -77,7 +77,7 @@ fn renderFound(w: *std.Io.Writer, project: Project) !void {
     var total: usize = 0;
     for (project.languages) |language| total += language.files;
     if (total == 0) {
-        try w.writeAll("#\n# zanity init found no files in a language zanity checks; it checks Python, Zig, Go,\n# TypeScript, Rust, Java and C#.\n");
+        try w.writeAll("#\n# zanity init found no files in a language zanity checks; it checks Python, Zig, Go,\n# TypeScript, Rust, Java, C# and Swift.\n");
         return;
     }
     try w.writeAll("#\n# zanity init found");

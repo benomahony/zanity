@@ -1,0 +1,7 @@
+rules: relaxed-check
+exit: 0
+SuppressionsSwift.swift:10:32: warning [relaxed-check]
+SuppressionsSwift.swift:13:1: warning [relaxed-check]
+SuppressionsSwift.swift:1:1: warning [relaxed-check]
+SuppressionsSwift.swift:21:20: warning [relaxed-check]
+SuppressionsSwift.swift:3:1: warning [relaxed-check]

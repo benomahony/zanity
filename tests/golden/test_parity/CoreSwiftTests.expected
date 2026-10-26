@@ -1,0 +1,10 @@
+rules: sleep-in-test,polling-loop,nondeterministic-test,filesystem-in-test,network-in-test,process-in-test,stdin-in-test
+exit: 0
+CoreSwiftTests.swift:12:13: warning [filesystem-in-test]
+CoreSwiftTests.swift:14:9: warning [network-in-test]
+CoreSwiftTests.swift:15:13: warning [process-in-test]
+CoreSwiftTests.swift:16:13: warning [stdin-in-test]
+CoreSwiftTests.swift:5:9: warning [sleep-in-test]
+CoreSwiftTests.swift:6:9: warning [polling-loop]
+CoreSwiftTests.swift:7:13: warning [sleep-in-test]
+CoreSwiftTests.swift:9:13: warning [nondeterministic-test]

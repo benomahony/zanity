@@ -236,7 +236,7 @@
         { "const": "public-finalizer", "description": "warning, on by default. Remove the public modifier and provide an explicit close method for resources." },
         { "const": "direct-thread", "description": "warning, on by default. Submit the task to a bounded, application-managed executor." },
         { "const": "unsafe-jni", "description": "warning, on by default. Replace it with a safe library API, or isolate and audit the native boundary with explicit input validation." },
-        { "const": "public-static-field", "description": "warning, on by default. Make it private and expose behaviour instead of state; make a constant unassignable, with final in Java or const or readonly in C#." },
+        { "const": "public-static-field", "description": "warning, on by default. Make it private and expose behaviour instead of state; make a constant unassignable, with final in Java, const or readonly in C#, or let in Swift." },
         { "const": "public-static-array", "description": "warning, on by default. Keep the array private and return an immutable view or a defensive copy." },
         { "const": "missing-super-finalizer", "description": "warning, on by default. Remove finalization in favour of explicit resource ownership, or call super.finalize() in a finally block while legacy finalization remains." },
         { "const": "missing-super-clone", "description": "warning, on by default. Start with super.clone(), or replace Cloneable with an explicit copy constructor or factory." },
