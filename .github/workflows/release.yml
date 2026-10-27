@@ -44,6 +44,7 @@ jobs:
       commit: ${{ steps.version.outputs.commit }}
       version: ${{ steps.version.outputs.version }}
       skip: ${{ steps.version.outputs.skip }}
+      notes: ${{ steps.version.outputs.notes }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
@@ -71,6 +72,11 @@ jobs:
           fi
           echo "Releasing v$next (after ${latest:-no release})."
           echo "version=$next" >> "$GITHUB_OUTPUT"
+          {
+            echo "notes<<RELEASE_NOTES"
+            git log --no-merges --format='- %s (%h)' "${latest:+$latest..}HEAD"
+            echo "RELEASE_NOTES"
+          } >> "$GITHUB_OUTPUT"
 
   build:
     needs: version
@@ -119,7 +125,8 @@ jobs:
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
+          NOTES: ${{ needs.version.outputs.notes }}
         run: >-
           gh release create "v$VERSION" release/*
           --repo "$GITHUB_REPOSITORY" --target "${{ needs.version.outputs.commit }}"
-          --title "zanity v$VERSION" --generate-notes
+          --title "zanity v$VERSION" --notes "$NOTES" --generate-notes
