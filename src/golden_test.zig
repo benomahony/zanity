@@ -546,6 +546,27 @@ test "--infer keeps every answer, so a second run asks the model nothing and rep
     try expectOutput(requests, &.{"\"authorization\": \"Bearer test\""}, &.{});
 }
 
+test "--infer names a unit too large to send and keeps every other answer, but stops on a refused key" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    const io = std.testing.io;
+    var project = try InferRun.initInferRun(arena, io);
+    defer project.tmp.cleanup();
+    defer project.mock.child.kill(io);
+    const whole = try project.checkInferring(arena, io);
+    try project.tmp.dir.writeFile(io, .{ .sub_path = "huge.py", .data = "def huge():\n    # mock: too-large\n    return 1\n" });
+    const huge = try project.checkInferring(arena, io);
+    try std.testing.expectEqual(whole.term, huge.term);
+    try std.testing.expectEqual(std.mem.count(u8, whole.stdout, "(jev-latest is"), std.mem.count(u8, huge.stdout, "(jev-latest is"));
+    try expectOutput(huge.stdout, &.{"(jev-latest is 95% sure)"}, &.{});
+    try expectOutput(huge.stderr, &.{ "zanity: jev-latest refused 'huge' in huge.py as too large for one request", "so its questions were not asked; split it" }, &.{"could not judge"});
+    try project.tmp.dir.writeFile(io, .{ .sub_path = "locked.py", .data = "def locked():\n    # mock: unauthorized\n    return 1\n" });
+    const locked = try project.checkInferring(arena, io);
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 74 }, locked.term);
+    try expectOutput(locked.stderr, &.{ "could not judge", "Unauthorized (HTTP 401", "Check the API key in TYPESAFE_API_KEY" }, &.{"Check TYPESAFE_BASE_URL"});
+}
+
 test "--infer asks the System One server zanity.toml names, with only the key it names" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();

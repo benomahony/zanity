@@ -35,6 +35,8 @@ const Job = struct {
     count: usize = 0,
     state: []const u8 = "",
     failed: ?anyerror = null,
+    /// Whether the server refused the request for its size, which leaves the run going.
+    too_large: bool = false,
     input_tokens: u64 = 0,
     output_tokens: u64 = 0,
     diagnostics: tai.Client.Diagnostics = .{},
@@ -51,6 +53,8 @@ pub const Stats = struct { functions: usize = 0, asked: usize = 0, seconds: i64 
 
 /// Why the last `judge` failed, with the detail the server returned.
 pub var failure: []const u8 = "";
+/// What to do about `failure`.
+pub var advice: []const u8 = "";
 
 /// Which System One server to ask, from [infer] in zanity.toml. Each unset field falls back to
 /// TypeSafe's variable in `environ`, then to TypeSafe's API and model.
@@ -120,7 +124,7 @@ pub const Inference = struct {
         for (units) |*unit| try self.plan(unit, findings.items()[0..before], enabled);
         try self.askAll();
         self.stats.seconds = started.durationTo(Io.Timestamp.now(self.io, .awake)).toSeconds();
-        for (self.jobs.items()) |*job| try self.record(job, findings);
+        for (self.jobs.items()) |*job| if (job.failed == null) try self.record(job, findings);
         try self.recordRun();
         if (findings.len < before) assert.panic("--infer removed findings: {d} before, {d} after; judge() must only add findings", .{ before, findings.len });
     }
@@ -190,7 +194,10 @@ pub const Inference = struct {
         for (self.jobs.items()) |*job| {
             defer job.diagnostics.deinit();
             const err = job.failed orelse continue;
+            job.too_large = tooLarge(job, err);
+            if (job.too_large) continue;
             failure = try self.describe(job, err);
+            advice = adviceFor(err);
             return error.AskFailed;
         }
         if (pending > self.slots.len) assert.panic("{d} unanswered questions in {d} queued; plan() queues each question once", .{ pending, self.slots.len });
@@ -342,6 +349,29 @@ pub const Inference = struct {
         return self.json.buffer[start..self.json.used];
     }
 
+    /// Says on stderr how many units --infer had questions about and how many it asked, unless
+    /// -q, then names each unit the server refused as too large, whose questions went unasked.
+    pub fn summarise(self: *Inference, ctx: anytype) !void {
+        const stats = self.stats;
+        if (stats.asked > stats.functions) assert.panic("--infer asked about {d} of {d} functions; askAll() must count only queued functions as asked", .{ stats.asked, stats.functions });
+        if (stats.seconds < 0) assert.panic("--infer took {d} seconds; measure the time with the .awake clock, which never runs backwards", .{stats.seconds});
+        if (!ctx.quiet and stats.functions > 0) try ctx.diagnostic(try self.json.format("zanity: --infer had questions about {d} {s}: {d} answered from the store, {d} asked of {s} in {d}m{d:0>2}s.", .{
+            stats.functions,
+            if (stats.functions == 1) "function" else "functions",
+            stats.functions - stats.asked,
+            stats.asked,
+            self.client.model,
+            @divTrunc(stats.seconds, 60),
+            @as(u64, @intCast(@mod(stats.seconds, 60))),
+        }));
+        for (self.jobs.items()) |job| {
+            const err = job.failed orelse continue;
+            if (!job.too_large) assert.panic("{s}: '{s}' failed with {t} but the run went on; askAll() stops at any failure but a unit too large to send", .{ job.unit.path, job.unit.name, err });
+            const unit = job.unit;
+            try ctx.diagnostic(try self.json.format("zanity: {s} refused '{s}' in {s} as too large for one request ({d} bytes), so its questions were not asked; split it into smaller files or functions to have them asked.", .{ self.client.model, unit.name, unit.path, unit.source.len }));
+        }
+    }
+
     fn describe(self: *Inference, job: *const Job, err: anyerror) ![]const u8 {
         if (job.failed == null) assert.panic("{s}: describing a failure ({t}) for '{s}', whose request succeeded; call describe() only for a job whose failed is set", .{ job.unit.path, err, job.unit.name });
         const d = job.diagnostics;
@@ -352,6 +382,30 @@ pub const Inference = struct {
         return text;
     }
 };
+
+/// Whether the server refused a request for its size: HTTP 413, or Jev's max_tokens_exceeded.
+fn tooLarge(job: *const Job, err: anyerror) bool {
+    if (job.failed == null) assert.panic("{s}: asking whether '{s}' was too large to send, though its request succeeded", .{ job.unit.path, job.unit.name });
+    const d = job.diagnostics;
+    if (d.status == .payload_too_large) return true;
+    const refused = err == error.BadRequest and std.mem.indexOf(u8, d.body, "max_tokens_exceeded") != null;
+    if (refused and d.status != .bad_request) assert.panic("{s}: '{s}' was refused as too large with HTTP {d}, not 400; tai reports BadRequest only for 400", .{ job.unit.path, job.unit.name, if (d.status) |s| @backingInt(s) else 0 });
+    return refused;
+}
+
+/// What to do about a request that failed, by what the server or connection said.
+fn adviceFor(err: anyerror) []const u8 {
+    const text: []const u8 = switch (err) {
+        error.Unauthorized, error.PermissionDenied => "Check the API key in TYPESAFE_API_KEY, or the variable [infer] api_key_env names, then run again; answers already received are cached.",
+        error.ConnectionFailed, error.InvalidBaseUrl, error.NotFound => "Check TYPESAFE_BASE_URL, or [infer] url, and the network, then run again; answers already received are cached.",
+        error.RateLimited, error.Overloaded => "The server is busy; wait, or lower [infer] concurrency in zanity.toml, then run again; answers already received are cached.",
+        error.ServerError, error.RequestTimeout => "The server failed; run again later; answers already received are cached.",
+        else => "The server refused the request; run again, and report it with the detail above if it happens twice. Answers already received are cached.",
+    };
+    if (text.len == 0) assert.panic("no advice for {t}; give every case in adviceFor() a sentence", .{err});
+    if (!std.mem.endsWith(u8, text, ".")) assert.panic("the advice for {t} is not a sentence: '{s}'", .{ err, text });
+    return text;
+}
 
 /// The variable's value, or null when it is unset or blank, as tai treats the environment.
 fn present(environ: *const std.process.Environ.Map, name: []const u8) ?[]const u8 {

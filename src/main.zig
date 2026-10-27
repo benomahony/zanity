@@ -804,11 +804,11 @@ fn checkPaths(ctx: *zclig.Context, ws: *Workspace, options: CheckOptions, select
     };
     const units = ws.facts.units;
     if (ws.inference) |*inference| inference.judge(units.items(), &ws.findings, selected) catch |e| switch (e) {
-        error.AskFailed => return ctx.fail(.io, infer.failure, "Check TYPESAFE_API_KEY and TYPESAFE_BASE_URL, then run again; answers already received are cached."),
+        error.AskFailed => return ctx.fail(.io, infer.failure, infer.advice),
         error.StoreUnavailable => return ctx.fail(.io, try storeProblem(ws), "Check that the cache directory is writable and not full, then run again."),
         else => return e,
     };
-    if (ws.inference) |inference| try describeInference(ctx, ws, inference.stats);
+    if (ws.inference) |*inference| try inference.summarise(ctx);
     try dropDisabled(ws);
     report.sortFindings(ws.findings.items());
     if (options.fix) try fixFiles(ctx, ws);
@@ -883,22 +883,6 @@ fn reportInference(state: *anyopaque, done: usize, total: usize) void {
 }
 
 /// Says how much of --infer came from the store and how long the model took, so a slow run explains itself.
-fn describeInference(ctx: *zclig.Context, ws: *Workspace, stats: infer.Stats) !void {
-    if (stats.asked > stats.functions) assert.panic("--infer asked about {d} of {d} functions; askAll() must count only queued functions as asked", .{ stats.asked, stats.functions });
-    if (stats.seconds < 0) assert.panic("--infer took {d} seconds; measure the time with the .awake clock, which never runs backwards", .{stats.seconds});
-    if (ctx.quiet or stats.functions == 0) return;
-    const line = try ws.text.format("zanity: --infer had questions about {d} {s}: {d} answered from the store, {d} asked of {s} in {d}m{d:0>2}s.", .{
-        stats.functions,
-        if (stats.functions == 1) "function" else "functions",
-        stats.functions - stats.asked,
-        stats.asked,
-        (ws.inference orelse assert.panic("describing --infer with no model connected; connectInference() runs first", .{})).client.model,
-        @divTrunc(stats.seconds, 60),
-        @as(u64, @intCast(@mod(stats.seconds, 60))),
-    });
-    try ctx.diagnostic(line);
-}
-
 /// Says why the answer store could not be used, in SQLite's words when it gave some.
 fn storeProblem(ws: *Workspace) ![]const u8 {
     if (store.failure_len > store.failure.len) assert.panic("the store kept {d} bytes of failure message in room for {d}; the store must cut its message to fit its buffer", .{ store.failure_len, store.failure.len });

@@ -3,6 +3,8 @@
 Answers each noul question from markers in the source of the function, file, setting line or project
 files it is about: a comment
 `judge: <rule>` makes that rule's question answer 0.95, anything else 0.05.
+`mock: too-large` refuses the request as Jev refuses one over its input limit, and
+`mock: unauthorized` refuses it as a wrong key is refused.
 Each request is appended to the file named by MOCK_TYPESAFE_LOG, with the model and the
 Authorization header it carried, so tests can see what was asked and with which key. Prints the port it listens on, then serves until killed or until its
 stdin closes: the test holds stdin open, so a test that dies without killing the mock still
@@ -30,8 +32,12 @@ class Handler(BaseHTTPRequestHandler):
         if log:
             with open(log, "a") as f:
                 f.write(json.dumps({"function": source.splitlines()[0], "questions": sorted(body["questions"]), "model": body["model"], "authorization": self.headers.get("Authorization", "")}) + "\n")
-        reply = json.dumps({"model": body["model"], "answers": answers, "usage": {"input_tokens": 1, "output_tokens": 1}}).encode()
-        self.send_response(200)
+        status, reply = 200, json.dumps({"model": body["model"], "answers": answers, "usage": {"input_tokens": 1, "output_tokens": 1}}).encode()
+        if "mock: too-large" in source:
+            status, reply = 400, json.dumps({"detail": {"error_type": "max_tokens_exceeded"}}).encode()
+        if "mock: unauthorized" in source:
+            status, reply = 401, json.dumps({"detail": "Invalid API key"}).encode()
+        self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(reply)))
         self.end_headers()
