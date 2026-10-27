@@ -295,7 +295,7 @@ fn runCheck(ctx: *zclig.Context, options: CheckOptions) ![]const Row {
     if (options.paths.len == 0) assert.panic("check ran with no paths; zclig supplies '.' when none are given", .{});
     const ws = workspaceOf(ctx);
     try baseline.validateOptions(ctx, ws, options);
-    const agent = try speaksToAgent(ctx, ws, options.agent);
+    const agent = try speaksToAgent(ctx, ws, options.agent or options.all);
     const settings = try loadSettings(ctx, ws, std.heap.page_allocator);
     if (options.watch) return watchCheck(ctx, ws, options, agent);
     ws.settings = &settings;
@@ -458,7 +458,7 @@ fn renderWatched(ctx: *zclig.Context, ws: *Workspace, output: WatchOutput) !void
     const out = ctx.runtime.out;
     const err = ctx.runtime.err;
     if (output.agent) {
-        try report.renderAgent(out.writer, .{ .findings = ws.findings.items(), .counts = counts, .paths = options.paths, .limit = options.limit, .watching = true });
+        try report.renderAgent(out.writer, .{ .findings = ws.findings.items(), .counts = counts, .paths = options.paths, .limit = options.limit, .watching = true, .all = options.all });
         try triage.continuation(out.writer, ws.args, 0, 10000);
         if (ws.cache_hits > 0) try err.writer.print("zanity: reused cached deterministic analysis for {d} of {d} source files; query {s}'s source_analyses table for the cached facts and findings.\n", .{ ws.cache_hits, ws.checked, ws.source_cache.?.path });
         return;
@@ -513,7 +513,7 @@ fn loadSettings(ctx: *zclig.Context, ws: *Workspace, gpa: Allocator) !config.Con
 }
 
 fn speaksToAgent(ctx: *zclig.Context, ws: *const Workspace, asked: bool) !bool {
-    if (asked and ws.chose_format) return ctx.fail(.usage, "--agent cannot be combined with --json or --plain.", "Choose one: --agent for a coding agent to read, --json or --plain for a program to parse.");
+    if (asked and ws.chose_format) return ctx.fail(.usage, "--agent and --all cannot be combined with --json or --plain.", "Choose one: --agent or --all to read, --json or --plain for a program to parse; --json and --plain always list every finding.");
     const agent = asked or (!ws.chose_format and agentRunning(ws));
     if (agent and ws.chose_format) assert.panic("writing for an agent although the command line chose --json or --plain; speaksToAgent() must refuse that", .{});
     if (asked and !agent) assert.panic("--agent was given but agent output is off; speaksToAgent() must honour --agent", .{});
@@ -526,7 +526,7 @@ fn reportToAgent(ctx: *zclig.Context, ws: *Workspace, options: CheckOptions, cou
     if (paths.len == 0) assert.panic("reporting to an agent with no checked paths to name; zclig supplies '.' when none are given", .{});
     if (ws.findings.len != counts.errors + counts.warnings) assert.panic("{d} findings for {d} errors and {d} warnings; count the findings being reported", .{ ws.findings.len, counts.errors, counts.warnings });
     const out = ctx.runtime.out;
-    try report.renderAgent(out.writer, .{ .findings = ws.findings.items(), .counts = counts, .paths = paths, .limit = options.limit, .watching = watching(ws) });
+    try report.renderAgent(out.writer, .{ .findings = ws.findings.items(), .counts = counts, .paths = paths, .limit = options.limit, .watching = watching(ws), .all = options.all });
     try triage.continuation(out.writer, ws.args, 0, 10000);
     if (ws.cache_hits > 0) {
         const err = ctx.runtime.err;

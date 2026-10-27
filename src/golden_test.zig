@@ -313,6 +313,29 @@ test "under Claude Code, check speaks to the agent unless --json or --plain asks
     try std.testing.expectEqual(std.process.Child.Term{ .exited = 2 }, both.term);
 }
 
+test "--all lists every finding on its own line after the totals, with or without Claude Code, and refuses --json" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    var claude = std.process.Environ.Map.init(arena);
+    try claude.put("CLAUDECODE", "1");
+    const run = try checkForAgent(arena, std.testing.io, &claude, &.{"--all"});
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 1 }, run.term);
+    try std.testing.expect(std.mem.startsWith(u8, run.stdout,
+        \\zanity: 2 errors, 2 warnings in 1/1 file; 1 [--fix].
+        \\a.py:1:5: error [assertion-density] 'f' has 1 assertion that can catch a bug; it needs at least 2.
+        \\a.py:2:5: warning [unbounded-loop] 'while True' has no bound, so it can run forever.
+        \\a.py:3:9: warning [assertion-message] This assertion has no message, so when it fails nobody will know which invariant broke, why it must hold, or with what values.
+        \\a.py:6:5: error [assertion-density] 'g' has 0 assertions that can catch a bug; it needs at least 2.
+        \\Inspect/export:
+    ));
+    var plain = std.process.Environ.Map.init(arena);
+    const outside = try checkForAgent(arena, std.testing.io, &plain, &.{"--all"});
+    try std.testing.expectEqualStrings(run.stdout, outside.stdout);
+    const both = try checkForAgent(arena, std.testing.io, &claude, &.{ "--all", "--json" });
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 2 }, both.term);
+}
+
 test "unbounded-loop's fix names where the loop stops, leaving out breaks of inner loops and continues" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();

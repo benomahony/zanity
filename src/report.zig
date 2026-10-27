@@ -172,6 +172,16 @@ fn renderPreview(console: zrich.Console, findings: []const Finding) !void {
     if (findings.len > preview.len) try console.styled(try std.fmt.bufPrint(&buffer, "+{d} more\n", .{findings.len - preview.len}), quiet);
 }
 
+/// Every finding on its own line, as compilers print them, with nothing grouped or left out.
+fn renderList(out: *std.Io.Writer, findings: []const Finding) !void {
+    if (!std.sort.isSorted(Finding, findings, {}, findingOrder)) assert.panic("expected findings sorted by path and position, got {d} findings out of order; call sortFindings() before renderList()", .{findings.len});
+    for (findings) |f| {
+        const severity = rules.all[ruleIndex(f.rule)].severity;
+        try out.print("{s}:{d}:{d}: {s} [{s}] {s}\n", .{ f.path, f.line + 1, f.column + 1, label(severity), f.rule, f.message });
+    }
+    if (findings.len > 0 and findings[findings.len - 1].path.len == 0) assert.panic("listed a {s} finding with no path; findings are added with the path of the file checked", .{findings[findings.len - 1].rule});
+}
+
 /// One row per file with findings, worst first, up to `table_files`, then one row for the rest and
 /// a total, each with its errors, its warnings and the rule that fired most there: plain aligned
 /// columns, as a coverage report has, fitted to the terminal by shortening paths from the left.
@@ -338,6 +348,19 @@ fn digits(value: usize) usize {
     return result;
 }
 
+/// The run's totals in one line, and how many findings zanity can fix itself.
+fn renderTotals(out: *std.Io.Writer, findings: []const Finding, counts: Counts) !void {
+    if (counts.errors + counts.warnings != findings.len) assert.panic("totalling {d} findings for {d} errors and {d} warnings; count() the findings being rendered", .{ findings.len, counts.errors, counts.warnings });
+    const files = if (counts.files == 1) "file" else "files";
+    if (findings.len == 0) return out.print("zanity: checked {d} {s}, no issues found.\n", .{ counts.files, files });
+    var fixable: usize = 0;
+    for (findings) |f| fixable += @intFromBool(f.edit != null);
+    try out.print("zanity: {d} {s}, {d} {s} in {d}/{d} {s}", .{ counts.errors, if (counts.errors == 1) "error" else "errors", counts.warnings, if (counts.warnings == 1) "warning" else "warnings", counts.flagged, counts.files, files });
+    if (fixable > 0) try out.print("; {d} [--fix]", .{fixable});
+    try out.writeAll(".\n");
+    if (fixable > findings.len) assert.panic("{d} fixable findings out of {d}; each finding has at most one edit", .{ fixable, findings.len });
+}
+
 /// Findings for a coding agent: the totals and what to run next first, so a truncated read still
 /// has them, then each rule that fired, errors first, with its fix once and up to `limit` of its
 /// findings by file as `line:column message`, `[--fix]` marking those zanity can fix itself. A
@@ -348,13 +371,10 @@ pub fn renderAgent(out: *std.Io.Writer, report: AgentReport) !void {
     const paths = report.paths;
     if (paths.len == 0) assert.panic("rendering agent output with no paths to name in the next command; pass the paths the run checked", .{});
     if (counts.errors + counts.warnings != findings.len) assert.panic("rendering {d} findings for {d} errors and {d} warnings; count() the findings being rendered", .{ findings.len, counts.errors, counts.warnings });
-    const files = if (counts.files == 1) "file" else "files";
-    if (findings.len == 0) return out.print("zanity: checked {d} {s}, no issues found.\n", .{ counts.files, files });
-    var fixable: usize = 0;
-    for (findings) |f| fixable += @intFromBool(f.edit != null);
-    try out.print("zanity: {d} {s}, {d} {s} in {d}/{d} {s}", .{ counts.errors, if (counts.errors == 1) "error" else "errors", counts.warnings, if (counts.warnings == 1) "warning" else "warnings", counts.flagged, counts.files, files });
-    if (fixable > 0) try out.print("; {d} [--fix]", .{fixable});
-    try out.writeAll(".\nNext: fix this displayed batch");
+    try renderTotals(out, findings, counts);
+    if (findings.len == 0) return;
+    if (report.all) return renderList(out, findings);
+    try out.writeAll("Next: fix this displayed batch");
     try out.writeAll(if (report.watching)
         "; saving a file checks again. This is a selected batch. Resolve the displayed findings in code. If the code is correct, make that correctness explicit enough for the rule to verify; never suppress the finding, disable its rule or exclude its path.\n"
     else
@@ -414,6 +434,8 @@ pub const AgentReport = struct {
     limit: u32,
     /// Whether `zanity check --watch` reruns this check when a file is saved.
     watching: bool = false,
+    /// Whether to list every finding on its own line, with no grouping or limit.
+    all: bool = false,
 };
 
 /// A rule that fired: its index in rules.all, its findings, and the files they are in.
