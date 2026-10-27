@@ -202,7 +202,7 @@ pub fn failsReview(options: anytype, counts: @import("report.zig").Counts, revie
     return considered.errors > 0 or (options.@"fail-on" == .warning and considered.warnings > 0);
 }
 
-pub const check_options: []const @import("zcli").OptionInfo = &.{
+pub const check_options: []const @import("zclig").OptionInfo = &.{
     .{ .name = "junit", .metavar = "PATH", .help = "Read measured test durations from this JUnit XML report; slow-test findings point to the report." },
     .{ .name = "slow-test-ms", .metavar = "MS", .help = "Report measured tests exceeding this many milliseconds (default 1000); requires --junit." },
     .{ .name = "baseline", .metavar = "PATH", .help = "Compare against this explicit baseline file." },

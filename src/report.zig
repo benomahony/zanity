@@ -1,6 +1,6 @@
 const std = @import("std");
 const assert = @import("assert.zig");
-const zrich = @import("zcli").zrich;
+const zrich = @import("zclig").zrich;
 const rules = @import("rules.zig");
 const memory = @import("memory.zig");
 const Finding = @import("facts.zig").Finding;

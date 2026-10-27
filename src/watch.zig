@@ -131,7 +131,7 @@ pub fn agentOutput(args: []const []const u8, chose_format: bool, asked: bool) bo
     return asked or !chose_format;
 }
 
-/// Writes rows during a resident watch run in the same two machine formats zcli uses.
+/// Writes rows during a resident watch run in the same two machine formats zclig uses.
 pub fn renderRows(comptime Row: type, out: *std.Io.Writer, json: bool, rows: []const Row) !void {
     const fields = .{ "path", "line", "column", "severity", "rule", "message", "fix", "edit_start", "edit_end", "edit_text" };
     if (@typeInfo(Row) != .@"struct") assert.panic("rendering watched rows of {s}; output rows must be structs", .{@typeName(Row)});
@@ -413,7 +413,7 @@ test "a resident watch defaults to agent output unless the command chooses other
     try std.testing.expect(!agentOutput(&.{ "check", ".", "--watch", "--json" }, true, false));
 }
 
-test "resident watch rows use zcli's JSON and plain formats" {
+test "resident watch rows use zclig's JSON and plain formats" {
     const TestRow = struct { path: []const u8, line: u32, column: u32, severity: []const u8, rule: []const u8, message: []const u8, fix: []const u8, edit_start: ?u32, edit_end: ?u32, edit_text: ?[]const u8 };
     const rows = [_]TestRow{.{ .path = "a.py", .line = 2, .column = 3, .severity = "warning", .rule = "example", .message = "found", .fix = "fix it", .edit_start = null, .edit_end = null, .edit_text = null }};
     var buffer: [1024]u8 = undefined;

@@ -8,7 +8,7 @@ const memory = @import("memory.zig");
 const store_module = @import("store.zig");
 const Store = store_module.Store;
 const Observed = store_module.Observed;
-const zcli = @import("zcli");
+const zclig = @import("zclig");
 const main = @import("main.zig");
 
 /// What the calibration commands fail with: misuse, or the store or memory giving out.
@@ -62,7 +62,7 @@ var review_rows: [max_rows]ReviewRow = undefined;
 var stats_rows: [max_rows]StatsRow = undefined;
 
 /// The store of answers and labels, opened for the calibration commands.
-fn calibration(ctx: *zcli.Context) !Calibration {
+fn calibration(ctx: *zclig.Context) !Calibration {
     const ws = main.workspaceOf(ctx);
     const environ = ws.environ orelse assert.panic("a calibration command ran without the environment; main() passes it to the workspace", .{});
     if (ws.source_cache == null) ws.source_cache = Store.initStore(std.heap.page_allocator, ws.io, environ, ws.limits.store_bytes) catch |e| {
@@ -78,7 +78,7 @@ fn calibration(ctx: *zcli.Context) !Calibration {
 const Misuse = struct { problem: []const u8, fix: []const u8 };
 
 /// A calibration command's rows, or its misuse told as a usage error.
-fn calibrated(comptime Row: type, ctx: *zcli.Context, result: Error![]const Row, misuse: Misuse) ![]const Row {
+fn calibrated(comptime Row: type, ctx: *zclig.Context, result: Error![]const Row, misuse: Misuse) ![]const Row {
     if (misuse.problem.len == 0 or misuse.fix.len == 0) assert.panic("a calibration command has no words for being misused", .{});
     const rows = result catch |e| switch (e) {
         error.Usage => return ctx.fail(.usage, misuse.problem, misuse.fix),
@@ -88,7 +88,7 @@ fn calibrated(comptime Row: type, ctx: *zcli.Context, result: Error![]const Row,
     return rows;
 }
 
-pub fn runMark(ctx: *zcli.Context, options: LabelOptions) ![]const LabelRow {
+pub fn runMark(ctx: *zclig.Context, options: LabelOptions) ![]const LabelRow {
     if (options.finding.len > 64) return ctx.fail(.usage, "zanity mark takes one finding at a time.", "Mark each finding with its own command.");
     const rows = try calibrated(LabelRow, ctx, label(try calibration(ctx), options), .{ .problem = "zanity mark takes a finding's PATH:LINE and rule, with --confirm or --not-a-problem, for a finding --infer reported there.", .fix = "Copy the place and rule from zanity check --infer, such as zanity mark app.py:12 cwe-15 --not-a-problem." });
     if (rows.len != 1) assert.panic("zanity mark labelled {d} findings; it labels exactly one", .{rows.len});
@@ -96,7 +96,7 @@ pub fn runMark(ctx: *zcli.Context, options: LabelOptions) ![]const LabelRow {
     return rows;
 }
 
-pub fn runReview(ctx: *zcli.Context, options: ReviewOptions) ![]const ReviewRow {
+pub fn runReview(ctx: *zclig.Context, options: ReviewOptions) ![]const ReviewRow {
     if (options.limit > max_rows) return ctx.fail(.usage, "zanity review lists at most 4096 answers at once.", "Pass a smaller --limit.");
     const rows = try calibrated(ReviewRow, ctx, review(try calibration(ctx), options), .{ .problem = "zanity review takes one --infer question's rule, and a --limit above 0.", .fix = "Name a question, such as zanity review cwe-15." });
     if (rows.len > options.limit) assert.panic("zanity review listed {d} answers past --limit {d}", .{ rows.len, options.limit });
@@ -104,7 +104,7 @@ pub fn runReview(ctx: *zcli.Context, options: ReviewOptions) ![]const ReviewRow 
     return rows;
 }
 
-pub fn runStats(ctx: *zcli.Context, options: StatsOptions) ![]const StatsRow {
+pub fn runStats(ctx: *zclig.Context, options: StatsOptions) ![]const StatsRow {
     const rows = try calibrated(StatsRow, ctx, stats(try calibration(ctx), options), .{ .problem = "zanity stats takes at most one --rule.", .fix = "Run zanity stats, or zanity stats --rule cwe-15." });
     for (rows) |r| if (r.fired > r.answers) assert.panic("'{s}' fired {d} times in {d} answers", .{ r.rule, r.fired, r.answers });
     if (!options.thresholds) for (rows) |r| if (r.threshold != 0) assert.panic("'{s}' has a threshold row without --thresholds", .{r.rule});
