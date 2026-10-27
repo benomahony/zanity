@@ -98,6 +98,7 @@ const app: zclig.App = .{
     }, .{ .run = runInit, .human = renderInit }), zclig.command(UpgradeOptions, UpgradeRow, .{
         .name = "upgrade",
         .description = "Replace this zanity with the latest release, or the one --to names, after checking its SHA-256.",
+        .aliases = &.{"update"},
         .examples = &.{ "zanity upgrade", "zanity upgrade --dry-run", "zanity upgrade --to 0.1.4" },
         .result_title = "Upgrade",
         .options = &.{
