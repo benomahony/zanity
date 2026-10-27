@@ -863,3 +863,6 @@
   (#empty? @_constant_empty)
   (#eq? @_expect "expect")
   (#any-of? @_matcher "toBeTruthy" "toBeFalsy" "toBeNull" "toBeDefined" "toBeUndefined"))
+
+; Export modifiers belong to the declaration sent for inference.
+(export_statement) @unit.prefix

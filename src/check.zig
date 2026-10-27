@@ -997,7 +997,7 @@ pub const File = struct {
                 const starts_before = ts.ts_node_start_byte(parent) < ts.ts_node_start_byte(span);
                 if (starts_before and ts.ts_node_end_byte(parent) == ts.ts_node_end_byte(span)) span = parent;
             };
-            try self.work.facts.unit(name, span.text(self.source), .{ .kind = kind, .reports_error = ctx.has_message, .at = .{ at.row, at.column, last } });
+            try self.work.facts.unit(name, @import("documentation.zig").sourceWithComments(span, self.source, &self.index, self.checker.compiled.id("unit.prefix")), .{ .kind = kind, .reports_error = ctx.has_message, .at = .{ at.row, at.column, last } });
         }
     }
 

@@ -1,4 +1,5 @@
 test {
+    _ = @import("documentation_test.zig");
     _ = @import("test_timings.zig");
     _ = @import("test_parity.zig");
     _ = @import("language.zig");

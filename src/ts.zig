@@ -152,3 +152,5 @@ pub fn stringValue(query: *const Query, id: u32) []const u8 {
     return ptr[0..len];
 }
 pub extern fn ts_query_capture_quantifier_for_id(query: *const Query, pattern_index: u32, capture_index: u32) Quantifier;
+
+pub extern fn ts_node_prev_named_sibling(node: Node) Node;

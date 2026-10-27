@@ -416,3 +416,6 @@
   macro: (identifier) @_assert
   (token_tree) @test.value) @test.constant
   (#any-of? @_assert "assert" "debug_assert" "assert_eq" "assert_ne" "debug_assert_eq" "debug_assert_ne"))
+
+; Attributes are siblings of their declaration and belong in its inference source.
+(attribute_item) @unit.prefix

@@ -15,6 +15,7 @@ pub const read_families = [_][]const u8{ "finding", "unless", "name", "parameter
 /// architecture_test.zig checks every name the code looks up is read.
 pub const looked_up = [_][]const u8{
     "abstraction.name",
+    "unit.prefix",
     "arith.difference",
     "async.name",
     "catch.swallowed",

@@ -31,6 +31,7 @@ fn revisionOfAnalyzer() [8]u8 {
     const sources = .{
         cache_format,
         @embedFile("check.zig"),
+        @embedFile("documentation.zig"),
         @embedFile("captures.zig"),
         @embedFile("facts.zig"),
         @embedFile("hazards.zig"),
