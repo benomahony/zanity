@@ -58,6 +58,7 @@ pub fn identify(gpa: std.mem.Allocator, ws: anytype) !void {
     if (ws.source.len == 0) assert.panic("identity needs a source buffer", .{});
     var duplicates: std.StringHashMapUnmanaged(usize) = .empty;
     duplicates = try initIdentityIndex(gpa, rows.len);
+    defer duplicates.deinit(gpa);
     var path: []const u8 = "";
     var source: []const u8 = "";
     var split = std.mem.splitScalar(u8, source, '\n');
@@ -190,6 +191,7 @@ fn initIdentityIndex(gpa: std.mem.Allocator, capacity: usize) !std.StringHashMap
 fn initComparisonIndex(gpa: std.mem.Allocator, old: []const Row, resolved: *std.ArrayList(Row)) !std.StringHashMapUnmanaged(Row) {
     if (old.len > 1 << 18) return error.TooManyBaselineFindings;
     var index: std.StringHashMapUnmanaged(Row) = .empty;
+    errdefer index.deinit(gpa);
     try index.ensureTotalCapacity(gpa, @intCast(old.len));
     try resolved.ensureTotalCapacity(gpa, old.len);
     for (old) |row| index.putAssumeCapacity(row.id, row);
@@ -203,4 +205,38 @@ pub fn validateOptions(ctx: anytype, ws: anytype, options: anytype) !void {
     const text = &ws.text;
     if (text.used > text.buffer.len) assert.panic("validation text used {d} exceeds capacity", .{text.used});
     triage.validate(options) catch |e| return ctx.fail(.usage, try ws.text.format("Invalid baseline/triage options: {t}.", .{e}), "Use --baseline PATH; capture and update are explicit, separate actions without --watch.");
+}
+
+test "identifying duplicate findings releases its temporary index" {
+    const memory = @import("memory.zig");
+    const gpa = std.testing.allocator;
+    const io = std.testing.io;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(io, .{ .sub_path = "a.py", .data = "assert value\n" });
+    const path = try tmp.dir.realPathFileAlloc(io, "a.py", gpa);
+    defer gpa.free(path);
+    var source: [1024]u8 = undefined;
+    var ws: struct {
+        rows: memory.Bounded(Row),
+        text: memory.Text,
+        source: []u8,
+        limits: memory.Limits,
+        io: std.Io,
+    } = .{
+        .rows = try .initBounded(gpa, 2, "findings"),
+        .text = try .initText(gpa, 4096),
+        .source = &source,
+        .limits = .{ .findings = 2 },
+        .io = io,
+    };
+    defer gpa.free(ws.rows.buffer);
+    defer gpa.free(ws.text.buffer);
+    const row: Row = .{ .path = path, .line = 1, .column = 1, .severity = "warning", .rule = "assertion-message", .message = "assertion needs context", .fix = "Add a message." };
+    try ws.rows.add(row);
+    try ws.rows.add(row);
+    try identify(gpa, &ws);
+    try std.testing.expectEqual(@as(usize, 64), ws.rows.items()[0].id.len);
+    try std.testing.expectEqualStrings(try identity(&ws.text, row, "assert value", 0), ws.rows.items()[0].id);
+    try std.testing.expectEqualStrings(try identity(&ws.text, row, "assert value", 1), ws.rows.items()[1].id);
 }
