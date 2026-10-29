@@ -224,6 +224,7 @@ pub const LanguageServer = struct {
     dirty: memory.Bounded(u64),
     /// Findings flagged as false positives this session, by `flagKey()`, which later checks hide.
     flagged: memory.Bounded(u64),
+    initialized: bool = false,
     shut_down: bool = false,
 
     pub fn initLanguageServer(gpa: Allocator, io: Io, out: *Io.Writer, services: Services) !LanguageServer {
@@ -256,10 +257,13 @@ pub const LanguageServer = struct {
                 try self.sendError(.null, -32700, try self.scratch.text.format("The {d}-byte message is not JSON.", .{body.len}));
                 continue;
             };
-            const method = stringOf(member(parsed, "method")) orelse continue;
-            if (std.mem.eql(u8, method, "exit")) return self.shut_down;
-            const id = member(parsed, "id");
-            self.handle(method, id, member(parsed, "params") orelse no_value) catch |e| try self.reportFailure(method, id, e);
+            if (member(parsed, "method") == null and (member(parsed, "result") != null or member(parsed, "error") != null)) continue;
+            const message = requestOf(parsed) orelse {
+                try self.sendError(.null, -32600, "Send a JSON-RPC 2.0 object with a nonempty method and a string or integer id.");
+                continue;
+            };
+            if (std.mem.eql(u8, message.method, "exit")) return self.shut_down;
+            self.handle(message.method, message.id, message.params) catch |e| try self.reportFailure(message.method, message.id, e);
             try self.flushTelemetry();
         }
         assert.panic("handled {d} messages without the editor exiting; raise max_messages if a real editor session needs more", .{max_messages});
@@ -267,6 +271,7 @@ pub const LanguageServer = struct {
 
     fn handle(self: *LanguageServer, method: []const u8, request: ?json.Value, params: json.Value) !void {
         if (method.len == 0) assert.panic("handling a message with an empty method; serve() passes the method the message names", .{});
+        if (!try self.accepts(method, request)) return;
         const id = request orelse no_value;
         const is = std.mem.eql;
         if (is(u8, method, "initialize")) return self.initialize(id, params);
@@ -284,6 +289,24 @@ pub const LanguageServer = struct {
         if (self.root.len == 0) assert.panic("the workspace root is empty after {s}; initialize() falls back to the working directory", .{method});
     }
 
+    /// Checks protocol ordering before requests reach handlers that require initialization.
+    fn accepts(self: *LanguageServer, method: []const u8, request: ?json.Value) !bool {
+        if (method.len == 0) assert.panic("checking protocol order with no method; requestOf() validates it before handle()", .{});
+        if (self.initialized and self.root.len == 0) assert.panic("initialized without a workspace root; initialize() must retain rootOf()'s validated path", .{});
+        if (self.shut_down) {
+            if (request) |id| try self.sendError(id, -32600, "The server has shut down; send exit and start a new session.");
+            return false;
+        }
+        if (std.mem.eql(u8, method, "initialize")) {
+            if (!self.initialized) return request != null;
+            if (request) |id| try self.sendError(id, -32600, "The server is already initialized; start a new session to change its workspace.");
+            return false;
+        }
+        if (self.initialized) return true;
+        if (request) |id| try self.sendError(id, -32002, "Initialize the server before sending other requests.");
+        return false;
+    }
+
     /// Tells the editor a message could not be handled, and goes on to the next.
     fn reportFailure(self: *LanguageServer, method: []const u8, id: ?json.Value, e: anyerror) !void {
         if (method.len == 0) assert.panic("reporting a failure of a message with no method; pass the method from handle()", .{});
@@ -294,8 +317,13 @@ pub const LanguageServer = struct {
 
     fn initialize(self: *LanguageServer, id: json.Value, params: json.Value) !void {
         if (self.current.files.len != 0) assert.panic("initialize arrived after a check of {d} files; the editor sends it first", .{self.current.files.len});
-        self.root = try self.rootOf(params);
-        self.utf8 = offersUtf8(params);
+        const root = self.rootOf(params) catch |e| switch (e) {
+            error.InvalidWorkspaceRoot, error.InvalidFileUri, error.NameTooLong => return self.sendError(id, -32602, "Name the workspace with an absolute rootPath or a local file URI in rootUri."),
+            else => return e,
+        };
+        const utf8 = offersUtf8(params) catch return self.sendError(id, -32602, "Offer at most 1048576 position encodings in capabilities.general.positionEncodings.");
+        self.root = root;
+        self.utf8 = utf8;
         try self.respond(id, .{
             .capabilities = .{
                 .positionEncoding = if (self.utf8) "utf-8" else "utf-16",
@@ -305,6 +333,7 @@ pub const LanguageServer = struct {
             },
             .serverInfo = .{ .name = "zanity", .version = self.services.version },
         });
+        self.initialized = true;
         if (!std.fs.path.isAbsolute(self.root)) assert.panic("the workspace root {s} is relative; rootOf() returns an absolute path", .{self.root});
     }
 
@@ -314,10 +343,11 @@ pub const LanguageServer = struct {
         const folders = member(params, "workspaceFolders") orelse no_value;
         const listed: []const json.Value = if (folders == .array) folders.array.items else &.{};
         const first = if (listed.len > 0) listed[0] else no_value;
-        const uri = stringOf(member(params, "rootUri")) orelse stringOf(member(first, "uri")) orelse "";
-        const named = try pathOf(&self.scratch.text, uri) orelse stringOf(member(params, "rootPath"));
+        const uri = stringOf(member(params, "rootUri")) orelse stringOf(member(first, "uri"));
+        const named: ?[]const u8 = if (uri) |value| try pathOf(&self.scratch.text, value) orelse return error.InvalidWorkspaceRoot else stringOf(member(params, "rootPath"));
         const root = if (named) |path| path else self.root_buffer[0..try Io.Dir.cwd().realPath(self.io, &self.root_buffer)];
         if (root.len > self.root_buffer.len) return error.NameTooLong;
+        if (root.len == 0 or !std.fs.path.isAbsolute(root) or std.mem.indexOfScalar(u8, root, 0) != null) return error.InvalidWorkspaceRoot;
         @memmove(self.root_buffer[0..root.len], root);
         if (root.len == 0) assert.panic("the editor named an empty workspace root; fall back to the working directory in rootOf()", .{});
         return self.root_buffer[0..root.len];
@@ -465,6 +495,10 @@ pub const LanguageServer = struct {
         const file = try self.fileOf(params) orelse return self.respond(id, &none);
         if (self.isDirty(file.path)) return self.respond(id, &none);
         const only = member(member(params, "context"), "only");
+        if (only) |value| if (value == .array) {
+            const kinds = value.array.items;
+            if (kinds.len > 1 << 10) return self.sendError(id, -32602, "Request at most 1024 code action kinds in context.only.");
+        };
         const range = member(params, "range");
         const first = integerOf(member(member(range, "start"), "line")) orelse 0;
         const last = integerOf(member(member(range, "end"), "line")) orelse first;
@@ -533,6 +567,7 @@ pub const LanguageServer = struct {
         const call = json.parseFromValueLeaky(Call, self.scratch.parse.allocator(), params, .{ .ignore_unknown_fields = true }) catch Call{ .command = "", .arguments = &.{} };
         if (call.arguments.len != 1) return self.sendError(id, -32602, try self.scratch.text.format("zanity's commands take one argument, the finding its code action named, not {d}.", .{call.arguments.len}));
         const target = call.arguments[0];
+        if (target.path.len == 0 or target.rule.len == 0 or target.message.len == 0) return self.sendError(id, -32602, "Use the nonempty path, rule and message from a finding offered by a code action.");
         if (target.line == 0 or target.column == 0) return self.sendError(id, -32602, try self.scratch.text.format("The finding is at line {d} column {d}, but both count from 1.", .{ target.line, target.column }));
         if (std.mem.eql(u8, call.command, flag_command)) {
             try self.flag(target);
@@ -847,38 +882,69 @@ pub fn readMessage(in: *Io.Reader, inbox: []u8) !?[]u8 {
 }
 
 /// Whether the editor can count positions in bytes, which saves converting them.
-fn offersUtf8(params: json.Value) bool {
+fn offersUtf8(params: json.Value) error{TooManyPositionEncodings}!bool {
     const encodings = member(member(member(params, "capabilities"), "general"), "positionEncodings") orelse return false;
     const offered: []const json.Value = if (encodings == .array) encodings.array.items else &.{};
-    if (offered.len > 1 << 20) assert.panic("the editor offered {d} position encodings; cap or reject the initialize list", .{offered.len});
+    if (offered.len > 1 << 20) return error.TooManyPositionEncodings;
     const utf8 = for (offered) |e| {
         if (std.mem.eql(u8, stringOf(e) orelse continue, "utf-8")) break true;
     } else false;
     if (utf8 and offered.len == 0) assert.panic("chose UTF-8 positions though the editor offered no encodings; fix offersUtf8() to choose only from the list", .{});
+    if (utf8 and encodings != .array) assert.panic("chose UTF-8 from {t} encodings; offersUtf8() must inspect an offered array", .{encodings});
     return utf8;
+}
+
+/// Each URI escape consumes exactly a percent sign and two hexadecimal digits.
+fn validateEscapes(encoded: []const u8) error{InvalidFileUri}!void {
+    var at: usize = 0;
+    var escapes: usize = 0;
+    while (at < encoded.len) : (at += 1) {
+        if (encoded[at] != '%') continue;
+        if (encoded.len - at < 3 or !std.ascii.isHex(encoded[at + 1]) or !std.ascii.isHex(encoded[at + 2])) return error.InvalidFileUri;
+        at += 2;
+        escapes += 1;
+    }
+    if (at != encoded.len) assert.panic("validated URI escapes through byte {d} of {d}; consume complete escapes without crossing the path's end", .{ at, encoded.len });
+    if (escapes > encoded.len / 3) assert.panic("counted {d} three-byte escapes in {d} URI bytes; count each percent sign once", .{ escapes, encoded.len });
 }
 
 /// The path a `file://` URI names, decoded into `text`; null for any other scheme.
 pub fn pathOf(text: *memory.Text, uri: []const u8) !?[]const u8 {
-    const scheme = "file://";
-    if (!std.mem.startsWith(u8, uri, scheme)) return null;
+    if (!std.ascii.startsWithIgnoreCase(uri, "file://")) return null;
+    const parsed = std.Uri.parse(uri) catch return error.InvalidFileUri;
+    const unsupported = [_]bool{ parsed.user != null, parsed.password != null, parsed.port != null, parsed.query != null, parsed.fragment != null };
+    for (unsupported) |present| if (present) return error.InvalidFileUri;
+    if (parsed.host) |host| {
+        const name = switch (host) {
+            .raw, .percent_encoded => |value| value,
+        };
+        if (name.len != 0 and !std.ascii.eqlIgnoreCase(name, "localhost")) return error.InvalidFileUri;
+    }
+    const encoded = switch (parsed.path) {
+        .raw, .percent_encoded => |value| value,
+    };
+    try validateEscapes(encoded);
     const start = text.used;
-    _ = try text.copy(uri[scheme.len..]);
-    const tail = std.Uri.percentDecodeInPlace(text.buffer[start..text.used]);
-    std.mem.copyForwards(u8, text.buffer[start..][0..tail.len], tail);
-    const decoded = text.buffer[start..][0..tail.len];
+    _ = try text.copy(encoded);
+    var decoded = std.Uri.percentDecodeInPlace(text.buffer[start..text.used]);
+    if (@import("builtin").os.tag == .windows and std.mem.startsWith(u8, decoded, "/") and std.fs.path.diskDesignatorWindows(decoded[1..]).len == 2) decoded = decoded[1..];
+    if (decoded.len == 0 or !std.fs.path.isAbsolute(decoded) or std.mem.indexOfScalar(u8, decoded, 0) != null) return error.InvalidFileUri;
+    std.mem.copyForwards(u8, text.buffer[start..][0..decoded.len], decoded);
     text.used = start + decoded.len;
-    if (decoded.len > uri.len) assert.panic("decoding {s} lengthened it to {d} bytes; percent-decoding only shortens", .{ uri, decoded.len });
-    if (decoded.ptr != text.buffer[start..].ptr) assert.panic("decoded {s} outside the text it was copied to", .{uri});
-    return decoded;
+    if (decoded.len > encoded.len) assert.panic("decoding {s} lengthened its path to {d} bytes; percent decoding can only shorten it", .{ uri, decoded.len });
+    if (text.used > text.buffer.len) assert.panic("decoded {s} beyond the path buffer; Text.copy() must reserve the encoded path first", .{uri});
+    return text.buffer[start..text.used];
 }
 
 /// The `file://` URI of an absolute path, written into `text`, encoding what a URI path cannot hold.
 pub fn uriOf(text: *memory.Text, path: []const u8) ![]const u8 {
     if (!std.fs.path.isAbsolute(path)) assert.panic("making a URI of the relative path {s}; resolve it against the root first", .{path});
     var out: Io.Writer = .fixed(text.buffer[text.used..]);
-    out.writeAll("file://") catch return error.LimitExceeded;
-    for (path) |c| {
+    const windows = @import("builtin").os.tag == .windows;
+    const prefix = if (windows and std.fs.path.diskDesignatorWindows(path).len == 2) "file:///" else "file://";
+    out.writeAll(prefix) catch return error.LimitExceeded;
+    for (path) |native| {
+        const c = if (windows and native == '\\') '/' else native;
         const plain = std.ascii.isAlphanumeric(c) or std.mem.indexOfScalar(u8, "-._~/", c) != null;
         (if (plain) out.writeByte(c) else out.print("%{X:0>2}", .{c})) catch {
             memory.exceeded = "bytes of paths and URIs in one check";
@@ -889,6 +955,30 @@ pub fn uriOf(text: *memory.Text, path: []const u8) ![]const u8 {
     text.used += uri.len;
     if (uri.len < path.len + "file://".len) assert.panic("the URI of {s} is shorter than the path", .{path});
     return uri;
+}
+
+const Request = struct { method: []const u8, id: ?json.Value, params: json.Value };
+
+/// Validates the JSON-RPC envelope before its fields reach handlers with internal contracts.
+fn requestOf(value: json.Value) ?Request {
+    const version = stringOf(member(value, "jsonrpc")) orelse return null;
+    if (!std.mem.eql(u8, version, "2.0")) return null;
+    const method = stringOf(member(value, "method")) orelse return null;
+    if (method.len == 0) return null;
+    const id = member(value, "id");
+    if (id) |found| switch (found) {
+        .integer, .string, .null => {},
+        else => return null,
+    };
+    const params = member(value, "params") orelse no_value;
+    switch (params) {
+        .object, .array, .null => {},
+        else => return null,
+    }
+    const request: Request = .{ .method = method, .id = id, .params = params };
+    if (request.method.len == 0) assert.panic("validated an empty request method; requestOf() must reject it", .{});
+    if (value != .object) assert.panic("validated a request in a {t}; member() must accept only JSON objects", .{value});
+    return request;
 }
 
 fn member(value: ?json.Value, name: []const u8) ?json.Value {
@@ -966,4 +1056,44 @@ test "a code action kind covers the kinds under it" {
     try std.testing.expect(!wants(only, "quickfix"));
     try std.testing.expect(isBefore(.{ .line = 0, .character = 4 }, .{ .line = 1, .character = 0 }));
     try std.testing.expect(!isBefore(.{ .line = 1, .character = 0 }, .{ .line = 1, .character = 0 }));
+}
+
+test "JSON-RPC request envelopes reject malformed methods and ids" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const invalid = [_][]const u8{
+        "{}",
+        "[]",
+        "{\"jsonrpc\":\"1.0\",\"method\":\"initialize\",\"id\":1}",
+        "{\"jsonrpc\":\"2.0\",\"method\":\"\",\"id\":1}",
+        "{\"jsonrpc\":\"2.0\",\"method\":\"shutdown\",\"id\":[]}",
+        "{\"jsonrpc\":\"2.0\",\"method\":\"shutdown\",\"id\":{}}",
+        "{\"jsonrpc\":\"2.0\",\"method\":\"initialize\",\"id\":1,\"params\":false}",
+    };
+    for (invalid) |body| {
+        const value = try json.parseFromSliceLeaky(json.Value, arena_state.allocator(), body, .{});
+        try std.testing.expectEqual(null, requestOf(value));
+    }
+    for ([_][]const u8{ "null", "1", "\"request-1\"" }) |id| {
+        const body = try std.fmt.allocPrint(arena_state.allocator(), "{{\"jsonrpc\":\"2.0\",\"method\":\"initialize\",\"id\":{s}}}", .{id});
+        const valid = try json.parseFromSliceLeaky(json.Value, arena_state.allocator(), body, .{});
+        try std.testing.expectEqualStrings("initialize", requestOf(valid).?.method);
+    }
+}
+
+test "file URIs accept localhost and reject malformed or empty paths" {
+    var text = try memory.Text.initText(std.testing.allocator, 4096);
+    defer std.testing.allocator.free(text.buffer);
+    const windows = @import("builtin").os.tag == .windows;
+    const uri = if (windows) "file://localhost/C:/tmp/project" else "file://localhost/tmp/project";
+    try std.testing.expectEqualStrings(if (windows) "C:/tmp/project" else "/tmp/project", (try pathOf(&text, uri)).?);
+    const invalid = [_][]const u8{ "file://", "file://remote/tmp/project", "file:///tmp/%00x", "file:///tmp/%GG", "file:///tmp/x?query" };
+    for (invalid) |bad| try std.testing.expectError(error.InvalidFileUri, pathOf(&text, bad));
+    const drive = (try pathOf(&text, "file:///C:/tmp/project")).?;
+    try std.testing.expectEqualStrings(if (windows) "C:/tmp/project" else "/C:/tmp/project", drive);
+    if (windows) {
+        const written = try uriOf(&text, "C:\\tmp\\project");
+        try std.testing.expectEqualStrings("file:///C%3A/tmp/project", written);
+        try std.testing.expectEqualStrings("C:/tmp/project", (try pathOf(&text, written)).?);
+    }
 }
