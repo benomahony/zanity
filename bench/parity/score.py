@@ -6,7 +6,9 @@ import re
 import shutil
 import sqlite3
 import subprocess
+import tempfile
 from collections import Counter
+from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -78,27 +80,90 @@ def settled_by() -> dict[str, list[str]]:
     return found
 
 
+def decoded_records(output: str, producer: str, field_types: dict[str, tuple[type, ...]]) -> list[dict]:
+    """Validate the JSON record protocol emitted by a benchmark child. Output/shape failures
+    become actionable ValueError messages for the comparison CLI's operational-error boundary."""
+    assert producer, "name the benchmark child whose JSON is being decoded"
+    assert field_types, "specify the required fields of the child's record protocol"
+    try:
+        records = json.loads(output)
+    except ValueError as error:
+        raise ValueError(f"{producer} did not emit JSON records: {error}; fix its adapter or command, then rerun parity.py") from error
+    if not isinstance(records, list):
+        raise ValueError(f"{producer} returned {type(records).__name__}, not a JSON array; fix the adapter's record protocol")
+    for position, record in enumerate(records):
+        if not isinstance(record, dict):
+            raise ValueError(f"{producer} record {position} is not an object; fix the adapter's record protocol")
+        for field, accepted_types in field_types.items():
+            value = record.get(field)
+            if type(value) not in accepted_types or value == "":
+                raise ValueError(f"{producer} record {position} has invalid {field}={value!r}; fix the adapter's record protocol")
+        if "probability" in field_types and not 0 <= record["probability"] <= 1:
+            raise ValueError(f"{producer} record {position} has probability {record['probability']}; return a value between 0 and 1")
+    return records
+
+
+def inference_observations(store: Path, rules: set[str]) -> list[dict]:
+    """Read the public observations schema of one completed zanity child, read-only. This is
+    the cross-language result adapter, not an application repository; both cursor and connection
+    close before the caller deletes its private temporary store. Database failures become ValueError."""
+    assert store.is_absolute(), f"{store} is relative; create the inference store in the comparison's temporary directory"
+    assert rules, "pass the selected rules so unexpected cache observations can be diagnosed"
+    fields = ("path", "rule", "probability", "threshold", "fired")
+    try:
+        with closing(sqlite3.connect(store.as_uri() + "?mode=ro", uri=True)) as connection:
+            with closing(connection.execute("SELECT path, rule, probability, threshold, fired FROM observations")) as cursor:
+                rows = [dict(zip(fields, row)) for row in cursor.fetchall()]
+    except sqlite3.Error as error:
+        raise ValueError(f"could not read inference observations from {store}: {error}; check that zanity completed --infer with this store") from error
+    unexpected = sorted({row["rule"] for row in rows} - rules)
+    if unexpected:
+        raise ValueError(f"fresh inference store {store} contains unselected rules {unexpected}; fix the benchmark's rule selection")
+    if not rows:
+        raise ValueError(f"zanity kept no inference observations in {store}; fix the model/server failure or missing fixture units before comparing")
+    return rows
+
+
+def named_fixture_questions(fixture_files: set[str]) -> dict[str, str]:
+    """Select fixture-backed inference questions from one directory snapshot. Slow tests are
+    measured from JUnit reports, and are deliberately not model questions."""
+    assert fixture_files, "no inference Python fixtures were found; restore fixtures/nouls before running the live comparison"
+    named = {q: z for q, z in QUESTIONS.items() if q != "test_slow" and (f"{q}.py" in fixture_files or f"test_{q}.py" in fixture_files)}
+    assert named, f"none of {len(fixture_files)} fixture files matches QUESTIONS; fix the fixture names or question mapping"
+    return named
+
+
 def score_inference_live(zanity: Zanity, server: Server) -> list[dict]:
-    """Both tools' answers, from the same server, to each named question about the fixture that
-    has the problem it asks about: how sure each was, and whether each reported it."""
+    """Compare model answers for the CLI's fixed local fixtures, on the server the invoking
+    user explicitly selected. This benchmark runs trusted local tools with that user's authority;
+    it exposes no command or file capability to a remote caller. One directory scan selects
+    fixtures, and one private, short-lived store plus one read-only query owns zanity's results."""
     root = FIXTURES / "nouls"
-    # Elapsed time is measured from JUnit reports, not judged from source by a model.
-    named = {q: z for q, z in QUESTIONS.items() if q != "test_slow" and ((root / f"{q}.py").exists() or (root / f"test_{q}.py").exists())}
-    adapter = [str(SOURCES / "nouls" / ".venv" / "bin" / "python"), str(HERE / "adapters" / "run_nouls.py"), str(root)]
-    theirs = json.loads(subprocess.run(adapter, env=server.env(os.environ | {"NOULS_PARITY_RULES": ",".join(named)}), capture_output=True, text=True, check=True).stdout)
+    with os.scandir(root) as entries:
+        fixture_files = {entry.name for entry in entries if entry.is_file() and entry.name.endswith(".py")}
+    named = named_fixture_questions(fixture_files)
+    names = {q: f"{q}.py" if f"{q}.py" in fixture_files else f"test_{q}.py" for q in named}
+    environment = SOURCES / "nouls" / ".venv"
+    interpreter = environment / "Scripts" / "python.exe" if os.name == "nt" else environment / "bin" / "python"
+    adapter = [str(interpreter), str(HERE / "adapters" / "run_nouls.py"), str(root)]
+    output = subprocess.run(adapter, env=server.env(os.environ | {"NOULS_PARITY_RULES": ",".join(named)}), capture_output=True, text=True, check=False)
+    if output.returncode != 0:
+        raise ValueError(f"nouls adapter exited with {output.returncode}: {output.stderr}; sync its environment and fix the reported server/adapter failure before rerunning parity.py")
+    theirs = decoded_records(output.stdout, "nouls", {"path": (str,), "rule": (str,), "probability": (int, float), "fired": (bool,)})
     settles = settled_by()
-    rules = sorted({z for z in named.values()} | {r for z in named.values() for r in settles.get(z, [])})
-    store = zanity.store.parent / "inference.db"
-    store.unlink(missing_ok=True)
-    args = [str(zanity.binary), "check", "--infer", "--json", "--quiet", "--rules", ",".join(rules), "."]
-    out = subprocess.run(args, cwd=root, env=server.env(zanity.env(store)), capture_output=True, text=True, check=False)
-    assert out.returncode <= 1, f"zanity check --infer failed in {root}:\n{out.stderr}"
-    reported = json.loads(out.stdout or "[]")
-    ours = [dict(zip(("path", "rule", "probability", "threshold", "fired"), r)) for r in sqlite3.connect(store).execute("SELECT path, rule, probability, threshold, fired FROM observations")]
+    rules = {z for z in named.values()} | {r for z in named.values() for r in settles.get(z, [])}
+    with tempfile.TemporaryDirectory(prefix="parity-inference-") as temporary:
+        store = Path(temporary) / "store.db"
+        args = [str(zanity.binary), "check", "--infer", "--json", "--quiet", "--rules", ",".join(sorted(rules)), "."]
+        out = subprocess.run(args, cwd=root, env=server.env(zanity.env(store)), capture_output=True, text=True, check=False)
+        if out.returncode not in (0, 1):
+            raise ValueError(f"zanity check --infer exited with {out.returncode} in {root}: {out.stderr}; fix the reported model/server or checker failure before rerunning parity.py")
+        reported = decoded_records(out.stdout, "zanity", {"path": (str,), "rule": (str,)})
+        ours = inference_observations(store, rules)
     answers = Answers(theirs, ours, reported, settles)
-    rows = [live_row(question, rule, fixture_named(root, question), answers) for question, rule in named.items()]
-    assert rows, f"no named question has a fixture in {root}"
-    assert len(rows) == len(named), "a row per question with a fixture"
+    rows = [live_row(question, rule, names[question], answers) for question, rule in named.items()]
+    assert rows, f"no comparison rows were produced for {len(named)} questions in {root}; fix the adapter's fixture results"
+    assert len(rows) == len(named), f"made {len(rows)} rows for {len(named)} questions; fix live_row to keep one result per fixture"
     return rows
 
 
@@ -111,14 +176,6 @@ class Answers:
     ours: list[dict]
     reported: list[dict]
     settles: dict[str, list[str]]
-
-
-def fixture_named(root: Path, question: str) -> str:
-    """The fixture written for a question: a module, or a test file for test and fixture questions."""
-    name = f"{question}.py" if (root / f"{question}.py").exists() else f"test_{question}.py"
-    assert (root / name).exists(), f"{question} has no fixture in {root}"
-    assert question, "a question has no name"
-    return name
 
 
 def live_row(question: str, rule: str, name: str, a: Answers) -> dict:
