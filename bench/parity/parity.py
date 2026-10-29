@@ -15,6 +15,7 @@ Usage: python3 bench/parity/parity.py [--zanity PATH] [--skip-bench] [--runs N]
 import argparse
 import json
 import subprocess
+import sys
 import tempfile
 import time
 from pathlib import Path
@@ -51,26 +52,64 @@ def scores(zanity: Zanity) -> dict:
     return data
 
 
-def main() -> None:
-    args = arguments()
-    zanity = Zanity(args.zanity.resolve(), Path(tempfile.mkdtemp(prefix="parity-")) / "store.db")
+def comparison_results(args: argparse.Namespace, zanity: Zanity) -> dict:
+    """Collect one CLI run's scores and measurements. Arguments come from the invoking user's
+    parser, and cached results are our own generated JSON; malformed cache data is an error.
+    No global state is changed here, and callers own both the cache lifetime and error display."""
+    assert args.runs > 0, f"benchmark runs must be positive, not {args.runs}; pass --runs 1 or more"
+    assert zanity.binary.is_file(), f"{zanity.binary} is missing; build zanity before collecting comparison results"
     commit = subprocess.run(["git", "-C", str(REPO), "rev-parse", "--short", "HEAD"], capture_output=True, text=True, check=True)
     data = {"when": time.strftime("%Y-%m-%d"), "commit": commit.stdout.strip(), "runs": args.runs, **scores(zanity)}
+    kept = {}
+    if args.skip_bench or not args.infer_url:
+        try:
+            kept = json.loads(page.RESULTS.read_text())
+        except FileNotFoundError as error:
+            if args.skip_bench:
+                raise ValueError(f"{page.RESULTS} has no previous timings to reuse; run parity.py once without --skip-bench") from error
+            kept = {}
+        if not isinstance(kept, dict):
+            raise ValueError(f"{page.RESULTS} must contain a JSON object; regenerate it without --skip-bench")
     if args.infer_url:
         data["inference_live"] = {"model": args.infer_model, "rows": score_inference_live(zanity, Server(args.infer_url, args.infer_model))}
-    elif page.RESULTS.is_file() and "inference_live" in (kept_live := json.loads(page.RESULTS.read_text())):
-        data["inference_live"] = kept_live["inference_live"]
-    if args.skip_bench and page.RESULTS.is_file():
-        kept = json.loads(page.RESULTS.read_text())
+    elif "inference_live" in kept:
+        data["inference_live"] = kept["inference_live"]
+    if args.skip_bench:
         data |= {key: kept[key] for key in ("cli", "lsp", "lsp_lines", "runs") if key in kept}
-    elif not args.skip_bench:
+    else:
         data["cli"] = bench_cli(zanity, args.runs)
         data["lsp"] = bench_lsp(zanity, args.runs)
         data["lsp_lines"] = len(LSP_FILE.read_text().splitlines())
-    assert "cli" in data, "no timings: run once without --skip-bench"
-    assert data["commit"], f"git found no commit in {REPO}"
-    page.RESULTS.write_text(json.dumps(data, indent=2) + "\n")
+    return data
+
+
+def publish_comparison(data: dict) -> None:
+    """Atomically replace our fixed results artifact, then derive the comparison pages from
+    that complete snapshot. The sibling staging directory is removed even if publication fails."""
+    assert "cli" in data, "no timings in comparison data: run once without --skip-bench"
+    assert data["commit"], f"git found no commit in {REPO}; run parity from a checkout with a commit"
+    with tempfile.TemporaryDirectory(prefix=".parity-results-", dir=page.RESULTS.parent) as pending:
+        snapshot = Path(pending) / page.RESULTS.name
+        snapshot.write_text(json.dumps(data, indent=2) + "\n")
+        snapshot.replace(page.RESULTS)
     page.main()
+
+
+def main() -> None:
+    """Run a local developer CLI with the invoking user's filesystem and process permissions.
+    Own a private cache for the run, delegate collection and publication, and report operational
+    failures at this command boundary. There is no remote caller or shared mutable application state."""
+    args = arguments()
+    assert args.runs > 0, f"--runs must be positive, not {args.runs}; pass --runs 1 or more"
+    try:
+        with tempfile.TemporaryDirectory(prefix="parity-") as temporary:
+            zanity = Zanity(args.zanity.resolve(), Path(temporary) / "store.db")
+            data = comparison_results(args, zanity)
+            assert data["commit"], "comparison results lack a commit; collect results from a git checkout before publishing"
+            publish_comparison(data)
+    except (OSError, ValueError, subprocess.CalledProcessError) as error:
+        print(f"parity: {error}\nFix the reported file or tool failure, then rerun parity.py.", file=sys.stderr)
+        raise SystemExit(1) from error
 
 
 if __name__ == "__main__":

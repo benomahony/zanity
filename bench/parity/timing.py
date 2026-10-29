@@ -72,13 +72,15 @@ def bench_cli(zanity: Zanity, runs: int) -> dict[str, dict]:
 
 @dataclass
 class Session:
-    """One language server over stdio, from the moment it starts."""
+    """A single-threaded benchmark client for a directly spawned child over private OS pipes.
+    Request IDs only correlate responses; they are neither credentials nor shared between threads."""
 
     proc: subprocess.Popen
     started: float
-    next_id: int = 0
+    last_request_id: int = 0
 
     def send(self, message: dict) -> None:
+        """Frame the benchmark's own message for its child; callers sequence LSP operations."""
         body = json.dumps({"jsonrpc": "2.0", **message}).encode()
         assert self.proc.stdin, "the server's stdin is not a pipe; start it with stdin=subprocess.PIPE"
         assert self.proc.poll() is None, f"the server exited with {self.proc.returncode}; inspect its stderr and fix the server command"
@@ -91,14 +93,17 @@ class Session:
         self.send({"method": method, "params": params})
 
     def request(self, method: str, params: dict) -> int:
+        """Assign this client's next response-correlation ID and send one LSP request.
+        IDs may have gaps after a failed write; they grant no authority or access."""
         assert method, "a request needs a method; pass the LSP method name"
-        assert self.next_id >= 0, f"request ids count up from 1, but the last was {self.next_id}; start a new Session at id 0"
-        self.next_id += 1
-        self.send({"id": self.next_id, "method": method, "params": params})
-        return self.next_id
+        assert self.last_request_id >= 0, f"request ids count up from 1, but the last was {self.last_request_id}; start a new Session at id 0"
+        self.last_request_id += 1
+        self.send({"id": self.last_request_id, "method": method, "params": params})
+        return self.last_request_id
 
     def receive_bytes(self, size: int, deadline: float) -> bytes:
-        """Read exactly size bytes without waiting beyond the caller's deadline."""
+        """Receive size bytes from the child's private stdout pipe before the deadline.
+        The OS pipe identifies the spawned process; this is not a network channel."""
         assert size > 0, f"read size must be positive, not {size}; pass the remaining frame length"
         assert self.proc.stdout, "the server's stdout is not a pipe; start it with stdout=subprocess.PIPE"
         body = bytearray()
@@ -115,6 +120,7 @@ class Session:
         return bytes(body)
 
     def read(self, deadline: float) -> dict:
+        """Decode one bounded LSP frame from our directly spawned child's stdout."""
         assert self.proc.stdout, "the server's stdout is not a pipe; start it with stdout=subprocess.PIPE"
         header = b""
         for _ in range(MAX_HEADER_BYTES):

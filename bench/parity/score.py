@@ -62,7 +62,8 @@ class Server:
 
     def env(self, base: dict[str, str]) -> dict[str, str]:
         """base with the variables both tools read to find the server; a local Kev needs no key,
-        but the inference linter's client wants one set."""
+        but the inference linter's client wants one set. Preserve the caller's real key; the
+        placeholder only satisfies the optional-key client and cannot bypass server authentication."""
         assert self.url.startswith(("http://", "https://")), f"{self.url} is not a server's address"
         assert self.model, "name the model the server runs"
         return base | {"TYPESAFE_BASE_URL": self.url, "TYPESAFE_DEFAULT_MODEL": self.model, "TYPESAFE_API_KEY": base.get("TYPESAFE_API_KEY") or "local"}

@@ -119,10 +119,15 @@ def pct(part: int, whole: int) -> str:
     return f"{100 * part / whole:.0f}%" if whole else "–"
 
 
-def seconds(value: float) -> str:
-    assert value >= 0, f"a duration is never negative, but got {value} s"
-    assert value < 3600, f"{value} s is not a plausible timing; check the units"
-    return f"{value * 1000:.0f} ms" if value < 1 else f"{value:.2f} s"
+def seconds(duration_seconds: float) -> str:
+    """Round a timing's display label to milliseconds or hundredths of a second.
+    Formatting never replaces or converts the numeric measurement kept in results.json."""
+    assert duration_seconds >= 0, f"a duration is never negative, but got {duration_seconds} s"
+    assert duration_seconds < 3600, f"{duration_seconds} s is not a plausible timing; check the units"
+    if duration_seconds < 1:
+        milliseconds = duration_seconds * 1000
+        return f"{milliseconds:.0f} ms"
+    return f"{duration_seconds:.2f} s"
 
 
 def codes(names: list[str]) -> str:
