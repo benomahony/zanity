@@ -39,6 +39,8 @@ const no_value: json.Value = .null;
 const max_header_lines = 16;
 /// The most messages one session handles; an editor sends far fewer in a working lifetime.
 const max_messages = 1 << 40;
+/// Bound the checker's diagnostic output independently of its JSON findings.
+const check_stderr_bytes = 64 * 1024;
 
 /// One finding of `zanity check --json`, as the server reads it back. Lines and columns count from 1.
 pub const Record = struct {
@@ -145,6 +147,14 @@ const Results = struct {
         if (file.first + file.count > all.len) assert.panic("{s}: its findings run to entry {d} of {d}; fix Results.add() to record the file's actual range", .{ file.path, file.first + file.count, all.len });
         if (file.first > all.len) assert.panic("{s}: its findings start at entry {d} of {d}; fix Results.add() to record the file's actual start", .{ file.path, file.first, all.len });
         return all[file.first..][0..file.count];
+    }
+
+    /// Borrows capture storage only after the previous findings and their sources were cleared.
+    fn outputBuffer(self: *const Results) []u8 {
+        if (self.entries.len != 0 or self.files.len != 0) assert.panic("reusing capture storage with {d} findings in {d} files; clear the results first", .{ self.entries.len, self.files.len });
+        if (self.text.used != 0) assert.panic("reusing capture storage with {d} bytes of source text; clear the results first", .{self.text.used});
+        if (self.output.len == 0) assert.panic("results have no capture storage; initialize them with initResults()", .{});
+        return self.output;
     }
 
     /// Reads a file into the results' text, or gives no bytes when it cannot be read whole.
@@ -394,16 +404,18 @@ pub const LanguageServer = struct {
     /// Runs this executable as `zanity check --json` in the root and reads its findings back into
     /// `into`; null, after telling the editor why, when the check fails.
     fn runCheck(self: *LanguageServer, into: *Results) !?[]const Record {
-        if (into.entries.len != 0) assert.panic("checking into results that hold {d} findings; clear them first", .{into.entries.len});
-        var output: std.heap.FixedBufferAllocator = .init(into.output);
-        const argv = [_][]const u8{ self.services.exe, "check", ".", "--json", "--quiet", "--no-color", "--infer" };
+        if (!std.fs.path.isAbsolute(self.root)) assert.panic("checking the relative workspace {s}; initialize() must select an absolute workspace first", .{self.root});
+        const buffer = into.outputBuffer();
+        var output: std.heap.FixedBufferAllocator = .init(buffer);
+        const services = self.services;
+        const argv = [_][]const u8{ services.exe, "check", ".", "--json", "--quiet", "--no-color", "--infer" };
         const result = std.process.run(output.allocator(), self.io, .{
-            .argv = argv[0..if (self.services.infer) argv.len else argv.len - 1],
+            .argv = argv[0..if (services.infer) argv.len else argv.len - 1],
             .cwd = .{ .path = self.root },
-            .stdout_limit = .limited(into.output.len / 2),
-            .stderr_limit = .limited(1 << 16),
+            .stdout_limit = .limited(buffer.len / 2),
+            .stderr_limit = .limited(check_stderr_bytes),
         }) catch |e| {
-            try self.show(1, try self.scratch.text.format("zanity could not run {s} check in {s}: {t}.", .{ self.services.exe, self.root, e }));
+            try self.show(1, try self.scratch.text.format("zanity could not run {s} check in {s}: {t}. Check that this executable can run and the workspace is readable, then save a file to retry.", .{ self.services.exe, self.root, e }));
             return null;
         };
         const ok = switch (result.term) {
@@ -411,11 +423,11 @@ pub const LanguageServer = struct {
             else => false,
         };
         if (!ok) {
-            try self.show(1, try self.scratch.text.format("zanity check failed in {s}: {s}", .{ self.root, std.mem.trim(u8, result.stderr, " \n") }));
+            try self.show(1, try self.scratch.text.format("zanity check failed in {s}: {s} Run zanity check --json in this workspace to diagnose the failure, then save a file to retry.", .{ self.root, std.mem.trim(u8, result.stderr, " \n") }));
             return null;
         }
         const records = json.parseFromSliceLeaky([]const Record, output.allocator(), result.stdout, .{ .ignore_unknown_fields = true }) catch |e| {
-            try self.show(1, try self.scratch.text.format("zanity could not read the findings of zanity check in {s}: {t}.", .{ self.root, e }));
+            try self.show(1, try self.scratch.text.format("zanity could not read the findings of zanity check in {s}: {t}. Rebuild or reinstall zanity and restart the language server; if the workspace has too many findings, open a smaller workspace.", .{ self.root, e }));
             return null;
         };
         for (records) |r| if (r.line == 0 or r.column == 0) assert.panic("{s}: zanity check reported line {d} column {d}; --json counts both from 1", .{ r.path, r.line, r.column });

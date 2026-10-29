@@ -588,8 +588,13 @@ fn runLsp(ctx: *zclig.Context, options: LspOptions) ![]const LspRow {
     const exe = std.process.executablePathAlloc(ws.io, ctx.allocator) catch |e| {
         return ctx.fail(.io, try ws.text.format("Could not find where this zanity is installed, to run its checks: {t}.", .{e}), "Reinstall it with install.sh, as the README describes.");
     };
+    // SQLite's configured heap is process-wide and must outlive every cached statement.
+    // Editor-session buffers and telemetry, by contrast, are released when stdio closes.
+    var session_memory = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer session_memory.deinit();
+    const session_allocator = session_memory.allocator();
     ws.source_cache = store.Store.initStore(std.heap.page_allocator, ws.io, environ, ws.limits.store_bytes) catch null;
-    var telemetry = Telemetry.initTelemetry(std.heap.page_allocator, ws.io, environ, app.version) catch null;
+    var telemetry = Telemetry.initTelemetry(session_allocator, ws.io, environ, app.version) catch null;
     const services: lsp.Services = .{
         .exe = exe,
         .version = app.version,
@@ -598,7 +603,7 @@ fn runLsp(ctx: *zclig.Context, options: LspOptions) ![]const LspRow {
         .telemetry = if (telemetry) |*t| t else null,
     };
     const out = ctx.runtime.out;
-    var server = try lsp.LanguageServer.initLanguageServer(std.heap.page_allocator, ws.io, out.writer, services);
+    var server = try lsp.LanguageServer.initLanguageServer(session_allocator, ws.io, out.writer, services);
     if (!try server.serveEditorStdio()) ctx.status = .failure;
     ctx.format = .plain;
     if (exe.len == 0) assert.panic("found this zanity at an empty path; executablePathAlloc() returns a path or fails", .{});
