@@ -282,14 +282,18 @@ fn listPredicate(name: []const u8, capture: u32, values: []const []const u8) Pre
 
 fn hasAncestor(node: ts.Node, kinds: []const []const u8) bool {
     if (kinds.len == 0) assert.panic("#has-ancestor? names no node kinds; list at least one after the capture", .{});
+    // The captured node belongs to the live syntax tree, and kinds come from the compiled
+    // language query. Tree size bounds every valid ancestor chain, including single-line trees.
+    const tree = node.tree orelse assert.panic("walking ancestors of a node with no live tree; retain the parsed tree until predicate evaluation finishes", .{});
+    const node_count = ts.ts_node_descendant_count(ts.ts_tree_root_node(tree));
     var current = node.parent();
-    for (0..ts.ts_node_start_point(node).row + 4096) |_| {
+    for (0..node_count) |_| {
         const ancestor = current orelse return false;
         const kind = std.mem.span(ts.ts_node_type(ancestor));
         for (kinds) |k| if (std.mem.eql(u8, k, kind)) return true;
         current = ancestor.parent();
     }
-    if (current == null) assert.panic("the ancestor walk from {s} at byte {d} ran out of steps on a null node instead of returning; the walk must stop at the root, so check its loop condition", .{ ts.ts_node_type(node), ts.ts_node_start_byte(node) });
+    if (current != null) assert.panic("the ancestor walk from {s} at byte {d} exceeded its tree's {d} nodes; retain a valid acyclic tree for predicate evaluation", .{ ts.ts_node_type(node), ts.ts_node_start_byte(node), node_count });
     return false;
 }
 
@@ -401,4 +405,29 @@ fn equalToString(nodes: []const ts.Node, value: []const u8, sense: Sense, text: 
     }
     if (nodes.len == 0 and !result) assert.panic("#eq? with '{s}' failed with no captures to compare; the predicate's capture must be in the same pattern, so fix it in the language's .scm files", .{value});
     return result;
+}
+
+test "ancestor predicates reach the root of deeply nested single-line source" {
+    const language = @import("language.zig");
+    const nesting = 4100;
+    const source = try std.testing.allocator.alloc(u8, nesting * 2 + 1);
+    defer std.testing.allocator.free(source);
+    @memset(source[0..nesting], '(');
+    source[nesting] = 'x';
+    @memset(source[nesting + 1 ..], ')');
+    const parser = ts.ts_parser_new() orelse return error.OutOfMemory;
+    defer ts.ts_parser_delete(parser);
+    _ = ts.ts_parser_set_language(parser, @ptrCast(language.forPath("a.py").?.grammar()));
+    const tree = ts.ts_parser_parse_string(parser, null, source.ptr, @intCast(source.len)) orelse return error.ParseFailed;
+    defer ts.ts_tree_delete(tree);
+    const root = ts.ts_tree_root_node(tree);
+    var leaf = root;
+    for (0..ts.ts_node_descendant_count(root)) |_| {
+        if (ts.ts_node_named_child_count(leaf) == 0) break;
+        leaf = ts.ts_node_named_child(leaf, 0);
+    }
+    try std.testing.expectEqualStrings("x", source[ts.ts_node_start_byte(leaf)..ts.ts_node_end_byte(leaf)]);
+    const root_kind = std.mem.span(ts.ts_node_type(root));
+    try std.testing.expect(hasAncestor(leaf, &.{root_kind}));
+    try std.testing.expect(!hasAncestor(leaf, &.{"absent_kind"}));
 }
