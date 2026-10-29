@@ -171,11 +171,8 @@ fn validateDownloadDestination(url: []const u8, authenticated: bool) !bool {
 
 /// Races the request against a deadline, joining cancellation before its buffers can be reused.
 fn fetchBeforeDeadline(client: *std.http.Client, options: std.http.Client.FetchOptions, timeout: Io.Duration) !std.http.Client.FetchResult {
-    if (timeout.nanoseconds <= 0) {
-        var buffer: [64]u8 = undefined;
-        const shown = std.fmt.bufPrint(&buffer, "{d}", .{timeout.nanoseconds}) catch unreachable;
-        assert.panic("download timeout is {s} ns; pass a positive request_timeout constant", .{shown});
-    }
+    var timeout_buffer: [64]u8 = undefined;
+    if (timeout.nanoseconds <= 0) assert.panic("download timeout is {s} ns; pass a positive request_timeout constant", .{std.fmt.bufPrint(&timeout_buffer, "{d}", .{timeout.nanoseconds}) catch unreachable});
     if (options.response_writer == null) assert.panic("download has no response writer; fetchBeforeDeadline() must receive its caller-owned output buffer", .{});
     const Race = Io.Select(union(enum) { fetched: std.http.Client.FetchError!std.http.Client.FetchResult, deadline: Io.Cancelable!void });
     var results: [2]Race.Union = undefined;
