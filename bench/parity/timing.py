@@ -10,8 +10,11 @@ import subprocess
 import sys
 import tempfile
 import time
-from dataclasses import dataclass
+import uuid
+from _thread import LockType
+from dataclasses import dataclass, field
 from pathlib import Path
+from threading import Lock
 
 from score import CORPUS, Zanity
 from tools import SOURCES, TOOLS
@@ -72,34 +75,56 @@ def bench_cli(zanity: Zanity, runs: int) -> dict[str, dict]:
 
 @dataclass
 class Session:
-    """A single-threaded benchmark client for a directly spawned child over private OS pipes.
-    Request IDs only correlate responses; they are neither credentials nor shared between threads."""
+    """One benchmark response reader for a directly spawned child over private OS pipes.
+    Writers serialize complete frames. Request IDs are correlation tags without shared counter
+    state; a failed write makes this session unusable and the benchmark owner disposes its child."""
 
     proc: subprocess.Popen
     started: float
-    last_request_id: int = 0
+    write_lock: LockType = field(default_factory=Lock, repr=False)
+    write_failed: bool = False
 
     def send(self, message: dict) -> None:
-        """Frame the benchmark's own message for its child; callers sequence LSP operations."""
-        body = json.dumps({"jsonrpc": "2.0", **message}).encode()
+        """Encode a strict JSON-RPC frame and finish its pipe write under one writer lock.
+        Polling cannot guarantee a child stays alive, so actual I/O failures poison the session
+        and propagate. Never retry a failed frame: the child may already have received it."""
+        assert message, "an LSP frame needs a request, notification or response; pass the protocol message"
         assert self.proc.stdin, "the server's stdin is not a pipe; start it with stdin=subprocess.PIPE"
-        assert self.proc.poll() is None, f"the server exited with {self.proc.returncode}; inspect its stderr and fix the server command"
-        self.proc.stdin.write(f"Content-Length: {len(body)}\r\n\r\n".encode() + body)
-        self.proc.stdin.flush()
+        body = json.dumps({**message, "jsonrpc": "2.0"}, allow_nan=False).encode()
+        body_bytes = len(body)
+        if body_bytes > MAX_MESSAGE_BYTES:
+            raise ValueError(f"LSP body has {body_bytes} bytes, above {MAX_MESSAGE_BYTES}; reduce the benchmark document or raise MAX_MESSAGE_BYTES")
+        frame = f"Content-Length: {body_bytes}\r\n\r\n".encode() + body
+        frame_bytes = len(frame)
+        with self.write_lock:
+            if self.write_failed:
+                raise OSError("this LSP session already had a failed write; dispose its child and create a new session instead of retrying a possibly delivered request")
+            sent = 0
+            try:
+                while sent < frame_bytes:
+                    written = self.proc.stdin.write(frame[sent:])
+                    if written is None or written <= 0:
+                        raise BrokenPipeError(f"LSP pipe stopped after {sent} of {frame_bytes} bytes; discard this session and restart the child")
+                    sent += written
+                self.proc.stdin.flush()
+            except (OSError, ValueError) as error:
+                self.write_failed = True
+                raise OSError(f"LSP frame failed after {sent} of {frame_bytes} bytes: {error}; dispose the child, fix its command, and start a new session without retrying this frame") from error
 
     def notify(self, method: str, params: dict) -> None:
         assert "/" in method or method in {"initialized", "exit"}, f"{method!r} isn't an LSP notification; pass a protocol method such as textDocument/didOpen"
         assert self.proc.poll() is None, f"the server exited with {self.proc.returncode} before {method}; inspect its stderr and fix the server command"
         self.send({"method": method, "params": params})
 
-    def request(self, method: str, params: dict) -> int:
-        """Assign this client's next response-correlation ID and send one LSP request.
-        IDs may have gaps after a failed write; they grant no authority or access."""
+    def request(self, method: str, params: dict) -> str:
+        """Send one request with an independent UUID response-correlation tag, not a credential.
+        No mutable ID counter can race or advance on failure. The caller sequences LSP methods;
+        send() propagates write failures and forbids reuse of a possibly desynchronised session."""
         assert method, "a request needs a method; pass the LSP method name"
-        assert self.last_request_id >= 0, f"request ids count up from 1, but the last was {self.last_request_id}; start a new Session at id 0"
-        self.last_request_id += 1
-        self.send({"id": self.last_request_id, "method": method, "params": params})
-        return self.last_request_id
+        assert self.proc.stdout, "a request needs a response pipe; start the child with stdout=subprocess.PIPE"
+        correlation_id = uuid.uuid4().hex
+        self.send({"id": correlation_id, "method": method, "params": params})
+        return correlation_id
 
     def receive_bytes(self, size: int, deadline: float) -> bytes:
         """Receive size bytes from the child's private stdout pipe before the deadline.
