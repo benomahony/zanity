@@ -1107,7 +1107,7 @@
  },
  {
   "id": "CWE-749",
-  "question": "Does the function expose a dangerous capability, such as running commands, reading files or evaluating code, through a public API or interface without restricting who can call it?",
+  "question": "Does the function expose a dangerous capability, such as running commands, reading files or evaluating code, to callers less trusted than the program itself, such as web requests, remote clients, plugins or other users, without restricting who can call it? Ignore a program, script or command-line tool that does these things itself for the person running it.",
   "message": "A dangerous operation is exposed without restriction. Remove it, or require authorisation to call it",
   "severity": "error",
   "scope": "function"
