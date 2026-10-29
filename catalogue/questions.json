@@ -2284,7 +2284,7 @@
  },
  {
   "id": "EXT-HUMAN-002",
-  "question": "Does the function perform a destructive action, such as deleting or overwriting, where the confirmation shown or requested may refer to a different target than the one actually affected, or where no confirmation is required?",
+  "question": "Does the function delete or overwrite data on a user's behalf, such as their files, records or accounts, where the confirmation shown or requested may refer to a different target than the one actually affected, or where no confirmation is required? Ignore removing files, folders or records that the same code or test created earlier in the run, such as temporary files and test fixtures.",
   "message": "The destructive action may not match what the user confirmed. Confirm the exact target, and act on that same target",
   "severity": "error",
   "scope": "function"
