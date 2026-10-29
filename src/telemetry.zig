@@ -174,22 +174,47 @@ fn nonEmpty(value: ?[]const u8) ?[]const u8 {
 }
 
 /// The headers of `OTEL_EXPORTER_OTLP_HEADERS`: comma-separated `name=value` pairs whose values
-/// may be percent-encoded, as Logfire's `Authorization=<token>` is written.
-pub fn initHeaders(gpa: Allocator, text: []const u8) ![]const std.http.Header {
-    const headers = try gpa.alloc(std.http.Header, max_headers);
-    var count: usize = 0;
-    var pairs = std.mem.tokenizeScalar(u8, text, ',');
-    for (0..max_headers) |_| {
-        const pair = pairs.next() orelse break;
+/// may be percent-encoded, as Logfire's `Authorization=<token>` is written. The caller owns
+/// the returned slice and every name/value; freeHeaders() releases all of them.
+pub fn initHeaders(gpa: Allocator, operator_config: []const u8) ![]const std.http.Header {
+    // The operator supplies exporter configuration, including reusable collector credentials.
+    // Split its encoded pairs before decoding values, so encoded commas remain in their value.
+    var headers: std.ArrayList(std.http.Header) = .empty;
+    errdefer {
+        for (headers.items) |header| {
+            gpa.free(header.name);
+            gpa.free(header.value);
+        }
+        headers.deinit(gpa);
+    }
+    try headers.ensureTotalCapacity(gpa, max_headers);
+    var pairs = std.mem.tokenizeScalar(u8, operator_config, ',');
+    while (pairs.next()) |pair| {
         const equals = std.mem.indexOfScalar(u8, pair, '=') orelse continue;
         const name = std.mem.trim(u8, pair[0..equals], " ");
         if (name.len == 0) continue;
-        headers[count] = .{ .name = try gpa.dupe(u8, name), .value = std.Uri.percentDecodeInPlace(try gpa.dupe(u8, std.mem.trim(u8, pair[equals + 1 ..], " "))) };
-        count += 1;
-    } else if (pairs.next() != null) return error.TooManyHeaders;
-    if (count > max_headers) assert.panic("parsed {d} headers; at most {d} are read; fix initHeaders() to stop at the limit", .{ count, max_headers });
-    if (count > std.mem.count(u8, text, "=")) assert.panic("parsed {d} headers from {d} '=' signs; fix initHeaders() to require one per header", .{ count, std.mem.count(u8, text, "=") });
-    return headers[0..count];
+        if (headers.items.len == max_headers) return error.TooManyHeaders;
+        const owned_name = try gpa.dupe(u8, name);
+        errdefer gpa.free(owned_name);
+        const encoded_value = try gpa.dupe(u8, std.mem.trim(u8, pair[equals + 1 ..], " "));
+        defer gpa.free(encoded_value);
+        const owned_value = try gpa.dupe(u8, std.Uri.percentDecodeInPlace(encoded_value));
+        headers.appendAssumeCapacity(.{ .name = owned_name, .value = owned_value });
+    }
+    if (headers.items.len > max_headers) assert.panic("parsed {d} headers; at most {d} are read; fix initHeaders() to stop at the limit", .{ headers.items.len, max_headers });
+    if (headers.items.len > std.mem.count(u8, operator_config, "=")) assert.panic("parsed {d} headers from {d} '=' signs; fix initHeaders() to require one per header", .{ headers.items.len, std.mem.count(u8, operator_config, "=") });
+    return headers.toOwnedSlice(gpa);
+}
+
+/// Releases the headers and strings returned by initHeaders(), using the same allocator.
+pub fn freeHeaders(gpa: Allocator, headers: []const std.http.Header) void {
+    if (headers.len > max_headers) assert.panic("freeing {d} exporter headers; initHeaders() returns at most {d}", .{ headers.len, max_headers });
+    for (headers) |header| {
+        if (header.name.len == 0) assert.panic("freeing an unnamed exporter header; freeHeaders() accepts only owned results of initHeaders()", .{});
+        gpa.free(header.name);
+        gpa.free(header.value);
+    }
+    gpa.free(headers);
 }
 
 test "OTLP headers are name=value pairs with percent-encoded values" {
