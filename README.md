@@ -589,13 +589,14 @@ No Zig code changes. Add:
 zig build test              # formatting, then unit, architecture and catalogue tests: the fast loop
 zig build test-integration  # the built zanity on the golden fixtures, --fix, the CLI, and its own source
 zig build test --fuzz=100K  # fuzz the checker with arbitrary bytes in every language
+./scripts/check-all         # optional full validation, including every release target
 ```
 
-`git config core.hooksPath .githooks` turns on the repository's hooks. `pre-commit` runs the same format check as CI. `pre-push` refuses to test a dirty or different checkout, then runs the complete CI gate: formatting, unit and integration tests, zanity's strict self-check, every release build, the generated catalogue check, and the feature-parity ratchet.
+`git config core.hooksPath .githooks` turns on the lightweight `pre-commit` formatting check. Pushes do not run local validation or require a clean working tree; CI validates pushed commits. Run `./scripts/check-all` when you want the full local gate: formatting, unit and integration tests, zanity's warning-level self-check, every release build, the generated catalogue check, and the feature-parity ratchet. It checks the current working tree, including uncommitted changes, and stops at the first failure. It requires Zig, Python 3 and `uv`; `uv` supplies the pinned PyYAML dependency for catalogue generation.
 
 `python3 bench/parity/ratchet.py` protects every covered comparison fixture, inference question, and language/rule match count in `bench/parity/results.json`. After the full parity benchmark improves coverage, run it with `--write` and commit the raised `bench/parity/floors.json`; it refuses to write over a regression.
 
-Zig does not prune `.zig-cache`; run `./scripts/zig-cache` when its old content is no longer worth keeping. The pre-push hook warns above 10 GB without deleting anything. Set `ZANITY_ZIG_CACHE_WARN_MB` to choose a different warning threshold.
+Zig does not prune `.zig-cache`; run `./scripts/zig-cache` when its old content is no longer worth keeping. `./scripts/check-all` also runs `./scripts/zig-cache --check`, which warns above 10 GB without deleting anything. Set `ZANITY_ZIG_CACHE_WARN_MB` to choose a different warning threshold.
 
 Native test parity covers all nine adapters, including Zig, C# and Swift. `zig build test` requires a positive golden case for each of 12 common deterministic test checks in every language; `zig build test-integration` runs those cases through the binary and verifies the exact findings, including negative controls. Framework assertions include Zig's `std.testing.expect`, equality, string, slice and approximate comparisons. This native gate is independent of the six-language bonsai comparison, whose reference tool does not support Zig, C# or Swift.
 

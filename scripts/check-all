@@ -1,0 +1,21 @@
+#!/bin/sh
+# Run the full validation gate explicitly; CI remains authoritative for pushed commits.
+set -eu
+
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+
+echo "check-all: running the full validation gate" >&2
+zig fmt --check build.zig build.zig.zon src languages/*.zig languages/*.zon
+zig build test test-integration --summary all
+zig build
+./zig-out/bin/zanity check . --fail-on warning
+zig build release
+uv run --with 'PyYAML==6.0.3' python catalogue/sync.py
+python3 catalogue/triage.py
+git diff --exit-code -- catalogue
+python3 -m unittest bench.parity.test_page bench.parity.test_ratchet
+python3 bench/parity/ratchet.py
+python3 bench/parity/page.py
+git diff --exit-code -- docs/content/comparison
+./scripts/zig-cache --check

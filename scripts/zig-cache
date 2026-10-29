@@ -18,7 +18,7 @@ case "${1:-}" in
         used_kb=$(size_kb)
         if [ "$used_kb" -gt "$((limit_mb * 1024))" ]; then
             used_mb=$(((used_kb + 1023) / 1024))
-            echo "pre-push: .zig-cache is ${used_mb} MB; run ./scripts/zig-cache to reclaim it" >&2
+            echo "zig-cache: .zig-cache is ${used_mb} MB; run ./scripts/zig-cache to reclaim it" >&2
         fi
         ;;
     "")
