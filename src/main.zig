@@ -25,6 +25,7 @@ const Live = @import("live.zig").Live;
 const config = @import("config.zig");
 const starter = @import("init.zig");
 const upgrade = @import("upgrade.zig");
+const Notice = @import("notice.zig").Notice;
 const edits = @import("edits.zig");
 const calibrate = @import("calibrate.zig");
 const lsp = @import("lsp.zig");
@@ -179,6 +180,8 @@ const Workspace = struct {
     chose_format: bool = false,
     inference: ?infer.Inference = null,
     source_cache: ?store.Store = null,
+    /// The notice after a check a person reads, when a newer release is out.
+    notice: Notice = .{},
     cache_hits: usize = 0,
     checkers: [language.count]?check.Checker = @splat(null),
     checker_rules: rules.Set = .{},
@@ -298,6 +301,8 @@ fn runCheck(ctx: *zclig.Context, options: CheckOptions) ![]const Row {
     const agent = try speaksToAgent(ctx, ws, options.agent or options.all);
     const settings = try loadSettings(ctx, ws, std.heap.page_allocator);
     if (options.watch) return watchCheck(ctx, ws, options, agent);
+    startNotice(ctx, ws, options, agent);
+    errdefer ws.notice.cancel(ws.io);
     ws.settings = &settings;
     defer ws.settings = null;
     rules.custom = settings.questionRules();
@@ -562,6 +567,19 @@ fn renderHuman(ctx: *zclig.Context, rows: []const Row) !void {
     try report.render(.{ .console = console(ctx, ctx.runtime.out), .scratch = &ws.table, .text = &ws.text }, findings);
     try report.summarise(console(ctx, ctx.runtime.err), report.count(findings, ws.checked + ws.project_files.len));
     if (ws.checked > ws.files.len) assert.panic("checked {d} files out of {d} collected; count a file as checked only once, in checkFiles()", .{ ws.checked, ws.files.len });
+    const err = ctx.runtime.err;
+    try ws.notice.finish(ws.io, err.writer, app.version);
+}
+
+/// Starts the newer-release notice when a person reads the check at a terminal; agents, --json,
+/// --plain, --quiet and pipes get none.
+fn startNotice(ctx: *zclig.Context, ws: *Workspace, options: CheckOptions, agent: bool) void {
+    if (agent and ws.chose_format) assert.panic("writing for an agent although the command line chose --json or --plain; speaksToAgent() must refuse that", .{});
+    if (ws.chose_format and ctx.format == .human) assert.panic("the command line chose --json or --plain, but zclig formats for a person; zclig sets the format before running the command", .{});
+    const environ = ws.environ orelse assert.panic("zanity check ran without the environment; main() passes it to the workspace", .{});
+    const err = ctx.runtime.err;
+    const person = !agent and !ws.chose_format and !triage.special(options) and ctx.format == .human and !ctx.quiet and err.capabilities.interactive;
+    if (person) ws.notice.start(ws.io, environ, app.version);
 }
 
 fn runLsp(ctx: *zclig.Context, options: LspOptions) ![]const LspRow {

@@ -450,15 +450,24 @@ fn initPath(gpa: Allocator, io: Io, environ: *const std.process.Environ.Map) ![:
         if (path.len == 0) assert.panic("ZANITY_STORE is set but empty; unset it or name a file", .{});
         return gpa.dupeSentinel(u8, path, 0);
     }
-    const cache = if (environ.get("XDG_CACHE_HOME")) |xdg| try gpa.dupe(u8, xdg) else blk: {
-        const home = environ.get("HOME") orelse return error.StoreUnavailable;
-        break :blk try std.fs.path.join(gpa, &.{ home, ".cache" });
-    };
-    const dir = try std.fs.path.join(gpa, &.{ cache, "zanity" });
-    Io.Dir.cwd().createDirPath(io, dir) catch return error.StoreUnavailable;
-    const path = try std.fs.path.joinZ(gpa, &.{ dir, store_name });
+    var dir_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const path = try std.fs.path.joinZ(gpa, &.{ try cacheDir(&dir_buffer, io, environ), store_name });
     if (!std.mem.endsWith(u8, path, store_name)) assert.panic("the store path {s} does not end in {s}; initPath() must join the cache directory with it", .{ path, store_name });
     return path;
+}
+
+/// zanity's folder of the user's cache directory, written into `buffer` and created if it is missing.
+pub fn cacheDir(buffer: []u8, io: Io, environ: *const std.process.Environ.Map) ![]const u8 {
+    if (buffer.len < std.fs.max_path_bytes) assert.panic("the cache directory gets {d} bytes, less than a path may need; pass a buffer of std.fs.max_path_bytes", .{buffer.len});
+    const sep = std.fs.path.sep_str;
+    const named = if (environ.get("XDG_CACHE_HOME")) |xdg|
+        std.fmt.bufPrint(buffer, "{s}" ++ sep ++ "zanity", .{xdg})
+    else
+        std.fmt.bufPrint(buffer, "{s}" ++ sep ++ ".cache" ++ sep ++ "zanity", .{environ.get("HOME") orelse return error.StoreUnavailable});
+    const dir = named catch return error.StoreUnavailable;
+    Io.Dir.cwd().createDirPath(io, dir) catch return error.StoreUnavailable;
+    if (!std.mem.endsWith(u8, dir, "zanity")) assert.panic("the cache directory {s} is not zanity's folder; cacheDir() must join the cache directory with it", .{dir});
+    return dir;
 }
 
 fn prepare(db: *sqlite3, sql: []const u8) !*sqlite3_stmt {

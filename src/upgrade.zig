@@ -1,6 +1,7 @@
 //! `zanity upgrade`: replaces the running zanity with a GitHub release, checked against the SHA-256
-//! GitHub records for it, as install.sh does. With --infer, it is the only part of zanity that
-//! uses the network.
+//! GitHub records for it, as install.sh does. It also looks up the latest release, at most once
+//! a day, for the notice `zanity check` shows when a newer one is out. With --infer, it is the
+//! only part of zanity that uses the network.
 const std = @import("std");
 const builtin = @import("builtin");
 const assert = @import("assert.zig");
@@ -170,6 +171,107 @@ pub fn replace(io: Io, path: []const u8, bytes: []const u8) !void {
 test "the asset name matches a release platform" {
     try std.testing.expect(std.mem.startsWith(u8, asset_name, "zanity-"));
     try std.testing.expect(std.mem.indexOfScalar(u8, asset_name, '-') != std.mem.lastIndexOfScalar(u8, asset_name, '-'));
+}
+
+/// How long GitHub's answer about the latest release is trusted before `zanity check` asks again.
+pub const notice_seconds = 24 * 60 * 60;
+/// The file in zanity's cache directory that keeps GitHub's last answer between runs.
+const notice_name = "latest-release";
+
+/// A release version kept without allocating, as the task that looks it up hands it back.
+pub const Version = struct {
+    bytes: [32]u8 = undefined,
+    len: u8 = 0,
+
+    /// The version, or null when `text` is not a `major.minor.patch` that fits.
+    pub fn of(text: []const u8) ?Version {
+        if (text.len > 32 or parseVersion(text) == null) return null;
+        var version: Version = .{ .len = @intCast(text.len) };
+        @memcpy(version.bytes[0..text.len], text);
+        if (!std.mem.eql(u8, version.slice(), text)) assert.panic("kept version '{s}' as '{s}'; Version.of() must copy every byte", .{ text, version.slice() });
+        if (parseVersion(version.slice()) == null) assert.panic("kept '{s}', which is not a version; Version.of() must refuse it", .{version.slice()});
+        return version;
+    }
+
+    pub fn slice(version: *const Version) []const u8 {
+        if (version.len == 0) assert.panic("reading an empty version; build it with Version.of()", .{});
+        if (version.len > version.bytes.len) assert.panic("a version of {d} bytes in room for {d}; build it with Version.of()", .{ version.len, version.bytes.len });
+        return version.bytes[0..version.len];
+    }
+};
+
+/// GitHub's last answer about the latest release and when it gave it, kept as `<unix seconds> <version>`.
+pub const Seen = struct {
+    at: i64,
+    version: Version,
+
+    /// The answer kept in `text`, or null when it is missing or not one zanity wrote.
+    pub fn parse(text: []const u8) ?Seen {
+        var words = std.mem.tokenizeAny(u8, text, " \n");
+        const at = std.fmt.parseInt(i64, words.next() orelse return null, 10) catch return null;
+        const version = Version.of(words.next() orelse return null) orelse return null;
+        if (words.next() != null) return null;
+        if (version.len == 0) assert.panic("parsed an empty version from '{s}'; Version.of() must refuse it", .{text});
+        if (std.mem.indexOf(u8, text, version.slice()) == null) assert.panic("parsed version {s} from '{s}', which does not hold it", .{ version.slice(), text });
+        return .{ .at = at, .version = version };
+    }
+
+    /// Whether the answer is under a day old at `now`; one from the future is not trusted.
+    pub fn fresh(seen: Seen, now: i64) bool {
+        const trusted = seen.at <= now and now - seen.at < notice_seconds;
+        if (trusted and seen.at > now) assert.panic("trusted an answer kept at {d}, after now, {d}", .{ seen.at, now });
+        if (trusted and now - seen.at >= notice_seconds) assert.panic("trusted an answer {d} seconds old, past the {d} it is trusted for", .{ now - seen.at, notice_seconds });
+        return trusted;
+    }
+};
+
+/// The latest release: GitHub's answer kept in `dir` when it is under a day old at `now`,
+/// otherwise GitHub's answer now, which is kept for the next run. Null when neither can say,
+/// because a notice about a newer release must never stop a check.
+pub fn latestRelease(io: Io, dir: []const u8, now: i64) ?Version {
+    if (dir.len == 0) assert.panic("looking for the kept release in an unnamed directory; pass store.cacheDir()", .{});
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const path = std.fmt.bufPrint(&path_buffer, "{s}" ++ std.fs.path.sep_str ++ notice_name, .{dir}) catch return null;
+    var kept_buffer: [64]u8 = undefined;
+    const kept = Io.Dir.cwd().readFile(io, path, &kept_buffer) catch "";
+    if (Seen.parse(kept)) |seen| if (seen.fresh(now)) return seen.version;
+    const version = askGitHub(io) orelse return null;
+    var line_buffer: [64]u8 = undefined;
+    const line = std.fmt.bufPrint(&line_buffer, "{d} {s}\n", .{ now, version.slice() }) catch return version;
+    if (Seen.parse(line) == null) assert.panic("wrote '{s}', which Seen.parse() cannot read back", .{line});
+    // Without the kept answer the next run asks GitHub again, which costs only time.
+    Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = line }) catch return version;
+    return version;
+}
+
+/// GitHub's latest release, or null when it cannot be reached or its answer cannot be read.
+fn askGitHub(io: Io) ?Version {
+    var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var client: std.http.Client = .{ .allocator = allocator, .io = io };
+    defer client.deinit();
+    var url_buffer: [256]u8 = undefined;
+    var url: Io.Writer = .fixed(&url_buffer);
+    const address = releaseUrl(&url, null) catch return null;
+    if (!std.mem.endsWith(u8, address, "/releases/latest")) assert.panic("asked {s} for the latest release; releaseUrl() with no version names the latest", .{address});
+    var body: Io.Writer.Allocating = .init(allocator);
+    const status = get(&client, address, &body, null) catch return null;
+    if (status != .ok) return null;
+    const release = parseRelease(allocator, body.written()) catch return null;
+    if (release.tag_name.len == 0) assert.panic("GitHub's latest release has an empty tag; parseRelease() must refuse it", .{});
+    return Version.of(release.tag_name);
+}
+
+test "a kept answer is read back, and is trusted for a day" {
+    const seen = Seen.parse("1000 0.1.34\n").?;
+    try std.testing.expectEqualStrings("0.1.34", seen.version.slice());
+    try std.testing.expect(seen.fresh(1000 + notice_seconds - 1));
+    try std.testing.expect(!seen.fresh(1000 + notice_seconds));
+    try std.testing.expect(!seen.fresh(999));
+    try std.testing.expectEqual(null, Seen.parse(""));
+    try std.testing.expectEqual(null, Seen.parse("1000 dev\n"));
+    try std.testing.expectEqual(null, Seen.parse("1000 0.1.34 extra\n"));
 }
 
 test "versions compare numerically, with or without v, and dev builds don't compare" {

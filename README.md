@@ -49,6 +49,8 @@ zanity upgrade --to 0.1.4 # install that release instead, even an older one
 
 It checks the download against the SHA-256 GitHub lists for the release before it replaces the running binary, and leaves it untouched if anything fails. Set `GITHUB_TOKEN` if GitHub's rate limit for anonymous requests gets in the way. A zanity installed by mise or Homebrew is left to that tool to upgrade, and one built from source needs `--to`, since `dev` is no release.
 
+When a newer release is out, `zanity check` ends with a line saying so, naming the command that installs it. It asks GitHub at most once a day, while the check runs, keeps the answer in `~/.cache/zanity/latest-release`, and waits at most half a second for it once the check is done. The line appears only on a terminal: never in `--agent`, `--json`, `--plain` or `--quiet` output, piped output, a build from source, or when `CI` or `ZANITY_NO_UPDATE_NOTIFIER` is set.
+
 If you use [mise](https://mise.jdx.dev), `mise use -g github:benomahony/zanity` installs and updates it, as does [eget](https://github.com/zyedidia/eget) with `eget benomahony/zanity`. Or download `zanity-<os>-<arch>` from the release page yourself: it is a single file with nothing else to install, and the Linux builds are static, so they run on any distribution.
 
 ### From source
