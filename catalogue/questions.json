@@ -2158,7 +2158,7 @@
  },
  {
   "id": "EXT-DISTRIBUTED-001",
-  "question": "Does the function perform a side effect that must happen once, such as charging, sending or creating a record, in a way that a retry, redelivered message or repeated request would repeat, with no idempotency key or deduplication?",
+  "question": "Does the function handle a request or message that can be retried or delivered more than once, such as a webhook, queue consumer or API handler, and perform a side effect there that must happen once, such as charging, sending or creating a record, with no idempotency key or deduplication? Ignore bookkeeping in memory within one run, and writes that are already idempotent, such as upserts keyed by the data's identity.",
   "message": "A retry or duplicate delivery repeats a side effect that must happen once. Deduplicate with a stable request identity or idempotency key",
   "severity": "error",
   "scope": "function"
