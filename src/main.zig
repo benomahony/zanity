@@ -32,6 +32,7 @@ const lsp = @import("lsp.zig");
 const watch = @import("watch.zig");
 const Telemetry = @import("telemetry.zig").Telemetry;
 const Facts = @import("facts.zig").Facts;
+const workspace_init = @import("workspace_init.zig");
 const Finding = @import("facts.zig").Finding;
 
 const CheckOptions = triage.CheckOptions;
@@ -193,35 +194,6 @@ const Workspace = struct {
     baseline_buffer: []u8,
     history: @import("history.zig").History,
 
-    fn initWorkspace(gpa: Allocator, limits: memory.Limits) Allocator.Error!*Workspace {
-        if (limits.files == 0) assert.panic("memory.Limits.files is 0, so zanity could not check any file", .{});
-        if (limits.file_bytes == 0) assert.panic("memory.Limits.file_bytes is 0, so zanity could not read any file", .{});
-        const ws = try gpa.create(Workspace);
-        ws.* = .{
-            .limits = limits,
-            .text = try .initText(gpa, limits.text_bytes),
-            .facts = undefined,
-            .naming = try .initNamingScratch(gpa, limits),
-            .liveness = try .initLiveScratch(gpa, limits),
-            .graph = try .initGraphScratch(gpa, limits),
-            .findings = try .initBounded(gpa, limits.findings, "findings across all files"),
-            .files = try .initBounded(gpa, limits.files, "files"),
-            .project_files = try .initBounded(gpa, 1024, "project files"),
-            .dirs = try .initBounded(gpa, limits.files, "directories"),
-            .order = try memory.reserveUninitialized(gpa, batch.Sized, limits.files),
-            .rows = try .initBounded(gpa, std.math.mul(usize, limits.findings, 2) catch return error.OutOfMemory, "findings and resolved baseline entries"),
-            .table = try .initTableScratch(gpa, limits.files),
-            .history = try .initHistory(gpa, limits.findings),
-            .baseline_buffer = try memory.reserveUninitialized(gpa, u8, 1 << 28),
-            .source = try memory.reserveUninitialized(gpa, u8, std.math.add(usize, limits.file_bytes, 1) catch return error.OutOfMemory),
-            .fixed = try memory.reserveUninitialized(gpa, u8, std.math.mul(usize, limits.file_bytes, 2) catch return error.OutOfMemory),
-            .analysis = try memory.reserveUninitialized(gpa, u8, limits.analysis_bytes),
-            .ignore = try .initIgnore(gpa, limits),
-        };
-        ws.facts = try .initFacts(gpa, limits, &ws.text);
-        return ws;
-    }
-
     /// Compiles the queries of each language the run will check, and only those.
     fn initCheckers(ws: *Workspace, gpa: Allocator, selected: rules.Set) !void {
         if (selected.len == 0) assert.panic("compiling checkers with no rules selected; runCheck always selects at least one", .{});
@@ -274,8 +246,7 @@ pub fn main(init: std.process.Init) !u8 {
     var out_writer: Io.File.Writer = .initStreaming(.stdout(), init.io, &out_buffer);
     var err_buffer: [4096]u8 = undefined;
     var err_writer: Io.File.Writer = .initStreaming(.stderr(), init.io, &err_buffer);
-    const ws = try Workspace.initWorkspace(std.heap.page_allocator, .{});
-    ws.io = init.io;
+    const ws = try workspace_init.initWorkspace(Workspace, std.heap.page_allocator, init.io, .{});
     ws.environ = init.environ_map;
     const rest = args[1..];
     ws.args = rest;
@@ -410,8 +381,7 @@ fn watchCheck(ctx: *zclig.Context, ws: *Workspace, options: CheckOptions, asked_
     var roots: [max_watch_args][]const u8 = undefined;
     var trees: [max_watch_args][]const u8 = undefined;
     try startWatching(ctx, ws, paths, .{ .watcher = &watcher, .filter = &filter, .roots = roots[0..paths.len], .trees = trees[0..paths.len] });
-    const checks = try Workspace.initWorkspace(std.heap.page_allocator, ws.limits);
-    checks.io = ws.io;
+    const checks = try workspace_init.initWorkspace(Workspace, std.heap.page_allocator, ws.io, ws.limits);
     checks.environ = ws.environ;
     checks.args = ws.args;
     checks.chose_format = ws.chose_format;
