@@ -15,6 +15,7 @@ extern fn sqlite3_open_v2(filename: [*:0]const u8, db: *?*sqlite3, flags: c_int,
 extern fn sqlite3_busy_timeout(db: *sqlite3, ms: c_int) c_int;
 extern fn sqlite3_exec(db: *sqlite3, sql: [*:0]const u8, callback: ?*const anyopaque, arg: ?*anyopaque, errmsg: ?*?[*:0]u8) c_int;
 extern fn sqlite3_errmsg(db: *sqlite3) [*:0]const u8;
+extern fn sqlite3_errcode(db: *sqlite3) c_int;
 extern fn sqlite3_prepare_v2(db: *sqlite3, sql: [*]const u8, n: c_int, stmt: *?*sqlite3_stmt, tail: ?*?[*]const u8) c_int;
 extern fn sqlite3_reset(stmt: *sqlite3_stmt) c_int;
 extern fn sqlite3_step(stmt: *sqlite3_stmt) c_int;
@@ -448,13 +449,21 @@ pub const Store = struct {
 const store_name = "zanity.db";
 
 /// Where the store lives: `ZANITY_STORE`, or zanity.db in zanity's folder of the user's cache directory.
-fn initPath(gpa: Allocator, io: Io, environ: *const std.process.Environ.Map) ![:0]const u8 {
-    if (environ.get("ZANITY_STORE")) |path| {
-        if (path.len == 0) assert.panic("ZANITY_STORE is set but empty; unset it or name a file", .{});
-        return gpa.dupeSentinel(u8, path, 0);
+fn initPath(gpa: Allocator, io: Io, operator_environ: *const std.process.Environ.Map) ![:0]const u8 {
+    // The person running zanity chooses this local cache path through their own environment.
+    if (operator_environ.get("ZANITY_STORE")) |path| {
+        if (path.len == 0 or std.mem.indexOfScalar(u8, path, 0) != null) {
+            const reason = "ZANITY_STORE is empty or contains a NUL byte; unset it or name a writable SQLite file";
+            failure_len = reason.len;
+            @memcpy(failure[0..failure_len], reason);
+            return error.StoreUnavailable;
+        }
+        const owned = try gpa.dupeSentinel(u8, path, 0);
+        if (owned.len != path.len) assert.panic("copied {d} bytes of the {d}-byte store path; dupeSentinel() must retain the whole operator-supplied path", .{ owned.len, path.len });
+        return owned;
     }
     var dir_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const path = try std.fs.path.joinZ(gpa, &.{ try cacheDir(&dir_buffer, io, environ), store_name });
+    const path = try std.fs.path.joinZ(gpa, &.{ try cacheDir(&dir_buffer, io, operator_environ), store_name });
     if (!std.mem.endsWith(u8, path, store_name)) assert.panic("the store path {s} does not end in {s}; initPath() must join the cache directory with it", .{ path, store_name });
     return path;
 }
@@ -507,6 +516,8 @@ fn bindInt(stmt: *sqlite3_stmt, index: c_int, value: u64) !void {
 fn captureDatabaseFailure(db: *sqlite3) error{StoreUnavailable} {
     // failure and failure_len are threadlocal, so a different worker cannot replace this cause.
     // Callers still own the connection here, so its message is copied before any next operation.
+    const code = sqlite3_errcode(db);
+    if (code == ok or code == row or code == done) assert.panic("capturing SQLite failure after successful status {d}; call captureDatabaseFailure() only after an operation reports an error", .{code});
     const message = std.mem.span(sqlite3_errmsg(db));
     if (message.len == 0) assert.panic("SQLite reported a failure with no message; check the store file with the sqlite3 command-line tool", .{});
     failure_len = @min(message.len, failure.len);
