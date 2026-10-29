@@ -599,9 +599,7 @@ fn runLsp(ctx: *zclig.Context, options: LspOptions) ![]const LspRow {
     };
     const out = ctx.runtime.out;
     var server = try lsp.LanguageServer.initLanguageServer(std.heap.page_allocator, ws.io, out.writer, services);
-    var in_buffer: [64 * 1024]u8 = undefined;
-    var in = Io.File.stdin().readerStreaming(ws.io, &in_buffer);
-    if (!try server.serve(&in.interface)) ctx.status = .failure;
+    if (!try server.serveEditorStdio()) ctx.status = .failure;
     ctx.format = .plain;
     if (exe.len == 0) assert.panic("found this zanity at an empty path; executablePathAlloc() returns a path or fails", .{});
     if (ctx.format != .plain) assert.panic("zanity lsp left the {t} format on, which would print an empty result after the protocol", .{ctx.format});
@@ -714,7 +712,7 @@ fn fetchRelease(up: *Upgrader, version: ?[]const u8) !upgrade.Release {
     var url_buffer: [256]u8 = undefined;
     var url: std.Io.Writer = .fixed(&url_buffer);
     var body: std.Io.Writer.Allocating = .init(ctx.allocator);
-    const status = upgrade.get(&up.client, try upgrade.releaseUrl(&url, version), &body, if (token) |t| (if (t.len == 0 or std.mem.indexOfAny(u8, t, "\r\n") != null) null else t) else null) catch |e| {
+    const status = upgrade.downloadInto(&up.client, try upgrade.releaseUrl(&url, version), &body, if (token) |t| (if (t.len == 0 or std.mem.indexOfAny(u8, t, "\r\n") != null) null else t) else null) catch |e| {
         return ctx.fail(.io, try ws.text.format("Could not reach GitHub to find the release: {t}.", .{e}), "Check the network connection, then run zanity upgrade again.");
     };
     switch (status) {
@@ -742,7 +740,7 @@ fn replaceExecutable(up: *Upgrader, path: []const u8, asset: upgrade.Release.Ass
         return ctx.fail(.usage, try ws.text.format("The release lists no SHA-256 for {s}, so its download cannot be checked.", .{asset.name}), "Download it from " ++ upgrade.releases_url ++ " and check it yourself, or install with install.sh.");
     };
     var body: std.Io.Writer.Allocating = .init(ctx.allocator);
-    const status = upgrade.get(&up.client, asset.browser_download_url, &body, null) catch |e| {
+    const status = upgrade.downloadInto(&up.client, asset.browser_download_url, &body, null) catch |e| {
         return ctx.fail(.io, try ws.text.format("Could not download {s}: {t}.", .{ asset.browser_download_url, e }), "Check the network connection, then run zanity upgrade again.");
     };
     if (status != .ok) return ctx.fail(.io, try ws.text.format("GitHub answered {d} to the download of {s}.", .{ @backingInt(status), asset.browser_download_url }), "Run zanity upgrade again; this zanity is unchanged.");

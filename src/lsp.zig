@@ -245,16 +245,25 @@ pub const LanguageServer = struct {
         };
     }
 
-    /// Answers the editor until it says `exit` or closes stdin. Returns whether it shut down first,
-    /// as the protocol asks of a clean exit.
-    pub fn serve(self: *LanguageServer, in: *Io.Reader) !bool {
+    /// Answers the launching editor over inherited stdio until `exit` or EOF. Returns whether
+    /// it shut down first, as the protocol asks of a clean exit.
+    pub fn serveEditorStdio(self: *LanguageServer) !bool {
+        // The launching editor owns this process's stdin/stdout descriptors. This session runs
+        // with that editor's OS permissions; the transport is its local process pipe.
+        var buffer: [64 * 1024]u8 = undefined;
+        var parent_stdin = Io.File.stdin().readerStreaming(self.io, &buffer);
         if (self.inbox.len == 0) assert.panic("serving with no room for a message; initLanguageServer() reserves it", .{});
         if (self.outbox.len == 0) assert.panic("serving with no room to answer; initLanguageServer() reserves it", .{});
         for (0..max_messages) |_| {
             self.scratch.clear();
-            const body = try readMessage(in, self.inbox) orelse return self.shut_down;
-            const parsed = json.parseFromSliceLeaky(json.Value, self.scratch.parse.allocator(), body, .{}) catch {
-                try self.sendError(.null, -32700, try self.scratch.text.format("The {d}-byte message is not JSON.", .{body.len}));
+            const body = try readMessage(&parent_stdin.interface, self.inbox) orelse return self.shut_down;
+            const parsed = json.parseFromSliceLeaky(json.Value, self.scratch.parse.allocator(), body, .{}) catch |e| {
+                const exhausted = e == error.OutOfMemory;
+                const message = if (exhausted)
+                    try self.scratch.text.format("The {d}-byte message exceeds this server's JSON parsing memory; send a smaller message.", .{body.len})
+                else
+                    try self.scratch.text.format("The {d}-byte message is not valid JSON; send a JSON-RPC 2.0 object encoded as JSON.", .{body.len});
+                try self.sendError(.null, if (exhausted) -32603 else -32700, message);
                 continue;
             };
             if (member(parsed, "method") == null and (member(parsed, "result") != null or member(parsed, "error") != null)) continue;

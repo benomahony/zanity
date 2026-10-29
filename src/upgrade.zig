@@ -15,6 +15,8 @@ pub const asset_name = "zanity-" ++ @tagName(builtin.os.tag) ++ "-" ++ @tagName(
 /// Larger than any release binary, so a runaway download stops instead of filling memory.
 const max_binary_bytes = 256 * 1024 * 1024;
 const max_release_bytes = 1024 * 1024;
+/// Bounds the whole HTTP exchange, including connection, response headers and body.
+const request_timeout: Io.Duration = .fromSeconds(60);
 
 /// What GitHub's API says about a release, keeping only the fields an upgrade reads.
 pub const Release = struct {
@@ -99,7 +101,7 @@ pub fn releaseUrl(text: *std.Io.Writer, version: ?[]const u8) ![]const u8 {
 pub fn matches(bytes: []const u8, digest: []const u8) bool {
     const prefix = "sha256:";
     if (!std.mem.startsWith(u8, digest, prefix)) return false;
-    if (bytes.len > max_binary_bytes) assert.panic("hashing a {d}-byte download, past the {d} get() allows; reject it before calling matches()", .{ bytes.len, max_binary_bytes });
+    if (bytes.len > max_binary_bytes) assert.panic("hashing a {d}-byte download, past the {d} downloadInto() allows; reject it before calling matches()", .{ bytes.len, max_binary_bytes });
     var hash: [std.crypto.hash.sha2.Sha256.digest_length]u8 = undefined;
     std.crypto.hash.sha2.Sha256.hash(bytes, &hash, .{});
     const hex = std.fmt.bytesToHex(hash, .lower);
@@ -125,9 +127,11 @@ const managers = [_]Manager{
     .{ .marker = "/.cache/pre-commit/", .name = "pre-commit", .command = "pre-commit autoupdate" },
 };
 
-/// GETs `url` into `out`, sending GitHub's API headers and, when given, a token for its rate limit.
-pub fn get(client: *std.http.Client, url: []const u8, out: *Io.Writer.Allocating, token: ?[]const u8) !std.http.Status {
-    if (url.len == 0) assert.panic("fetching an empty URL; build it with releaseUrl() or take it from the release", .{});
+/// Downloads a response into the caller-owned output buffer. The optional token is the
+/// operator's GitHub API credential; this client sends it and never verifies caller identities.
+/// Token-bearing requests cannot redirect. Response bytes are bounded while streaming.
+pub fn downloadInto(client: *std.http.Client, url: []const u8, out: *Io.Writer.Allocating, token: ?[]const u8) !std.http.Status {
+    const api_host = try validateDownloadDestination(url, token != null);
     var authorization: [512]u8 = undefined;
     const bearer: std.http.Client.Request.Headers.Value = if (token) |t| .{ .override = try std.fmt.bufPrint(&authorization, "Bearer {s}", .{t}) } else .default;
     if (out.written().len > max_binary_bytes) return error.StreamTooLong;
@@ -135,18 +139,67 @@ pub fn get(client: *std.http.Client, url: []const u8, out: *Io.Writer.Allocating
     // std.http drops privileged_headers without sending them, so the token goes in the
     // authorization header, which a redirect would carry to any host; a request with a token
     // therefore follows no redirect, as GitHub's API needs none.
-    const result = client.fetch(.{
+    const result = fetchBeforeDeadline(client, .{
         .location = .{ .url = url },
         .response_writer = &download.writer,
         .headers = .{ .user_agent = .{ .override = "zanity-upgrade" }, .authorization = bearer },
         .extra_headers = &.{.{ .name = "accept", .value = "application/vnd.github+json, application/octet-stream" }},
         .redirect_behavior = if (token == null) null else .not_allowed,
-    }) catch |e| {
+    }, request_timeout) catch |e| {
         if (download.exceeded) return error.StreamTooLong;
         return e;
     };
     if ((bearer == .override) != (token != null)) assert.panic("sending {t} authorization with {s} token for {s}", .{ bearer, if (token == null) "no" else "a", url });
+    if (bearer == .override and !api_host) assert.panic("sent a GitHub credential to {s}; downloadInto must restrict authenticated requests to api.github.com", .{url});
     return result.status;
+}
+
+/// Allows GitHub's HTTPS API and release links, with credentials confined to the API host.
+fn validateDownloadDestination(url: []const u8, authenticated: bool) !bool {
+    const destination = std.Uri.parse(url) catch return error.InvalidDownloadUrl;
+    if (!std.ascii.eqlIgnoreCase(destination.scheme, "https") or destination.user != null or destination.password != null or destination.port != null) return error.InvalidDownloadUrl;
+    const host = if (destination.host) |value| switch (value) {
+        .raw, .percent_encoded => |name| name,
+    } else return error.InvalidDownloadUrl;
+    const api_host = std.ascii.eqlIgnoreCase(host, "api.github.com");
+    if (!api_host and !std.ascii.eqlIgnoreCase(host, "github.com")) return error.InvalidDownloadUrl;
+    if (authenticated and !api_host) return error.InvalidDownloadUrl;
+    if (host.len == 0) assert.panic("accepted an empty download host; validateDownloadDestination() must allow only GitHub hosts", .{});
+    if (authenticated and !api_host) assert.panic("accepted credential-bearing download to {s}; validateDownloadDestination() must confine credentials to the API host", .{host});
+    return api_host;
+}
+
+/// Races the request against a deadline, joining cancellation before its buffers can be reused.
+fn fetchBeforeDeadline(client: *std.http.Client, options: std.http.Client.FetchOptions, timeout: Io.Duration) !std.http.Client.FetchResult {
+    if (timeout.nanoseconds <= 0) {
+        var buffer: [64]u8 = undefined;
+        const shown = std.fmt.bufPrint(&buffer, "{d}", .{timeout.nanoseconds}) catch unreachable;
+        assert.panic("download timeout is {s} ns; pass a positive request_timeout constant", .{shown});
+    }
+    if (options.response_writer == null) assert.panic("download has no response writer; fetchBeforeDeadline() must receive its caller-owned output buffer", .{});
+    const Race = Io.Select(union(enum) { fetched: std.http.Client.FetchError!std.http.Client.FetchResult, deadline: Io.Cancelable!void });
+    var results: [2]Race.Union = undefined;
+    var race: Race = .init(client.io, &results);
+    defer race.cancelDiscard();
+    // Unlike async(), concurrent() cannot run a blocking request inline before the timer starts.
+    try race.concurrent(.fetched, std.http.Client.fetch, .{ client, options });
+    try race.concurrent(.deadline, Io.sleep, .{ client.io, timeout, .awake });
+    return switch (try race.await()) {
+        .fetched => |result| result,
+        .deadline => |result| {
+            try result;
+            return error.RequestTimedOut;
+        },
+    };
+}
+
+test "download destinations reject alternate hosts, schemes and credential targets" {
+    try std.testing.expect(try validateDownloadDestination("https://api.github.com/repos/benomahony/zanity/releases/latest", true));
+    try std.testing.expect(!try validateDownloadDestination("https://github.com/benomahony/zanity/releases/download/v1/zanity", false));
+    for ([_][]const u8{ "http://api.github.com/releases", "https://api.github.com.evil.example/releases", "https://user@api.github.com/releases", "https://api.github.com:443/releases", "not a URL" }) |url| {
+        try std.testing.expectError(error.InvalidDownloadUrl, validateDownloadDestination(url, false));
+    }
+    try std.testing.expectError(error.InvalidDownloadUrl, validateDownloadDestination("https://github.com/releases", true));
 }
 
 /// Forwards response bytes without allowing even a chunked or decompressed body past its limit.
@@ -308,7 +361,7 @@ fn askGitHub(io: Io) ?Version {
     const address = releaseUrl(&url, null) catch return null;
     if (!std.mem.endsWith(u8, address, "/releases/latest")) assert.panic("asked {s} for the latest release; releaseUrl() with no version names the latest", .{address});
     var body: Io.Writer.Allocating = .init(allocator);
-    const status = get(&client, address, &body, null) catch return null;
+    const status = downloadInto(&client, address, &body, null) catch return null;
     if (status != .ok) return null;
     const release = parseRelease(allocator, body.written()) catch return null;
     if (release.tag_name.len == 0) assert.panic("GitHub's latest release has an empty tag; parseRelease() must refuse it", .{});
