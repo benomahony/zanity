@@ -2,6 +2,7 @@
 //! answers and deterministic source analyses; the latter are JSON so people and agents can query
 //! the facts and findings zanity reused.
 const std = @import("std");
+const builtin = @import("builtin");
 const assert = @import("assert.zig");
 const Io = std.Io;
 const Allocator = std.mem.Allocator;
@@ -11,6 +12,8 @@ const sqlite3_stmt = opaque {};
 
 extern fn sqlite3_config(op: c_int, ...) c_int;
 extern fn sqlite3_initialize() c_int;
+extern fn sqlite3_close_v2(db: *sqlite3) c_int;
+extern fn sqlite3_finalize(stmt: *sqlite3_stmt) c_int;
 extern fn sqlite3_open_v2(filename: [*:0]const u8, db: *?*sqlite3, flags: c_int, vfs: ?[*:0]const u8) c_int;
 extern fn sqlite3_busy_timeout(db: *sqlite3, ms: c_int) c_int;
 extern fn sqlite3_exec(db: *sqlite3, sql: [*:0]const u8, callback: ?*const anyopaque, arg: ?*anyopaque, errmsg: ?*?[*:0]u8) c_int;
@@ -219,7 +222,12 @@ pub const FalsePositive = struct {
 pub threadlocal var failure: [512]u8 = undefined;
 pub threadlocal var failure_len: usize = 0;
 
-var configured = false;
+var heap_configured = false;
+var heap_mutex: Io.Mutex = .init;
+const minimum_heap_bytes = 1 << 20;
+const sqlite_heap_alignment = 64;
+/// Wait briefly for another local process holding a SQLite write lock.
+const busy_timeout_ms = 5000;
 
 /// One connection and its prepared statements, used by one thread at a time.
 /// Batch holds its mutex across complete operations when its workers share this connection.
@@ -242,39 +250,16 @@ pub const Store = struct {
     /// Gives SQLite one fixed heap, then opens the store and prepares every statement, so
     /// nothing allocates after start-up. SQLite keeps the first heap for the life of the process,
     /// so `gpa` must never free it. `ZANITY_STORE` overrides where the store lives.
-    pub fn initStore(gpa: Allocator, io: Io, environ: *const std.process.Environ.Map, heap_bytes: usize) !Store {
-        if (heap_bytes < 1 << 20) assert.panic("SQLite was given a {d}-byte heap; it needs at least 1 MiB", .{heap_bytes});
-        if (!configured) {
-            const heap = try gpa.alignedAlloc(u8, .@"64", heap_bytes);
-            if (sqlite3_config(config_heap, heap.ptr, @as(c_int, @intCast(heap.len)), @as(c_int, 64)) != ok) return error.StoreUnavailable;
-            if (sqlite3_initialize() != ok) return error.StoreUnavailable;
-            configured = true;
-        }
-        const path = try initPath(gpa, io, environ);
-        var handle: ?*sqlite3 = null;
-        if (sqlite3_open_v2(path.ptr, &handle, open_readwrite | open_create, null) != ok) {
-            return if (handle) |h| captureDatabaseFailure(h) else error.StoreUnavailable;
-        }
-        const db = handle orelse return error.StoreUnavailable;
-        _ = sqlite3_busy_timeout(db, 5000);
-        if (sqlite3_exec(db, schema, null, null, null) != ok) return captureDatabaseFailure(db);
-        const opened: Store = .{
-            .path = path,
-            .db = db,
-            .find = try prepare(db, find_answer),
-            .unit = try prepare(db, save_unit),
-            .answer = try prepare(db, save_answer),
-            .observation = try prepare(db, save_observation),
-            .run = try prepare(db, save_run),
-            .find_analysis = try prepare(db, find_analysis),
-            .touch_analysis = try prepare(db, touch_analysis),
-            .save_analysis = try prepare(db, save_analysis),
-            .false_positive = try prepare(db, save_false_positive),
-            .save_label = try prepare(db, save_label),
-            .find_label = try prepare(db, find_label),
-            .list_observed = try prepare(db, list_observed),
-        };
-        if (!configured) assert.panic("opened {s} before SQLite was given its heap; install the heap with sqlite3_config before opening the store", .{path});
+    pub fn initStore(gpa: Allocator, io: Io, operator_environ: *const std.process.Environ.Map, heap_bytes: usize) !Store {
+        // This is the operator's local analysis cache, opened under their filesystem permissions.
+        try initializeSqliteHeap(gpa, io, heap_bytes);
+        const path = try initPath(gpa, io, operator_environ);
+        errdefer gpa.free(path);
+        const db = try openLocalCache(path);
+        errdefer _ = sqlite3_close_v2(db);
+        const opened = try prepareStoreStatements(path, db);
+        if (opened.db != db) assert.panic("prepared local-cache connection 0x{x}, expected opened database 0x{x}; prepareStoreStatements() must retain initStore()'s connection", .{ @intFromPtr(opened.db), @intFromPtr(db) });
+        if (opened.path.ptr != path.ptr) assert.panic("prepared cache path at 0x{x}, expected owned path at 0x{x}; prepareStoreStatements() must retain initStore()'s path", .{ @intFromPtr(opened.path.ptr), @intFromPtr(path.ptr) });
         return opened;
     }
 
@@ -446,6 +431,85 @@ pub const Store = struct {
     }
 };
 
+/// Serializes SQLite's global heap setup. SQLite owns an accepted heap until process exit.
+fn initializeSqliteHeap(gpa: Allocator, io: Io, heap_bytes: usize) !void {
+    if (heap_bytes < minimum_heap_bytes) assert.panic("SQLite was given a {d}-byte heap; it needs at least {d} bytes", .{ heap_bytes, minimum_heap_bytes });
+    if (heap_bytes > std.math.maxInt(c_int)) return error.StoreUnavailable;
+    heap_mutex.lockUncancelable(io);
+    defer heap_mutex.unlock(io);
+    if (!heap_configured) {
+        const heap = try gpa.alignedAlloc(u8, .@"64", heap_bytes);
+        if (@intFromPtr(heap.ptr) % sqlite_heap_alignment != 0) assert.panic("SQLite's heap is not {d}-byte aligned; alignedAlloc() must honor its requested alignment", .{sqlite_heap_alignment});
+        if (sqlite3_config(config_heap, heap.ptr, @as(c_int, @intCast(heap.len)), @as(c_int, sqlite_heap_alignment)) != ok) {
+            gpa.free(heap);
+            return error.StoreUnavailable;
+        }
+        // Even failed sqlite3_initialize() may retain this accepted heap; never free or replace it.
+        heap_configured = true;
+    }
+    if (sqlite3_initialize() != ok) return error.StoreUnavailable;
+}
+
+/// Opens only the chosen local cache; every unsuccessful opening releases its connection.
+fn openLocalCache(path: [:0]const u8) !*sqlite3 {
+    if (path.len == 0) assert.panic("opening an empty local cache path; initPath() must reject empty operator overrides", .{});
+    var handle: ?*sqlite3 = null;
+    if (sqlite3_open_v2(path.ptr, &handle, open_readwrite | open_create, null) != ok) {
+        const failed_db = handle orelse return error.StoreUnavailable;
+        defer _ = sqlite3_close_v2(failed_db);
+        return captureDatabaseFailure(failed_db);
+    }
+    const db = handle orelse return error.StoreUnavailable;
+    errdefer _ = sqlite3_close_v2(db);
+    if (sqlite3_busy_timeout(db, busy_timeout_ms) != ok) return captureDatabaseFailure(db);
+    if (sqlite3_exec(db, schema, null, null, null) != ok) return captureDatabaseFailure(db);
+    if (db != handle.?) assert.panic("opened local-cache connection 0x{x}, expected SQLite's handle 0x{x}; openLocalCache() must return that handle", .{ @intFromPtr(db), @intFromPtr(handle.?) });
+    return db;
+}
+
+/// Built-in SQL for each prepared statement owned by Store, with matching field names.
+const statement_sql = .{
+    .find = find_answer,
+    .unit = save_unit,
+    .answer = save_answer,
+    .observation = save_observation,
+    .run = save_run,
+    .find_analysis = find_analysis,
+    .touch_analysis = touch_analysis,
+    .save_analysis = save_analysis,
+    .false_positive = save_false_positive,
+    .save_label = save_label,
+    .find_label = find_label,
+    .list_observed = list_observed,
+};
+
+/// Returns a complete statement owner, finalizing any partial preparation before an error escapes.
+fn prepareStoreStatements(path: [:0]const u8, db: *sqlite3) !Store {
+    var opened: Store = undefined;
+    opened.path = path;
+    opened.db = db;
+    const names = @typeInfo(@TypeOf(statement_sql)).@"struct".field_names;
+    comptime {
+        for (@typeInfo(Store).@"struct".field_names) |name| {
+            if (std.mem.eql(u8, name, "path") or std.mem.eql(u8, name, "db")) continue;
+            if (!@hasField(@TypeOf(statement_sql), name)) @compileError("missing built-in SQL for Store." ++ name);
+        }
+    }
+    var prepared: usize = 0;
+    errdefer {
+        inline for (names, 0..) |name, i| {
+            if (i < prepared) _ = sqlite3_finalize(@field(opened, name));
+        }
+    }
+    inline for (names) |name| {
+        @field(opened, name) = try prepare(db, @field(statement_sql, name));
+        prepared += 1;
+    }
+    if (prepared != names.len) assert.panic("prepared {d} of {d} local-cache statements; prepareStoreStatements() must fill every statement field", .{ prepared, names.len });
+    if (opened.path.ptr != path.ptr) assert.panic("statement owner has cache path at 0x{x}, expected initStore()'s path at 0x{x}; retain the supplied path", .{ @intFromPtr(opened.path.ptr), @intFromPtr(path.ptr) });
+    return opened;
+}
+
 const store_name = "zanity.db";
 
 /// Where the store lives: `ZANITY_STORE`, or zanity.db in zanity's folder of the user's cache directory.
@@ -469,25 +533,36 @@ fn initPath(gpa: Allocator, io: Io, operator_environ: *const std.process.Environ
 }
 
 /// zanity's folder of the user's cache directory, written into `buffer` and created if it is missing.
-pub fn cacheDir(buffer: []u8, io: Io, environ: *const std.process.Environ.Map) ![]const u8 {
+pub fn cacheDir(buffer: []u8, io: Io, operator_environ: *const std.process.Environ.Map) ![]const u8 {
     if (buffer.len < std.fs.max_path_bytes) assert.panic("the cache directory gets {d} bytes, less than a path may need; pass a buffer of std.fs.max_path_bytes", .{buffer.len});
-    const sep = std.fs.path.sep_str;
-    const named = if (environ.get("XDG_CACHE_HOME")) |xdg|
-        std.fmt.bufPrint(buffer, "{s}" ++ sep ++ "zanity", .{xdg})
+    // These are local filesystem preferences set by the operator, subject to OS permissions.
+    // Keep an explicit XDG override first; otherwise use the target platform's cache root.
+    const xdg = operator_environ.get("XDG_CACHE_HOME");
+    const windows = builtin.os.tag == .windows;
+    const root = xdg orelse if (windows)
+        operator_environ.get("LOCALAPPDATA") orelse return error.StoreUnavailable
     else
-        std.fmt.bufPrint(buffer, "{s}" ++ sep ++ ".cache" ++ sep ++ "zanity", .{environ.get("HOME") orelse return error.StoreUnavailable});
+        operator_environ.get("HOME") orelse return error.StoreUnavailable;
+    if (!std.fs.path.isAbsolute(root) or std.mem.indexOfScalar(u8, root, 0) != null) return error.StoreUnavailable;
+    const sep = std.fs.path.sep_str;
+    const named = if (xdg != null or windows)
+        std.fmt.bufPrint(buffer, "{s}" ++ sep ++ "zanity", .{root})
+    else
+        std.fmt.bufPrint(buffer, "{s}" ++ sep ++ ".cache" ++ sep ++ "zanity", .{root});
     const dir = named catch return error.StoreUnavailable;
     Io.Dir.cwd().createDirPath(io, dir) catch return error.StoreUnavailable;
     if (!std.mem.endsWith(u8, dir, "zanity")) assert.panic("the cache directory {s} is not zanity's folder; cacheDir() must join the cache directory with it", .{dir});
     return dir;
 }
 
-fn prepare(db: *sqlite3, sql: []const u8) !*sqlite3_stmt {
-    if (sql.len == 0) assert.panic("preparing an empty statement; pass the SQL to prepare()", .{});
-    if (std.mem.indexOfScalar(u8, sql, ';') != null) assert.panic("'{s}' holds more than one statement; prepare them one at a time", .{sql});
+/// Prepares only SQL built into this executable; external values are bound as parameters later.
+fn prepare(db: *sqlite3, comptime trusted_sql: []const u8) !*sqlite3_stmt {
+    // comptime prevents runtime file contents, environment or request data becoming SQL here.
+    if (trusted_sql.len == 0) assert.panic("preparing an empty built-in statement; pass a module SQL constant to prepare()", .{});
+    if (std.mem.indexOfScalar(u8, trusted_sql, ';') != null) assert.panic("'{s}' holds more than one built-in statement; prepare them one at a time", .{trusted_sql});
     var stmt: ?*sqlite3_stmt = null;
-    if (sqlite3_prepare_v2(db, sql.ptr, @intCast(sql.len), &stmt, null) != ok) return captureDatabaseFailure(db);
-    return stmt orelse assert.panic("SQLite prepared '{s}' but returned no statement; check the SQL passed to prepare() is a single statement", .{sql});
+    if (sqlite3_prepare_v2(db, trusted_sql.ptr, @intCast(trusted_sql.len), &stmt, null) != ok) return captureDatabaseFailure(db);
+    return stmt orelse assert.panic("SQLite prepared '{s}' but returned no statement; check the built-in SQL passed to prepare() is a single statement", .{trusted_sql});
 }
 
 fn bind(stmt: *sqlite3_stmt, index: c_int, text: []const u8) !void {
@@ -574,7 +649,7 @@ test "a source analysis is queryable JSON and records cache hits" {
 }
 
 /// The first column of the first row `sql` returns, for reading back what a test kept.
-fn scalar(db: *sqlite3, sql: []const u8) !f64 {
+fn scalar(db: *sqlite3, comptime sql: []const u8) !f64 {
     if (!std.mem.startsWith(u8, sql, "SELECT ")) assert.panic("'{s}' is not a query; scalar() only reads back what a test kept", .{sql});
     const stmt = try prepare(db, sql);
     defer _ = sqlite3_reset(stmt);
