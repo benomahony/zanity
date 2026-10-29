@@ -179,13 +179,17 @@ const FsEvents = struct {
     const Context = extern struct { version: i32 = 0, info: ?*anyopaque, retain: ?*const anyopaque = null, release: ?*const anyopaque = null, copy_description: ?*const anyopaque = null };
     const Callback = *const fn (StreamRef, ?*anyopaque, usize, *anyopaque, [*]const EventFlags, [*]const EventId) callconv(.c) void;
 
-    /// The CoreServices functions the watcher calls, looked up when it starts.
+    /// The CoreServices symbols the watcher uses, looked up when it starts.
     const Api = struct {
         FSEventStreamCreate: *const fn (?*const anyopaque, Callback, *const Context, CFArrayRef, EventId, f64, CreateFlags) callconv(.c) ?StreamRef,
         FSEventStreamSetDispatchQueue: *const fn (StreamRef, dispatch.queue_t) callconv(.c) void,
         FSEventStreamStart: *const fn (StreamRef) callconv(.c) bool,
+        FSEventStreamInvalidate: *const fn (StreamRef) callconv(.c) void,
+        FSEventStreamRelease: *const fn (StreamRef) callconv(.c) void,
         CFArrayCreate: *const fn (?*const anyopaque, [*]const CFStringRef, i32, ?*const anyopaque) callconv(.c) ?CFArrayRef,
         CFStringCreateWithCString: *const fn (?*const anyopaque, [*:0]const u8, u32) callconv(.c) ?CFStringRef,
+        CFRelease: *const fn (*const anyopaque) callconv(.c) void,
+        kCFTypeArrayCallBacks: *const anyopaque,
     };
     const utf8: u32 = 0x8000100;
     /// Seconds FSEvents gathers changes for before reporting them, so one save is one rerun.
@@ -200,23 +204,32 @@ const FsEvents = struct {
         if (targets.trees.len > max_trees) return error.TooManyWatches;
         if (targets.directories.len < targets.trees.len) assert.panic("{d} watched trees but the walk entered only {d} directories; every tree is a directory the walk started from", .{ targets.trees.len, targets.directories.len });
         self.library = std.DynLib.open(core_services) catch return error.WatchUnavailable;
+        errdefer self.library.close();
         const info = @typeInfo(Api).@"struct";
         inline for (info.field_names, info.field_types) |name, T| {
             @field(self.api, name) = self.library.lookup(T, name) orelse return error.WatchUnavailable;
         }
         self.scope = targets.scope;
         self.semaphore = dispatch.semaphore_create(0) orelse return error.WatchUnavailable;
+        errdefer dispatch.release(@ptrCast(self.semaphore));
         self.queue = dispatch.queue_create("zanity-watch", dispatch.QUEUE_SERIAL()) orelse return error.WatchUnavailable;
+        errdefer dispatch.release(@ptrCast(self.queue));
         var strings: [max_trees]CFStringRef = undefined;
+        var created: usize = 0;
+        defer for (strings[0..created]) |string| self.api.CFRelease(string);
         for (targets.trees, strings[0..targets.trees.len]) |tree, *string| {
             var buffer: [std.fs.max_path_bytes + 1]u8 = undefined;
             const terminated = std.fmt.bufPrintSentinel(&buffer, "{s}", .{tree}, 0) catch return error.LimitExceeded;
             string.* = self.api.CFStringCreateWithCString(null, terminated, utf8) orelse return error.WatchUnavailable;
+            created += 1;
         }
-        const array = self.api.CFArrayCreate(null, &strings, @intCast(targets.trees.len), null) orelse return error.WatchUnavailable;
+        const array = self.api.CFArrayCreate(null, &strings, @intCast(targets.trees.len), self.api.kCFTypeArrayCallBacks) orelse return error.WatchUnavailable;
+        defer self.api.CFRelease(array);
         const context: Context = .{ .info = self };
         const stream = self.api.FSEventStreamCreate(null, &changed, &context, array, .since_now, latency, .{ .file_events = true, .watch_root = true }) orelse return error.WatchUnavailable;
+        errdefer self.api.FSEventStreamRelease(stream);
         self.api.FSEventStreamSetDispatchQueue(stream, self.queue);
+        errdefer self.api.FSEventStreamInvalidate(stream);
         if (!self.api.FSEventStreamStart(stream)) return error.WatchUnavailable;
     }
 
@@ -267,9 +280,12 @@ const Inotify = struct {
         const rc = linux.inotify_init1(linux.IN.CLOEXEC);
         if (linux.errno(rc) != .SUCCESS) return error.WatchUnavailable;
         self.fd = @intCast(rc);
+        errdefer _ = linux.close(self.fd);
         self.scope = targets.scope;
         self.watched = memory.Bounded(Watched).initBounded(gpa, max_directories, "watched directories") catch return error.LimitExceeded;
+        errdefer gpa.free(self.watched.buffer);
         self.text = memory.Text.initText(gpa, path_bytes) catch return error.LimitExceeded;
+        errdefer gpa.free(self.text.buffer);
         for (targets.directories) |directory| try self.watch(directory);
     }
 
