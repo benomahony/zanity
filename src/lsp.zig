@@ -41,6 +41,8 @@ const max_header_lines = 16;
 const max_messages = 1 << 40;
 /// Bound the checker's diagnostic output independently of its JSON findings.
 const check_stderr_bytes = 64 * 1024;
+/// JSON-RPC 2.0's response code for an unsupported request method.
+const method_not_found = -32601;
 
 /// One finding of `zanity check --json`, as the server reads it back. Lines and columns count from 1.
 pub const Record = struct {
@@ -282,16 +284,22 @@ pub const LanguageServer = struct {
                 continue;
             };
             if (std.mem.eql(u8, message.method, "exit")) return self.shut_down;
-            self.handle(message.method, message.id, message.params) catch |e| try self.reportFailure(message.method, message.id, e);
+            self.dispatchEditorRequest(message) catch |e| try self.reportFailure(message.method, message.id, e);
             try self.flushTelemetry();
         }
         assert.panic("handled {d} messages without the editor exiting; raise max_messages if a real editor session needs more", .{max_messages});
     }
 
-    fn handle(self: *LanguageServer, method: []const u8, request: ?json.Value, params: json.Value) !void {
-        if (method.len == 0) assert.panic("handling a message with an empty method; serve() passes the method the message names", .{});
-        if (!try self.accepts(method, request)) return;
-        const id = request orelse no_value;
+    /// Dispatches a shape-validated request from the launching editor's inherited stdio.
+    fn dispatchEditorRequest(self: *LanguageServer, request: EditorRequest) !void {
+        // requestOf() validated the envelope; each handler validates its method's arguments.
+        const method = request.method;
+        const params = request.params;
+        const id = request.id orelse no_value;
+        if (self.outbox.len == 0) assert.panic("dispatching request {s} without reply storage; call initLanguageServer() before dispatch", .{method});
+        if (method.len == 0) return self.sendError(id, -32600, "The editor's request has an empty method; send a supported nonempty request name.");
+        if (!try self.accepts(method, request.id)) return;
+        if (self.root.len == 0) assert.panic("dispatching request {s} without a workspace; retain the validated root in initialize() before accepting requests", .{method});
         const is = std.mem.eql;
         if (is(u8, method, "initialize")) return self.initialize(id, params);
         if (is(u8, method, "initialized")) return self.check("initialized");
@@ -304,13 +312,12 @@ pub const LanguageServer = struct {
         if (is(u8, method, "textDocument/didSave")) return self.check("save");
         if (is(u8, method, "textDocument/codeAction")) return self.codeActions(id, params);
         if (is(u8, method, "workspace/executeCommand")) return self.execute(id, params);
-        if (request != null) try self.sendError(id, -32601, try self.scratch.text.format("zanity does not handle the request {s}.", .{method}));
-        if (self.root.len == 0) assert.panic("the workspace root is empty after {s}; initialize() falls back to the working directory", .{method});
+        if (request.id != null) try self.sendError(id, method_not_found, try self.scratch.text.format("zanity does not support the editor's request {s}. Send a request supported by the server's advertised capabilities.", .{method}));
     }
 
     /// Checks protocol ordering before requests reach handlers that require initialization.
     fn accepts(self: *LanguageServer, method: []const u8, request: ?json.Value) !bool {
-        if (method.len == 0) assert.panic("checking protocol order with no method; requestOf() validates it before handle()", .{});
+        if (method.len == 0) assert.panic("checking protocol order with no method; requestOf() validates it before dispatch", .{});
         if (self.initialized and self.root.len == 0) assert.panic("initialized without a workspace root; initialize() must retain rootOf()'s validated path", .{});
         if (self.shut_down) {
             if (request) |id| try self.sendError(id, -32600, "The server has shut down; send exit and start a new session.");
@@ -978,10 +985,11 @@ pub fn uriOf(text: *memory.Text, path: []const u8) ![]const u8 {
     return uri;
 }
 
-const Request = struct { method: []const u8, id: ?json.Value, params: json.Value };
+/// A JSON-RPC envelope validated by requestOf() before dispatch to an editor command handler.
+const EditorRequest = struct { method: []const u8, id: ?json.Value, params: json.Value };
 
 /// Validates the JSON-RPC envelope before its fields reach handlers with internal contracts.
-fn requestOf(value: json.Value) ?Request {
+fn requestOf(value: json.Value) ?EditorRequest {
     const version = stringOf(member(value, "jsonrpc")) orelse return null;
     if (!std.mem.eql(u8, version, "2.0")) return null;
     const method = stringOf(member(value, "method")) orelse return null;
@@ -996,7 +1004,7 @@ fn requestOf(value: json.Value) ?Request {
         .object, .array, .null => {},
         else => return null,
     }
-    const request: Request = .{ .method = method, .id = id, .params = params };
+    const request: EditorRequest = .{ .method = method, .id = id, .params = params };
     if (request.method.len == 0) assert.panic("validated an empty request method; requestOf() must reject it", .{});
     if (value != .object) assert.panic("validated a request in a {t}; member() must accept only JSON objects", .{value});
     return request;
