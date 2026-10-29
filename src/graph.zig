@@ -31,7 +31,7 @@ pub const CycleScratch = struct {
         if (limits.edges == 0) assert.panic("memory.Limits.edges is 0, so the call graph has no room for any call", .{});
         return .{
             .by_name = try .initBounded(gpa, limits.functions, "functions across all files"),
-            .offsets = try .initBounded(gpa, limits.functions + 1, "functions across all files"),
+            .offsets = try .initBounded(gpa, std.math.add(usize, limits.functions, 1) catch return error.OutOfMemory, "functions across all files"),
             .targets = try .initBounded(gpa, limits.edges, "call edges across all files"),
             .index = try memory.reserve(gpa, u32, limits.functions),
             .low = try memory.reserve(gpa, u32, limits.functions),
@@ -60,15 +60,16 @@ pub const Graph = struct {
         s.offsets.clear();
         for (0..functions.len + 1) |_| try s.offsets.add(0);
         const offsets = s.offsets.items();
+        s.targets.clear();
         for (facts.calls.items()) |call| {
             const lookup: Lookup = .{ .functions = functions, .sorted = sorted, .call = call };
             for (lookup.candidates()) |c| {
-                if (lookup.accepts(c)) offsets[call.caller + 1] += 1;
+                if (!lookup.accepts(c)) continue;
+                try s.targets.add(0);
+                offsets[call.caller + 1] += 1;
             }
         }
         for (1..offsets.len) |i| offsets[i] += offsets[i - 1];
-        s.targets.clear();
-        for (0..offsets[functions.len]) |_| try s.targets.add(0);
         const cursor = s.low[0..functions.len];
         @memcpy(cursor, offsets[0..functions.len]);
         for (facts.calls.items()) |call| {
@@ -85,7 +86,7 @@ pub const Graph = struct {
     }
 
     fn out(self: Graph, v: u32) []const u32 {
-        if (v + 1 >= self.offsets.len) assert.panic("asked for the calls of function {d}, but the graph has {d} functions; pass an index below the function count from the facts", .{ v, self.offsets.len -| 1 });
+        if (v >= self.offsets.len -| 1) assert.panic("asked for the calls of function {d}, but the graph has {d} functions; pass an index below the function count from the facts", .{ v, self.offsets.len -| 1 });
         if (self.offsets[v] > self.offsets[v + 1]) assert.panic("function {d}'s calls run backwards ({d}..{d}); the offsets were not built in order, so build() must fill the offsets in function order", .{ v, self.offsets[v], self.offsets[v + 1] });
         return self.targets[self.offsets[v]..self.offsets[v + 1]];
     }
@@ -290,4 +291,18 @@ test "among overloads that fit its arguments, a call reaches the ones whose type
     const unknown: Lookup = .{ .functions = &functions, .sorted = &sorted, .call = .{ .caller = 1, .callee = "Sign", .reach = .any, .arguments = 1 } };
     try std.testing.expectEqual(true, unknown.accepts(0));
     try std.testing.expectEqual(true, unknown.accepts(1));
+}
+
+test "overload expansion respects the edge limit before accumulating offsets" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const gpa = arena_state.allocator();
+    var text = try memory.Text.initText(gpa, 1024);
+    var facts = try Facts.initFacts(gpa, .{ .definitions = 4, .functions = 4, .calls = 4, .references = 4 }, &text);
+    try facts.functions.add(.{ .path = "a.cs", .name = "Emit", .method = true, .line = 1, .column = 1, .parameters = 1 });
+    try facts.functions.add(.{ .path = "a.cs", .name = "Emit", .method = true, .line = 2, .column = 1, .parameters = 2 });
+    try facts.calls.add(.{ .caller = 0, .callee = "Emit", .reach = .any, .arguments = 3 });
+    var scratch = try CycleScratch.initGraphScratch(gpa, .{ .functions = 4, .edges = 1 });
+    try std.testing.expectError(error.LimitExceeded, Graph.fromFacts(&scratch, &facts));
+    try std.testing.expectEqualStrings("call edges across all files", memory.exceeded);
 }

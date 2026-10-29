@@ -36,7 +36,7 @@ pub const Worker = struct {
             .scratch = try .initCheckScratch(gpa, limits),
             .text = try .initText(gpa, limits.text_bytes),
             .facts = undefined,
-            .source = try memory.reserve(gpa, u8, limits.file_bytes + 1),
+            .source = try memory.reserve(gpa, u8, std.math.add(usize, limits.file_bytes, 1) catch return error.OutOfMemory),
         };
         worker.facts = try .initFacts(gpa, limits, &worker.text);
         return worker;
