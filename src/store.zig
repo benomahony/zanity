@@ -213,12 +213,15 @@ pub const FalsePositive = struct {
     version: []const u8,
 };
 
-/// Why the last store operation failed, as SQLite put it.
-pub var failure: [512]u8 = undefined;
-pub var failure_len: usize = 0;
+/// Why the calling thread's last store operation failed, as SQLite put it.
+/// A worker using another connection cannot overwrite the caller's diagnostic.
+pub threadlocal var failure: [512]u8 = undefined;
+pub threadlocal var failure_len: usize = 0;
 
 var configured = false;
 
+/// One connection and its prepared statements, used by one thread at a time.
+/// Batch holds its mutex across complete operations when its workers share this connection.
 pub const Store = struct {
     path: []const u8,
     db: *sqlite3,
@@ -249,11 +252,11 @@ pub const Store = struct {
         const path = try initPath(gpa, io, environ);
         var handle: ?*sqlite3 = null;
         if (sqlite3_open_v2(path.ptr, &handle, open_readwrite | open_create, null) != ok) {
-            return if (handle) |h| failed(h) else error.StoreUnavailable;
+            return if (handle) |h| captureDatabaseFailure(h) else error.StoreUnavailable;
         }
         const db = handle orelse return error.StoreUnavailable;
         _ = sqlite3_busy_timeout(db, 5000);
-        if (sqlite3_exec(db, schema, null, null, null) != ok) return failed(db);
+        if (sqlite3_exec(db, schema, null, null, null) != ok) return captureDatabaseFailure(db);
         const opened: Store = .{
             .path = path,
             .db = db,
@@ -285,7 +288,7 @@ pub const Store = struct {
         return switch (sqlite3_step(self.find)) {
             row => sqlite3_column_double(self.find, 0),
             done => null,
-            else => failed(self.db),
+            else => captureDatabaseFailure(self.db),
         };
     }
 
@@ -298,12 +301,12 @@ pub const Store = struct {
         try bind(self.unit, 1, &a.unit);
         try bind(self.unit, 2, a.language);
         try bind(self.unit, 3, a.source);
-        if (sqlite3_step(self.unit) != done) return failed(self.db);
+        if (sqlite3_step(self.unit) != done) return captureDatabaseFailure(self.db);
         try bind(self.answer, 1, a.model);
         try bind(self.answer, 2, &a.question);
         try bind(self.answer, 3, &a.unit);
-        if (sqlite3_bind_double(self.answer, 4, a.probability) != ok) return failed(self.db);
-        if (sqlite3_step(self.answer) != done) return failed(self.db);
+        if (sqlite3_bind_double(self.answer, 4, a.probability) != ok) return captureDatabaseFailure(self.db);
+        if (sqlite3_step(self.answer) != done) return captureDatabaseFailure(self.db);
     }
 
     /// Keeps what the model said about a unit, replacing what an earlier run said there.
@@ -319,10 +322,10 @@ pub const Store = struct {
         try bind(self.observation, 6, o.language);
         try bind(self.observation, 7, o.model);
         try bind(self.observation, 8, &o.question);
-        if (sqlite3_bind_double(self.observation, 9, o.probability) != ok) return failed(self.db);
-        if (sqlite3_bind_double(self.observation, 10, o.threshold) != ok) return failed(self.db);
+        if (sqlite3_bind_double(self.observation, 9, o.probability) != ok) return captureDatabaseFailure(self.db);
+        if (sqlite3_bind_double(self.observation, 10, o.threshold) != ok) return captureDatabaseFailure(self.db);
         try bindInt(self.observation, 11, @intFromBool(o.fired));
-        if (sqlite3_step(self.observation) != done) return failed(self.db);
+        if (sqlite3_step(self.observation) != done) return captureDatabaseFailure(self.db);
     }
 
     /// Records whether the finding `rule` makes about `unit` is real: confirmed, or not a problem.
@@ -333,7 +336,7 @@ pub const Store = struct {
         try bind(self.save_label, 1, rule);
         try bind(self.save_label, 2, &unit);
         try bindInt(self.save_label, 3, @intFromBool(real));
-        if (sqlite3_step(self.save_label) != done) return failed(self.db);
+        if (sqlite3_step(self.save_label) != done) return captureDatabaseFailure(self.db);
     }
 
     /// Whether someone said `rule`'s finding about `unit` is real, if anyone has.
@@ -346,7 +349,7 @@ pub const Store = struct {
         return switch (sqlite3_step(self.find_label)) {
             row => sqlite3_column_int64(self.find_label, 0) != 0,
             done => null,
-            else => failed(self.db),
+            else => captureDatabaseFailure(self.db),
         };
     }
 
@@ -371,7 +374,7 @@ pub const Store = struct {
                 if (!try visit(context, observed)) return;
             },
             done => return,
-            else => return failed(self.db),
+            else => return captureDatabaseFailure(self.db),
         };
     }
 
@@ -386,7 +389,7 @@ pub const Store = struct {
         try bindInt(self.run, 4, r.cached);
         try bindInt(self.run, 5, r.input_tokens);
         try bindInt(self.run, 6, r.output_tokens);
-        if (sqlite3_step(self.run) != done) return failed(self.db);
+        if (sqlite3_step(self.run) != done) return captureDatabaseFailure(self.db);
     }
 
     /// Keeps a flagged finding, replacing an earlier flag of the same finding on the same code.
@@ -401,7 +404,7 @@ pub const Store = struct {
         try bind(self.false_positive, 5, f.message);
         try bind(self.false_positive, 6, f.code);
         try bind(self.false_positive, 7, f.version);
-        if (sqlite3_step(self.false_positive) != done) return failed(self.db);
+        if (sqlite3_step(self.false_positive) != done) return captureDatabaseFailure(self.db);
     }
 
     /// Copies a cached JSON analysis into caller-owned memory, and records that it was reused.
@@ -414,7 +417,7 @@ pub const Store = struct {
         switch (sqlite3_step(self.find_analysis)) {
             done => return null,
             row => {},
-            else => return failed(self.db),
+            else => return captureDatabaseFailure(self.db),
         }
         const length = sqlite3_column_bytes(self.find_analysis, 0);
         if (length <= 0) return error.StoreUnavailable;
@@ -424,7 +427,7 @@ pub const Store = struct {
         @memcpy(result, pointer[0..@intCast(length)]);
         defer _ = sqlite3_reset(self.touch_analysis);
         try bind(self.touch_analysis, 1, &key);
-        if (sqlite3_step(self.touch_analysis) != done) return failed(self.db);
+        if (sqlite3_step(self.touch_analysis) != done) return captureDatabaseFailure(self.db);
         return result;
     }
 
@@ -438,7 +441,7 @@ pub const Store = struct {
         try bind(self.save_analysis, 3, analysis.path);
         try bind(self.save_analysis, 4, analysis.language);
         try bind(self.save_analysis, 5, analysis.result);
-        if (sqlite3_step(self.save_analysis) != done) return failed(self.db);
+        if (sqlite3_step(self.save_analysis) != done) return captureDatabaseFailure(self.db);
     }
 };
 
@@ -474,7 +477,7 @@ fn prepare(db: *sqlite3, sql: []const u8) !*sqlite3_stmt {
     if (sql.len == 0) assert.panic("preparing an empty statement; pass the SQL to prepare()", .{});
     if (std.mem.indexOfScalar(u8, sql, ';') != null) assert.panic("'{s}' holds more than one statement; prepare them one at a time", .{sql});
     var stmt: ?*sqlite3_stmt = null;
-    if (sqlite3_prepare_v2(db, sql.ptr, @intCast(sql.len), &stmt, null) != ok) return failed(db);
+    if (sqlite3_prepare_v2(db, sql.ptr, @intCast(sql.len), &stmt, null) != ok) return captureDatabaseFailure(db);
     return stmt orelse assert.panic("SQLite prepared '{s}' but returned no statement; check the SQL passed to prepare() is a single statement", .{sql});
 }
 
@@ -499,13 +502,17 @@ fn bindInt(stmt: *sqlite3_stmt, index: c_int, value: u64) !void {
     if (sqlite3_bind_int64(stmt, index, @intCast(value)) != ok) return error.StoreUnavailable;
 }
 
-/// Records SQLite's reason for the last failure, for the error message, and reports it.
-fn failed(db: *sqlite3) error{StoreUnavailable} {
+/// Converts a failed SQLite operation into the store's stable error, retaining its detailed cause.
+/// The diagnostic belongs to this calling thread, not to all connections in the process.
+fn captureDatabaseFailure(db: *sqlite3) error{StoreUnavailable} {
+    // failure and failure_len are threadlocal, so a different worker cannot replace this cause.
+    // Callers still own the connection here, so its message is copied before any next operation.
     const message = std.mem.span(sqlite3_errmsg(db));
     if (message.len == 0) assert.panic("SQLite reported a failure with no message; check the store file with the sqlite3 command-line tool", .{});
     failure_len = @min(message.len, failure.len);
     @memcpy(failure[0..failure_len], message[0..failure_len]);
-    if (failure_len == 0) assert.panic("kept none of SQLite's {d}-byte failure message; failed() must copy at least part of SQLite's message", .{message.len});
+    if (failure_len == 0) assert.panic("kept none of SQLite's {d}-byte failure message; captureDatabaseFailure() must copy at least part of SQLite's message", .{message.len});
+    // SQLite error kinds deliberately share this public error; failure retains the specific cause.
     return error.StoreUnavailable;
 }
 
@@ -560,7 +567,7 @@ fn scalar(db: *sqlite3, sql: []const u8) !f64 {
     if (!std.mem.startsWith(u8, sql, "SELECT ")) assert.panic("'{s}' is not a query; scalar() only reads back what a test kept", .{sql});
     const stmt = try prepare(db, sql);
     defer _ = sqlite3_reset(stmt);
-    if (sqlite3_step(stmt) != row) return failed(db);
+    if (sqlite3_step(stmt) != row) return captureDatabaseFailure(db);
     const value = sqlite3_column_double(stmt, 0);
     if (std.math.isNan(value)) assert.panic("'{s}' read back NaN; SQLite reads NULL as 0, so check the column holds numbers", .{sql});
     return value;
