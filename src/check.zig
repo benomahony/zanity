@@ -1,4 +1,5 @@
 const std = @import("std");
+const source_lines = @import("code_lines.zig");
 const assert = @import("assert.zig");
 const Allocator = std.mem.Allocator;
 const ts = @import("ts.zig");
@@ -312,17 +313,25 @@ pub const Checker = struct {
         if (requested.len == 0) assert.panic("building a {s} checker with no rules requested; runCheck always requests at least one", .{loaded.adapter.name});
         const compiled = try captures.Compiled.initCompiled(gpa, loaded.query);
         _ = unread.disableUnread(loaded.query, compiled);
-        var supported: rules.Set = .{};
-        for (requested.names()) |name| {
-            if (language.applies(loaded.adapter, name)) supported.include(name);
-        }
-        if (supported.len > requested.len) assert.panic("{s} supports {d} of the {d} requested rules; it can't support more than were asked for", .{ loaded.adapter.name, supported.len, requested.len });
-        return .{
+        var checker: Checker = .{
             .loaded = loaded,
             .compiled = compiled,
             .vocabulary = Vocabulary.lookup(compiled),
-            .enabled = supported,
+            .enabled = .{},
         };
+        checker.selectRules(requested);
+        if (checker.enabled.len > requested.len) assert.panic("{s} enabled {d} rules from {d} requests; selectRules() must keep only supported requests", .{ loaded.adapter.name, checker.enabled.len, requested.len });
+        return checker;
+    }
+
+    /// Changes selection without reallocating the language's immutable compiled query.
+    pub fn selectRules(self: *Checker, requested: rules.Set) void {
+        if (requested.len == 0) assert.panic("selecting no rules for {s}; settings must retain at least one requested rule", .{self.loaded.adapter.name});
+        self.enabled = .{};
+        for (requested.names()) |name| {
+            if (language.applies(self.loaded.adapter, name)) self.enabled.include(name);
+        }
+        if (self.enabled.len > requested.len) assert.panic("{s} supports {d} of {d} requested rules; selection cannot introduce rules", .{ self.loaded.adapter.name, self.enabled.len, requested.len });
     }
 
     pub const Result = struct { diagnostics: []Diagnostic, parse_error: bool };
@@ -1064,28 +1073,16 @@ pub const File = struct {
     }
 
     pub fn codeLines(self: *File) []const bool {
-        const in_comment = self.s.in_comment[0..self.source.len];
-        @memset(in_comment, false);
-        if (self.v.comment) |comment| {
-            for (self.index.triples) |t| {
-                if (t.id != comment) continue;
-                @memset(in_comment[ts.ts_node_start_byte(t.node)..ts.ts_node_end_byte(t.node)], true);
-            }
-        }
-        const rows = std.mem.count(u8, self.source, "\n") + 1;
-        const code = self.s.code_lines[0..rows];
-        @memset(code, false);
-        var row: usize = 0;
-        for (self.source, in_comment) |c, commented| {
-            if (c == '\n') {
-                row += 1;
-                continue;
-            }
-            if (!commented and !std.ascii.isWhitespace(c)) code[row] = true;
-        }
-        if (row + 1 != rows) assert.panic("{s}: marked code on {d} lines of a {d}-line file; codeLines() must advance one row per newline, so check its loop", .{ self.work.facts.path, row + 1, rows });
-        if (code.len != rows) assert.panic("{s}: {d} code-line flags for {d} lines; size code_lines from the file's row count, as initCheckScratch() does with file_bytes + 1", .{ self.work.facts.path, code.len, rows });
-        return code;
+        if (self.s.in_comment.len < self.source.len) assert.panic("{s}: comment scratch has {d} bytes for {d} source bytes; initialize scratch from the file limit", .{ self.work.facts.path, self.s.in_comment.len, self.source.len });
+        if (self.s.code_lines.len <= self.source.len) assert.panic("{s}: code-line scratch has {d} flags for {d} bytes; allow one flag per byte plus the final row", .{ self.work.facts.path, self.s.code_lines.len, self.source.len });
+        return source_lines.mark(.{
+            .source = self.source,
+            .in_comment = self.s.in_comment,
+            .code_lines = self.s.code_lines,
+            .captures = self.index.triples,
+            .comment_id = self.v.comment,
+            .path = self.work.facts.path,
+        });
     }
 
     pub fn finish(self: *File) []Diagnostic {

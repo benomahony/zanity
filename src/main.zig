@@ -189,7 +189,7 @@ const Workspace = struct {
     workers: [batch.max_workers]?*batch.Worker = @splat(null),
     worker_view: [batch.max_workers]*batch.Worker = undefined,
     checked: usize = 0,
-    io: Io = undefined,
+    io: Io,
     review: baseline.Review = .{},
     baseline_buffer: []u8,
     history: @import("history.zig").History,
@@ -198,7 +198,9 @@ const Workspace = struct {
     fn initCheckers(ws: *Workspace, gpa: Allocator, selected: rules.Set) !void {
         if (selected.len == 0) assert.panic("compiling checkers with no rules selected; runCheck always selects at least one", .{});
         if (!ws.checker_rules.same(selected)) {
-            ws.checkers = @splat(null);
+            for (&ws.checkers) |*slot| {
+                if (slot.*) |*checker| checker.selectRules(selected);
+            }
             ws.checker_rules = selected;
         }
         for (ws.files.items()) |path| {
