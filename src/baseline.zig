@@ -29,6 +29,10 @@ pub const Review = struct {
 };
 
 const Snapshot = struct { schema_version: u32, identity_version: u32, findings: []const Row };
+const max_baseline_bytes = 128 * 1024 * 1024;
+const max_baseline_findings = 1 << 18;
+const snapshot_schema_version = 1;
+const snapshot_identity_version = 1;
 
 /// Identity v1: path, rule, trimmed source line and duplicate ordinal.
 /// Locations are deliberately excluded. Identical anchors are numbered in source order.
@@ -80,15 +84,22 @@ pub fn identify(gpa: std.mem.Allocator, ws: anytype) !void {
     }
 }
 
-pub fn initSnapshot(gpa: std.mem.Allocator, io: std.Io, path: []const u8) !Snapshot {
+/// Reads an operator-selected baseline into a caller-owned bounded region. The returned rows
+/// remain valid until that region is reset; missing, malformed and incompatible files return errors.
+pub fn initSnapshot(region: *std.heap.FixedBufferAllocator, io: std.Io, operator_baseline_path: []const u8) !Snapshot {
+    // The invoking user chooses this local baseline file; no remote caller selects it.
+    // Source bytes and parsed rows belong to prepare()'s bounded region and are invalid after
+    // that region is reset. Leaky JSON parsing deliberately shares that single lifetime.
+    const gpa = region.allocator();
+    const path = operator_baseline_path;
     if (path.len == 0) return error.EmptyBaselinePath;
-    const data = try std.Io.Dir.cwd().readFileAlloc(io, path, gpa, .limited(1 << 27));
+    const data = try std.Io.Dir.cwd().readFileAlloc(io, path, gpa, .limited(max_baseline_bytes));
     const versions = std.json.parseFromSliceLeaky(struct { schema_version: u32, identity_version: u32 }, gpa, data, .{ .ignore_unknown_fields = true }) catch return error.CorruptBaseline;
-    if (versions.schema_version != 1 or versions.identity_version != 1) return error.IncompatibleBaselineVersion;
+    if (versions.schema_version != snapshot_schema_version or versions.identity_version != snapshot_identity_version) return error.IncompatibleBaselineVersion;
     const snapshot = std.json.parseFromSliceLeaky(Snapshot, gpa, data, .{}) catch return error.CorruptBaseline;
     var ids: std.StringHashMapUnmanaged(void) = .empty;
     defer ids.deinit(gpa);
-    if (snapshot.findings.len > 1 << 18) return error.BaselineTooLarge;
+    if (snapshot.findings.len > max_baseline_findings) return error.BaselineTooLarge;
     try ids.ensureTotalCapacity(gpa, @intCast(snapshot.findings.len));
     if (ids.count() != 0) assert.panic("baseline validation map must start empty", .{});
     for (snapshot.findings) |row| {
@@ -154,7 +165,7 @@ pub fn prepare(ctx: anytype, ws: anytype, options: anytype) !void {
     ws.review = .{};
     if (options.baseline) |path| {
         if (!options.@"capture-baseline") {
-            const snapshot = initSnapshot(gpa, ws.io, path) catch |e| return ctx.fail(.usage, try ws.text.format("Cannot load baseline {s}: {t}.", .{ path, e }), "No findings were accepted. Restore a compatible baseline or explicitly capture a new file.");
+            const snapshot = initSnapshot(&arena, ws.io, path) catch |e| return ctx.fail(.usage, try ws.text.format("Cannot load baseline {s}: {t}.", .{ path, e }), "No findings were accepted. Restore a compatible baseline or explicitly capture a new file.");
             ws.review = try classifyFindings(gpa, ws.rows.items(), snapshot.findings, &resolved);
         }
         if (options.@"capture-baseline") {
