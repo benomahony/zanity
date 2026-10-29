@@ -130,27 +130,78 @@ pub fn get(client: *std.http.Client, url: []const u8, out: *Io.Writer.Allocating
     if (url.len == 0) assert.panic("fetching an empty URL; build it with releaseUrl() or take it from the release", .{});
     var authorization: [512]u8 = undefined;
     const bearer: std.http.Client.Request.Headers.Value = if (token) |t| .{ .override = try std.fmt.bufPrint(&authorization, "Bearer {s}", .{t}) } else .default;
+    if (out.written().len > max_binary_bytes) return error.StreamTooLong;
+    var download: DownloadWriter = .{ .out = &out.writer, .remaining = max_binary_bytes - out.written().len };
     // std.http drops privileged_headers without sending them, so the token goes in the
     // authorization header, which a redirect would carry to any host; a request with a token
     // therefore follows no redirect, as GitHub's API needs none.
-    const result = try client.fetch(.{
+    const result = client.fetch(.{
         .location = .{ .url = url },
-        .response_writer = &out.writer,
+        .response_writer = &download.writer,
         .headers = .{ .user_agent = .{ .override = "zanity-upgrade" }, .authorization = bearer },
         .extra_headers = &.{.{ .name = "accept", .value = "application/vnd.github+json, application/octet-stream" }},
         .redirect_behavior = if (token == null) null else .not_allowed,
-    });
-    if (out.written().len > max_binary_bytes) return error.StreamTooLong;
+    }) catch |e| {
+        if (download.exceeded) return error.StreamTooLong;
+        return e;
+    };
     if ((bearer == .override) != (token != null)) assert.panic("sending {t} authorization with {s} token for {s}", .{ bearer, if (token == null) "no" else "a", url });
     return result.status;
 }
 
+/// Forwards response bytes without allowing even a chunked or decompressed body past its limit.
+const DownloadWriter = struct {
+    out: *Io.Writer,
+    remaining: usize,
+    exceeded: bool = false,
+    writer: Io.Writer = .{ .buffer = &.{}, .vtable = &.{ .drain = drain } },
+
+    fn drain(writer: *Io.Writer, data: []const []const u8, splat: usize) Io.Writer.Error!usize {
+        const self: *DownloadWriter = @alignCast(@fieldParentPtr("writer", writer));
+        if (writer.end != 0) assert.panic("bounded download buffered {d} bytes; it must forward every byte directly to its output", .{writer.end});
+        if (self.remaining == 0) {
+            self.exceeded = true;
+            return error.WriteFailed;
+        }
+        const written = try self.out.writeSplatHeaderLimit(&.{}, data, splat, .limited(self.remaining));
+        if (written > self.remaining) assert.panic("download wrote {d} bytes with only {d} remaining; writeSplatHeaderLimit must respect its limit", .{ written, self.remaining });
+        self.remaining -= written;
+        return written;
+    }
+};
+
+test "a bounded download accepts exactly its limit and rejects the next byte" {
+    var output: Io.Writer.Allocating = .init(std.testing.allocator);
+    defer output.deinit();
+    var download: DownloadWriter = .{ .out = &output.writer, .remaining = 4 };
+    try download.writer.writeAll("abcd");
+    try std.testing.expectEqualStrings("abcd", output.written());
+    try std.testing.expect(!download.exceeded);
+    try std.testing.expectError(error.WriteFailed, download.writer.writeAll("e"));
+    try std.testing.expect(download.exceeded);
+    try std.testing.expectEqualStrings("abcd", output.written());
+}
+
+test "a download chunk cannot grow the output beyond its remaining limit" {
+    var output: Io.Writer.Allocating = .init(std.testing.allocator);
+    defer output.deinit();
+    var download: DownloadWriter = .{ .out = &output.writer, .remaining = 4 };
+    try download.writer.writeAll("ab");
+    try std.testing.expectError(error.WriteFailed, download.writer.writeAll("cdefgh"));
+    try std.testing.expect(download.exceeded);
+    try std.testing.expectEqualStrings("abcd", output.written());
+}
+
 /// Puts `bytes` in place of the executable at `path`, keeping it executable. Windows cannot
-/// overwrite a running program but can rename it, so there the old one moves aside first.
+/// overwrite a running program but can rename it, so there the old one moves aside only after
+/// the replacement is staged, and moves back if installing the staged file fails.
 pub fn replace(io: Io, path: []const u8, bytes: []const u8) !void {
     if (bytes.len == 0) assert.panic("replacing {s} with an empty file; the download must be checked first", .{path});
     const cwd = Io.Dir.cwd();
     const permissions = (try cwd.statFile(io, path, .{})).permissions;
+    var atomic = try cwd.createFileAtomic(io, path, .{ .permissions = permissions, .replace = true });
+    defer atomic.deinit(io);
+    try atomic.file.writeStreamingAll(io, bytes);
     if (builtin.os.tag == .windows) {
         var buffer: [std.fs.max_path_bytes]u8 = undefined;
         const old = try std.fmt.bufPrint(&buffer, "{s}.old", .{path});
@@ -159,11 +210,11 @@ pub fn replace(io: Io, path: []const u8, bytes: []const u8) !void {
             else => return e,
         };
         try cwd.rename(path, cwd, old, io);
-    }
-    var atomic = try cwd.createFileAtomic(io, path, .{ .permissions = permissions, .replace = true });
-    defer atomic.deinit(io);
-    try atomic.file.writeStreamingAll(io, bytes);
-    try atomic.replace(io);
+        atomic.replace(io) catch |e| {
+            cwd.rename(old, cwd, path, io) catch return error.RestoreFailed;
+            return e;
+        };
+    } else try atomic.replace(io);
     const written = try cwd.statFile(io, path, .{});
     if (written.size != bytes.len) assert.panic("wrote {d} bytes to {s} but it holds {d}", .{ bytes.len, path, written.size });
 }
