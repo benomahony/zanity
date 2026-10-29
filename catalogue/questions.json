@@ -785,7 +785,7 @@
  },
  {
   "id": "CWE-454",
-  "question": "Does the function initialise critical internal variables, settings or data stores from input that untrusted users can control, such as request parameters, cookies or environment variables?",
+  "question": "Does the function initialise security-critical internal state, such as a trusted identity, permissions, executable search path or security policy, from input controlled by a less trusted caller without validating that the caller may set it? Identify both the less trusted source and the security decision the initialised state controls. Ignore ordinary parsing, buffers, counters, result selection, and settings supplied by the person running the program or their editor, including workspace roots, environment variables, command-line arguments and configuration files.",
   "message": "Critical internal state is initialised from untrusted input. Initialise it from trusted sources, and validate anything external",
   "severity": "error",
   "scope": "function"
