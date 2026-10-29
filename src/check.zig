@@ -173,8 +173,8 @@ pub const FileScratch = struct {
             .names = try .initNameCounts(gpa, limits.per_file),
             .path = try .initBounded(gpa, limits.depth, "syntax nodes on the walk's path in one file"),
             .ancestors = try .initBounded(gpa, limits.depth, "ancestors of one syntax node"),
-            .in_comment = try memory.reserve(gpa, bool, limits.file_bytes),
-            .code_lines = try memory.reserve(gpa, bool, std.math.add(usize, limits.file_bytes, 1) catch return error.OutOfMemory),
+            .in_comment = try memory.reserveUninitialized(gpa, bool, limits.file_bytes),
+            .code_lines = try memory.reserveUninitialized(gpa, bool, std.math.add(usize, limits.file_bytes, 1) catch return error.OutOfMemory),
             .captures = try .initCaptureScratch(gpa, limits),
         };
     }

@@ -119,7 +119,7 @@ const Results = struct {
 
     fn initResults(gpa: Allocator, limits: ServerLimits) !Results {
         const results: Results = .{
-            .output = try memory.reserve(gpa, u8, limits.check_bytes),
+            .output = try memory.reserveUninitialized(gpa, u8, limits.check_bytes),
             .text = try .initText(gpa, limits.check_text_bytes),
             .entries = try .initBounded(gpa, limits.findings, "findings in one check"),
             .files = try .initBounded(gpa, limits.files, "files with findings in one check"),
@@ -184,7 +184,7 @@ const Scratch = struct {
 
     fn initScratch(gpa: Allocator, limits: ServerLimits) !Scratch {
         const scratch: Scratch = .{
-            .parse = .init(try memory.reserve(gpa, u8, limits.parse_bytes)),
+            .parse = .init(try memory.reserveUninitialized(gpa, u8, limits.parse_bytes)),
             .text = try .initText(gpa, limits.message_bytes),
             .actions = try .initBounded(gpa, limits.actions, "code actions in one answer"),
             .targets = try .initBounded(gpa, limits.actions, "code actions in one answer"),
@@ -247,8 +247,8 @@ pub const LanguageServer = struct {
             .io = io,
             .out = out,
             .services = services,
-            .inbox = try memory.reserve(gpa, u8, limits.message_bytes),
-            .outbox = try memory.reserve(gpa, u8, limits.message_bytes),
+            .inbox = try memory.reserveUninitialized(gpa, u8, limits.message_bytes),
+            .outbox = try memory.reserveUninitialized(gpa, u8, limits.message_bytes),
             .scratch = try .initScratch(gpa, limits),
             .current = try .initResults(gpa, limits),
             .previous = try .initResults(gpa, limits),
@@ -293,6 +293,8 @@ pub const LanguageServer = struct {
     /// Dispatches a shape-validated request from the launching editor's inherited stdio.
     fn dispatchEditorRequest(self: *LanguageServer, request: EditorRequest) !void {
         // requestOf() validated the envelope; each handler validates its method's arguments.
+        // The stdio loop consumed this frame before dispatch. A failed command is reported,
+        // not retried; dispatch never replays a command after writing its response.
         const method = request.method;
         const params = request.params;
         const id = request.id orelse no_value;

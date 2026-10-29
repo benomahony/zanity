@@ -106,17 +106,17 @@ pub const NameCounts = struct {
     pub fn initNameCounts(gpa: std.mem.Allocator, capacity: u32) std.mem.Allocator.Error!NameCounts {
         if (capacity == 0) assert.panic("NameCounts was given no room; size it from memory.Limits.per_file", .{});
         const slots = 2 * @as(usize, capacity);
-        const hashes = try memory.reserve(gpa, u64, slots);
+        const hashes = try memory.reserveUninitialized(gpa, u64, slots);
         @memset(hashes, 0);
         if (hashes.len != slots) assert.panic("reserved {d} name slots, asked for {d}; reserve() returns what it was asked for", .{ hashes.len, slots });
-        const pair_keys = try memory.reserve(gpa, u64, slots);
+        const pair_keys = try memory.reserveUninitialized(gpa, u64, slots);
         @memset(pair_keys, 0);
         return .{
             .hashes = hashes,
-            .counts = try memory.reserve(gpa, i32, slots),
+            .counts = try memory.reserveUninitialized(gpa, i32, slots),
             .used = try .initBounded(gpa, capacity, "distinct names in one file"),
             .pair_keys = pair_keys,
-            .pairs = try memory.reserve(gpa, facts_module.Reference, slots),
+            .pairs = try memory.reserveUninitialized(gpa, facts_module.Reference, slots),
             .pairs_used = try .initBounded(gpa, capacity, "distinct places names are referred to from in one file"),
         };
     }

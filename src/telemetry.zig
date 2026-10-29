@@ -69,7 +69,7 @@ pub const Telemetry = struct {
             .spans = try .initBounded(gpa, max_spans, "telemetry spans between flushes"),
             .values = try .initBounded(gpa, max_attributes, "telemetry attributes between flushes"),
             .text = try .initText(gpa, text_bytes),
-            .body = try memory.reserve(gpa, u8, body_bytes),
+            .body = try memory.reserveUninitialized(gpa, u8, body_bytes),
         };
         if (traces == null and !std.mem.endsWith(u8, telemetry.url, "/v1/traces")) assert.panic("posting traces to {s}, not the endpoint's /v1/traces", .{telemetry.url});
         return telemetry;

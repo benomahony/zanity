@@ -34,9 +34,9 @@ pub const LiveScratch = struct {
     pub fn initLiveScratch(gpa: std.mem.Allocator, limits: memory.Limits) std.mem.Allocator.Error!LiveScratch {
         if (limits.definitions == 0) assert.panic("memory.Limits.definitions is 0, so dead-symbol has no room for any name", .{});
         const live: LiveScratch = .{
-            .candidates = try memory.reserve(gpa, u64, limits.definitions),
-            .others = try memory.reserve(gpa, u64, limits.definitions),
-            .alive = try memory.reserve(gpa, bool, limits.definitions),
+            .candidates = try memory.reserveUninitialized(gpa, u64, limits.definitions),
+            .others = try memory.reserveUninitialized(gpa, u64, limits.definitions),
+            .alive = try memory.reserveUninitialized(gpa, bool, limits.definitions),
         };
         if (live.alive.len != live.candidates.len) assert.panic("reserved {d} flags for {d} names", .{ live.alive.len, live.candidates.len });
         return live;

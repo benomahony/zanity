@@ -32,9 +32,9 @@ pub threadlocal var exceeded: []const u8 = "";
 /// Room for `n` items, left as the allocator returned it. `Allocator.alloc` fills memory in Debug
 /// builds, touching every page; zanity's buffers are sized for the largest input it accepts, so that
 /// fill cost a Debug run 800 MB however little it checked. Callers write each item before reading it.
-pub fn reserve(gpa: Allocator, comptime T: type, n: usize) Allocator.Error![]T {
+pub fn reserveUninitialized(gpa: Allocator, comptime T: type, n: usize) Allocator.Error![]T {
     if (n == 0) assert.panic("reserving no {s}; size the buffer from a memory.Limits field above 0", .{@typeName(T)});
-    comptime if (@sizeOf(T) == 0) @compileError("reserve() needs a nonzero-sized type; zero-sized values need no backing storage");
+    comptime if (@sizeOf(T) == 0) @compileError("reserveUninitialized() needs a nonzero-sized type; zero-sized values need no backing storage");
     if (n > std.math.maxInt(usize) / @sizeOf(T)) return error.OutOfMemory;
     const bytes = @sizeOf(T) * n;
     // This allocator primitive deliberately returns uninitialized backing storage. Every caller
@@ -58,7 +58,7 @@ pub fn Bounded(comptime T: type) type {
         pub fn initBounded(gpa: Allocator, room: usize, what: []const u8) Allocator.Error!Self {
             if (room == 0) assert.panic("Bounded buffer for {s} was given capacity 0; check the matching field in memory.Limits", .{what});
             if (what.len == 0) assert.panic("Bounded buffer of capacity {d} has no description; pass what it holds so a full buffer can say which limit to raise", .{room});
-            return .{ .buffer = try reserve(gpa, T, room), .what = what };
+            return .{ .buffer = try reserveUninitialized(gpa, T, room), .len = 0, .what = what };
         }
 
         pub fn add(self: *Self, item: T) error{LimitExceeded}!void {
@@ -114,9 +114,9 @@ pub const Text = struct {
 
     pub fn initText(gpa: Allocator, capacity: usize) Allocator.Error!Text {
         if (capacity == 0) assert.panic("Text buffer was given capacity 0; check memory.Limits.text_bytes", .{});
-        const buffer = try reserve(gpa, u8, capacity);
+        const buffer = try reserveUninitialized(gpa, u8, capacity);
         if (buffer.len != capacity) assert.panic("Text buffer: asked for {d} bytes, the allocator returned {d}; check the allocator passed to initText()", .{ capacity, buffer.len });
-        return .{ .buffer = buffer };
+        return .{ .buffer = buffer, .used = 0 };
     }
 
     pub fn format(self: *Text, comptime fmt: []const u8, args: anytype) error{LimitExceeded}![]const u8 {
