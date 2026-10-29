@@ -16,6 +16,8 @@ from tools import BY_NAME, FIXTURES, HERE, QUESTIONS, REPO, SOURCES, TOOLS, Tool
 
 CORPUS = HERE / ".corpus"
 LANGUAGES = ["python", "javascript", "typescript", "go", "rust", "java"]
+# Below this, missing dependency checkouts can make benchmark timings misleading.
+MIN_CORPUS_PYTHON_FILES = 101
 # Real code for recall and timing: two widely used libraries, and the old tools' own pytest
 # suites, which are full of the doubles and fixtures the test rules look for.
 CORPUS_SOURCES = {
@@ -355,17 +357,69 @@ def score_languages(zanity: Zanity) -> dict[str, dict]:
     return out
 
 
+def populate_corpus(destination: Path, sources: dict[str, Path]) -> dict[str, int]:
+    """Build an unpublished corpus from the fixed source manifest. Source checkouts are read
+    only; every tree is copied once and the completed copy is counted in one content pass.
+    The caller owns this staging directory and discards it on any copy/count failure."""
+    assert destination.is_absolute(), f"{destination} must be an absolute staging path; create it beneath the harness first"
+    assert sources, "the corpus source manifest is empty; restore CORPUS_SOURCES before benchmarking"
+    for name, source in sources.items():
+        shutil.copytree(source, destination / name, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+    # dddlint's generated config checks duplicates and drift without imposing a vocabulary.
+    (destination / "dddlint.yaml").write_text("forbidden: []\n")
+    files = list(destination.rglob("*.py"))
+    return {"files": len(files), "lines": sum(len(path.read_text(errors="replace").splitlines()) for path in files)}
+
+
+def publish_corpus() -> dict[str, int]:
+    """Construct and validate a replacement for the fixed harness-owned CORPUS cache. All
+    staging/backup paths are private directories created here beneath HERE, not caller input.
+    The caller holds the build lock. Rollback runs in finally, including on interruption; if a
+    filesystem failure prevents restoration, its rename error names the retained recovery backup."""
+    with tempfile.TemporaryDirectory(prefix=".corpus-build-", dir=HERE) as temporary:
+        staged = Path(temporary) / "corpus"
+        sources = {name: SOURCES / source for name, source in CORPUS_SOURCES.items()}
+        stats = populate_corpus(staged, sources)
+        assert stats["files"] >= MIN_CORPUS_PYTHON_FILES, f"only {stats['files']} corpus files; restore the dependency checkouts in CORPUS_SOURCES to reach at least {MIN_CORPUS_PYTHON_FILES}"
+        assert stats["lines"] >= stats["files"], f"only {stats['lines']} lines in {stats['files']} corpus files; inspect missing or empty dependency copies before benchmarking"
+        backup_directory = Path(tempfile.mkdtemp(prefix=".corpus-previous-", dir=HERE))
+        previous = backup_directory / "corpus"
+        published = False
+        try:
+            try:
+                CORPUS.rename(previous)
+            except FileNotFoundError:
+                staged.rename(CORPUS)
+                published = True
+                return stats
+            try:
+                staged.rename(CORPUS)
+                published = True
+            finally:
+                if not published:
+                    previous.rename(CORPUS)
+            return stats
+        finally:
+            if published or not previous.exists():
+                shutil.rmtree(backup_directory)
+
+
 def build_corpus() -> dict[str, int]:
-    """Copy the corpus beside the harness, so no tool picks up a config from where it came from."""
-    shutil.rmtree(CORPUS, ignore_errors=True)
-    for name, source in CORPUS_SOURCES.items():
-        shutil.copytree(SOURCES / source, CORPUS / name, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
-    # dddlint needs a config to run; an empty one checks duplicates and drift only.
-    (CORPUS / "dddlint.yaml").write_text("forbidden: []\n")
-    files = list(CORPUS.rglob("*.py"))
-    assert files, f"the corpus at {CORPUS} has no Python files; check CORPUS_SOURCES"
-    assert len(files) > 100, f"only {len(files)} files in the corpus; a checkout in CORPUS_SOURCES is missing"
-    return {"files": len(files), "lines": sum(len(p.read_text(errors="replace").splitlines()) for p in files)}
+    """Regenerate the CLI's private .corpus cache, never any source checkout. Immutable module
+    constants define source locations and minimum size. A directory lock serializes builders;
+    publication owns staging, validates the complete copy and restores the old cache on failure."""
+    assert CORPUS == HERE / ".corpus", f"{CORPUS} is not the harness's generated cache; restore its fixed location beneath {HERE}"
+    lock = HERE / ".corpus.lock"
+    try:
+        lock.mkdir()
+    except FileExistsError as error:
+        raise ValueError(f"corpus build lock {lock} exists; wait for the other benchmark, or remove a crashed build's lock only after confirming no builder is running") from error
+    try:
+        stats = publish_corpus()
+        assert stats["files"] >= MIN_CORPUS_PYTHON_FILES, f"published only {stats['files']} files; fix corpus validation before benchmarking"
+        return stats
+    finally:
+        lock.rmdir()
 
 
 def score_corpus(zanity: Zanity) -> dict[str, dict]:
