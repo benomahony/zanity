@@ -106,7 +106,7 @@
  },
  {
   "id": "CWE-190",
-  "question": "Does the function perform integer arithmetic, such as addition, multiplication or a size calculation, that could overflow or wrap around, where the result is then used for allocation, indexing, a loop bound or a security decision?",
+  "question": "Does the function perform unchecked integer arithmetic whose overflow can produce an incorrect allocation size, index, loop bound or security decision? Identify the overflowing operation and how its result is used. Checked arithmetic that returns an error on overflow is safe. Ignore intentional wrapping arithmetic in hashes, and arithmetic whose operands are explicitly bounded so the result fits.",
   "message": "This integer arithmetic can overflow and produce a small or negative value. Check the operands against the type's limits before the arithmetic, or use checked arithmetic",
   "severity": "error",
   "scope": "function"
@@ -358,7 +358,7 @@
  },
  {
   "id": "CWE-294",
-  "question": "Does the function accept an authentication message or token without a nonce, timestamp or one-time value, so a captured copy could be replayed to authenticate again?",
+  "question": "Does the function verify an authentication proof that its protocol requires to be fresh or single-use, but accept a captured old proof again because it fails to check a nonce, timestamp or consumed challenge? Ignore clients sending credentials, and ordinary reusable session or bearer tokens sent over an authenticated encrypted channel; reusability alone does not demonstrate a replay vulnerability.",
   "message": "A captured authentication message can be replayed. Include a nonce or timestamp and reject any message seen before or too old",
   "severity": "error",
   "scope": "function"
@@ -435,7 +435,7 @@
  },
  {
   "id": "CWE-342",
-  "question": "Does the function produce security-relevant identifiers or tokens that follow from previous values, such as incrementing IDs or sequential tokens?",
+  "question": "Does the function generate a security credential or secret token whose next value an attacker can predict from previous values, allowing impersonation or unauthorised access? Identify how the generated value grants access. Ignore counters, array indices, deterministic hashes for caching or deduplication, diagnostic IDs and JSON-RPC request IDs, which do not serve as credentials.",
   "message": "The next value can be predicted from previous ones. Use random identifiers from a secure source",
   "severity": "error",
   "scope": "function"
@@ -960,7 +960,7 @@
  },
  {
   "id": "CWE-617",
-  "question": "Does the function use an assert, panic or abort to reject bad input that comes from outside the program, such as file contents, configuration, command-line arguments, a request or a message, where a handled error with a clear message is needed, rather than only to check invariants that only a bug in the code could break?",
+  "question": "Can a caller provide a concrete invalid external input that reaches an assert, panic or abort instead of a handled input error? Identify the input and the assertion it reaches. Ignore assertions of internal API contracts, buffer bookkeeping, parser cursor invariants or postconditions unless the shown control flow demonstrates that ordinary invalid external input can violate them. A function parameter alone is not evidence of an untrusted source.",
   "message": "Bad input from outside the program is rejected with an assertion, which crashes with a traceback and disappears when assertions are disabled. Raise a specific error and report it clearly instead",
   "severity": "warning",
   "scope": "function"
@@ -1576,7 +1576,7 @@
  },
  {
   "id": "CWE-1090",
-  "question": "Does the function read or modify another class's private or internal members, such as names starting with an underscore, or reach through a chain of several other objects' fields, instead of calling methods on them?",
+  "question": "Does the function bypass an established encapsulation boundary by accessing another class's explicitly private implementation members instead of its provided interface? Identify the private member and the boundary being bypassed. Ignore ordinary public fields of structs, records, syntax nodes, configuration, buffers or data-transfer objects; a chain of field accesses alone is not an encapsulation violation.",
   "message": "This reaches into another class's internals. Call a method on that class instead",
   "severity": "info",
   "scope": "function"
@@ -1723,7 +1723,7 @@
  },
  {
   "id": "CWE-1115",
-  "question": "Does this file lack a standard header, such as a copyright or licence notice and a summary of what the module is for, at its top?",
+  "question": "Does this file omit a header that the project demonstrably requires, such as a copyright or licence notice consistently present in comparable files? Identify the established header convention being violated. Do not assume every project requires per-file copyright notices or a particular header template; a missing module summary alone is not evidence of a missing required standard header.",
   "message": "This file has no standard header. Add the project's header, with its copyright or licence notice and what the module is for",
   "severity": "info",
   "scope": "file"
