@@ -218,9 +218,10 @@ pub const Seen = struct {
 
     /// Whether the answer is under a day old at `now`; one from the future is not trusted.
     pub fn fresh(seen: Seen, now: i64) bool {
-        const trusted = seen.at <= now and now - seen.at < notice_seconds;
+        const age = std.math.sub(i64, now, seen.at) catch return false;
+        const trusted = age >= 0 and age < notice_seconds;
         if (trusted and seen.at > now) assert.panic("trusted an answer kept at {d}, after now, {d}", .{ seen.at, now });
-        if (trusted and now - seen.at >= notice_seconds) assert.panic("trusted an answer {d} seconds old, past the {d} it is trusted for", .{ now - seen.at, notice_seconds });
+        if (trusted and age >= notice_seconds) assert.panic("trusted an answer {d} seconds old, past the {d} it is trusted for", .{ age, notice_seconds });
         return trusted;
     }
 };
@@ -269,6 +270,9 @@ test "a kept answer is read back, and is trusted for a day" {
     try std.testing.expect(seen.fresh(1000 + notice_seconds - 1));
     try std.testing.expect(!seen.fresh(1000 + notice_seconds));
     try std.testing.expect(!seen.fresh(999));
+    const ancient: Seen = .{ .at = std.math.minInt(i64), .version = seen.version };
+    try std.testing.expect(!ancient.fresh(std.math.maxInt(i64)));
+    try std.testing.expect(!ancient.fresh(0));
     try std.testing.expectEqual(null, Seen.parse(""));
     try std.testing.expectEqual(null, Seen.parse("1000 dev\n"));
     try std.testing.expectEqual(null, Seen.parse("1000 0.1.34 extra\n"));
