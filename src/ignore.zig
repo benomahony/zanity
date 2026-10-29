@@ -74,8 +74,11 @@ pub const Ignore = struct {
         if (!std.fs.path.isAbsolute(base)) assert.panic("'{s}/{s}' has a relative directory; ignore patterns are matched against absolute paths, so pass the real path", .{ base, name });
         if (name.len == 0) assert.panic("asked to load an ignore file with no name from '{s}'; pass '.gitignore' or '.git/info/exclude'", .{base});
         var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-        const path = std.fmt.bufPrint(&path_buffer, "{s}/{s}", .{ base, name }) catch return;
-        const bytes = Io.Dir.cwd().readFile(io, path, self.file) catch return;
+        const path = std.fmt.bufPrint(&path_buffer, "{s}/{s}", .{ base, name }) catch return error.NameTooLong;
+        const bytes = Io.Dir.cwd().readFile(io, path, self.file) catch |e| switch (e) {
+            error.FileNotFound => return,
+            else => return e,
+        };
         if (bytes.len == self.file.len) {
             memory.exceeded = "bytes in one ignore file";
             return error.LimitExceeded;
@@ -287,4 +290,21 @@ test "the last matching pattern decides and negation re-includes" {
     try std.testing.expect(!ignore.ignored("/r/a/top.py", .file));
     try std.testing.expect(ignore.ignored("/r/docs/a/b/c.md", .file));
     try std.testing.expect(!ignore.ignored("/other/x.log", .file));
+}
+
+test "missing ignore files are optional but invalid paths are reported" {
+    const io = std.testing.io;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var root_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const root = root_buffer[0..try tmp.dir.realPath(io, &root_buffer)];
+    var ignore = try Ignore.initIgnore(std.testing.allocator, .{ .ignore_patterns = 16, .ignore_bytes = 1024 });
+    defer std.testing.allocator.free(ignore.patterns.buffer);
+    defer std.testing.allocator.free(ignore.text.buffer);
+    defer std.testing.allocator.free(ignore.file);
+    try ignore.loadFile(io, root, "missing.gitignore");
+    try tmp.dir.writeFile(io, .{ .sub_path = "file", .data = "" });
+    try std.testing.expectError(error.NotDir, ignore.loadFile(io, root, "file/.gitignore"));
+    const oversized: [std.fs.max_path_bytes]u8 = @splat('a');
+    try std.testing.expectError(error.NameTooLong, ignore.loadFile(io, root, &oversized));
 }
