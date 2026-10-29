@@ -15,7 +15,8 @@ def files(args: list[str], suffixes: tuple[str, ...]) -> list[Path]:
     for arg in args:
         path = Path(arg).resolve()
         if path.is_file():
-            found.append(path)
+            if path.suffix in suffixes:
+                found.append(path)
             continue
         found.extend(
             p for p in sorted(path.rglob("*")) if p.suffix in suffixes and p.is_file() and not SKIP & set(p.parts)
@@ -33,4 +34,7 @@ def emit(findings: list[dict]) -> None:
 def finding(path: Path | str, line: int, rule: str, end: int | None = None) -> dict:
     assert rule, f"the finding at {path}:{line} has no rule; the adapter must name one"
     assert Path(path).exists(), f"{path} doesn't exist, so the tool reported a path the harness can't match"
-    return {"path": str(Path(path).resolve()), "line": line, "end": end or line, "rule": rule}
+    last = line if end is None else end
+    if line < 0 or last < line:
+        raise ValueError(f"invalid finding range {line}..{last} at {path}; report a nonnegative line and an end on or after it")
+    return {"path": str(Path(path).resolve()), "line": line, "end": last, "rule": rule}
