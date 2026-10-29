@@ -1073,7 +1073,7 @@ fn collect(ctx: *zclig.Context, ws: *Workspace, path: []const u8) !void {
     var absolute_buffer: [std.fs.max_path_bytes]u8 = undefined;
     for (0..ws.limits.files * 2) |_| {
         const entry = try walker.next(ws.io) orelse break;
-        const absolute = std.fmt.bufPrint(&absolute_buffer, "{s}/{s}", .{ root, entry.path }) catch continue;
+        const absolute = std.fmt.bufPrint(&absolute_buffer, "{s}/{s}", .{ root, entry.path }) catch return ctx.fail(.io, try ws.text.format("Cannot check {s}/{s}: its absolute path is too long.", .{ root, entry.path }), "Move the project to a shorter path, or shorten the nested directory names.");
         switch (entry.kind) {
             .directory => if (!project.skippedDir(entry.basename) and !ws.ignore.ignored(absolute, .directory)) {
                 try ws.ignore.loadFile(ws.io, absolute, ".gitignore");

@@ -90,6 +90,7 @@ pub fn isProjectFile(relative: []const u8) bool {
 /// What checking the project files needs: where to read them and where to report.
 pub const ProjectRun = struct {
     io: Io,
+    /// One extra byte beyond the largest accepted file, to detect truncated reads.
     buffer: []u8,
     facts: *Facts,
     enabled: rules.Set,
@@ -104,7 +105,11 @@ pub fn checkProjectFiles(run: ProjectRun, paths: []const []const u8) !void {
     const project_start = facts.text.used;
     var first: ?[]const u8 = null;
     for (paths) |path| {
-        const source = Io.Dir.cwd().readFile(run.io, path, run.buffer) catch continue;
+        const source = try Io.Dir.cwd().readFile(run.io, path, run.buffer);
+        if (source.len == run.buffer.len) {
+            memory.exceeded = "bytes in one project file";
+            return error.LimitExceeded;
+        }
         if (first == null) first = path;
         try checkProjectFile(run, path, source);
         if (facts.collect_units) _ = try facts.text.format("=== {s} ===\n{s}\n", .{ path, source });
@@ -116,6 +121,30 @@ pub fn checkProjectFiles(run: ProjectRun, paths: []const []const u8) !void {
         try facts.unit("the project's build and CI files", whole, .{ .kind = .project, .reports_error = false, .at = .{ 0, 0, 0 } });
     };
     if (first == null and whole.len > 0) assert.panic("wrote {d} bytes of project files without reading one; only files read are added", .{whole.len});
+}
+
+test "project files must be readable in full before the check succeeds" {
+    const io = std.testing.io;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    const root = try tmp.dir.realPathFileAlloc(io, ".", arena);
+    const missing = try std.fs.path.join(arena, &.{ root, "missing.toml" });
+    const invalid = try std.fs.path.join(arena, &.{ root, "file", "project.toml" });
+    const large = try std.fs.path.join(arena, &.{ root, "large.toml" });
+    try tmp.dir.writeFile(io, .{ .sub_path = "file", .data = "" });
+    try tmp.dir.writeFile(io, .{ .sub_path = "large.toml", .data = "allow_failure: true\n" });
+    var text = try memory.Text.initText(arena, 1024);
+    var facts = try Facts.initFacts(arena, .{ .definitions = 4, .functions = 4, .calls = 4, .references = 4 }, &text);
+    var findings = try memory.Bounded(Finding).initBounded(arena, 4, "project findings");
+    var buffer: [16]u8 = undefined;
+    const run: ProjectRun = .{ .io = io, .buffer = &buffer, .facts = &facts, .enabled = .{}, .findings = &findings };
+    try std.testing.expectError(error.FileNotFound, checkProjectFiles(run, &.{missing}));
+    try std.testing.expectError(error.NotDir, checkProjectFiles(run, &.{invalid}));
+    try std.testing.expectError(error.LimitExceeded, checkProjectFiles(run, &.{large}));
+    try std.testing.expectEqualStrings("bytes in one project file", memory.exceeded);
 }
 
 fn checkProjectFile(run: ProjectRun, path: []const u8, source: []const u8) !void {
