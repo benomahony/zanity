@@ -5,6 +5,7 @@ Usage: python3 bench/parity/page.py
 
 import html
 import json
+from dataclasses import dataclass
 from pathlib import Path
 
 from score import LANGUAGES
@@ -304,38 +305,136 @@ def live(data: dict) -> list[str]:
     ]
 
 
+@dataclass(frozen=True)
+class CliTiming:
+    """One validated command measurement; times are seconds and memory is bytes."""
+
+    mean: float
+    stddev: float
+    minimum: float
+    memory: float
+
+
+MAX_REPORT_SECONDS = 3600
+MAX_REPORT_MEMORY_BYTES = 1 << 40
+ALL_RULES_COLD = "zanity, all rules, cold"
+ALL_RULES_WARM = "zanity, all rules, warm"
+
+
+def benchmark_number(data: dict, path: tuple[str, ...]) -> int | float:
+    """Read one required numeric report field, checking nesting, type and units before use.
+    Invalid generated JSON raises ValueError with its field path and regeneration instructions."""
+    assert path, "name the benchmark field to validate before formatting it"
+    field = path[-1]
+    assert field in {"mean", "stddev", "min", "memory", "runs", "lines"}, f"unknown numeric benchmark field {field}; add its validation policy before rendering it"
+    value = data
+    label = ".".join(path)
+    for segment in path:
+        if not isinstance(value, dict) or segment not in value:
+            raise ValueError(f"results.json is missing {label}; run parity.py again without --skip-bench")
+        value = value[segment]
+    accepted_types = (int,) if field in {"memory", "runs", "lines"} else (int, float)
+    if type(value) not in accepted_types:
+        raise ValueError(f"results.json {label} has type {type(value).__name__}; rerun parity.py to produce numeric measurements")
+    invalid = not value >= 0
+    invalid |= field in {"mean", "runs", "memory"} and not value > 0
+    invalid |= field in {"mean", "stddev", "min"} and not value < MAX_REPORT_SECONDS
+    invalid |= field == "memory" and not value < MAX_REPORT_MEMORY_BYTES
+    if invalid:
+        raise ValueError(f"results.json {label}={value} has an invalid count or duration; check benchmark units and rerun parity.py")
+    return value
+
+
+def cli_timings(data: dict, required: tuple[str, ...]) -> dict[str, CliTiming]:
+    """Validate command-record shape once, then expose named timing values to the renderer.
+    Missing fields, wrong types, NaN/infinite durations and zero divisors fail before calculations."""
+    assert required, "name the baseline commands required by the CLI comparison"
+    assert len(required) == len(set(required)), f"duplicate baseline commands {required}; list each required command once"
+    if not isinstance(data, dict):
+        raise ValueError("results.json must contain an object; regenerate the benchmark report with parity.py")
+    cli = data.get("cli")
+    if not isinstance(cli, dict) or not cli:
+        raise ValueError("results.json needs a nonempty cli object; run parity.py without --skip-bench")
+    timings = {}
+    for name in cli:
+        if not isinstance(name, str) or not name:
+            raise ValueError("each CLI timing needs a nonempty command name; regenerate results.json with parity.py")
+        timings[name] = CliTiming(
+            mean=benchmark_number(data, ("cli", name, "mean")),
+            stddev=benchmark_number(data, ("cli", name, "stddev")),
+            minimum=benchmark_number(data, ("cli", name, "min")),
+            memory=benchmark_number(data, ("cli", name, "memory")),
+        )
+    missing = set(required) - timings.keys()
+    missing |= {f"zanity, {tool.name} rules, cold" for tool in TOOLS if tool.name in timings} - timings.keys()
+    if missing:
+        raise ValueError(f"results.json lacks CLI comparisons {sorted(missing)}; rerun parity.py without --skip-bench")
+    return timings
+
+
+def cli_headline(pairs: list[tuple[str, CliTiming, CliTiming]], base: float) -> list[str]:
+    """Summarise validated command pairs without assuming every optional tool was measured."""
+    assert pairs, "the CLI headline needs a measured tool pair; validate the report first"
+    assert base > 0, f"headline baseline is {base}; validate a positive cold-cache mean first"
+    name, fastest, _ = min(pairs, key=lambda pair: pair[1].mean)
+    first = f'<div><strong>{fastest.mean / base:.1f}×</strong> faster on every rule, from an empty cache, than the fastest tool, {name}, on its own {len(BY_NAME[name].rules)}: {seconds(base)} against {seconds(fastest.mean)}.</div>'
+    quick = [(label, theirs.mean / ours.mean) for label, theirs, ours in pairs if label != "bonsai"]
+    summary = ""
+    if quick:
+        ratios = [ratio for _, ratio in quick]
+        summary = f'<strong>{min(ratios):.1f}–{max(ratios):.1f}×</strong> faster than {", ".join(label for label, _ in quick)}, each on its own rules'
+    bonsai = next(((theirs, ours) for label, theirs, ours in pairs if label == "bonsai"), None)
+    if bonsai:
+        separator = "; " if summary else ""
+        summary += f'{separator}bonsai, which rebuilds its index on every run, is {bonsai[0].mean / bonsai[1].mean:.0f}× slower'
+    return raw(['<div class="headline">', first, f'<div>{summary}.</div>', "</div>"])
+
+
+def cli_command_rows(timings: dict[str, CliTiming], base: float) -> list[list[str]]:
+    """Format the already validated command measurements as the comparison table's cells."""
+    assert timings, "the CLI table needs command measurements; validate the report first"
+    assert base > 0, f"table baseline is {base}; validate a positive cold-cache mean first"
+    return [[name, seconds(result.mean), seconds(result.stddev), seconds(result.minimum), megabytes(result.memory), f"{result.mean / base:.1f}×"] for name, result in timings.items()]
+
+
 def cli_speed(data: dict) -> list[str]:
-    cli = data["cli"]
-    base = cli["zanity, all rules, cold"]["mean"]
-    warm = cli["zanity, all rules, warm"]["mean"]
-    rows = [[name, seconds(r["mean"]), seconds(r["stddev"]), seconds(r["min"]), megabytes(r["memory"]), f"{r['mean'] / base:.1f}×"] for name, r in cli.items()]
-    pairs = [(tool.name, cli[tool.name], cli[f"zanity, {tool.name} rules, cold"]) for tool in measured(data, "cli")]
-    means = [(name, t["mean"], z["mean"]) for name, t, z in pairs]
-    fast = min(means, key=lambda mean: mean[1])
-    quick = [(name, theirs / ours) for name, theirs, ours in means if name != "bonsai"]
-    ratios = [ratio for _, ratio in quick]
-    together = sum(t["memory"] for _, t, _ in pairs)
-    memory = cli["zanity, all rules, cold"]["memory"]
-    assert base > 0, f"zanity's time is the baseline, so it can't be {base} s"
-    assert all("memory" in r for r in cli.values()), f"results.json has no memory for {[n for n, r in cli.items() if 'memory' not in r]}; run parity.py again"
+    """Validate a persisted report before deriving ratios, headlines, charts and table cells.
+    Named timing records keep JSON structure and error handling out of the presentation phase."""
+    cli = cli_timings(data, (ALL_RULES_COLD, ALL_RULES_WARM))
+    corpus_lines = benchmark_number(data, ("corpus_stats", "lines"))
+    runs = benchmark_number(data, ("runs",))
+    pairs = [(tool.name, cli[tool.name], cli[f"zanity, {tool.name} rules, cold"]) for tool in TOOLS if tool.name in cli]
+    if not pairs:
+        raise ValueError("results.json has no measured comparison tool pairs; rerun parity.py without --skip-bench")
+    tool_count = len(pairs)
+    base = cli[ALL_RULES_COLD].mean
+    warm = cli[ALL_RULES_WARM].mean
+    assert base > 0, f"validated cold baseline is {base}; fix CLI report validation before dividing"
+    assert len({name for name, _, _ in pairs}) == tool_count, "TOOLS contains duplicate measured names; give each comparison tool a unique name"
+    means = [(name, theirs.mean, ours.mean) for name, theirs, ours in pairs]
+    together = sum(theirs.memory for _, theirs, _ in pairs)
+    if together >= MAX_REPORT_MEMORY_BYTES:
+        raise ValueError(f"combined CLI memory is {together} bytes; check result units and rerun parity.py before rendering")
+    memory = cli[ALL_RULES_COLD].memory
+    rows = cli_command_rows(cli, base)
+    all_tools = "all five at once" if tool_count == 5 else f"all {tool_count} measured tools at once"
+    tool_coverage = "all five tools" if tool_count == 5 else f"all {tool_count} measured tools"
+    chart_caption = "Each tool on its own rules beside zanity on all of them, shorter is better"
+    if any(name == "bonsai" for name, _, _ in pairs):
+        chart_caption += "; bonsai, off this scale, is above"
     return [
-        *raw([
-            '<div class="headline">',
-            f'<div><strong>{fast[1] / base:.1f}×</strong> faster on every rule, from an empty cache, than the fastest tool, {fast[0]}, on its own {len(BY_NAME[fast[0]].rules)}: {seconds(base)} against {seconds(fast[1])}.</div>',
-            f'<div><strong>{min(ratios):.1f}–{max(ratios):.1f}×</strong> faster than {", ".join(name for name, _ in quick)}, each on its own rules; bonsai, which rebuilds its index on every run, is {cli["bonsai"]["mean"] / cli["zanity, bonsai rules, cold"]["mean"]:.0f}× slower.</div>',
-            "</div>",
-        ]),
+        *cli_headline(pairs, base),
         "## Head to head",
         "",
-        f"Each tool on the whole corpus, {data['corpus_stats']['lines']:,} lines, beside zanity running only the rules that answer that tool's, from an empty cache. Each pair has its own scale. The mean of {data['runs']} runs after a warm-up, with [hyperfine](https://github.com/sharkdp/hyperfine).",
+        f"Each tool on the whole corpus, {corpus_lines:,} lines, beside zanity running only the rules that answer that tool's, from an empty cache. Each pair has its own scale. The mean of {runs} runs after a warm-up, with [hyperfine](https://github.com/sharkdp/hyperfine).",
         "",
         *duel(means, seconds, ("faster", "slower"), "Time to check the corpus, shorter is better"),
-        *chart([*((name, theirs, seconds(theirs), False) for name, theirs, _ in means if name != "bonsai"), ("zanity, every rule, cold", base, seconds(base), True), ("zanity, every rule, warm", warm, seconds(warm), True)], "Each tool on its own rules beside zanity on all of them, shorter is better; bonsai, off this scale, is above"),
+        *chart([*((name, theirs, seconds(theirs), False) for name, theirs, _ in means if name != "bonsai"), ("zanity, every rule, cold", base, seconds(base), True), ("zanity, every rule, warm", warm, seconds(warm), True)], chart_caption),
         "## Memory",
         "",
-        f"The most memory each run held, from the kernel's accounting of the process. One zanity run covers every rule, where the same coverage takes all five tools: run side by side, as in a pre-commit hook, they hold {megabytes(together)} at once.",
+        f"The most memory each run held, from the kernel's accounting of the process. One zanity run covers every rule, where the same coverage takes {tool_coverage}: run side by side, as in a pre-commit hook, they hold {megabytes(together)} at once.",
         "",
-        *chart([*((name, t["memory"], megabytes(t["memory"]), False) for name, t, _ in pairs), ("all five at once", together, megabytes(together), False), ("zanity, cold", memory, megabytes(memory), True)], "Peak memory checking the corpus, smaller is better"),
+        *chart([*((name, t.memory, megabytes(t.memory), False) for name, t, _ in pairs), (all_tools, together, megabytes(together), False), ("zanity, cold", memory, megabytes(memory), True)], "Peak memory checking the corpus, smaller is better"),
         "## Every command",
         "",
         "The tools ran through the same adapters as above. Cold zanity starts each run with an empty cache; warm reuses the last run's.",
