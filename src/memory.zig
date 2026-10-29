@@ -34,7 +34,11 @@ pub threadlocal var exceeded: []const u8 = "";
 /// fill cost a Debug run 800 MB however little it checked. Callers write each item before reading it.
 pub fn reserve(gpa: Allocator, comptime T: type, n: usize) Allocator.Error![]T {
     if (n == 0) assert.panic("reserving no {s}; size the buffer from a memory.Limits field above 0", .{@typeName(T)});
-    const bytes = std.math.mul(usize, @sizeOf(T), n) catch return error.OutOfMemory;
+    comptime if (@sizeOf(T) == 0) @compileError("reserve() needs a nonzero-sized type; zero-sized values need no backing storage");
+    if (n > std.math.maxInt(usize) / @sizeOf(T)) return error.OutOfMemory;
+    const bytes = @sizeOf(T) * n;
+    // This allocator primitive deliberately returns uninitialized backing storage. Every caller
+    // tracks its initialized prefix separately and writes an item before exposing it to readers.
     const raw = gpa.rawAlloc(bytes, .of(T), @returnAddress()) orelse return error.OutOfMemory;
     const items = @as([*]T, @ptrCast(@alignCast(raw)))[0..n];
     if (@intFromPtr(items.ptr) % @alignOf(T) != 0) assert.panic("reserved {d} {s} at 0x{x}, not {d}-byte aligned; rawAlloc must honour the alignment it is given", .{ n, @typeName(T), @intFromPtr(items.ptr), @alignOf(T) });
