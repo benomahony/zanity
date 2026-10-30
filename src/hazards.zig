@@ -190,6 +190,35 @@ pub fn checkRiskyCall(self: *File, ctx: Context, name: []const u8) !void {
     if (name.len == 0) assert.panic("{s}: the call {f} has an empty name; capture the callee as @call.name in the language's zanity.scm", .{ self.work.facts.path, ctx.node.where() });
 }
 
+/// A tracing call from the language's tables: a span named with text built at runtime, and the
+/// spans the enclosing function starts and ends, for checkUnendedSpan when it closes.
+pub fn checkSpanCall(self: *File, ctx: Context, name: []const u8) !void {
+    if (ctx.family != .call) assert.panic("{s}: checking {f} as a tracing call, but it is a {t}; call checkSpanCall() only from closeCall()", .{ self.work.facts.path, ctx.node.where(), ctx.family });
+    if (name.len == 0) assert.panic("{s}: the call {f} has an empty name; capture the callee as @call.name in the language's zanity.scm", .{ self.work.facts.path, ctx.node.where() });
+    const t = self.tables;
+    const has_receiver = ctx.receiver != null;
+    const names_span = self.calleeIn(ctx, name, t.span_name_first_calls) != null or (has_receiver and contains(t.span_name_first_methods, name));
+    if (names_span) if (ctx.arguments[0]) |first| {
+        if (self.index.marks(first, self.v.string_built) or self.index.marks(first, self.v.string_format)) {
+            _ = try self.report(first, "dynamic-span-name", try self.say("'{s}' names the span with text built at runtime, so each value makes a new span name and traces can't be grouped by operation.", .{header(first.text(self.source))}));
+        }
+    };
+    const function = self.enclosingFunction() orelse return;
+    if (has_receiver and contains(t.span_end_methods, name)) function.ends_span = true;
+    const starts = self.calleeIn(ctx, name, t.span_start_calls) != null or (has_receiver and contains(t.span_start_methods, name));
+    if (!starts or self.index.marks(ctx.node, self.checker.compiled.id("call.handed_off"))) return;
+    if (function.span_start == null) function.span_start = ctx.callee orelse ctx.name.?;
+}
+
+/// A span the function starts and never ends, which the tracer never records or exports.
+pub fn checkUnendedSpan(self: *File, ctx: Context) !void {
+    if (ctx.family != .function) assert.panic("{s}: checking {f} for an unended span, but it is a {t}; call checkUnendedSpan() only from closeFunction()", .{ self.work.facts.path, ctx.node.where(), ctx.family });
+    const start = ctx.span_start orelse return;
+    if (ts.ts_node_end_byte(start) > ts.ts_node_end_byte(ctx.node)) assert.panic("{s}: the span start {f} ends after its function {f}; record only calls inside the enclosing function", .{ self.work.facts.path, start.where(), ctx.node.where() });
+    if (ctx.ends_span) return;
+    _ = try self.report(start, "unended-span", try self.say("'{s}' starts a span this function never ends, so the span is never recorded or exported.", .{start.text(self.source)}));
+}
+
 fn checkDirectParameterSinks(self: *File, ctx: Context, name: []const u8) !void {
     if (ctx.family != .call) assert.panic("{s}: checking direct parameter sinks in {f}, which is a {t}; call only from checkRiskyCall", .{ self.work.facts.path, ctx.node.where(), ctx.family });
     if (name.len == 0) assert.panic("{s}: checking direct parameter sinks for an unnamed call; capture @call.name in the language query", .{self.work.facts.path});

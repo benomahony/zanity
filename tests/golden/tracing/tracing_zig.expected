@@ -1,0 +1,4 @@
+rules: unended-span,dynamic-span-name
+exit: 0
+tracing_zig.zig:6:18: warning [unended-span]
+tracing_zig.zig:30:35: warning [dynamic-span-name]

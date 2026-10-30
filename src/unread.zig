@@ -20,6 +20,7 @@ pub const looked_up = [_][]const u8{
     "async.name",
     "catch.swallowed",
     "call.discarded",
+    "call.handed_off",
     "chain.link",
     "comment.outer",
     "compare.equal",
