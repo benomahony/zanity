@@ -190,24 +190,44 @@ pub fn checkRiskyCall(self: *File, ctx: Context, name: []const u8) !void {
     if (name.len == 0) assert.panic("{s}: the call {f} has an empty name; capture the callee as @call.name in the language's zanity.scm", .{ self.work.facts.path, ctx.node.where() });
 }
 
-/// A tracing call from the language's tables: a span named with text built at runtime, and the
-/// spans the enclosing function starts and ends, for checkUnendedSpan when it closes.
+/// A tracing call from the language's tables: a span named with text built at runtime, a span
+/// start that discards the context it returns, and the spans the enclosing function starts and
+/// ends, for checkUnendedSpan when it closes.
 pub fn checkSpanCall(self: *File, ctx: Context, name: []const u8) !void {
     if (ctx.family != .call) assert.panic("{s}: checking {f} as a tracing call, but it is a {t}; call checkSpanCall() only from closeCall()", .{ self.work.facts.path, ctx.node.where(), ctx.family });
     if (name.len == 0) assert.panic("{s}: the call {f} has an empty name; capture the callee as @call.name in the language's zanity.scm", .{ self.work.facts.path, ctx.node.where() });
     const t = self.tables;
     const has_receiver = ctx.receiver != null;
-    const names_span = self.calleeIn(ctx, name, t.span_name_first_calls) != null or (has_receiver and contains(t.span_name_first_methods, name));
-    if (names_span) if (ctx.arguments[0]) |first| {
-        if (self.index.marks(first, self.v.string_built) or self.index.marks(first, self.v.string_format)) {
-            _ = try self.report(first, "dynamic-span-name", try self.say("'{s}' names the span with text built at runtime, so each value makes a new span name and traces can't be grouped by operation.", .{header(first.text(self.source))}));
-        }
+    const function = self.enclosingFunction();
+    if (function) |f| if (has_receiver and contains(t.span_end_methods, name)) {
+        f.ends_span = true;
     };
-    const function = self.enclosingFunction() orelse return;
-    if (has_receiver and contains(t.span_end_methods, name)) function.ends_span = true;
+    if (t.span_start_pairs and !self.index.marks(ctx.node, self.checker.compiled.id("call.paired"))) return;
+    if (spanName(self, ctx, name)) |span_name| {
+        if (self.index.marks(span_name, self.v.string_built) or self.index.marks(span_name, self.v.string_format)) {
+            _ = try self.report(span_name, "dynamic-span-name", try self.say("'{s}' names the span with text built at runtime, so each value makes a new span name and traces can't be grouped by operation.", .{header(span_name.text(self.source))}));
+        }
+    }
     const starts = self.calleeIn(ctx, name, t.span_start_calls) != null or (has_receiver and contains(t.span_start_methods, name));
-    if (!starts or self.index.marks(ctx.node, self.checker.compiled.id("call.handed_off"))) return;
-    if (function.span_start == null) function.span_start = ctx.callee orelse ctx.name.?;
+    if (!starts) return;
+    const at = ctx.callee orelse ctx.name.?;
+    if (self.index.marks(ctx.node, self.checker.compiled.id("call.context_discarded"))) {
+        _ = try self.report(at, "discarded-span-context", try self.say("'{s}' starts a span and throws away the context that carries it, so spans started from the old context are not its children and the trace splits apart.", .{at.text(self.source)}));
+    }
+    const f = function orelse return;
+    if (self.index.marks(ctx.node, self.checker.compiled.id("call.handed_off"))) return;
+    if (f.span_start == null) f.span_start = at;
+}
+
+/// The argument naming the span a tracing call starts, at the position its table gives.
+fn spanName(self: *File, ctx: Context, name: []const u8) ?ts.Node {
+    if (ctx.family != .call) assert.panic("{s}: finding the span name of {f}, which is a {t}; call only from checkSpanCall", .{ self.work.facts.path, ctx.node.where(), ctx.family });
+    if (name.len == 0) assert.panic("{s}: finding the span name of an unnamed call; capture @call.name in the language query", .{self.work.facts.path});
+    const t = self.tables;
+    const has_receiver = ctx.receiver != null;
+    if (self.calleeIn(ctx, name, t.span_name_first_calls) != null or (has_receiver and contains(t.span_name_first_methods, name))) return ctx.arguments[0];
+    if (has_receiver and contains(t.span_name_second_methods, name)) return ctx.arguments[1];
+    return null;
 }
 
 /// A span the function starts and never ends, which the tracer never records or exports.

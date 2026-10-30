@@ -168,6 +168,11 @@ pub const Tables = struct {
     /// Tracing calls and methods whose first argument names the span, scoped or not.
     span_name_first_calls: []const []const u8 = &.{},
     span_name_first_methods: []const []const u8 = &.{},
+    /// Tracing methods whose second argument names the span, as Go's `tracer.Start(ctx, name)` does.
+    span_name_second_methods: []const []const u8 = &.{},
+    /// Whether a span start returns the context and the span together, as Go's `tracer.Start` does,
+    /// so a call to one of its methods that doesn't is something else, such as `cmd.Start()`.
+    span_start_pairs: bool = false,
     /// Calls that stop the program for a debugger or dump its state for one.
     debug_calls: []const []const u8 = &.{},
     mutating_calls: []const []const u8 = &.{},

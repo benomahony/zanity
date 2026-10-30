@@ -554,12 +554,13 @@ Rules marked *strict* hold code to what safety-critical software needs and most 
 
 `constant-condition`, `float-equality`, `discarded-comparison`, `unreachable-code`, `generic-catch`, `generic-throw`, `debug-leftover`, `hardcoded-secret`, `return-in-finally`, `identity-comparison`, `precedence-trap`, `switch-fallthrough`, `missing-default`, `no-effect-statement`, `tls-verification-disabled`, `weak-hash`, `unsafe-deserialization`, `shell-command`, `sql-built-from-strings`, `secret-in-log`, `wall-clock-duration` and `unawaited-call`.
 
-**Tracing** (OpenTelemetry's API in Python, Swift's `swift-distributed-tracing` and a Zig tracer's `startSpan`; other tracing libraries are entries in `languages/tables.zon`)
+**Tracing** (OpenTelemetry's API in Python, Go, TypeScript and JavaScript, Honeycomb's Go Beeline, Swift's `swift-distributed-tracing` and a Zig tracer's `startSpan`; other tracing libraries are entries in `languages/tables.zon`)
 
 | Rule | Severity | Flags |
 |---|---|---|
-| `unended-span` | warning | a span started by hand, such as with `start_span` or `startSpan`, that the function never ends; not one in a `with` block, returned, or stored on an object |
-| `dynamic-span-name` | warning | a span named with text built at runtime, such as an f-string, `"\(id)"` or `std.fmt.allocPrint`, so each value makes a new span name |
+| `unended-span` | warning | a span started by hand, such as with `start_span`, `startSpan`, `startActiveSpan` or Go's `tracer.Start`, that the function never ends; not one in a `with` block, returned, or stored on an object |
+| `dynamic-span-name` | warning | a span named with text built at runtime, such as an f-string, a template string, `fmt.Sprintf`, `"\(id)"` or `std.fmt.allocPrint`, so each value makes a new span name |
+| `discarded-span-context` | warning | a Go span start whose context is thrown away, as in `_, span := tracer.Start(ctx, name)`, so later spans are not its children |
 
 `parse-error` reports a file tree-sitter could not fully parse; the other rules still run on what it recovered.
 
