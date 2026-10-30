@@ -386,7 +386,7 @@
  },
  {
   "id": "CWE-306",
-  "question": "Does the function perform a critical or expensive action, such as changing accounts, configuration, money or data, or starting heavy work, without first authenticating the caller?",
+  "question": "Does the function perform a critical or expensive action, such as changing accounts, configuration, money or data, or starting heavy work, for a caller that reaches it across a trust boundary, such as a network request, a message from another process or a request from another user, without first authenticating that caller? A dependency or check that does not establish who the caller is does not count as authentication. Ignore code that its own user runs directly, such as command line tools, scripts, tests and the helpers they call, where the operating system has already identified who is running it, and code acting as a client that sends its own user's requests and credentials to another service.",
   "message": "A critical action runs without authenticating the caller. Require authentication before this action",
   "severity": "error",
   "scope": "function"
@@ -2284,7 +2284,7 @@
  },
  {
   "id": "EXT-HUMAN-002",
-  "question": "Does the function delete or overwrite data on a user's behalf, such as their files, records or accounts, where the confirmation shown or requested may refer to a different target than the one actually affected, or where no confirmation is required? Ignore removing files, folders or records that the same code or test created earlier in the run, such as temporary files and test fixtures.",
+  "question": "Does the function delete or overwrite data on a user's behalf, such as their files, records or accounts, where the confirmation shown or requested refers to a different target than the one actually affected, or where it deletes or overwrites data the user never named or asked to change? An explicit command, flag or request that names both the action and its target, such as a fix, upgrade or delete command, is the user's confirmation for that target. Ignore removing files, folders or records that the same code or test created earlier in the run, such as temporary files and test fixtures, and ignore the program replacing files that only it writes, such as its own cache, state, baseline or generated output.",
   "message": "The destructive action may not match what the user confirmed. Confirm the exact target, and act on that same target",
   "severity": "error",
   "scope": "function"
