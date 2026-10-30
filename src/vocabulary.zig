@@ -189,7 +189,7 @@ fn conflicts(run: Run) error{LimitExceeded}!void {
     const settings = anchor.config;
     const terms = settings.vocabulary();
     for (terms, 0..) |a, i| for (terms[i + 1 ..]) |b| {
-        const message = if (a.canonical.len == 0 and std.ascii.eqlIgnoreCase(a.word, b.canonical) or b.canonical.len == 0 and std.ascii.eqlIgnoreCase(b.word, a.canonical))
+        const message = if ((a.canonical.len == 0 and std.ascii.eqlIgnoreCase(a.word, b.canonical)) or (b.canonical.len == 0 and std.ascii.eqlIgnoreCase(b.word, a.canonical)))
             try text.format("'{s}' is both banned and the canonical word for something, so every name that uses it is reported.", .{if (a.canonical.len == 0) a.word else b.word})
         else if (a.canonical.len > 0 and b.canonical.len > 0 and std.ascii.eqlIgnoreCase(a.word, b.word) and !std.ascii.eqlIgnoreCase(a.canonical, b.canonical))
             try text.format("'{s}' stands for '{s}' on line {d} but for '{s}' here, so the same name is told to become two different ones.", .{ b.word, a.canonical, a.line, b.canonical })
