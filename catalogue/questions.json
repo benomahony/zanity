@@ -1065,7 +1065,7 @@
  },
  {
   "id": "CWE-681",
-  "question": "Does the function convert between numeric types, such as long to int, float to int, or signed to unsigned, in a way that can truncate, overflow or change sign?",
+  "question": "Does the function convert between numeric types, such as long to int, float to int, or signed to unsigned, where the value can fall outside the target type and nothing checks or handles that, so it is truncated, wrapped, sign-changed, or crashes the program or is undefined behaviour? A cast that only traps or is undefined on a value that does not fit, such as Zig's @intCast or C's (int), is not a check. Identify the conversion and the out-of-range value that reaches it. A checked conversion that reports or handles a value that does not fit, such as one returning null or an error, is safe, as is a conversion whose value an earlier check or the arithmetic itself keeps in range. A conversion from a signed to an unsigned type is never widening: a negative value does not fit. Ignore only conversions to a type that holds every value of the source type, such as u16 to u32 or i32 to i64.",
   "message": "This numeric conversion can lose data or change sign. Check the value fits in the target type first",
   "severity": "error",
   "scope": "function"
@@ -1937,7 +1937,7 @@
  },
  {
   "id": "CWE-197",
-  "question": "Does the function cast a value to a smaller numeric type, losing high-order bits, where the value can exceed the smaller type's range?",
+  "question": "Does the function cast a value to a smaller numeric type, losing high-order bits, where the value can exceed the smaller type's range and nothing checks or handles that first? A cast that only traps or is undefined on a value that does not fit, such as Zig's @intCast, is not a check. Identify the cast and the value that can exceed the range. A checked conversion that reports or handles a value that does not fit is safe, as is a cast whose value an earlier check keeps in range.",
   "message": "Casting to a smaller type can lose data. Check the value fits before casting",
   "severity": "error",
   "scope": "function"
