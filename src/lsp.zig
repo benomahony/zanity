@@ -11,6 +11,21 @@ const store = @import("store.zig");
 const rules = @import("rules.zig");
 const Telemetry = @import("telemetry.zig").Telemetry;
 const Attribute = @import("telemetry.zig").Attribute;
+const protocol = @import("lsp_protocol.zig");
+const Position = protocol.Position;
+const Range = protocol.Range;
+const TextEdit = protocol.TextEdit;
+const no_value = protocol.no_value;
+const position = protocol.position;
+const readMessage = protocol.readMessage;
+const offersUtf8 = protocol.offersUtf8;
+const pathOf = protocol.pathOf;
+const uriOf = protocol.uriOf;
+const EditorRequest = protocol.EditorRequest;
+const requestOf = protocol.requestOf;
+const member = protocol.member;
+const stringOf = protocol.stringOf;
+const integerOf = protocol.integerOf;
 const Io = std.Io;
 const Allocator = std.mem.Allocator;
 const json = std.json;
@@ -33,10 +48,6 @@ pub const ServerLimits = struct {
     flags: u32 = 1 << 12,
 };
 
-/// JSON's null, as a result and as what a missing member reads as.
-const no_value: json.Value = .null;
-/// The most header lines one message may start with; LSP defines two.
-const max_header_lines = 16;
 /// The most messages one session handles; an editor sends far fewer in a working lifetime.
 const max_messages = 1 << 40;
 /// Bound the checker's diagnostic output independently of its JSON findings.
@@ -58,9 +69,6 @@ pub const Record = struct {
     edit_text: ?[]const u8 = null,
 };
 
-pub const Position = struct { line: u32, character: u32 };
-pub const Range = struct { start: Position, end: Position };
-pub const TextEdit = struct { range: Range, newText: []const u8 };
 pub const LspDiagnostic = struct { range: Range, severity: u8, code: []const u8, source: []const u8 = "zanity", message: []const u8 };
 
 /// A finding's diagnostic, the edit that fixes it when zanity can make one, and the finding itself.
@@ -95,7 +103,7 @@ fn firstUnit(found: *?store.Digest, observed: store.Observed) anyerror!bool {
 }
 
 /// Which finding a command is about, as its code action passes it back.
-const Target = struct { path: []const u8, line: u32, column: u32, rule: []const u8, message: []const u8 };
+const Target = struct { path: []const u8, line: u32, column: u32, rule: []const u8, message: []const u8, generation: u64 = 0 };
 
 /// The commands the server's code actions run.
 const flag_command = "zanity.flagFalsePositive";
@@ -109,9 +117,13 @@ const fix_all = "source.fixAll.zanity";
 /// A checked file with findings: its path, URI and bytes as checked, and where its findings sit
 /// among the check's entries, which `zanity check` sorts by path.
 const CheckedFile = struct { path: []const u8, uri: []const u8, source: []const u8, first: usize, count: usize };
+/// A borrowed snapshot of the diagnostics currently visible for one file.
+const DiagnosticView = struct { uri: []const u8, entries: []const Entry };
 
 /// The findings of one check and the memory that holds them, cleared for every second check.
 const Results = struct {
+    /// Zero before a check, otherwise the session generation whose findings these are.
+    generation: u64 = 0,
     output: []u8,
     text: memory.Text,
     entries: memory.Bounded(Entry),
@@ -133,8 +145,37 @@ const Results = struct {
         self.text.used = 0;
         self.entries.clear();
         self.files.clear();
+        self.generation = 0;
         if (self.files.len != 0) assert.panic("cleared results still hold {d} files; fix Results.clear() to empty files", .{self.files.len});
         if (self.text.used != 0) assert.panic("cleared results still hold {d} bytes of text; fix Results.clear() to reset text", .{self.text.used});
+    }
+
+    /// Advances the public revision of the diagnostic cache after the previous snapshot.
+    fn advanceDiagnosticRevision(self: *Results, previous: *const Results) error{LimitExceeded}!void {
+        // This revision is public code-action metadata, like a document version: its only
+        // purpose is to distinguish cached views when rejecting stale editor actions.
+        if (self.entries.len != 0) assert.panic("starting a check with {d} old findings; clear the destination results first", .{self.entries.len});
+        if (self.files.len != 0) assert.panic("starting a check with {d} old files; clear the destination results first", .{self.files.len});
+        self.generation = std.math.add(u64, previous.generation, 1) catch {
+            memory.exceeded = "language-server check generations";
+            return error.LimitExceeded;
+        };
+    }
+
+    /// Carries the producing check's identity with the opaque arguments returned by a code action.
+    fn bindTarget(self: *const Results, target: Target) Target {
+        if (self.generation == 0) assert.panic("binding a finding in {s} before a check; begin a checked generation before offering actions", .{target.path});
+        if (self.files.len == 0) assert.panic("binding a finding in {s} without checked files; add the checked results before offering actions", .{target.path});
+        var bound = target;
+        bound.generation = self.generation;
+        return bound;
+    }
+
+    /// Whether an action still names this snapshot; unchanged generations permit safe retries.
+    fn isCurrentTarget(self: *const Results, target: Target) bool {
+        if (self.generation == 0 and self.files.len != 0) assert.panic("{d} checked files have no generation; call advanceDiagnosticRevision() before recording files", .{self.files.len});
+        if (self.generation == 0 and self.entries.len != 0) assert.panic("{d} checked findings have no generation; call advanceDiagnosticRevision() before recording findings", .{self.entries.len});
+        return self.generation != 0 and target.generation == self.generation;
     }
 
     fn find(self: *const Results, path: []const u8) ?*CheckedFile {
@@ -149,6 +190,30 @@ const Results = struct {
         if (file.first + file.count > all.len) assert.panic("{s}: its findings run to entry {d} of {d}; fix Results.add() to record the file's actual range", .{ file.path, file.first + file.count, all.len });
         if (file.first > all.len) assert.panic("{s}: its findings start at entry {d} of {d}; fix Results.add() to record the file's actual start", .{ file.path, file.first, all.len });
         return all[file.first..][0..file.count];
+    }
+
+    /// Removes matching diagnostic copies from the action's checked generation. A current
+    /// target returns the known file's view even when no entry matches; stale generations and
+    /// unknown or empty paths return null.
+    fn dismissDiagnostic(self: *Results, target: Target) ?DiagnosticView {
+        if (!self.isCurrentTarget(target)) return null;
+        if (target.path.len == 0) return null;
+        const cached_file = self.find(target.path) orelse return null;
+        // Only this in-memory display slice is compacted. Source bytes and record strings
+        // remain read-only; the cached count selects how much of the slice the editor sees.
+        const entries = self.entriesOf(cached_file);
+        var kept: usize = 0;
+        for (entries) |entry| {
+            const r = entry.record;
+            if (r.line == target.line and r.column == target.column and std.mem.eql(u8, r.rule, target.rule) and std.mem.eql(u8, r.message, target.message)) continue;
+            entries[kept] = entry;
+            kept += 1;
+        }
+        if (kept > entries.len) assert.panic("retained {d} diagnostics from {d}; dismissDiagnostic() must only retain existing entries", .{ kept, entries.len });
+        cached_file.count = kept;
+        const remaining = self.entriesOf(cached_file);
+        if (remaining.len != kept) assert.panic("dismissed diagnostics left a {d}-entry view for {d} retained entries; entriesOf() must use the updated file count", .{ remaining.len, kept });
+        return .{ .uri = cached_file.uri, .entries = remaining };
     }
 
     /// Borrows capture storage only after the previous findings and their sources were cleared.
@@ -389,6 +454,7 @@ pub const LanguageServer = struct {
         self.previous.clear();
         const records = try self.runCheck(&self.previous) orelse return;
         std.mem.swap(Results, &self.current, &self.previous);
+        try self.current.advanceDiagnosticRevision(&self.previous);
         self.dirty.clear();
         var fixable: usize = 0;
         for (records) |record| {
@@ -547,7 +613,7 @@ pub const LanguageServer = struct {
         if (file.uri.len == 0) assert.panic("offering fixes in {s}, which has no URI; add() records each file's URI", .{file.path});
         const s = &self.scratch;
         const before = s.actions.len;
-        try s.targets.add(entry.targets(file.path));
+        try s.targets.add(self.current.bindTarget(entry.targets(file.path)));
         const target = s.targets.items()[s.targets.len - 1 ..];
         const diagnostics: []const LspDiagnostic = (&entry.diagnostic)[0..1];
         const rule = entry.record.rule;
@@ -590,6 +656,30 @@ pub const LanguageServer = struct {
         return .{ .title = title, .kind = fix_all, .diagnostics = s.diagnostics.items(), .isPreferred = false, .edit = .{ .changes = .{ .uri = file.uri, .edits = s.edits.items() } } };
     }
 
+    /// Checks an action's finding coordinates and checked-view lifetime before changing labels
+    /// or diagnostics. Fix-applied acknowledgements describe an edit the editor already made.
+    fn acceptsCommandTarget(self: *LanguageServer, id: json.Value, command: []const u8, target: Target) !bool {
+        const text = &self.scratch.text;
+        if (self.outbox.len == 0) assert.panic("validating command {s} without reply storage; call initLanguageServer() first", .{command});
+        if (text.buffer.len == 0) assert.panic("validating command {s} without message storage; initialize the request scratch first", .{command});
+        if (target.path.len == 0 or target.rule.len == 0 or target.message.len == 0) {
+            try self.sendError(id, -32602, "Use the nonempty path, rule and message from a finding offered by a code action.");
+            return false;
+        }
+        if (target.line == 0 or target.column == 0) {
+            try self.sendError(id, -32602, try text.format("The finding is at line {d} column {d}, but both count from 1.", .{ target.line, target.column }));
+            return false;
+        }
+        // This acknowledgement only records telemetry for an edit already applied by the
+        // editor; autosave may have advanced its check or left the document dirty meanwhile.
+        if (std.mem.eql(u8, command, fixed_command)) return true;
+        if (!self.current.isCurrentTarget(target) or self.isDirty(target.path)) {
+            try self.sendError(id, -32602, try text.format("The code action for {s} no longer matches checked code; save the file and request fresh code actions before marking or dismissing a finding.", .{target.path}));
+            return false;
+        }
+        return true;
+    }
+
     /// Runs a command one of the server's code actions named.
     fn execute(self: *LanguageServer, id: json.Value, params: json.Value) !void {
         if (self.services.version.len == 0) assert.panic("running a command with no version to record it under", .{});
@@ -597,8 +687,7 @@ pub const LanguageServer = struct {
         const call = json.parseFromValueLeaky(Call, self.scratch.parse.allocator(), params, .{ .ignore_unknown_fields = true }) catch Call{ .command = "", .arguments = &.{} };
         if (call.arguments.len != 1) return self.sendError(id, -32602, try self.scratch.text.format("zanity's commands take one argument, the finding its code action named, not {d}.", .{call.arguments.len}));
         const target = call.arguments[0];
-        if (target.path.len == 0 or target.rule.len == 0 or target.message.len == 0) return self.sendError(id, -32602, "Use the nonempty path, rule and message from a finding offered by a code action.");
-        if (target.line == 0 or target.column == 0) return self.sendError(id, -32602, try self.scratch.text.format("The finding is at line {d} column {d}, but both count from 1.", .{ target.line, target.column }));
+        if (!try self.acceptsCommandTarget(id, call.command, target)) return;
         if (std.mem.eql(u8, call.command, flag_command)) {
             try self.flag(target);
         } else if (std.mem.eql(u8, call.command, confirm_command) or std.mem.eql(u8, call.command, dismiss_command)) {
@@ -621,23 +710,17 @@ pub const LanguageServer = struct {
         const unit = found orelse return self.show(2, try self.scratch.text.format("zanity: no answer is kept for {s} at {s}:{d}; check it again with --infer first.", .{ target.rule, target.path, target.line }));
         try kept.label(target.rule, unit, real);
         if (try kept.labelled(target.rule, unit) != real) assert.panic("marked {s} at {s}:{d}, but the store doesn't say so", .{ target.rule, target.path, target.line });
-        if (!real) try self.hide(target);
+        if (!real) try self.refreshDiagnosticsAfterDismissal(target);
         try self.show(3, try self.scratch.text.format("zanity: marked {s} at {s}:{d} {s}.", .{ target.rule, target.path, target.line, if (real) "as real" else "not a problem; it won't be reported for this function again" }));
     }
 
-    /// Stops publishing the finding `target` names until the next check.
-    fn hide(self: *LanguageServer, target: Target) !void {
-        if (target.line == 0) assert.panic("hiding a {s} finding on line 0; findings count lines from 1", .{target.rule});
-        const file = self.current.find(target.path) orelse return;
-        const entries = self.current.entriesOf(file);
-        const index = for (entries, 0..) |entry, i| {
-            const r = entry.record;
-            if (r.line == target.line and r.column == target.column and std.mem.eql(u8, r.rule, target.rule)) break i;
-        } else return;
-        std.mem.copyForwards(Entry, entries[index..], entries[index + 1 ..]);
-        file.count -= 1;
-        try self.publish(file.uri, entries[0 .. entries.len - 1]);
-        if (file.count >= entries.len) assert.panic("hiding a {s} finding left {d} of {d}", .{ target.rule, file.count, entries.len });
+    /// Republishes a current action's diagnostic view after an editor dismissal. Publication
+    /// replaces the editor's whole list, so retries in the same generation converge on that view.
+    fn refreshDiagnosticsAfterDismissal(self: *LanguageServer, target: Target) !void {
+        if (self.outbox.len == 0) assert.panic("publishing a dismissal for {s} without reply storage; call initLanguageServer() first", .{target.path});
+        const view = self.current.dismissDiagnostic(target) orelse return;
+        if (view.uri.len == 0) assert.panic("dismissal of {s} produced no document URI; retain each checked file's URI when adding results", .{target.path});
+        try self.publish(view.uri, view.entries);
     }
 
     /// Keeps a finding the editor flagged as a false positive, sends it as a span, and hides it.
@@ -879,192 +962,6 @@ fn lineStart(source: []const u8, line: u32) usize {
     return offset;
 }
 
-/// The LSP position of byte `offset`, counting characters in bytes or in UTF-16 code units.
-pub fn position(source: []const u8, offset: usize, utf8: bool) Position {
-    if (offset > source.len) assert.panic("byte {d} is past the end of a {d}-byte file; clamp or validate the offset before position()", .{ offset, source.len });
-    const line_start = if (std.mem.lastIndexOfScalar(u8, source[0..offset], '\n')) |n| n + 1 else 0;
-    const line: u32 = @intCast(std.mem.count(u8, source[0..line_start], "\n"));
-    const prefix = source[line_start..offset];
-    const character = if (utf8) prefix.len else std.unicode.calcUtf16LeLen(prefix) catch prefix.len;
-    if (character > prefix.len) assert.panic("{d} bytes counted as {d} characters; fix position()'s UTF-16 conversion", .{ prefix.len, character });
-    return .{ .line = line, .character = @intCast(character) };
-}
-
-/// Reads one message's JSON body into `inbox`, or null when the editor closed stdin between messages.
-pub fn readMessage(in: *Io.Reader, inbox: []u8) !?[]u8 {
-    if (inbox.len == 0) assert.panic("reading a message into no room", .{});
-    var length: ?usize = null;
-    for (0..max_header_lines) |i| {
-        const raw = in.takeDelimiterInclusive('\n') catch |e| switch (e) {
-            error.EndOfStream => if (i == 0) return null else return error.EndOfStream,
-            else => return e,
-        };
-        const header = std.mem.trimEnd(u8, raw, "\r\n");
-        if (header.len == 0) break;
-        const name = "content-length:";
-        if (header.len > name.len and std.ascii.startsWithIgnoreCase(header, name)) length = try std.fmt.parseInt(usize, std.mem.trim(u8, header[name.len..], " "), 10);
-    } else return error.TooManyHeaders;
-    const n = length orelse return error.MissingContentLength;
-    if (n > inbox.len) return error.MessageTooLong;
-    try in.readSliceAll(inbox[0..n]);
-    if (n > inbox.len) assert.panic("read a {d}-byte message into {d} bytes", .{ n, inbox.len });
-    return inbox[0..n];
-}
-
-/// Whether the editor can count positions in bytes, which saves converting them.
-fn offersUtf8(params: json.Value) error{TooManyPositionEncodings}!bool {
-    const encodings = member(member(member(params, "capabilities"), "general"), "positionEncodings") orelse return false;
-    const offered: []const json.Value = if (encodings == .array) encodings.array.items else &.{};
-    if (offered.len > 1 << 20) return error.TooManyPositionEncodings;
-    const utf8 = for (offered) |e| {
-        if (std.mem.eql(u8, stringOf(e) orelse continue, "utf-8")) break true;
-    } else false;
-    if (utf8 and offered.len == 0) assert.panic("chose UTF-8 positions though the editor offered no encodings; fix offersUtf8() to choose only from the list", .{});
-    if (utf8 and encodings != .array) assert.panic("chose UTF-8 from {t} encodings; offersUtf8() must inspect an offered array", .{encodings});
-    return utf8;
-}
-
-/// Each URI escape consumes exactly a percent sign and two hexadecimal digits.
-fn validateEscapes(encoded: []const u8) error{InvalidFileUri}!void {
-    var at: usize = 0;
-    var escapes: usize = 0;
-    while (at < encoded.len) : (at += 1) {
-        if (encoded[at] != '%') continue;
-        if (encoded.len - at < 3 or !std.ascii.isHex(encoded[at + 1]) or !std.ascii.isHex(encoded[at + 2])) return error.InvalidFileUri;
-        at += 2;
-        escapes += 1;
-    }
-    if (at != encoded.len) assert.panic("validated URI escapes through byte {d} of {d}; consume complete escapes without crossing the path's end", .{ at, encoded.len });
-    if (escapes > encoded.len / 3) assert.panic("counted {d} three-byte escapes in {d} URI bytes; count each percent sign once", .{ escapes, encoded.len });
-}
-
-/// The path a `file://` URI names, decoded into `text`; null for any other scheme.
-pub fn pathOf(text: *memory.Text, uri: []const u8) !?[]const u8 {
-    if (!std.ascii.startsWithIgnoreCase(uri, "file://")) return null;
-    const parsed = std.Uri.parse(uri) catch return error.InvalidFileUri;
-    const unsupported = [_]bool{ parsed.user != null, parsed.password != null, parsed.port != null, parsed.query != null, parsed.fragment != null };
-    for (unsupported) |present| if (present) return error.InvalidFileUri;
-    if (parsed.host) |host| {
-        const name = switch (host) {
-            .raw, .percent_encoded => |value| value,
-        };
-        if (name.len != 0 and !std.ascii.eqlIgnoreCase(name, "localhost")) return error.InvalidFileUri;
-    }
-    const encoded = switch (parsed.path) {
-        .raw, .percent_encoded => |value| value,
-    };
-    try validateEscapes(encoded);
-    const start = text.used;
-    _ = try text.copy(encoded);
-    var decoded = std.Uri.percentDecodeInPlace(text.buffer[start..text.used]);
-    if (@import("builtin").os.tag == .windows and std.mem.startsWith(u8, decoded, "/") and std.fs.path.diskDesignatorWindows(decoded[1..]).len == 2) decoded = decoded[1..];
-    if (decoded.len == 0 or !std.fs.path.isAbsolute(decoded) or std.mem.indexOfScalar(u8, decoded, 0) != null) return error.InvalidFileUri;
-    std.mem.copyForwards(u8, text.buffer[start..][0..decoded.len], decoded);
-    text.used = start + decoded.len;
-    if (decoded.len > encoded.len) assert.panic("decoding {s} lengthened its path to {d} bytes; percent decoding can only shorten it", .{ uri, decoded.len });
-    if (text.used > text.buffer.len) assert.panic("decoded {s} beyond the path buffer; Text.copy() must reserve the encoded path first", .{uri});
-    return text.buffer[start..text.used];
-}
-
-/// The `file://` URI of an absolute path, written into `text`, encoding what a URI path cannot hold.
-pub fn uriOf(text: *memory.Text, path: []const u8) ![]const u8 {
-    if (!std.fs.path.isAbsolute(path)) assert.panic("making a URI of the relative path {s}; resolve it against the root first", .{path});
-    var out: Io.Writer = .fixed(text.buffer[text.used..]);
-    const windows = @import("builtin").os.tag == .windows;
-    const prefix = if (windows and std.fs.path.diskDesignatorWindows(path).len == 2) "file:///" else "file://";
-    out.writeAll(prefix) catch return error.LimitExceeded;
-    for (path) |native| {
-        const c = if (windows and native == '\\') '/' else native;
-        const plain = std.ascii.isAlphanumeric(c) or std.mem.indexOfScalar(u8, "-._~/", c) != null;
-        (if (plain) out.writeByte(c) else out.print("%{X:0>2}", .{c})) catch {
-            memory.exceeded = "bytes of paths and URIs in one check";
-            return error.LimitExceeded;
-        };
-    }
-    const uri = out.buffered();
-    text.used += uri.len;
-    if (uri.len < path.len + "file://".len) assert.panic("the URI of {s} is shorter than the path", .{path});
-    return uri;
-}
-
-/// A JSON-RPC envelope validated by requestOf() before dispatch to an editor command handler.
-const EditorRequest = struct { method: []const u8, id: ?json.Value, params: json.Value };
-
-/// Validates the JSON-RPC envelope before its fields reach handlers with internal contracts.
-fn requestOf(value: json.Value) ?EditorRequest {
-    const version = stringOf(member(value, "jsonrpc")) orelse return null;
-    if (!std.mem.eql(u8, version, "2.0")) return null;
-    const method = stringOf(member(value, "method")) orelse return null;
-    if (method.len == 0) return null;
-    const id = member(value, "id");
-    if (id) |found| switch (found) {
-        .integer, .string, .null => {},
-        else => return null,
-    };
-    const params = member(value, "params") orelse no_value;
-    switch (params) {
-        .object, .array, .null => {},
-        else => return null,
-    }
-    const request: EditorRequest = .{ .method = method, .id = id, .params = params };
-    if (request.method.len == 0) assert.panic("validated an empty request method; requestOf() must reject it", .{});
-    if (value != .object) assert.panic("validated a request in a {t}; member() must accept only JSON objects", .{value});
-    return request;
-}
-
-fn member(value: ?json.Value, name: []const u8) ?json.Value {
-    if (name.len == 0) assert.panic("looking up an empty member name; pass the JSON property to read", .{});
-    const v = value orelse return null;
-    if (v != .object) return null;
-    const found = v.object.get(name);
-    if (found != null and v.object.count() == 0) assert.panic("found {s} in an empty object; fix member() or the JSON object implementation", .{name});
-    return found;
-}
-
-fn stringOf(value: ?json.Value) ?[]const u8 {
-    const v = value orelse return null;
-    if (v != .string) return null;
-    const string = v.string;
-    if (string.len > 1 << 28) assert.panic("a {d}-byte string in one message, past what a message holds; enforce the message limit before stringOf()", .{string.len});
-    if (string.len > 0 and @intFromPtr(string.ptr) == 0) assert.panic("a {d}-byte string at address 0; fix the parsed JSON string storage", .{string.len});
-    return string;
-}
-
-fn integerOf(value: ?json.Value) ?u32 {
-    const v = value orelse return null;
-    if (v != .integer or v.integer < 0 or v.integer > std.math.maxInt(u32)) return null;
-    const n: u32 = @intCast(v.integer);
-    if (n != v.integer) assert.panic("{d} changed to {d} on narrowing", .{ v.integer, n });
-    if (v.integer < 0) assert.panic("{d} passed as a line number; negative numbers are refused above", .{v.integer});
-    return n;
-}
-
-test "positions count bytes or UTF-16 code units" {
-    const source = "a = 1\nb = \"é𝄞\" + x\n";
-    const x = std.mem.indexOfScalar(u8, source, 'x').?;
-    try std.testing.expectEqual(Position{ .line = 1, .character = 15 }, position(source, x, true));
-    try std.testing.expectEqual(Position{ .line = 1, .character = 12 }, position(source, x, false));
-    try std.testing.expectEqual(Position{ .line = 0, .character = 0 }, position(source, 0, false));
-    try std.testing.expectEqual(Position{ .line = 2, .character = 0 }, position(source, source.len, false));
-}
-
-test "a URI and its path convert both ways" {
-    var text: memory.Text = try .initText(std.testing.allocator, 1024);
-    defer std.testing.allocator.free(text.buffer);
-    const uri = try uriOf(&text, "/tmp/my project/a#b.py");
-    try std.testing.expectEqualStrings("file:///tmp/my%20project/a%23b.py", uri);
-    try std.testing.expectEqualStrings("/tmp/my project/a#b.py", (try pathOf(&text, uri)).?);
-    try std.testing.expectEqual(null, try pathOf(&text, "untitled:Untitled-1"));
-}
-
-test "a message is read by its Content-Length header" {
-    var inbox: [64]u8 = undefined;
-    var in: Io.Reader = .fixed("Content-Length: 2\r\nContent-Type: application/vscode-jsonrpc\r\n\r\n{}Content-Length: 3\r\n\r\n[1]");
-    try std.testing.expectEqualStrings("{}", (try readMessage(&in, &inbox)).?);
-    try std.testing.expectEqualStrings("[1]", (try readMessage(&in, &inbox)).?);
-    try std.testing.expectEqual(null, try readMessage(&in, &inbox));
-}
-
 test "a finding becomes a diagnostic to the end of its line, with its edit placed" {
     var text: memory.Text = try .initText(std.testing.allocator, 1024);
     defer std.testing.allocator.free(text.buffer);
@@ -1089,42 +986,62 @@ test "a code action kind covers the kinds under it" {
     try std.testing.expect(!isBefore(.{ .line = 1, .character = 0 }, .{ .line = 1, .character = 0 }));
 }
 
-test "JSON-RPC request envelopes reject malformed methods and ids" {
+test "dismissal removes every matching copy and retains the same view on retry" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
-    const invalid = [_][]const u8{
-        "{}",
-        "[]",
-        "{\"jsonrpc\":\"1.0\",\"method\":\"initialize\",\"id\":1}",
-        "{\"jsonrpc\":\"2.0\",\"method\":\"\",\"id\":1}",
-        "{\"jsonrpc\":\"2.0\",\"method\":\"shutdown\",\"id\":[]}",
-        "{\"jsonrpc\":\"2.0\",\"method\":\"shutdown\",\"id\":{}}",
-        "{\"jsonrpc\":\"2.0\",\"method\":\"initialize\",\"id\":1,\"params\":false}",
-    };
-    for (invalid) |body| {
-        const value = try json.parseFromSliceLeaky(json.Value, arena_state.allocator(), body, .{});
-        try std.testing.expectEqual(null, requestOf(value));
-    }
-    for ([_][]const u8{ "null", "1", "\"request-1\"" }) |id| {
-        const body = try std.fmt.allocPrint(arena_state.allocator(), "{{\"jsonrpc\":\"2.0\",\"method\":\"initialize\",\"id\":{s}}}", .{id});
-        const valid = try json.parseFromSliceLeaky(json.Value, arena_state.allocator(), body, .{});
-        try std.testing.expectEqualStrings("initialize", requestOf(valid).?.method);
+    const arena = arena_state.allocator();
+    const limits: ServerLimits = .{ .check_bytes = 1024, .check_text_bytes = 1024, .findings = 4, .files = 4 };
+    const previous = try Results.initResults(arena, limits);
+    var results = try Results.initResults(arena, limits);
+    try results.advanceDiagnosticRevision(&previous);
+    const record: Record = .{ .path = "/tmp/a.py", .line = 1, .column = 1, .severity = "warning", .rule = "assertion-message", .message = "assertion needs context", .fix = "Add a message." };
+    const entry = try entryOf(&results.text, "assert value\n", record, true);
+    try results.entries.add(entry);
+    try results.entries.add(entry);
+    var other = record;
+    other.line = 2;
+    try results.entries.add(try entryOf(&results.text, "assert value\nassert other\n", other, true));
+    try results.files.add(.{ .path = record.path, .uri = "file:///tmp/a.py", .source = "assert value\nassert other\n", .first = 0, .count = 3 });
+    const target = results.bindTarget(entry.targets(record.path));
+    var stale = target;
+    stale.generation = 0;
+    try std.testing.expectEqual(null, results.dismissDiagnostic(stale));
+    const before = results.entriesOf(results.find(record.path).?);
+    try std.testing.expectEqual(@as(usize, 3), before.len);
+    const first = results.dismissDiagnostic(target).?;
+    try std.testing.expectEqual(@as(usize, 1), first.entries.len);
+    try std.testing.expectEqual(@as(u32, 2), first.entries[0].record.line);
+    const retry = results.dismissDiagnostic(target).?;
+    try std.testing.expectEqualStrings(first.uri, retry.uri);
+    try std.testing.expectEqual(@as(usize, 1), retry.entries.len);
+    for ([_][]const u8{ "", "/tmp/missing.py" }) |path| {
+        var unknown = target;
+        unknown.path = path;
+        try std.testing.expectEqual(null, results.dismissDiagnostic(unknown));
     }
 }
 
-test "file URIs accept localhost and reject malformed or empty paths" {
-    var text = try memory.Text.initText(std.testing.allocator, 4096);
-    defer std.testing.allocator.free(text.buffer);
-    const windows = @import("builtin").os.tag == .windows;
-    const uri = if (windows) "file://localhost/C:/tmp/project" else "file://localhost/tmp/project";
-    try std.testing.expectEqualStrings(if (windows) "C:/tmp/project" else "/tmp/project", (try pathOf(&text, uri)).?);
-    const invalid = [_][]const u8{ "file://", "file://remote/tmp/project", "file:///tmp/%00x", "file:///tmp/%GG", "file:///tmp/x?query" };
-    for (invalid) |bad| try std.testing.expectError(error.InvalidFileUri, pathOf(&text, bad));
-    const drive = (try pathOf(&text, "file:///C:/tmp/project")).?;
-    try std.testing.expectEqualStrings(if (windows) "C:/tmp/project" else "/C:/tmp/project", drive);
-    if (windows) {
-        const written = try uriOf(&text, "C:\\tmp\\project");
-        try std.testing.expectEqualStrings("file:///C%3A/tmp/project", written);
-        try std.testing.expectEqualStrings("C:/tmp/project", (try pathOf(&text, written)).?);
-    }
+test "a newer check rejects old code actions even when the finding is unchanged" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    const limits: ServerLimits = .{ .check_bytes = 1024, .check_text_bytes = 1024, .findings = 4, .files = 4 };
+    const empty = try Results.initResults(arena, limits);
+    var previous = try Results.initResults(arena, limits);
+    try previous.advanceDiagnosticRevision(&empty);
+    const record: Record = .{ .path = "/tmp/a.py", .line = 1, .column = 1, .severity = "warning", .rule = "assertion-message", .message = "assertion needs context", .fix = "Add a message." };
+    const entry = try entryOf(&previous.text, "assert value\n", record, true);
+    const file: CheckedFile = .{ .path = record.path, .uri = "file:///tmp/a.py", .source = "assert value\n", .first = 0, .count = 1 };
+    try previous.entries.add(entry);
+    try previous.files.add(file);
+    const old_action = previous.bindTarget(entry.targets(record.path));
+    var current = try Results.initResults(arena, limits);
+    try current.advanceDiagnosticRevision(&previous);
+    try current.entries.add(entry);
+    try current.files.add(file);
+    try std.testing.expectEqual(null, current.dismissDiagnostic(old_action));
+    const unchanged = current.entriesOf(current.find(record.path).?);
+    try std.testing.expectEqual(@as(usize, 1), unchanged.len);
+    const new_action = current.bindTarget(entry.targets(record.path));
+    try std.testing.expectEqual(@as(usize, 0), current.dismissDiagnostic(new_action).?.entries.len);
 }
