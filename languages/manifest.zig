@@ -159,6 +159,15 @@ pub const Tables = struct {
     wall_clocks: []const []const u8 = &.{},
     /// Calls that return something to await, which does nothing unless awaited.
     async_calls: []const []const u8 = &.{},
+    /// Tracing calls and methods that start a span the caller must end, such as OpenTelemetry's
+    /// `tracer.start_span`, and the methods that end one; a span started in a `with` block or a
+    /// closure the library runs ends itself, so its calls are not listed.
+    span_start_calls: []const []const u8 = &.{},
+    span_start_methods: []const []const u8 = &.{},
+    span_end_methods: []const []const u8 = &.{},
+    /// Tracing calls and methods whose first argument names the span, scoped or not.
+    span_name_first_calls: []const []const u8 = &.{},
+    span_name_first_methods: []const []const u8 = &.{},
     /// Calls that stop the program for a debugger or dump its state for one.
     debug_calls: []const []const u8 = &.{},
     mutating_calls: []const []const u8 = &.{},

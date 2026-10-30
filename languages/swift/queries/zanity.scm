@@ -744,6 +744,17 @@
 (control_transfer_statement
   result: (_) @expression.returned)
 
+; A call whose result something else ends, such as a span: the caller it is returned to, or the
+; object it is stored on.
+[
+  (control_transfer_statement
+    result: (call_expression) @call.handed_off)
+  (assignment
+    target: (directly_assignable_expression
+      (navigation_expression))
+    result: (call_expression) @call.handed_off)
+]
+
 ; `public` or `open`, so code outside the module can use it.
 ((_
   (modifiers

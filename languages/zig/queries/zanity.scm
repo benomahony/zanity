@@ -471,6 +471,35 @@
 (return_expression
   (_) @expression.returned)
 
+; A call whose result something else ends, such as a span: the caller it is returned to, or the
+; struct it is stored on.
+[
+  (return_expression
+    (call_expression) @call.handed_off)
+  (return_expression
+    (try_expression
+      (call_expression) @call.handed_off))
+  (variable_declaration
+    (field_expression)
+    (call_expression) @call.handed_off)
+  (variable_declaration
+    (field_expression)
+    (try_expression
+      (call_expression) @call.handed_off))
+]
+
+; Text formatted at runtime, into a buffer or a new allocation.
+((call_expression
+  function: (field_expression
+    member: (identifier) @_print)) @string.built
+  (#any-of? @_print "allocPrint" "allocPrintSentinel" "bufPrint" "bufPrintZ"))
+
+((try_expression
+  (call_expression
+    function: (field_expression
+      member: (identifier) @_print))) @string.built
+  (#any-of? @_print "allocPrint" "allocPrintSentinel" "bufPrint" "bufPrintZ"))
+
 ; `pub`, so code outside the file can use it.
 [
   (function_declaration
