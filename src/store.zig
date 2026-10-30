@@ -19,6 +19,7 @@ extern fn sqlite3_busy_timeout(db: *sqlite3, ms: c_int) c_int;
 extern fn sqlite3_exec(db: *sqlite3, sql: [*:0]const u8, callback: ?*const anyopaque, arg: ?*anyopaque, errmsg: ?*?[*:0]u8) c_int;
 extern fn sqlite3_errmsg(db: *sqlite3) [*:0]const u8;
 extern fn sqlite3_errcode(db: *sqlite3) c_int;
+extern fn sqlite3_db_handle(stmt: *sqlite3_stmt) *sqlite3;
 extern fn sqlite3_prepare_v2(db: *sqlite3, sql: [*]const u8, n: c_int, stmt: *?*sqlite3_stmt, tail: ?*?[*]const u8) c_int;
 extern fn sqlite3_reset(stmt: *sqlite3_stmt) c_int;
 extern fn sqlite3_step(stmt: *sqlite3_stmt) c_int;
@@ -30,6 +31,7 @@ extern fn sqlite3_column_text(stmt: *sqlite3_stmt, i: c_int) ?[*]const u8;
 extern fn sqlite3_column_bytes(stmt: *sqlite3_stmt, i: c_int) c_int;
 extern fn sqlite3_column_int64(stmt: *sqlite3_stmt, i: c_int) i64;
 extern fn sqlite3_column_type(stmt: *sqlite3_stmt, i: c_int) c_int;
+extern fn sqlite3_column_count(stmt: *sqlite3_stmt) c_int;
 
 const ok = 0;
 const row = 100;
@@ -110,8 +112,8 @@ pub const schema =
 ;
 
 const find_answer = "SELECT probability FROM answers WHERE model = ?1 AND question_hash = ?2 AND unit_hash = ?3";
-const save_unit = "INSERT OR IGNORE INTO units (unit_hash, language, source) VALUES (?1, ?2, ?3)";
-const save_answer = "INSERT OR REPLACE INTO answers (model, question_hash, unit_hash, probability, asked_at) VALUES (?1, ?2, ?3, ?4, strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now'))";
+const insert_unit_if_missing_sql = "INSERT OR IGNORE INTO units (unit_hash, language, source) VALUES (?1, ?2, ?3)";
+const upsert_answer_sql = "INSERT OR REPLACE INTO answers (model, question_hash, unit_hash, probability, asked_at) VALUES (?1, ?2, ?3, ?4, strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now'))";
 
 const save_observation = "INSERT OR REPLACE INTO observations (path, rule, unit_hash, unit_name, line, language, model, question_hash, probability, threshold, fired, seen_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now'))";
 const save_run = "INSERT INTO runs (at, path, units, asked, cached, input_tokens, output_tokens) VALUES (strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now'), ?1, ?2, ?3, ?4, ?5, ?6)";
@@ -222,12 +224,15 @@ pub const FalsePositive = struct {
 pub threadlocal var failure: [512]u8 = undefined;
 pub threadlocal var failure_len: usize = 0;
 
-var heap_configured = false;
-var heap_mutex: Io.Mutex = .init;
+/// Process-lifetime ownership of SQLite's accepted heap and the lock guarding its initialization.
+const ProcessHeap = struct { configured: bool = false, mutex: Io.Mutex = .init };
+var process_heap: ProcessHeap = .{};
 const minimum_heap_bytes = 1 << 20;
 const sqlite_heap_alignment = 64;
 /// Wait briefly for another local process holding a SQLite write lock.
 const busy_timeout_ms = 5000;
+/// Space left for cleanup context after retaining the original SQLite failure prefix.
+const rollback_context_bytes = 128;
 
 /// One connection and its prepared statements, used by one thread at a time.
 /// Batch holds its mutex across complete operations when its workers share this connection.
@@ -235,8 +240,8 @@ pub const Store = struct {
     path: []const u8,
     db: *sqlite3,
     find: *sqlite3_stmt,
-    unit: *sqlite3_stmt,
-    answer: *sqlite3_stmt,
+    insert_unit_if_missing: *sqlite3_stmt,
+    upsert_answer_by_identity: *sqlite3_stmt,
     observation: *sqlite3_stmt,
     run: *sqlite3_stmt,
     find_analysis: *sqlite3_stmt,
@@ -252,7 +257,7 @@ pub const Store = struct {
     /// so `gpa` must never free it. `ZANITY_STORE` overrides where the store lives.
     pub fn initStore(gpa: Allocator, io: Io, operator_environ: *const std.process.Environ.Map, heap_bytes: usize) !Store {
         // This is the operator's local analysis cache, opened under their filesystem permissions.
-        try initializeSqliteHeap(gpa, io, heap_bytes);
+        try initializeSqliteHeap(&process_heap, gpa, io, heap_bytes);
         const path = try initPath(gpa, io, operator_environ);
         errdefer gpa.free(path);
         const db = try openLocalCache(path);
@@ -278,21 +283,39 @@ pub const Store = struct {
         };
     }
 
-    /// Keeps an answer and the function it was about.
+    /// Idempotently caches a source unit and an answer identified by model, question and unit.
+    /// Repeated delivery inserts no duplicate unit and replaces the same keyed answer row.
     pub fn keepAnswer(self: *const Store, a: Answer) !void {
+        // This operator-owned local SQLite cache has a finite busy_timeout_ms lock wait.
+        // No remote database or service is contacted; the keyed writes below are replay-safe.
         if (a.probability < 0 or a.probability > 1) assert.panic("keeping a probability of {d}; answers are between 0 and 1, so check how infer.zig reads TypeSafe's answer", .{a.probability});
         if (a.language.len == 0 or a.source.len == 0) assert.panic("keeping an answer about a function with no language or source; plan() must pass the unit's language and source", .{});
-        defer _ = sqlite3_reset(self.unit);
-        defer _ = sqlite3_reset(self.answer);
-        try bind(self.unit, 1, &a.unit);
-        try bind(self.unit, 2, a.language);
-        try bind(self.unit, 3, a.source);
-        if (sqlite3_step(self.unit) != done) return captureDatabaseFailure(self.db);
-        try bind(self.answer, 1, a.model);
-        try bind(self.answer, 2, &a.question);
-        try bind(self.answer, 3, &a.unit);
-        if (sqlite3_bind_double(self.answer, 4, a.probability) != ok) return captureDatabaseFailure(self.db);
-        if (sqlite3_step(self.answer) != done) return captureDatabaseFailure(self.db);
+        if (sqlite3_exec(self.db, "SAVEPOINT zanity_answer", null, null, null) != ok) return captureDatabaseFailure(self.db);
+        errdefer self.rollbackUncommittedAnswer();
+        defer _ = sqlite3_reset(self.insert_unit_if_missing);
+        defer _ = sqlite3_reset(self.upsert_answer_by_identity);
+        // INSERT OR IGNORE uses the source-content hash as the units primary key.
+        try bind(self.insert_unit_if_missing, 1, &a.unit);
+        try bind(self.insert_unit_if_missing, 2, a.language);
+        try bind(self.insert_unit_if_missing, 3, a.source);
+        if (sqlite3_step(self.insert_unit_if_missing) != done) return captureDatabaseFailure(self.db);
+        // INSERT OR REPLACE uses (model, question_hash, unit_hash), so retries update one identity.
+        try bind(self.upsert_answer_by_identity, 1, a.model);
+        try bind(self.upsert_answer_by_identity, 2, &a.question);
+        try bind(self.upsert_answer_by_identity, 3, &a.unit);
+        if (sqlite3_bind_double(self.upsert_answer_by_identity, 4, a.probability) != ok) return captureDatabaseFailure(self.db);
+        if (sqlite3_step(self.upsert_answer_by_identity) != done) return captureDatabaseFailure(self.db);
+        if (sqlite3_exec(self.db, "RELEASE zanity_answer", null, null, null) != ok) return captureDatabaseFailure(self.db);
+    }
+
+    /// Rolls back the source/answer pair after its original SQLite cause was copied to this thread.
+    fn rollbackUncommittedAnswer(self: *const Store) void {
+        if (failure_len == 0) assert.panic("rolling back an answer with {d} diagnostic bytes; retain the original failure before cleanup", .{failure_len});
+        const statement_db = sqlite3_db_handle(self.upsert_answer_by_identity);
+        if (self.db != statement_db) assert.panic("rolling back cache 0x{x} with an answer statement owned by 0x{x}; retain one connection for both answer writes", .{ @intFromPtr(self.db), @intFromPtr(statement_db) });
+        // This Store method is the local SQLite data-access layer, not a caller bypassing it.
+        const status = sqlite3_exec(self.db, "ROLLBACK TO zanity_answer; RELEASE zanity_answer", null, null, null);
+        if (status != ok) appendAnswerRollbackFailure(status);
     }
 
     /// Keeps what the model said about a unit, replacing what an earlier run said there.
@@ -339,28 +362,26 @@ pub const Store = struct {
         };
     }
 
-    /// Calls `visit(context, observed)` for each kept answer `narrow` matches, newest first, until
-    /// it returns false.
-    pub fn eachObserved(self: *const Store, narrow: Narrow, context: anytype, comptime visit: fn (@TypeOf(context), Observed) anyerror!bool) !void {
-        const stmt = self.list_observed;
+    /// Runs the CLI's compile-time callback over the operator's filtered local-cache answers.
+    /// Row text is borrowed until the next row; callbacks copy anything they retain.
+    pub fn eachObserved(operator_cache: *const Store, operator_selection: Narrow, cli_context: anytype, comptime visit: fn (@TypeOf(cli_context), Observed) anyerror!bool) !void {
+        // initStore() already opened this local file under the invoking OS user's permissions.
+        // The operator chooses these CLI filters; no remote caller supplies the compile-time visitor.
+        const stmt = operator_cache.list_observed;
+        const statement_db = sqlite3_db_handle(stmt);
+        if (statement_db != operator_cache.db) assert.panic("observation statement uses connection 0x{x}, expected operator cache 0x{x}; retain its owning local connection", .{ @intFromPtr(statement_db), @intFromPtr(operator_cache.db) });
         defer _ = sqlite3_reset(stmt);
-        try bind(stmt, 1, narrow.rule);
-        try bind(stmt, 2, narrow.path);
-        try bindInt(stmt, 3, narrow.line);
+        try bind(stmt, 1, operator_selection.rule);
+        try bind(stmt, 2, operator_selection.path);
+        try bindInt(stmt, 3, operator_selection.line);
         for (0..std.math.maxInt(u32)) |_| switch (sqlite3_step(stmt)) {
             row => {
-                var unit: Digest = undefined;
-                const hash = columnText(stmt, 3);
-                if (hash.len != unit.len) assert.panic("a kept answer's unit_hash is {d} characters, not {d}; the store only keeps digests", .{ hash.len, unit.len });
-                @memcpy(&unit, hash);
-                const real: ?bool = if (sqlite3_column_type(stmt, 7) == column_null) null else sqlite3_column_int64(stmt, 7) != 0;
-                const line = sqlite3_column_int64(stmt, 2);
-                if (line < 1) assert.panic("a kept answer is on line {d}; observe() keeps lines from 1", .{line});
-                const observed: Observed = .{ .rule = columnText(stmt, 0), .path = columnText(stmt, 1), .line = @intCast(line), .unit = unit, .unit_name = columnText(stmt, 4), .probability = sqlite3_column_double(stmt, 5), .threshold = sqlite3_column_double(stmt, 6), .real = real };
-                if (!try visit(context, observed)) return;
+                const observed = try readObservedRow(stmt);
+                if (operator_selection.rule.len != 0 and !std.mem.eql(u8, observed.rule, operator_selection.rule)) assert.panic("observation query returned rule '{s}', expected selected rule '{s}'; retain the built-in SQL filter when decoding its rows", .{ observed.rule, operator_selection.rule });
+                if (!try visit(cli_context, observed)) return;
             },
             done => return,
-            else => return captureDatabaseFailure(self.db),
+            else => return captureDatabaseFailure(operator_cache.db),
         };
     }
 
@@ -432,22 +453,54 @@ pub const Store = struct {
 };
 
 /// Serializes SQLite's global heap setup. SQLite owns an accepted heap until process exit.
-fn initializeSqliteHeap(gpa: Allocator, io: Io, heap_bytes: usize) !void {
+fn initializeSqliteHeap(owner: *ProcessHeap, gpa: Allocator, io: Io, heap_bytes: usize) !void {
     if (heap_bytes < minimum_heap_bytes) assert.panic("SQLite was given a {d}-byte heap; it needs at least {d} bytes", .{ heap_bytes, minimum_heap_bytes });
-    if (heap_bytes > std.math.maxInt(c_int)) return error.StoreUnavailable;
-    heap_mutex.lockUncancelable(io);
-    defer heap_mutex.unlock(io);
-    if (!heap_configured) {
-        const heap = try gpa.alignedAlloc(u8, .@"64", heap_bytes);
+    if (heap_bytes > std.math.maxInt(c_int)) {
+        describeStoreFailure("SQLite heap size {d} exceeds its {d}-byte limit; reduce memory.Limits.store_bytes", .{ heap_bytes, std.math.maxInt(c_int) });
+        return error.StoreUnavailable;
+    }
+    owner.mutex.lockUncancelable(io);
+    defer owner.mutex.unlock(io);
+    if (!owner.configured) {
+        const heap = gpa.alignedAlloc(u8, .@"64", heap_bytes) catch {
+            describeStoreFailure("Could not allocate SQLite's {d}-byte heap; free memory or reduce memory.Limits.store_bytes", .{heap_bytes});
+            return error.StoreUnavailable;
+        };
         if (@intFromPtr(heap.ptr) % sqlite_heap_alignment != 0) assert.panic("SQLite's heap is not {d}-byte aligned; alignedAlloc() must honor its requested alignment", .{sqlite_heap_alignment});
-        if (sqlite3_config(config_heap, heap.ptr, @as(c_int, @intCast(heap.len)), @as(c_int, sqlite_heap_alignment)) != ok) {
+        const configured = sqlite3_config(config_heap, heap.ptr, @as(c_int, @intCast(heap.len)), @as(c_int, sqlite_heap_alignment));
+        if (configured != ok) {
             gpa.free(heap);
+            describeStoreFailure("SQLite rejected its fixed heap with status {d}; initialize zanity's cache before any other SQLite user", .{configured});
             return error.StoreUnavailable;
         }
         // Even failed sqlite3_initialize() may retain this accepted heap; never free or replace it.
-        heap_configured = true;
+        owner.configured = true;
     }
-    if (sqlite3_initialize() != ok) return error.StoreUnavailable;
+    const initialized = sqlite3_initialize();
+    if (initialized != ok) {
+        describeStoreFailure("SQLite initialization failed with status {d}; increase memory.Limits.store_bytes and retry", .{initialized});
+        return error.StoreUnavailable;
+    }
+}
+
+/// Supplies an actionable local-cache diagnostic to the calling thread's store-error path.
+fn describeStoreFailure(comptime template: []const u8, args: anytype) void {
+    if (template.len == 0) assert.panic("store failure has no description; pass a message naming the failing configuration and recovery", .{});
+    // failure/failure_len are threadlocal, so no other connection can replace this caller's cause.
+    const shown = std.fmt.bufPrint(&failure, template, args) catch assert.panic("store diagnostic '{s}' exceeds the {d}-byte diagnostic buffer; shorten the template", .{ template, failure.len });
+    failure_len = shown.len;
+    if (failure_len == 0) assert.panic("the store diagnostic template '{s}' formatted to no diagnostic; retain its description for the caller", .{template});
+}
+
+/// Adds bounded cleanup context without overwriting the calling thread's original failure prefix.
+fn appendAnswerRollbackFailure(status: c_int) void {
+    if (status == ok) assert.panic("recording answer rollback failure with successful SQLite status {d}; only append cleanup context on failure", .{status});
+    if (failure_len > failure.len) assert.panic("the original SQLite cause has {d} bytes in room for {d}; bound it before adding rollback context", .{ failure_len, failure.len });
+    // Both diagnostics are threadlocal. The reserved suffix budget is independent of runtime text.
+    var output: Io.Writer = .fixed(&failure);
+    output.end = @min(failure_len, failure.len - rollback_context_bytes);
+    output.print("; answer rollback failed with SQLite status {d}; restart zanity before reusing this cache", .{status}) catch assert.panic("answer rollback status {d} exceeds its {d}-byte context budget; shorten the fixed diagnostic", .{ status, rollback_context_bytes });
+    failure_len = output.end;
 }
 
 /// Opens only the chosen local cache; every unsuccessful opening releases its connection.
@@ -470,8 +523,8 @@ fn openLocalCache(path: [:0]const u8) !*sqlite3 {
 /// Built-in SQL for each prepared statement owned by Store, with matching field names.
 const statement_sql = .{
     .find = find_answer,
-    .unit = save_unit,
-    .answer = save_answer,
+    .insert_unit_if_missing = insert_unit_if_missing_sql,
+    .upsert_answer_by_identity = upsert_answer_sql,
     .observation = save_observation,
     .run = save_run,
     .find_analysis = find_analysis,
@@ -556,6 +609,29 @@ pub fn cacheDir(buffer: []u8, io: Io, operator_environ: *const std.process.Envir
 }
 
 /// Prepares only SQL built into this executable; external values are bound as parameters later.
+/// Validates persisted cache data before exposing a borrowed observation to a CLI callback.
+fn readObservedRow(stmt: *sqlite3_stmt) !Observed {
+    const columns = sqlite3_column_count(stmt);
+    const expected_columns = @typeInfo(Observed).@"struct".field_names.len;
+    if (columns != expected_columns) assert.panic("observation query has {d} columns, expected {d}; keep the built-in SELECT and Observed mapping aligned", .{ columns, expected_columns });
+    var unit: Digest = undefined;
+    const hash = columnText(stmt, 3);
+    if (hash.len != unit.len or std.mem.indexOfNone(u8, hash, "0123456789abcdef") != null) {
+        describeStoreFailure("Cached unit hash '{s}' has {d} bytes; expected {d} lowercase hex bytes. Restore a good copy of the store or choose a new ZANITY_STORE", .{ hash[0..@min(hash.len, unit.len)], hash.len, unit.len });
+        return error.StoreUnavailable;
+    }
+    @memcpy(&unit, hash);
+    const line = sqlite3_column_int64(stmt, 2);
+    if (line < 1 or line > std.math.maxInt(u32)) {
+        describeStoreFailure("Cached observation line {d} is outside 1..{d}. Restore a good copy of the store or choose a new ZANITY_STORE", .{ line, std.math.maxInt(u32) });
+        return error.StoreUnavailable;
+    }
+    const real: ?bool = if (sqlite3_column_type(stmt, 7) == column_null) null else sqlite3_column_int64(stmt, 7) != 0;
+    const observed: Observed = .{ .rule = columnText(stmt, 0), .path = columnText(stmt, 1), .line = @intCast(line), .unit = unit, .unit_name = columnText(stmt, 4), .probability = sqlite3_column_double(stmt, 5), .threshold = sqlite3_column_double(stmt, 6), .real = real };
+    if (observed.line != line) assert.panic("decoded observation line {d}, expected cached line {d}; copy the validated line without changing it", .{ observed.line, line });
+    return observed;
+}
+
 fn prepare(db: *sqlite3, comptime trusted_sql: []const u8) !*sqlite3_stmt {
     // comptime prevents runtime file contents, environment or request data becoming SQL here.
     if (trusted_sql.len == 0) assert.panic("preparing an empty built-in statement; pass a module SQL constant to prepare()", .{});
@@ -568,7 +644,7 @@ fn prepare(db: *sqlite3, comptime trusted_sql: []const u8) !*sqlite3_stmt {
 fn bind(stmt: *sqlite3_stmt, index: c_int, text: []const u8) !void {
     if (index < 1) assert.panic("binding parameter {d}; SQLite numbers parameters from 1", .{index});
     if (text.len > std.math.maxInt(c_int)) assert.panic("binding {d} bytes of text, more than SQLite takes in one parameter; shorten the function's source, or split the function", .{text.len});
-    if (sqlite3_bind_text(stmt, index, text.ptr, @intCast(text.len), transient) != ok) return error.StoreUnavailable;
+    if (sqlite3_bind_text(stmt, index, text.ptr, @intCast(text.len), transient) != ok) return captureDatabaseFailure(sqlite3_db_handle(stmt));
 }
 
 /// The text of column `index` in the current row, valid until the next row is read.
@@ -583,7 +659,7 @@ fn columnText(stmt: *sqlite3_stmt, index: c_int) []const u8 {
 fn bindInt(stmt: *sqlite3_stmt, index: c_int, value: u64) !void {
     if (index < 1) assert.panic("binding parameter {d}; SQLite numbers parameters from 1", .{index});
     if (value > std.math.maxInt(i64)) assert.panic("binding {d}, past the largest integer SQLite stores; count something smaller", .{value});
-    if (sqlite3_bind_int64(stmt, index, @intCast(value)) != ok) return error.StoreUnavailable;
+    if (sqlite3_bind_int64(stmt, index, @intCast(value)) != ok) return captureDatabaseFailure(sqlite3_db_handle(stmt));
 }
 
 /// Converts a failed SQLite operation into the store's stable error, retaining its detailed cause.
