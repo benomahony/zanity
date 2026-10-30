@@ -609,6 +609,18 @@
 (return_statement
   (_) @expression.returned)
 
+; A call whose result something else ends, such as a span: the caller it is returned to, or the
+; object it is stored on.
+[
+  (return_statement
+    (call_expression) @call.handed_off)
+  (arrow_function
+    body: (call_expression) @call.handed_off)
+  (assignment_expression
+    left: (member_expression)
+    right: (call_expression) @call.handed_off)
+]
+
 ; Functions, classes and methods, which the upstream tags leave to JavaScript's.
 (function_declaration
   name: (identifier) @name) @definition.function

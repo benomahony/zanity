@@ -1,0 +1,6 @@
+rules: unended-span,dynamic-span-name,discarded-span-context
+exit: 0
+tracing_ts.ts:6:16: warning [unended-span]
+tracing_ts.ts:20:3: warning [unended-span]
+tracing_ts.ts:47:33: warning [dynamic-span-name]
+tracing_ts.ts:52:33: warning [dynamic-span-name]
