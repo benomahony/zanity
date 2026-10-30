@@ -267,12 +267,22 @@ pub fn workspaceOf(ctx: *zclig.Context) *Workspace {
     return ws;
 }
 
-fn runCheck(ctx: *zclig.Context, options: CheckOptions) ![]const Row {
-    if (options.paths.len == 0) assert.panic("check ran with no paths; zclig supplies '.' when none are given", .{});
+/// The check's options with what zanity.toml turns on: `[infer] enabled` runs it as `--infer`.
+fn withSettings(requested: CheckOptions, settings: *const config.Config) CheckOptions {
+    var options = requested;
+    options.infer = requested.infer or settings.infer;
+    if (settings.infer and !options.infer) assert.panic("{s} sets [infer] enabled, but the check runs without --infer; withSettings() must honour the setting", .{settings.dir});
+    if (requested.infer and !options.infer) assert.panic("the check was asked for --infer but runs without it; withSettings() must only add to what was asked", .{});
+    return options;
+}
+
+fn runCheck(ctx: *zclig.Context, requested: CheckOptions) ![]const Row {
+    if (requested.paths.len == 0) assert.panic("check ran with no paths; zclig supplies '.' when none are given", .{});
     const ws = workspaceOf(ctx);
-    try baseline.validateOptions(ctx, ws, options);
-    const agent = try speaksToAgent(ctx, ws, options.agent or options.all);
+    try baseline.validateOptions(ctx, ws, requested);
+    const agent = try speaksToAgent(ctx, ws, requested.agent or requested.all);
     const settings = try loadSettings(ctx, ws, std.heap.page_allocator);
+    const options = withSettings(requested, &settings);
     if (options.watch) return watchCheck(ctx, ws, options, agent);
     startNotice(ctx, ws, options, agent);
     errdefer ws.notice.cancel(ws.io);

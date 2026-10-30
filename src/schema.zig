@@ -120,6 +120,11 @@ fn renderInfer(w: *std.Io.Writer) !void {
         \\      "type": "object",
         \\      "additionalProperties": false,
         \\      "properties": {{
+        \\        "enabled": {{
+        \\          "description": "Whether every check asks the model, as if run with --infer.",
+        \\          "type": "boolean",
+        \\          "default": false
+        \\        }},
         \\        "url": {{
         \\          "description": "The System One server to ask, such as a local Kev. Defaults to TYPESAFE_BASE_URL, then TypeSafe's API.",
         \\          "type": "string",

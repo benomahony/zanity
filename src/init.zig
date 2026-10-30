@@ -136,6 +136,7 @@ fn renderInferNotes(w: *std.Io.Writer) !void {
         \\# about, and caches every answer. By default it asks TypeSafe's Jev, which needs
         \\# TYPESAFE_API_KEY; any other System One server works, such as Kev on your own machine.
         \\[infer]
+        \\# enabled = true                 # every check asks the model, as if run with --infer
         \\# url = "http://127.0.0.1:8009"    # default: TYPESAFE_BASE_URL, then TypeSafe's API
         \\# model = "kev-latest"             # default: TYPESAFE_DEFAULT_MODEL, then jev-latest
         \\# api_key_env = "KEV_API_KEY"      # default: TYPESAFE_API_KEY; optional except for TypeSafe

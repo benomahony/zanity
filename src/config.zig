@@ -7,6 +7,7 @@
 //!     exclude = ["vendor/", "tests/golden/**"] # gitignore syntax, relative to this file
 //!
 //!     [infer]
+//!     enabled = true                           # every check asks the model, as with --infer
 //!     url = "http://127.0.0.1:8009"            # a System One server, such as a local Kev
 //!     model = "kev-latest"                     # the model to ask
 //!     api_key_env = "KEV_API_KEY"              # where the key is, if the server needs one
@@ -84,6 +85,28 @@ pub const PathRules = struct {
     disable: rules.Set = .{},
 };
 
+/// The [infer] settings that name the server, with the punctuation each may hold besides ASCII
+/// letters and digits, and an example to show when a value holds anything else.
+const ServerForm = struct { key: []const u8, target: enum { url, model, api_key_env }, allowed: []const u8, example: []const u8 };
+const server_forms = [_]ServerForm{
+    .{ .key = "url", .target = .url, .allowed = "-._~:/[]%", .example = "http://127.0.0.1:8009" },
+    .{ .key = "model", .target = .model, .allowed = "-._:/", .example = "kev-latest" },
+    .{ .key = "api_key_env", .target = .api_key_env, .allowed = "_", .example = "KEV_API_KEY" },
+};
+
+/// The first byte of `text` that is neither an ASCII letter or digit nor one of `extra`, or null.
+/// Only ASCII passes, so no look-alike letter from another script can stand in for one.
+fn firstOutside(text: []const u8, extra: []const u8) ?usize {
+    if (extra.len == 0) assert.panic("server_forms allows no punctuation in one of its settings; give each entry the characters it allows besides letters and digits", .{});
+    const found = for (text, 0..) |c, i| {
+        if (!std.ascii.isAlphanumeric(c) and std.mem.indexOfScalar(u8, extra, c) == null) break i;
+    } else null;
+    const at = found orelse return null;
+    if (at >= text.len) assert.panic("firstOutside() returned byte {d} of a {d}-byte value; it must return a byte inside the value", .{ at, text.len });
+    if (std.ascii.isAlphanumeric(text[at])) assert.panic("firstOutside() returned byte {d}, the letter or digit '{c}'; it must return only a byte outside the allowed set", .{ at, text[at] });
+    return at;
+}
+
 pub const Config = struct {
     /// The directory holding the file, which `exclude` patterns are relative to; empty when none was found.
     dir: []const u8 = "",
@@ -91,6 +114,8 @@ pub const Config = struct {
     disable: rules.Set = .{},
     exclude: [max_excludes][]const u8 = undefined,
     exclude_len: usize = 0,
+    /// Whether every check asks the model, as if run with `--infer`.
+    infer: bool = false,
     /// The System One server `--infer` asks; TYPESAFE_BASE_URL, then TypeSafe's API, when unset.
     url: ?[]const u8 = null,
     /// The model to ask; TYPESAFE_DEFAULT_MODEL, then jev-latest, when unset.
@@ -525,19 +550,11 @@ const TomlReader = struct {
 
     fn readInferSetting(self: *TomlReader, config: *Config, key: []const u8) Error!void {
         if (self.table != .infer) assert.panic("reading '{s}' as an [infer] setting outside [infer]; readSetting() must hand over only [infer] settings", .{key});
-        const InferSetting = enum { url, model, api_key_env, concurrency, threshold };
-        const setting = std.meta.stringToEnum(InferSetting, key) orelse return self.fail("'{s}' isn't an [infer] setting; the settings are url, model, api_key_env, concurrency and threshold.", .{key});
+        const InferSetting = enum { enabled, url, model, api_key_env, concurrency, threshold };
+        const setting = std.meta.stringToEnum(InferSetting, key) orelse return self.fail("'{s}' isn't an [infer] setting; the settings are enabled, url, model, api_key_env, concurrency and threshold.", .{key});
         switch (setting) {
-            .url => {
-                const url = try self.readString(key);
-                if (!(std.mem.startsWith(u8, url, "http://") or std.mem.startsWith(u8, url, "https://"))) return self.fail("url is '{s}'; it must start with http:// or https://, such as \"http://127.0.0.1:8009\".", .{url});
-                config.url = url;
-            },
-            .model, .api_key_env => {
-                const text = try self.readString(key);
-                if (text.len == 0) return self.fail("'{s}' is empty; name one, or remove the line to use the default.", .{key});
-                if (setting == .model) config.model = text else config.api_key_env = text;
-            },
+            .enabled => config.infer = try self.readBoolean(key),
+            .url, .model, .api_key_env => try self.readServerSetting(config, key),
             .concurrency => {
                 const value = try self.readInteger(key);
                 if (value < 1 or value > max_concurrency) return self.fail("concurrency is {d}; it must be between 1 and {d}.", .{ value, max_concurrency });
@@ -551,6 +568,41 @@ const TomlReader = struct {
         }
         if (setting == .concurrency and config.concurrency == null) assert.panic("read [infer] concurrency but stored nothing; its branch of readInferSetting() must store it", .{});
         if (setting == .threshold and config.threshold == null) assert.panic("read [infer] threshold but stored nothing; its branch of readInferSetting() must store it", .{});
+    }
+
+    /// The [infer] settings naming the server: `url`, `model` and `api_key_env`, each held to the
+    /// characters its kind of name uses.
+    fn readServerSetting(self: *TomlReader, config: *Config, key: []const u8) Error!void {
+        const text = try self.readString(key);
+        const form = for (server_forms) |f| {
+            if (std.mem.eql(u8, f.key, key)) break f;
+        } else assert.panic("read '{s}' as a server setting; readInferSetting() must hand over only url, model and api_key_env", .{key});
+        if (text.len == 0) return self.fail("'{s}' is empty; name one, or remove the line to use the default.", .{key});
+        if (firstOutside(text, form.allowed)) |i| return self.fail("{s} is '{s}', which has '{c}' at byte {d}; use only letters, digits and '{s}', such as \"{s}\".", .{ key, text, text[i], i, form.allowed, form.example });
+        if (form.target == .api_key_env and std.ascii.isDigit(text[0])) return self.fail("api_key_env is '{s}', which starts with a digit; name an environment variable, such as \"KEV_API_KEY\".", .{text});
+        if (form.target == .url) try self.checkServerUrl(text);
+        switch (form.target) {
+            .url => config.url = text,
+            .model => config.model = text,
+            .api_key_env => config.api_key_env = text,
+        }
+        const stored = switch (form.target) {
+            .url => config.url,
+            .model => config.model,
+            .api_key_env => config.api_key_env,
+        };
+        if (stored == null or stored.?.ptr != text.ptr) assert.panic("read [infer] {s} = '{s}' but stored something else; readServerSetting() must store the value it read", .{ key, text });
+        if (text.len > self.bytes.len) assert.panic("read [infer] {s} as {d} bytes from a {d}-byte file; readString() must return part of the file", .{ key, text.len, self.bytes.len });
+    }
+
+    /// A url holds a server's address: http or https, a host, and optionally a port and path.
+    fn checkServerUrl(self: *TomlReader, text: []const u8) Error!void {
+        if (!(std.mem.startsWith(u8, text, "http://") or std.mem.startsWith(u8, text, "https://"))) return self.fail("url is '{s}'; it must start with http:// or https://, such as \"http://127.0.0.1:8009\".", .{text});
+        const uri = std.Uri.parse(text) catch return self.fail("url is '{s}', which isn't a URL; write one such as \"http://127.0.0.1:8009\".", .{text});
+        const host = uri.host orelse return self.fail("url is '{s}', which names no host; write one such as \"http://127.0.0.1:8009\".", .{text});
+        if (host.isEmpty()) return self.fail("url is '{s}', which names no host; write one such as \"http://127.0.0.1:8009\".", .{text});
+        if (firstOutside(text, server_forms[0].allowed) != null) assert.panic("checking url '{s}' before its characters; readServerSetting() must check them first", .{text});
+        if (uri.query != null or uri.fragment != null) assert.panic("url '{s}' parsed with a query or fragment though '?' and '#' are refused; keep them out of the url's allowed characters", .{text});
     }
 
     /// `[questions."<name>"]`: starts a question of the file's own, or retunes one of zanity's,
@@ -635,7 +687,7 @@ const TomlReader = struct {
             return parsed.?;
         }
         if (in_rules) return self.fail("'{s}' isn't a [rules] setting; the settings are select and disable.", .{key});
-        return self.fail("'{s}' isn't a setting; the settings are exclude and, under [rules], select and disable, and under [infer], url, model, api_key_env, concurrency and threshold.", .{key});
+        return self.fail("'{s}' isn't a setting; the settings are exclude and, under [rules], select and disable, and under [infer], enabled, url, model, api_key_env, concurrency and threshold.", .{key});
     }
 
     fn readSetting(self: *TomlReader, config: *Config, key: []const u8) Error!void {
@@ -683,6 +735,17 @@ const TomlReader = struct {
         const value = std.fmt.parseInt(i64, digits[0..n], 10) catch return self.fail("'{s}' needs a whole number, such as {s} = 8.", .{ key, key });
         if (self.at <= start) assert.panic("parsed {d} for '{s}' without reading a digit at byte {d}; readInteger() must fail before parsing when it read no digit", .{ value, key, start });
         if (n > digits.len) assert.panic("kept {d} digits in room for {d}; readInteger() must keep at most the digit buffer's length", .{ n, digits.len });
+        return value;
+    }
+
+    fn readBoolean(self: *TomlReader, key: []const u8) Error!bool {
+        const rest = self.bytes[self.at..];
+        const value = if (std.mem.startsWith(u8, rest, "true")) true else if (std.mem.startsWith(u8, rest, "false")) false else return self.fail("'{s}' needs true or false, such as {s} = true.", .{ key, key });
+        const length: usize = if (value) "true".len else "false".len;
+        if (rest.len > length and (std.ascii.isAlphanumeric(rest[length]) or rest[length] == '_')) return self.fail("'{s}' needs true or false, not '{s}'; write {s} = true or {s} = false.", .{ key, std.mem.sliceTo(rest, '\n'), key, key });
+        self.at += length;
+        if (self.at > self.bytes.len) assert.panic("read '{s}' past the end of the {d}-byte file; readBoolean() must advance only over the word it matched", .{ key, self.bytes.len });
+        if (!std.mem.eql(u8, self.bytes[self.at - length .. self.at], if (value) "true" else "false")) assert.panic("read '{s}' for '{s}' as {s}; readBoolean() must advance over the word it matched", .{ self.bytes[self.at - length .. self.at], key, if (value) "true" else "false" });
         return value;
     }
 

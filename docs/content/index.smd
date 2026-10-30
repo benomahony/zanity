@@ -372,6 +372,8 @@ Everything is optional:
 exclude = ["vendor/", "tests/fixtures/**"]
 
 [infer]
+# Ask the model on every check, as if run with --infer (default: false).
+enabled = true
 # The System One server to ask, such as a local Kev (default: TypeSafe's API).
 url = "http://127.0.0.1:8009"
 # The model to ask (default: jev-latest).

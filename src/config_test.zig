@@ -50,6 +50,14 @@ test "a zanity.toml chooses rules, excludes paths and sets concurrency" {
     try std.testing.expectEqualStrings("KEV_API_KEY", c.api_key_env.?);
 }
 
+test "[infer] enabled turns --infer on for every check" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    try std.testing.expect((try parsed(arena_state.allocator(), "[infer]\nenabled = true\n")).infer);
+    try std.testing.expect(!(try parsed(arena_state.allocator(), "[infer]\nenabled = false\n")).infer);
+    try std.testing.expect(!(try parsed(arena_state.allocator(), "[infer]\nconcurrency = 4\n")).infer);
+}
+
 test "a [rules] table at the end selects and disables rules, as zanity init writes it" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
@@ -121,7 +129,7 @@ test "select 'strict' runs the defaults and the strict rules" {
 
 test "mistakes in zanity.toml name the line and what to write" {
     try expectProblem("rules = [\"recursions\"]\n", "zanity.toml:1: 'recursions' isn't a rule; the rules are listed in the README, 'all' names every rule, 'strict' the defaults and the strict rules, and 'zanity check --rules' takes the same names.");
-    try expectProblem("\ndisabled = []\n", "zanity.toml:2: 'disabled' isn't a setting; the settings are exclude and, under [rules], select and disable, and under [infer], url, model, api_key_env, concurrency and threshold.");
+    try expectProblem("\ndisabled = []\n", "zanity.toml:2: 'disabled' isn't a setting; the settings are exclude and, under [rules], select and disable, and under [infer], enabled, url, model, api_key_env, concurrency and threshold.");
     try expectProblem("[inference]\n", "zanity.toml:1: '[inference]' isn't a table zanity knows; the tables are [rules], [infer], [paths.\"<pattern>\"], [questions.\"<name>\"], [vocabulary], [domains.<name>] and [contexts.<name>].");
     try expectProblem("[contexts]\n", "zanity.toml:1: '[contexts]' needs a name, such as [contexts.billing].");
     try expectProblem("[vocabulary.words]\n", "zanity.toml:1: '[vocabulary.words]' isn't a table zanity knows; the only one inside [vocabulary] is synonyms.");
@@ -132,7 +140,15 @@ test "mistakes in zanity.toml name the line and what to write" {
     try expectProblem("[infer]\nconcurrency = 500\n", "zanity.toml:2: concurrency is 500; it must be between 1 and 64.");
     try expectProblem("[infer]\nthreshold = 1.5\n", "zanity.toml:2: threshold is 1.5; it must be above 0 and at most 1, such as 0.9 to report only what the model is at least 90% sure of.");
     try expectProblem("[infer]\nthreshold = high\n", "zanity.toml:2: 'threshold' needs a number, such as threshold = 0.9.");
-    try expectProblem("[infer]\nmodels = \"x\"\n", "zanity.toml:2: 'models' isn't an [infer] setting; the settings are url, model, api_key_env, concurrency and threshold.");
+    try expectProblem("[infer]\nenabled = truely\n", "zanity.toml:2: 'enabled' needs true or false, not 'truely'; write enabled = true or enabled = false.");
+    try expectProblem("[infer]\nurl = \"http://user@kev:8009\"\n", "zanity.toml:2: url is 'http://user@kev:8009', which has '@' at byte 11; use only letters, digits and '-._~:/[]%', such as \"http://127.0.0.1:8009\".");
+    try expectProblem("[infer]\nurl = \"http://:8009\"\n", "zanity.toml:2: url is 'http://:8009', which isn't a URL; write one such as \"http://127.0.0.1:8009\".");
+    try expectProblem("[infer]\nmodel = \"kev'latest\"\n", "zanity.toml:2: model is 'kev'latest', which has ''' at byte 3; use only letters, digits and '-._:/', such as \"kev-latest\".");
+    try expectProblem("[infer]\nmodel = \"kev latest\"\n", "zanity.toml:2: model is 'kev latest', which has ' ' at byte 3; use only letters, digits and '-._:/', such as \"kev-latest\".");
+    try expectProblem("[infer]\napi_key_env = \"KEV-KEY\"\n", "zanity.toml:2: api_key_env is 'KEV-KEY', which has '-' at byte 3; use only letters, digits and '_', such as \"KEV_API_KEY\".");
+    try expectProblem("[infer]\napi_key_env = \"1KEY\"\n", "zanity.toml:2: api_key_env is '1KEY', which starts with a digit; name an environment variable, such as \"KEV_API_KEY\".");
+    try expectProblem("[infer]\nenabled = yes\n", "zanity.toml:2: 'enabled' needs true or false, such as enabled = true.");
+    try expectProblem("[infer]\nmodels = \"x\"\n", "zanity.toml:2: 'models' isn't an [infer] setting; the settings are enabled, url, model, api_key_env, concurrency and threshold.");
     try expectProblem("[infer]\nurl = \"localhost:8009\"\n", "zanity.toml:2: url is 'localhost:8009'; it must start with http:// or https://, such as \"http://127.0.0.1:8009\".");
     try expectProblem("[infer]\nmodel = \"\"\n", "zanity.toml:2: 'model' is empty; name one, or remove the line to use the default.");
     try expectProblem("rules = []\n", "zanity.toml:1: 'rules' is empty, so nothing would run; list at least one rule, or remove it to run the defaults.");
