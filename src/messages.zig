@@ -140,6 +140,8 @@ pub const MessageWords = struct {
     }
 };
 
+/// Whether `word`, or `word` without a plural `s` when it is longer than three letters, is in
+/// `vocabulary`, ignoring case.
 pub fn inVocabulary(vocabulary: []const []const u8, word: []const u8) bool {
     if (word.len == 0) assert.panic("looked up an empty word among {d}; skip empty words before calling inVocabulary()", .{vocabulary.len});
     const singular = if (word.len > 3 and (word[word.len - 1] == 's' or word[word.len - 1] == 'S')) word[0 .. word.len - 1] else word;
@@ -150,7 +152,8 @@ pub fn inVocabulary(vocabulary: []const []const u8, word: []const u8) bool {
     return found;
 }
 
-/// The text inside a string literal: prefixes such as `f` or `r#` and the quotes removed.
+/// The text inside a string literal: prefixes such as `f` or `r#` and the quotes removed, then
+/// any spaces, tabs, newlines and full stops at either end.
 pub fn stringContent(literal: []const u8) []const u8 {
     if (literal.len == 0) assert.panic("asked for the content of an empty string literal; the capture matched no text", .{});
     const unprefixed = std.mem.trimStart(u8, literal, "rbufRBUF@#");
@@ -160,8 +163,11 @@ pub fn stringContent(literal: []const u8) []const u8 {
 }
 
 /// A message that is one token shaped like an identifier or a code: `E1234`, `ERR_TIMEOUT`, `OutOfMemory`.
+/// `content` comes from stringContent(), so a closing full stop is already gone and any `.` left is
+/// inside the token, as in `config.toml`.
 pub fn looksLikeCode(content: []const u8) bool {
     if (content.len == 0) assert.panic("asked whether an empty message is a code; check for an empty message first", .{});
+    if (content[content.len - 1] == '.') assert.panic("asked whether '{s}' is a code with its closing full stop; pass stringContent()'s result, which trims it", .{content});
     if (std.mem.indexOfAny(u8, content, " \t\n") != null) return false;
     var upper: usize = 0;
     var letters: usize = 0;

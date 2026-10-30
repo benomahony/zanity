@@ -10,6 +10,7 @@ const quiet: zrich.Style = .{ .dim = true };
 pub const Counts = struct {
     files: usize,
     errors: usize = 0,
+    /// Warnings and information findings together: both fail a check at `--fail-on warning`.
     warnings: usize = 0,
     flagged: usize = 0,
 };

@@ -56,8 +56,14 @@ pub fn identity(text: *@import("memory.zig").Text, row: Row, anchor: []const u8,
     return text.format("{x}", .{hash.finalResult()});
 }
 
+/// Gives each row an identity from its rule, message and the text of its line. Rows must be in
+/// report.sortFindings() order, by path and then line, since each file is read once, forwards.
 pub fn identify(gpa: std.mem.Allocator, ws: anytype) !void {
     const rows = ws.rows.items();
+    for (rows[0..rows.len -| 1], rows[@min(1, rows.len)..]) |a, b| {
+        const by_path = std.mem.order(u8, a.path, b.path);
+        if (by_path == .gt or (by_path == .eq and a.line > b.line)) assert.panic("identity rows are out of order: {s}:{d} before {s}:{d}; sort the findings with report.sortFindings() first", .{ a.path, a.line, b.path, b.line });
+    }
     if (rows.len > ws.limits.findings) assert.panic("identity input {d} exceeds capacity {d}", .{ rows.len, ws.limits.findings });
     if (ws.source.len == 0) assert.panic("identity needs a source buffer", .{});
     var duplicates: std.StringHashMapUnmanaged(usize) = .empty;

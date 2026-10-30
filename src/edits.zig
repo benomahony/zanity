@@ -6,13 +6,15 @@ const memory = @import("memory.zig");
 const Finding = @import("facts.zig").Finding;
 
 /// Writes `source` into `out` with each edit that doesn't overlap an earlier one applied, marking
-/// those findings fixed.
+/// those findings fixed. An edit that ends past `source` is skipped, and edits stop once the next
+/// would overflow `out`.
 pub fn applyEdits(source: []const u8, findings: []Finding, out: []u8) error{LimitExceeded}!struct { bytes: []const u8, applied: usize } {
     var used: usize = 0;
     var cursor: usize = 0;
     var applied: usize = 0;
     for (findings) |*f| {
         const edit = f.edit orelse continue;
+        if (edit.start > edit.end) assert.panic("the {s} edit at line {d} runs backwards, from byte {d} to {d}; an edit must start at or before its end", .{ f.rule, f.line + 1, edit.start, edit.end });
         if (edit.start < cursor or edit.end > source.len) continue;
         const kept = source[cursor..edit.start];
         if (used + kept.len + edit.replacement.len > out.len) break;
