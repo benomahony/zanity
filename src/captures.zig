@@ -387,7 +387,7 @@ fn oneOfText(text: []const u8, values: []const []const u8, affix: Affix) bool {
 fn equalTexts(a: []const ts.Node, b: []const ts.Node, sense: Sense, text: []const u8) bool {
     const n = @min(a.len, b.len);
     if (n > a.len or n > b.len) assert.panic("compared {d} pairs of {d} and {d} captures; equalTexts() must compare pairs up to the shorter list, so check its loop", .{ n, a.len, b.len });
-    var result = true;
+    var result = !sense.any;
     for (a[0..n], b[0..n]) |x, y| {
         result = std.mem.eql(u8, x.text(text), y.text(text)) == sense.positive;
         if (result == sense.any) break;
@@ -399,7 +399,7 @@ fn equalTexts(a: []const ts.Node, b: []const ts.Node, sense: Sense, text: []cons
 /// `#eq? @a "text"`: each capture's text is `value`; with `any`, at least one is.
 fn equalToString(nodes: []const ts.Node, value: []const u8, sense: Sense, text: []const u8) bool {
     if (nodes.len > 0 and ts.ts_node_end_byte(nodes[0]) > text.len) assert.panic("comparing a capture that ends at byte {d} of a {d}-byte source; pass the source the tree was parsed from", .{ ts.ts_node_end_byte(nodes[0]), text.len });
-    var result = true;
+    var result = !sense.any;
     for (nodes) |x| {
         result = std.mem.eql(u8, x.text(text), value) == sense.positive;
         if (result == sense.any) break;
@@ -431,4 +431,10 @@ test "ancestor predicates reach the root of deeply nested single-line source" {
     const root_kind = std.mem.span(ts.ts_node_type(root));
     try std.testing.expect(hasAnyAncestorKind(leaf, &.{root_kind}));
     try std.testing.expect(!hasAnyAncestorKind(leaf, &.{"absent_kind"}));
+}
+
+test "#any-eq? needs a matching pair, so no pairs never match" {
+    try std.testing.expect(!equalTexts(&.{}, &.{}, .{ .positive = true, .any = true }, ""));
+    try std.testing.expect(!equalTexts(&.{}, &.{}, .{ .positive = false, .any = true }, ""));
+    try std.testing.expect(equalTexts(&.{}, &.{}, .{ .positive = true, .any = false }, ""));
 }
