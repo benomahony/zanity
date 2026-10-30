@@ -33,15 +33,17 @@ pub const Live = struct {
         if (self.shown) |shown| {
             if (!finished and shown.durationTo(now).toNanoseconds() < redraw_ns) return;
         }
-        const elapsed = self.started.durationTo(now).toSeconds();
-        if (elapsed < 0) assert.panic("progress of '{s}' started {d} seconds in the future; take started from the same .awake clock that update() reads", .{ what, -elapsed });
-        const left = if (done == 0 or finished) 0 else @divTrunc(elapsed * @as(i64, @intCast(total - done)), @as(i64, @intCast(done)));
+        const since = self.started.durationTo(now).toSeconds();
+        const elapsed = std.math.cast(u64, since) orelse assert.panic("progress of '{s}' started {d} seconds in the future; take started from the same .awake clock that update() reads", .{ what, -since });
+        const remaining_work: u64 = total - done;
+        const left: u64 = if (done == 0 or finished) 0 else (std.math.mul(u64, elapsed, remaining_work) catch std.math.maxInt(u64)) / done;
+        if (finished and left != 0) assert.panic("progress of '{s}' finished with {d} seconds still estimated; update() must estimate nothing once done reaches the total", .{ what, left });
         const label = std.fmt.bufPrint(&self.label, "{s} {d}/{d}  {d}:{d:0>2}{s}", .{
             what,
             done,
             total,
-            @divTrunc(elapsed, 60),
-            @as(u64, @intCast(@mod(elapsed, 60))),
+            elapsed / 60,
+            elapsed % 60,
             if (left > 0) self.eta(left) else "",
         }) catch what;
         self.console.updateProgress(.{ .label = label, .completed = done, .total = total }, finished) catch return;
@@ -57,9 +59,9 @@ pub const Live = struct {
         if (self.shown != null) assert.panic("restarting progress left it marked as drawn; restart() must clear shown", .{});
     }
 
-    fn eta(self: *Live, seconds: i64) []const u8 {
+    fn eta(self: *Live, seconds: u64) []const u8 {
         if (seconds <= 0) assert.panic("estimating {d} seconds left; only positive estimates are shown; update() must call eta() only when time is left", .{seconds});
-        const text = std.fmt.bufPrint(&self.remaining, ", ~{d}:{d:0>2} left", .{ @divTrunc(seconds, 60), @as(u64, @intCast(@mod(seconds, 60))) }) catch return "";
+        const text = std.fmt.bufPrint(&self.remaining, ", ~{d}:{d:0>2} left", .{ seconds / 60, seconds % 60 }) catch return "";
         if (text.len > self.remaining.len) assert.panic("the estimate took {d} bytes of a {d}-byte buffer; enlarge the remaining buffer to fit the longest estimate", .{ text.len, self.remaining.len });
         return text;
     }

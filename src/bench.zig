@@ -116,11 +116,13 @@ const Timer = struct {
 
     fn lap(self: *Timer) u64 {
         const now = Io.Timestamp.now(self.io, .awake);
-        const elapsed: i64 = @intCast(self.started.durationTo(now).toNanoseconds());
-        if (elapsed < 0) assert.panic("the .awake clock ran {d} ns backwards; it is monotonic, so the timestamps came from different clocks", .{-elapsed});
+        const before = self.started;
+        const nanoseconds = before.durationTo(now).toNanoseconds();
+        const elapsed = std.math.cast(u64, nanoseconds) orelse assert.panic("a lap of {d} ns is negative or past 584 years; the .awake clock is monotonic, so the timestamps came from different clocks", .{nanoseconds});
         self.started = now;
         if (self.started.toNanoseconds() < elapsed) assert.panic("a lap of {d} ns ended before the clock had run that long; lap() must measure from the previous lap", .{elapsed});
-        return @intCast(elapsed);
+        if (before.toNanoseconds() + elapsed != now.toNanoseconds()) assert.panic("a lap of {d} ns from {d} doesn't end at {d}; lap() must measure from the previous lap to now", .{ elapsed, before.toNanoseconds(), now.toNanoseconds() });
+        return elapsed;
     }
 };
 

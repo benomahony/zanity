@@ -93,7 +93,7 @@ fn writeArg(w: *Writer, spec: []const u8, arg: Arg) Writer.Error!void {
     switch (arg) {
         .int => |n| switch (spec[0]) {
             'x' => try w.print("{x}", .{n}),
-            'c' => try w.writeByte(@truncate(@as(u128, @bitCast(n)))),
+            'c' => try w.writeByte(std.math.cast(u8, n) orelse std.debug.panic("a {{c}} placeholder was given {d}, which is not a byte; show it with {{d}} or {{x}}", .{n})),
             else => try w.print("{d}", .{n}),
         },
         .float => |f| if (spec[0] == 'd') try w.print("{d}", .{f}) else std.debug.panic("a {{{s}}} placeholder was given the fraction {d}; show fractions with {{d}}", .{ spec, f }),

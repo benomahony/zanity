@@ -170,10 +170,11 @@ const Sample = struct {
     count: u32 = 0,
 
     fn take(self: *Sample, observed: Observed) anyerror!bool {
-        if (observed.probability < 0 or observed.probability > 1) assert.panic("a kept answer has probability {d}", .{observed.probability});
+        if (!(observed.probability >= 0 and observed.probability <= 1)) assert.panic("a kept answer has probability {d}, outside 0 to 1; the store must keep only answers the model gave as probabilities", .{observed.probability});
         if (self.count >= self.limit) assert.panic("review took {d} answers past its limit of {d}", .{ self.count, self.limit });
         if (observed.real != null) return true;
-        const band = @min(@as(usize, @intFromFloat(observed.probability * bands)), bands - 1);
+        const scaled = observed.probability * bands;
+        const band: usize = if (scaled >= bands - 1) bands - 1 else @intFromFloat(scaled);
         if (self.taken[band] >= self.per_band) return true;
         self.taken[band] += 1;
         review_rows[self.count] = .{ .path = try self.text.copy(observed.path), .line = observed.line, .rule = try self.text.copy(observed.rule), .unit = try self.text.copy(&observed.unit), .probability = observed.probability };
