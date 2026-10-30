@@ -185,7 +185,10 @@ fn conflicts(run: Run) error{LimitExceeded}!void {
     const findings = run.findings;
     const before = findings.len;
     var buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const path = try text.copy(anchor.configPath(&buffer));
+    const path = try text.copy(anchor.configPath(&buffer) catch {
+        memory.exceeded = "bytes in the path from here to zanity.toml";
+        return error.LimitExceeded;
+    });
     const settings = anchor.config;
     const terms = settings.vocabulary();
     for (terms, 0..) |a, i| for (terms[i + 1 ..]) |b| {

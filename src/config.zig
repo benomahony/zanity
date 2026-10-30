@@ -235,17 +235,17 @@ pub const Anchor = struct {
         return joined;
     }
 
-    /// The config file, as a path from the working directory.
-    pub fn configPath(self: Anchor, buffer: []u8) []const u8 {
+    /// The config file, as a path from the working directory; NameTooLong when it doesn't fit `buffer`.
+    pub fn configPath(self: Anchor, buffer: []u8) error{NameTooLong}![]const u8 {
         if (self.config.dir.len == 0) assert.panic("asking where zanity.toml is when none was found; check config.dir first", .{});
         var used: usize = 0;
         var parts = std.mem.tokenizeScalar(u8, self.below, '/');
         while (parts.next()) |_| {
-            if (used + 3 > buffer.len) return file_name;
+            if (used + 3 > buffer.len) return error.NameTooLong;
             @memcpy(buffer[used..][0..3], "../");
             used += 3;
         }
-        if (used + file_name.len > buffer.len) return file_name;
+        if (used + file_name.len > buffer.len) return error.NameTooLong;
         @memcpy(buffer[used..][0..file_name.len], file_name);
         if (used % 3 != 0) assert.panic("wrote {d} bytes of '../' steps; each step is 3 bytes", .{used});
         return buffer[0 .. used + file_name.len];
