@@ -280,8 +280,9 @@ fn listPredicate(name: []const u8, capture: u32, values: []const []const u8) Pre
     return .{ .ancestor = .{ .capture = capture, .kinds = values, .positive = positive } };
 }
 
-fn hasAncestor(node: ts.Node, kinds: []const []const u8) bool {
-    if (kinds.len == 0) assert.panic("#has-ancestor? names no node kinds; list at least one after the capture", .{});
+fn hasAnyAncestorKind(node: ts.Node, expected_kinds: []const []const u8) bool {
+    // Match any listed kind among strict ancestors; the captured node itself is excluded.
+    if (expected_kinds.len == 0) assert.panic("#has-ancestor? names no node kinds; list at least one after the capture", .{});
     // The captured node belongs to the live syntax tree, and kinds come from the compiled
     // language query. Tree size bounds every valid ancestor chain, including single-line trees.
     const tree = node.tree orelse assert.panic("walking ancestors of a node with no live tree; retain the parsed tree until predicate evaluation finishes", .{});
@@ -290,7 +291,7 @@ fn hasAncestor(node: ts.Node, kinds: []const []const u8) bool {
     for (0..node_count) |_| {
         const ancestor = current orelse return false;
         const kind = std.mem.span(ts.ts_node_type(ancestor));
-        for (kinds) |k| if (std.mem.eql(u8, k, kind)) return true;
+        for (expected_kinds) |k| if (std.mem.eql(u8, k, kind)) return true;
         current = ancestor.parent();
     }
     if (current != null) assert.panic("the ancestor walk from {s} at byte {d} exceeded its tree's {d} nodes; retain a valid acyclic tree for predicate evaluation", .{ ts.ts_node_type(node), ts.ts_node_start_byte(node), node_count });
@@ -336,7 +337,7 @@ fn holds(predicate: Predicate, match: ts.QueryMatch, buffers: Buffers, text: []c
             if (hasWord(node.text(text), q.values) != q.positive) break false;
         } else true,
         .ancestor => |q| for (nodes) |node| {
-            if (hasAncestor(node, q.kinds) != q.positive) break false;
+            if (hasAnyAncestorKind(node, q.kinds) != q.positive) break false;
         } else true,
         .kind => |q| for (nodes) |node| {
             if (oneOfText(std.mem.span(ts.ts_node_type(node)), q.kinds, .whole) != q.positive) break false;
@@ -428,6 +429,6 @@ test "ancestor predicates reach the root of deeply nested single-line source" {
     }
     try std.testing.expectEqualStrings("x", source[ts.ts_node_start_byte(leaf)..ts.ts_node_end_byte(leaf)]);
     const root_kind = std.mem.span(ts.ts_node_type(root));
-    try std.testing.expect(hasAncestor(leaf, &.{root_kind}));
-    try std.testing.expect(!hasAncestor(leaf, &.{"absent_kind"}));
+    try std.testing.expect(hasAnyAncestorKind(leaf, &.{root_kind}));
+    try std.testing.expect(!hasAnyAncestorKind(leaf, &.{"absent_kind"}));
 }
