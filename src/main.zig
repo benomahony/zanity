@@ -29,6 +29,7 @@ const Notice = @import("notice.zig").Notice;
 const edits = @import("edits.zig");
 const calibrate = @import("calibrate.zig");
 const lsp = @import("lsp.zig");
+const exchange = @import("exchange.zig");
 const watch = @import("watch.zig");
 const Telemetry = @import("telemetry.zig").Telemetry;
 const Facts = @import("facts.zig").Facts;
@@ -996,9 +997,10 @@ fn fixFile(ctx: *zclig.Context, ws: *Workspace, findings: []Finding) !usize {
 /// A file to fix: its path, the bytes the fixes were made against, and the fixed bytes.
 const Replacement = struct { path: []const u8, read: []const u8, fixed: []const u8 };
 
-/// Writes the fixed file by atomic rename after one last content check. A non-cooperating writer
-/// can still race that final rename; ordinary filesystems offer no compare-and-swap replacement.
-fn replaceFile(ctx: *zclig.Context, ws: *Workspace, r: Replacement) !void { // zanity: ignore[check-then-act]
+/// Swaps the fixed file into place in one step, then compares what it displaced with what the
+/// fixes were made against. When another program wrote the file in the meantime, the swap is
+/// undone so its write stays, and whatever cannot be put back is kept beside the file, never deleted.
+fn replaceFile(ctx: *zclig.Context, ws: *Workspace, r: Replacement) !void {
     const path = r.path;
     const bytes = r.fixed;
     if (!(path.len > 0 and bytes.len <= ws.fixed.len)) assert.panic("expected a path and at most {d} bytes, got '{s}' and {d} bytes; fixFile() must write at most the fixed buffer's size", .{ ws.fixed.len, path, bytes.len });
@@ -1011,11 +1013,25 @@ fn replaceFile(ctx: *zclig.Context, ws: *Workspace, r: Replacement) !void { // z
     };
     defer atomic.deinit(ws.io);
     try atomic.file.writeStreamingAll(ws.io, bytes);
-    if (!try unchanged(ws.io, path, r.read)) {
-        return ctx.fail(.io, try ws.text.format("{s} changed while zanity was fixing it, so it was left as it is.", .{path}), "Run zanity check --fix again once nothing else is editing it.");
+    atomic.file.close(ws.io);
+    atomic.file_open = false;
+    const hex = std.fmt.hex(atomic.file_basename_hex);
+    const temporary = if (std.fs.path.dirname(path)) |dir| try ws.text.format("{s}{c}{s}", .{ dir, std.fs.path.sep, &hex }) else try ws.text.copy(&hex);
+    if (!std.mem.endsWith(u8, temporary, &hex) or std.mem.eql(u8, temporary, path)) assert.panic("the temporary file for {s} is '{s}', which is not the atomic file '{s}' beside it; build it from the file's directory and the atomic file's name", .{ path, temporary, &hex });
+    exchange.exchange(temporary, path) catch |e| switch (e) {
+        error.OriginalKeptAsBackup => return ctx.fail(.io, try ws.text.format("Swapping the fixed {s} into place failed halfway; the fixed file is in place and the original is kept at {s}{s}.", .{ path, temporary, exchange.backup_suffix }), "Compare the two files, keep the one you want, then run zanity check --fix again."),
+        else => return ctx.fail(.io, try ws.text.format("Could not swap the fixed {s} into place: {t}.", .{ path, e }), "Check the file system supports atomic renames, then run zanity check --fix again."),
+    };
+    if (try unchanged(ws.io, temporary, r.read)) return;
+    exchange.exchange(temporary, path) catch |e| {
+        atomic.file_exists = false;
+        return ctx.fail(.io, try ws.text.format("{s} changed while zanity was fixing it, and putting the other version back failed ({t}); it is kept at {s}.", .{ path, e, temporary }), "Compare the two files, keep the one you want, then run zanity check --fix again.");
+    };
+    if (!try unchanged(ws.io, temporary, bytes)) {
+        atomic.file_exists = false;
+        return ctx.fail(.io, try ws.text.format("{s} changed twice while zanity was fixing it; the latest version is in place and the one before it is kept at {s}.", .{ path, temporary }), "Compare the two files, keep the one you want, then run zanity check --fix again.");
     }
-    try atomic.replace(ws.io);
-    if (bytes.len == 0) assert.panic("expected a fixed file with content, got an empty {s}; fixFile() must write the kept source and each edit", .{path});
+    return ctx.fail(.io, try ws.text.format("{s} changed while zanity was fixing it, so it was left as it is.", .{path}), "Run zanity check --fix again once nothing else is editing it.");
 }
 
 /// Whether the file at `path` still holds exactly `expected`.

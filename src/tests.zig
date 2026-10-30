@@ -23,6 +23,7 @@ test {
     _ = @import("main.zig");
     _ = @import("upgrade.zig");
     _ = @import("lsp.zig");
+    _ = @import("exchange.zig");
     _ = @import("telemetry.zig");
     _ = @import("twins.zig");
     _ = @import("passthrough.zig");
