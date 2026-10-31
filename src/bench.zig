@@ -67,8 +67,9 @@ pub fn main(init: std.process.Init) !void {
     const io = init.io;
     const minimal = init.minimal;
     const args = try minimal.args.toSlice(arena);
-    if (args.len < 3 or args.len > 4) assert.panic("bench takes the zanity binary, the compiler and an optional corpus directory, but got {d} arguments; run it with zig build bench", .{args.len - 1});
+    if (args.len < 3 or args.len > 4) std.process.fatal("bench takes the zanity binary, the compiler and an optional corpus directory, but got {d} arguments; run it with zig build bench", .{args.len - 1});
     const limits: memory.Limits = .{};
+    if (limits.files == 0 or limits.file_bytes == 0) assert.panic("the default limits allow {d} files of {d} bytes, so bench could check nothing; restore them in memory.Limits", .{ limits.files, limits.file_bytes });
     var corpus = try Corpus.initCorpus(arena, if (args.len == 4) args[3] else try stdDir(arena, io, args[2]), limits);
     var scratch = try check.FileScratch.initCheckScratch(arena, limits);
     var text = try memory.Text.initText(arena, limits.text_bytes);

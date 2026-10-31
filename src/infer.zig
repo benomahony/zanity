@@ -411,12 +411,14 @@ fn adviceFor(err: anyerror) []const u8 {
     return text;
 }
 
-/// The variable's value, or null when it is unset or blank, as tai treats the environment.
+/// The variable's value, or null when it is unset or blank, as tai treats the environment, or
+/// holds a line break, which no key or address does and which would split a request header.
 fn present(environ: *const std.process.Environ.Map, name: []const u8) ?[]const u8 {
     if (name.len == 0) assert.panic("reading an unnamed environment variable; pass a name such as TYPESAFE_API_KEY", .{});
     const value = std.mem.trim(u8, environ.get(name) orelse return null, " \t\r\n");
-    if (std.mem.indexOfAny(u8, value, "\r\n") != null) assert.panic("{s} still holds a line break after trimming", .{name});
-    return if (value.len == 0) null else value;
+    if (value.len == 0 or std.mem.indexOfAny(u8, value, "\r\n") != null) return null;
+    if (std.mem.indexOfScalar(u8, name, '=') != null) assert.panic("reading the variable '{s}', whose name holds an equals sign; pass only the name", .{name});
+    return value;
 }
 
 /// Whether a question about `asks` applies to the unit: the error-message questions to functions

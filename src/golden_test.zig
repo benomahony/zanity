@@ -313,6 +313,27 @@ test "under Claude Code, check speaks to the agent unless --json or --plain asks
     try std.testing.expectEqual(std.process.Child.Term{ .exited = 2 }, both.term);
 }
 
+test "environment variables zanity did not set never crash it" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    var watched = std.process.Environ.Map.init(arena);
+    try watched.put("ZANITY_WATCH", "12");
+    const rerun = try checkForAgent(arena, std.testing.io, &watched, &.{});
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 1 }, rerun.term);
+    var agent = std.process.Environ.Map.init(arena);
+    const unusual = try arena.alloc(u8, 100);
+    @memset(unusual, 'x');
+    try agent.put("CLAUDECODE", unusual);
+    const speaking = try checkForAgent(arena, std.testing.io, &agent, &.{});
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 1 }, speaking.term);
+    var keyed = std.process.Environ.Map.init(arena);
+    try keyed.put("TYPESAFE_API_KEY", "abc\ndef");
+    try keyed.put("ZANITY_STORE", ":memory:");
+    const inferring = try checkForAgent(arena, std.testing.io, &keyed, &.{"--infer"});
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 2 }, inferring.term);
+}
+
 test "--all lists every finding on its own line after the totals, with or without Claude Code, and refuses --json" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();

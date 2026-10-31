@@ -34,8 +34,12 @@ def arguments() -> argparse.Namespace:
     parser.add_argument("--infer-url", help="a System One server, such as a local Kev, to ask both inference linters the named questions about their fixtures")
     parser.add_argument("--infer-model", default="kev-4b", help="the model --infer-url serves")
     args = parser.parse_args()
-    assert args.runs > 0, f"--runs must be at least 1, not {args.runs}"
-    assert args.zanity.is_file(), f"{args.zanity} is missing; run `zig build`"
+    if args.runs < 1:
+        parser.error(f"--runs must be at least 1, not {args.runs}")
+    if not args.zanity.is_file():
+        parser.error(f"{args.zanity} is missing; run `zig build`")
+    assert args.runs >= 1, f"returned --runs {args.runs}; parser.error() must exit on a bad value"
+    assert args.infer_model, "--infer-model has a default; restore it in arguments()"
     return args
 
 
@@ -100,10 +104,10 @@ def main() -> None:
     Own a private cache for the run, delegate collection and publication, and report operational
     failures at this command boundary. There is no remote caller or shared mutable application state."""
     args = arguments()
-    assert args.runs > 0, f"--runs must be positive, not {args.runs}; pass --runs 1 or more"
     try:
         with tempfile.TemporaryDirectory(prefix="parity-") as temporary:
             zanity = Zanity(args.zanity.resolve(), Path(temporary) / "store.db")
+            assert zanity.binary.is_absolute(), f"{zanity.binary} is relative; resolve it before the checks change directory"
             data = comparison_results(args, zanity)
             assert data["commit"], "comparison results lack a commit; collect results from a git checkout before publishing"
             publish_comparison(data)

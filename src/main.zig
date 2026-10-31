@@ -37,8 +37,6 @@ const Finding = @import("facts.zig").Finding;
 
 const CheckOptions = triage.CheckOptions;
 const triage = @import("triage.zig");
-/// The longest agent environment value inspected.
-const max_agent_value = 64;
 /// The widest terminal believed.
 const max_console_width = 4096;
 /// Buffered standard output, for a check's whole report.
@@ -253,7 +251,7 @@ const Workspace = struct {
 pub fn main(init: std.process.Init) !u8 {
     const minimal = init.minimal;
     const args = try minimal.args.toSlice(init.arena.allocator());
-    if (args.len == 0) assert.panic("the process has no arguments, not even its own name; start zanity from a shell or exec, which always pass the program's name", .{});
+    if (args.len == 0) std.process.fatal("the process has no arguments, not even its own name; start zanity from a shell or exec, which always pass the program's name", .{});
     var out_buffer: [out_buffer_bytes]u8 = undefined;
     var out_writer: Io.File.Writer = .initStreaming(.stdout(), init.io, &out_buffer);
     var err_buffer: [err_buffer_bytes]u8 = undefined;
@@ -262,6 +260,7 @@ pub fn main(init: std.process.Init) !u8 {
     ws.environ = init.environ_map;
     const rest = args[1..];
     ws.args = rest;
+    if (ws.args.len + 1 != args.len) assert.panic("the workspace holds {d} of {d} arguments; main() must give it all but the program's name", .{ ws.args.len, args.len });
     for (rest) |arg| ws.chose_format = ws.chose_format or std.mem.eql(u8, arg, "--json") or std.mem.eql(u8, arg, "--plain");
     var runtime = zclig.native.runtime(init, &out_writer.interface, &err_writer.interface);
     runtime.user_data = ws;
@@ -538,8 +537,9 @@ fn reportToAgent(ctx: *zclig.Context, ws: *Workspace, options: CheckOptions, cou
 fn watching(ws: *const Workspace) bool {
     const environ = ws.environ orelse return false;
     const value = environ.get(watch.env_var) orelse return false;
-    if (value.len > 1) assert.panic("{s} is '{s}'; zanity check --watch sets it to 1, so it was set by hand", .{ watch.env_var, value });
     if (ws.args.len == 0) assert.panic("a rerun of zanity check --watch with no arguments; the watcher passes check and its options", .{});
+    const text = &ws.text;
+    if (text.used > text.buffer.len) assert.panic("{d} of {d} text bytes used; write to ws.text only through its copy() and format()", .{ text.used, text.buffer.len });
     return std.mem.eql(u8, value, "1");
 }
 
@@ -547,8 +547,9 @@ fn agentRunning(ws: *const Workspace) bool {
     if (ws.chose_format) assert.panic("asked whether an agent runs zanity after the command line chose a format; speaksToAgent() checks chose_format first", .{});
     const environ = ws.environ orelse return false;
     const value = environ.get("CLAUDECODE") orelse return false;
-    if (value.len > max_agent_value) assert.panic("CLAUDECODE is {d} bytes long; Claude Code sets it to 1, so check what set it", .{value.len});
-    return value.len > 0 and !std.mem.eql(u8, value, "0");
+    const running = value.len > 0 and !std.mem.eql(u8, value, "0");
+    if (running and value.len == 0) assert.panic("took an empty CLAUDECODE for a running agent; only a set value other than 0 means one", .{});
+    return running;
 }
 
 /// The file-oriented terminal layout; `--plain` and `--json` stay zclig's record formats.
@@ -724,7 +725,7 @@ fn fetchRelease(up: *Upgrader, version: ?[]const u8) !upgrade.Release {
     if (version) |v| if (upgrade.versionOrder(v, release.tag_name)) |order| if (order != .eq) {
         return ctx.fail(.io, try ws.text.format("GitHub answered the request for v{s} with release {s}.", .{ upgrade.trimV(v), release.tag_name }), "Run zanity upgrade again, and report it if it happens twice.");
     };
-    if (release.tag_name.len == 0) assert.panic("GitHub's release has an empty tag; parseRelease() must refuse it", .{});
+    if (release.tag_name.len == 0) assert.panic("parseRelease() returned an empty tag, though it refuses anything but a version; restore that refusal", .{});
     return release;
 }
 
