@@ -960,7 +960,7 @@
  },
  {
   "id": "CWE-617",
-  "question": "Can a caller provide a concrete invalid external input that reaches an assert, panic or abort instead of a handled input error? Identify the input and the assertion it reaches. Ignore assertions of internal API contracts, buffer bookkeeping, parser cursor invariants or postconditions unless the shown control flow demonstrates that ordinary invalid external input can violate them. A function parameter alone is not evidence of an untrusted source.",
+  "question": "Does the function itself read a value from outside the program, such as a command line argument, environment variable, request body or user-edited file, and then assert, panic or abort when that value is invalid, instead of reporting a handled input error? Identify where the function reads the value and the assertion it reaches. Parsing a raw request body or message it was handed counts as reading it. Ignore every other value the function receives as a parameter, since a single function cannot show where its caller got it, and ignore files that belong to the project itself, such as its own source, data, fixtures or generated output. Ignore assertions of internal API contracts, buffer bookkeeping, parser cursor invariants and postconditions.",
   "message": "Bad input from outside the program is rejected with an assertion, which crashes with a traceback and disappears when assertions are disabled. Raise a specific error and report it clearly instead",
   "severity": "warning",
   "scope": "function"
