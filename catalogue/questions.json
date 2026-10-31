@@ -344,7 +344,7 @@
  },
  {
   "id": "CWE-289",
-  "question": "Does the function authenticate or authorise based on the name of a user or resource without handling every name that refers to the same entity, such as case variants, aliases, encoded forms or trailing characters?",
+  "question": "Does the function authenticate or authorise a caller based on the name of a user or resource without handling every name that refers to the same entity, such as case variants, aliases, encoded forms or trailing characters? Ignore code that inspects source or configuration text for security problems.",
   "message": "An alternate name for the same user or resource can bypass this check. Canonicalise the name before authenticating or authorising",
   "severity": "error",
   "scope": "function"
@@ -379,7 +379,7 @@
  },
  {
   "id": "CWE-305",
-  "question": "Does the function contain a path that skips authentication because of another flaw, such as an exception handler, default case or early return that lets the caller through?",
+  "question": "Does the function itself authenticate a caller, and contain a path that skips that authentication because of another flaw, such as an exception handler, default case or early return that lets the caller through? Ignore functions that authenticate nobody, including code that inspects source or configuration text for authentication problems.",
   "message": "A separate flaw lets callers skip authentication. Make every path fail closed unless authentication succeeded",
   "severity": "error",
   "scope": "function"
@@ -456,7 +456,7 @@
  },
  {
   "id": "CWE-346",
-  "question": "Does the function receive data or requests from another system or party, such as a webhook, message queue, cross-origin request or inter-process call, and act on them without verifying who sent them, for example by a signature, token or the Origin header?",
+  "question": "Does the function receive data or requests from another system or party, such as a webhook, message queue, cross-origin request or inter-process call, and act on them without verifying who sent them, for example by a signature, token or the Origin header? Ignore standard streams and pipes from the process that started this one, which only that process can write to, and test servers bound to the loopback address.",
   "message": "The sender of this data is not verified. Check its signature, token or origin before acting on it",
   "severity": "error",
   "scope": "function"
@@ -519,7 +519,7 @@
  },
  {
   "id": "CWE-358",
-  "question": "Does the function implement a standard protocol, algorithm or technique but omit or get wrong one of its required security checks?",
+  "question": "Does the function implement a standard protocol, algorithm or technique but omit or get wrong one of its required security checks? Identify the protocol and a check this function is itself responsible for. Ignore checks a library it calls performs, such as a TLS client verifying certificates, and code that inspects source or configuration text for security problems, which implements no protocol.",
   "message": "A security check required by the standard is missing or wrong. Implement every check the standard requires, or use a vetted library",
   "severity": "error",
   "scope": "function"
@@ -547,7 +547,7 @@
  },
  {
   "id": "CWE-367",
-  "question": "Does the function check a property of a file or resource, such as existence, permissions or ownership, and then use it separately, so the resource could change between the check and the use?",
+  "question": "Does the function check a property of a file or resource, such as existence, permissions or ownership, and then rely on that check when it uses the resource separately, so that a change in between gives a wrong or unsafe result? Ignore a use that fails cleanly when the resource changed, a check that only gives a better error message, and a use the function verifies afterwards.",
   "message": "The resource can change between the check and the use. Act on it atomically, or check through the handle you then use",
   "severity": "error",
   "scope": "function"
@@ -729,7 +729,7 @@
  },
  {
   "id": "CWE-434",
-  "question": "Does the function accept an uploaded file without restricting its type, extension and content, and store it where it could be served or executed?",
+  "question": "Does the function accept a file uploaded by a user of a server without restricting its type, extension and content, and store it where it could be served or executed? Ignore a program installing its own release after checking its hash.",
   "message": "Uploaded files of any type are accepted and could be executed. Allow only safe types, check the content, and store uploads outside executable locations",
   "severity": "error",
   "scope": "function"
@@ -900,7 +900,7 @@
  },
  {
   "id": "CWE-551",
-  "question": "Does the function make an authorisation decision on a URL, path or request before fully decoding and canonicalising it?",
+  "question": "Does the function make an authorisation decision on a URL, path or request before fully decoding and canonicalising it? Ignore code that inspects source or configuration text for security problems, which authorises nothing.",
   "message": "Authorisation checks the request before it is canonicalised, so encoded forms can bypass it. Decode and normalise first, then authorise",
   "severity": "error",
   "scope": "function"
@@ -1198,7 +1198,7 @@
  },
  {
   "id": "CWE-820",
-  "question": "Does the function use a resource shared between threads, processes or async tasks, such as a variable, file or collection, without any synchronisation?",
+  "question": "Does the function use a resource shared between threads, processes or async tasks, such as a variable, file or collection, without any synchronisation, so that overlapping use gives a wrong result? Ignore thread-local storage, which is not shared, and a cache whose reader treats a damaged entry as missing.",
   "message": "A shared resource is used concurrently without synchronisation. Protect it with a lock or use a thread-safe structure",
   "severity": "error",
   "scope": "function"
@@ -1247,7 +1247,7 @@
  },
  {
   "id": "CWE-841",
-  "question": "Does the function allow a step of a multi-step workflow, such as checkout, reset or approval, to run without checking the previous steps were completed in order?",
+  "question": "Does the function perform a step of a multi-step user workflow, such as checkout, password reset or approval, without checking the previous steps were completed in order? Ignore resetting a reusable object's state between uses.",
   "message": "A workflow step can be run out of order or skipped. Check the workflow state before each step",
   "severity": "error",
   "scope": "function"
@@ -1310,7 +1310,7 @@
  },
  {
   "id": "CWE-924",
-  "question": "Does the function receive messages over a channel without verifying they were not modified in transit, for example no TLS, MAC or signature?",
+  "question": "Does the function receive messages over a network connection between hosts without verifying they were not modified in transit, for example no TLS, MAC or signature? Ignore standard streams, pipes to a parent or child process and connections on the loopback address, which do not leave the machine.",
   "message": "Messages are not protected against tampering in transit. Use TLS, or add a MAC or signature and verify it",
   "severity": "error",
   "scope": "function"
@@ -1331,7 +1331,7 @@
  },
  {
   "id": "CWE-941",
-  "question": "Does the function send an outgoing request to a destination that is wrong or not verified, such as a destination from input, a misconfigured address or a host without checking its identity?",
+  "question": "Does the function send an outgoing request to a destination that is wrong or not verified, such as a destination from input, a misconfigured address or a host without checking its identity? Ignore destinations the function or its helper checks against a fixed list of hosts, and an address the person running the program chose by flag, environment variable or configuration.",
   "message": "Outgoing requests may go to the wrong destination. Use the configured destination and verify its identity",
   "severity": "error",
   "scope": "function"
@@ -1846,7 +1846,7 @@
  },
  {
   "id": "CWE-1285",
-  "question": "Does the function take an index, position or offset from input without checking it is within the bounds of the resource it indexes?",
+  "question": "Does the function index a resource with a position or offset taken from input without checking it is within the resource's bounds? Identify the indexing expression. Ignore functions that only record, compare or print such a value, and parser cursors the parser itself advances.",
   "message": "An index or offset from input is not checked against bounds. Check it is at least zero and less than the size",
   "severity": "error",
   "scope": "function"
@@ -1944,7 +1944,7 @@
  },
  {
   "id": "CWE-401",
-  "question": "Does the function allocate memory that is not freed on every path once it is no longer needed, for example leaking on an error return?",
+  "question": "Does the function allocate memory that is not freed on every path once it is no longer needed, for example leaking on an error return? Ignore memory from an arena or region freed as a whole, and memory the function returns or stores for its caller.",
   "message": "Allocated memory can leak. Free it on every path, or use automatic ownership such as RAII or smart pointers",
   "severity": "error",
   "scope": "function"
@@ -2242,7 +2242,7 @@
  },
  {
   "id": "EXT-VERIFY-001",
-  "question": "Is this a test whose expected value is computed the same way as the implementation, or copied from its output, rather than derived independently from the requirement?",
+  "question": "Is this a test case itself, not a fixture or helper that builds its data, whose expected value is computed the same way as the implementation, or copied from its output, rather than derived independently from the requirement?",
   "message": "The expected value comes from the implementation, so the test repeats its mistakes. Derive expected values independently from the requirement",
   "severity": "error",
   "scope": "function"
@@ -2291,7 +2291,7 @@
  },
  {
   "id": "EXT-HUMAN-003",
-  "question": "Does the function allow a safety-relevant action based on the assumption that another component or controller will block unsafe combinations, with no enforced check of its own?",
+  "question": "Does the function allow a safety-relevant action, one that can harm people or equipment, based on the assumption that another component or controller will block unsafe combinations, with no enforced check of its own? Ignore ordinary file, process and text handling, which moves no equipment.",
   "message": "Unsafe combinations of actions are not prevented here. Enforce the safety constraint in this code instead of assuming another component will",
   "severity": "error",
   "scope": "function"
