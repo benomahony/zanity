@@ -9,6 +9,8 @@ const File = check.File;
 const Context = check.Context;
 const contains = check.contains;
 const scope = @import("scope.zig");
+/// The most reported expressions compared against.
+const max_reported = 64;
 
 pub const Repeat = struct { node: ts.Node, hash: u64, size: u32 };
 /// Something the code writes to, by the name it starts with: `self` for `self.at += 1`.
@@ -203,7 +205,7 @@ fn groupEnd(items: []const Repeat, start: usize) usize {
 /// `item.get("price", 0)`, so the larger finding covers it.
 fn covered(items: []const Repeat, reported: []const CopyGroup, copies: []const Repeat) bool {
     if (copies.len == 0) assert.panic("asked whether an empty group of copies is covered; groupEnd() always returns at least one", .{});
-    if (reported.len > 64) assert.panic("{d} reported groups, more than checkRepeats() keeps; it must stop recording at its array's length", .{reported.len});
+    if (reported.len > max_reported) assert.panic("{d} reported groups, more than checkRepeats() keeps; it must stop recording at its array's length", .{reported.len});
     if (reported.len == 0) return false;
     for (copies) |copy| {
         if (!insideAny(items, reported, copy.node)) return false;

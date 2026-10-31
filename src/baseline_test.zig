@@ -3,6 +3,12 @@ const Io = std.Io;
 const paths = @import("paths");
 const assert = @import("assert.zig");
 const Row = @import("baseline.zig").Row;
+/// Flags one fixture command may pass.
+const max_fixture_flags = 64;
+/// Findings the legacy capture holds.
+const legacy_findings = 10000;
+/// The highest status the CLI exits with.
+const max_cli_status = 2;
 
 const Envelope = struct {
     summary: struct { new: usize, existing: usize, resolved: usize },
@@ -34,7 +40,7 @@ const Fixture = struct {
 
     fn check(self: *Fixture, flags: []const []const u8) !std.process.RunResult {
         if (self.exe.len == 0) assert.panic("fixture has no executable", .{});
-        if (flags.len > 64) assert.panic("fixture has {d} flags, above its intended bound", .{flags.len});
+        if (flags.len > max_fixture_flags) assert.panic("fixture has {d} flags, above its intended bound", .{flags.len});
         var args: std.ArrayList([]const u8) = .empty;
         try args.appendSlice(self.arena, &.{ self.exe, "check", ".", "--rules", "assertion-message" });
         try args.appendSlice(self.arena, flags);
@@ -50,8 +56,8 @@ const Fixture = struct {
     }
 
     fn json(self: *Fixture, flags: []const []const u8, code: u8) !Envelope {
-        if (code > 2) assert.panic("fixture expects non-CLI status {d}; expect one of the exit statuses the CLI returns", .{code});
-        if (flags.len > 64) assert.panic("JSON fixture has {d} flags; pass only as many flags as this fixture's argument array holds", .{flags.len});
+        if (code > max_cli_status) assert.panic("fixture expects non-CLI status {d}; expect one of the exit statuses the CLI returns", .{code});
+        if (flags.len > max_fixture_flags) assert.panic("JSON fixture has {d} flags; pass only as many flags as this fixture's argument array holds", .{flags.len});
         var args: std.ArrayList([]const u8) = .empty;
         try args.appendSlice(self.arena, flags);
         try args.append(self.arena, "--json");
@@ -69,9 +75,9 @@ fn initLegacy(arena: std.mem.Allocator) !Fixture {
     for (0..10000) |i| try source.writer.print("assert value_{d}\n", .{i});
     try fixture.write(source.written());
     const capture = try fixture.json(&.{ "--baseline", "backlog.json", "--capture-baseline", "--limit", "1" }, 0);
-    try std.testing.expectEqual(@as(usize, 10000), capture.findings.len);
-    if (source.written().len < 10000) assert.panic("legacy source has only {d} bytes; extend the legacy fixture to the text this test reads", .{source.written().len});
-    if (capture.pagination.matching_total != 10000) assert.panic("legacy capture matched {d} findings; update the legacy fixture to produce the findings this test expects", .{capture.pagination.matching_total});
+    try std.testing.expectEqual(@as(usize, legacy_findings), capture.findings.len);
+    if (source.written().len < legacy_findings) assert.panic("legacy source has only {d} bytes; extend the legacy fixture to the text this test reads", .{source.written().len});
+    if (capture.pagination.matching_total != legacy_findings) assert.panic("legacy capture matched {d} findings; update the legacy fixture to produce the findings this test expects", .{capture.pagination.matching_total});
     return fixture;
 }
 

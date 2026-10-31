@@ -1,6 +1,8 @@
 const triage = @import("triage.zig");
 const std = @import("std");
 const assert = @import("assert.zig");
+/// Hex characters in a finding's SHA-256 identity.
+pub const id_hex_length = 64;
 
 pub const Row = struct {
     path: []const u8,
@@ -119,7 +121,7 @@ pub fn initSnapshot(region: *std.heap.FixedBufferAllocator, io: std.Io, operator
 
 pub fn save(gpa: std.mem.Allocator, io: std.Io, target: struct { path: []const u8, replace: bool }, rows: []const Row) !void {
     if (target.path.len == 0) return error.EmptyBaselinePath;
-    if (rows.len > 1 << 18) return error.BaselineTooLarge;
+    if (rows.len > max_baseline_findings) return error.BaselineTooLarge;
     const data = try std.json.Stringify.valueAlloc(gpa, Snapshot{ .schema_version = 1, .identity_version = 1, .findings = rows }, .{ .whitespace = .indent_2 });
     defer gpa.free(data);
     var atomic = try std.Io.Dir.cwd().createFileAtomic(io, target.path, .{ .replace = target.replace });
@@ -189,15 +191,15 @@ pub fn prepare(ctx: anytype, ws: anytype, options: anytype) !void {
 }
 
 fn validateBaselineRow(row: Row) !void {
-    if (row.id.len != 64 or row.path.len == 0 or row.rule.len == 0 or row.line == 0 or row.column == 0) return error.CorruptBaseline;
+    if (row.id.len != id_hex_length or row.path.len == 0 or row.rule.len == 0 or row.line == 0 or row.column == 0) return error.CorruptBaseline;
     for (row.id) |c| if (!std.ascii.isHex(c)) return error.CorruptBaseline;
     if (!std.mem.eql(u8, row.severity, "error") and !std.mem.eql(u8, row.severity, "warning") and !std.mem.eql(u8, row.severity, "information")) return error.CorruptBaseline;
-    if (row.id.len != 64) assert.panic("validated identity has {d} characters", .{row.id.len});
+    if (row.id.len != id_hex_length) assert.panic("validated identity has {d} characters", .{row.id.len});
     if (row.line == 0) assert.panic("validated row has line {d}", .{row.line});
 }
 
 fn initIdentityIndex(gpa: std.mem.Allocator, capacity: usize) !std.StringHashMapUnmanaged(usize) {
-    if (capacity > 1 << 18) return error.TooManyFindings;
+    if (capacity > max_baseline_findings) return error.TooManyFindings;
     var index: std.StringHashMapUnmanaged(usize) = .empty;
     try index.ensureTotalCapacity(gpa, @intCast(capacity));
     if (index.count() != 0) assert.panic("new identity index contains {d} entries; build a fresh map in initIdentityIndex()", .{index.count()});
@@ -206,7 +208,7 @@ fn initIdentityIndex(gpa: std.mem.Allocator, capacity: usize) !std.StringHashMap
 }
 
 fn initComparisonIndex(gpa: std.mem.Allocator, old: []const Row, resolved: *std.ArrayList(Row)) !std.StringHashMapUnmanaged(Row) {
-    if (old.len > 1 << 18) return error.TooManyBaselineFindings;
+    if (old.len > max_baseline_findings) return error.TooManyBaselineFindings;
     var index: std.StringHashMapUnmanaged(Row) = .empty;
     errdefer index.deinit(gpa);
     try index.ensureTotalCapacity(gpa, @intCast(old.len));

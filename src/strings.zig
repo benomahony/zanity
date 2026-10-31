@@ -1,6 +1,8 @@
 //! Small comparisons of text that several checks share.
 const std = @import("std");
 const assert = @import("assert.zig");
+/// The most prefixes one table in languages/tables.zon lists.
+const max_prefixes = 16;
 
 /// Whether `needle` is one of the names in `haystack`, such as a call in a language's name table.
 pub fn contains(haystack: []const []const u8, needle: []const u8) bool {
@@ -15,7 +17,7 @@ pub fn contains(haystack: []const []const u8, needle: []const u8) bool {
 /// Whether `text` starts with one of `prefixes`, such as a test name with a test prefix.
 pub fn startsWithAny(text: []const u8, prefixes: []const []const u8) bool {
     if (text.len == 0) assert.panic("asked whether an empty text starts with one of {d} prefixes; skip empty texts before calling startsWithAny()", .{prefixes.len});
-    if (prefixes.len > 16) assert.panic("checking '{s}' against {d} prefixes; more than 16 means the table in languages/tables.zon is wrong", .{ text, prefixes.len });
+    if (prefixes.len > max_prefixes) assert.panic("checking '{s}' against {d} prefixes; more than 16 means the table in languages/tables.zon is wrong", .{ text, prefixes.len });
     for (prefixes) |prefix| if (std.mem.startsWith(u8, text, prefix)) return true;
     return false;
 }

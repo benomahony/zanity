@@ -2,6 +2,15 @@ const std = @import("std");
 const assert = @import("assert.zig");
 const triage = @import("triage.zig");
 const baseline = @import("baseline.zig");
+/// The most arguments a rerun may carry.
+const max_rerun_args = 256;
+/// Arguments added to each rerun.
+const added_rerun_args = 2;
+/// The most output kept from a rerun.
+const rerun_stdout_bytes = 1 << 27;
+const rerun_stderr_bytes = 1 << 24;
+/// The longest command line argument handled.
+const max_argument_bytes = 1 << 20;
 
 const Envelope = struct {
     summary: struct { new: usize, existing: usize, resolved: usize },
@@ -12,13 +21,13 @@ const Envelope = struct {
 /// Isolated --infer/--fix reruns still report transitions in the watching parent.
 pub fn isolatedCheck(ctx: anytype, ws: anytype, rerun: anytype, options: anytype) !void {
     if (options.baseline == null) assert.panic("isolated baseline reporting needs a baseline", .{});
-    if (rerun.argv.len > 256) assert.panic("isolated check has {d} arguments", .{rerun.argv.len});
+    if (rerun.argv.len > max_rerun_args) assert.panic("isolated check has {d} arguments", .{rerun.argv.len});
     ws.rows.clear();
     ws.text.used = 0;
     var arena = std.heap.FixedBufferAllocator.init(ws.baseline_buffer);
-    var args: [258][]const u8 = undefined;
+    var args: [max_rerun_args + added_rerun_args][]const u8 = undefined;
     const argv = machineArgs(&args, rerun.argv);
-    const run = try std.process.run(arena.allocator(), ws.io, .{ .argv = argv, .environ_map = rerun.environ, .stdout_limit = .limited(1 << 27), .stderr_limit = .limited(1 << 24) });
+    const run = try std.process.run(arena.allocator(), ws.io, .{ .argv = argv, .environ_map = rerun.environ, .stdout_limit = .limited(rerun_stdout_bytes), .stderr_limit = .limited(rerun_stderr_bytes) });
     const err = ctx.runtime.err;
     try err.writer.writeAll(run.stderr);
     if (run.term != .exited) return ctx.fail(.io, "The isolated watched check was interrupted.", "Run the check again.");
@@ -57,14 +66,14 @@ fn machineArgs(buffer: [][]const u8, original: []const []const u8) []const []con
 
 fn reportValueFlag(arg: []const u8) bool {
     if (arg.len == 0) assert.panic("isolated argument is empty; skip empty arguments before isolating the command", .{});
-    if (arg.len > 1 << 20) assert.panic("isolated argument has {d} bytes; refuse oversized arguments when parsing them", .{arg.len});
+    if (arg.len > max_argument_bytes) assert.panic("isolated argument has {d} bytes; refuse oversized arguments when parsing them", .{arg.len});
     for ([_][]const u8{ "--rule", "--file", "--classification", "--page-size", "--offset" }) |flag| if (std.mem.eql(u8, arg, flag)) return true;
     return false;
 }
 
 fn omitReportFlag(arg: []const u8) bool {
     if (arg.len == 0) assert.panic("report argument is empty; skip empty arguments before filtering report flags", .{});
-    if (arg.len > 1 << 20) assert.panic("report argument has {d} bytes; refuse oversized arguments when parsing them", .{arg.len});
+    if (arg.len > max_argument_bytes) assert.panic("report argument has {d} bytes; refuse oversized arguments when parsing them", .{arg.len});
     for ([_][]const u8{ "--agent", "--json", "--plain", "--triage", "--rule=", "--file=", "--classification=", "--page-size=", "--offset=" }) |prefix| if (std.mem.startsWith(u8, arg, prefix)) return true;
     return false;
 }

@@ -5,6 +5,8 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const assert = @import("assert.zig");
+/// The longest text read as a version.
+const max_version_text = 32;
 const Io = std.Io;
 const Allocator = std.mem.Allocator;
 
@@ -286,7 +288,7 @@ pub const Version = struct {
 
     /// The version, or null when `text` is not a `major.minor.patch` that fits.
     pub fn of(text: []const u8) ?Version {
-        if (text.len > 32 or parseVersion(text) == null) return null;
+        if (text.len > max_version_text or parseVersion(text) == null) return null;
         var version: Version = .{ .len = @intCast(text.len) };
         @memcpy(version.bytes[0..text.len], text);
         if (!std.mem.eql(u8, version.slice(), text)) assert.panic("kept version '{s}' as '{s}'; Version.of() must copy every byte", .{ text, version.slice() });

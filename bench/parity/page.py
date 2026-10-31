@@ -12,6 +12,9 @@ from score import LANGUAGES
 from tools import BY_NAME, HERE, REPO, TOOLS, Tool
 
 RESULTS = HERE / "results.json"
+MEGABYTE = 1 << 20
+# No process measured here could hold a terabyte; a peak this large means the units are wrong.
+MAX_PLAUSIBLE_PEAK = 1 << 40
 CONTENT = REPO / "docs" / "content"
 SECTION = CONTENT / "comparison"
 OVERVIEW = SECTION / "index.smd"
@@ -50,8 +53,8 @@ def score(part: int, whole: int, text: str = "") -> str:
 
 def megabytes(value: float) -> str:
     assert value > 0, f"a process holds some memory, not {value} bytes"
-    assert value < 1 << 40, f"{value} bytes is not a plausible peak; check the units"
-    return f"{value / (1 << 20):.0f} MB"
+    assert value < MAX_PLAUSIBLE_PEAK, f"{value} bytes is not a plausible peak; check the units"
+    return f"{value / MEGABYTE:.0f} MB"
 
 
 def raw(lines: list[str]) -> list[str]:

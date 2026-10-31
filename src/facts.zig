@@ -3,6 +3,8 @@ const assert = @import("assert.zig");
 const Allocator = std.mem.Allocator;
 const memory = @import("memory.zig");
 const rules = @import("rules.zig");
+/// The most arguments or parameters one call is compared across.
+const max_call_arguments = 1 << 16;
 
 pub const Definition = struct {
     path: []const u8,
@@ -121,7 +123,7 @@ pub const type_separator = ';';
 /// both known, as many of each, and every argument whose type shows is of its parameter's type.
 pub fn typesAgree(arguments: []const u8, parameters: []const u8) bool {
     if (arguments.len == 0 or parameters.len == 0) return false;
-    if (arguments.len > 1 << 16 or parameters.len > 1 << 16) assert.panic("comparing {d} bytes of argument types with {d} of parameter types; lists of types are bounded far below that", .{ arguments.len, parameters.len });
+    if (arguments.len > max_call_arguments or parameters.len > max_call_arguments) assert.panic("comparing {d} bytes of argument types with {d} of parameter types; lists of types are bounded far below that", .{ arguments.len, parameters.len });
     if (std.mem.count(u8, arguments, &.{type_separator}) != std.mem.count(u8, parameters, &.{type_separator})) return false;
     var given = std.mem.splitScalar(u8, arguments, type_separator);
     var taken = std.mem.splitScalar(u8, parameters, type_separator);

@@ -46,6 +46,8 @@ const Allocator = std.mem.Allocator;
 const Io = std.Io;
 const rules = @import("rules.zig");
 const ignore = @import("ignore.zig");
+/// One step up a directory, as written in a relative path.
+const parent_step = "../";
 
 pub const file_name = "zanity.toml";
 pub const max_excludes = 256;
@@ -241,13 +243,13 @@ pub const Anchor = struct {
         var used: usize = 0;
         var parts = std.mem.tokenizeScalar(u8, self.below, '/');
         while (parts.next()) |_| {
-            if (used + 3 > buffer.len) return error.NameTooLong;
-            @memcpy(buffer[used..][0..3], "../");
-            used += 3;
+            if (used + parent_step.len > buffer.len) return error.NameTooLong;
+            @memcpy(buffer[used..][0..parent_step.len], parent_step);
+            used += parent_step.len;
         }
         if (used + file_name.len > buffer.len) return error.NameTooLong;
         @memcpy(buffer[used..][0..file_name.len], file_name);
-        if (used % 3 != 0) assert.panic("wrote {d} bytes of '../' steps; each step is 3 bytes", .{used});
+        if (used % parent_step.len != 0) assert.panic("wrote {d} bytes of '../' steps; each step is 3 bytes", .{used});
         return buffer[0 .. used + file_name.len];
     }
 };

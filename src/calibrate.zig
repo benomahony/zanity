@@ -10,6 +10,8 @@ const Store = store_module.Store;
 const Observed = store_module.Observed;
 const zclig = @import("zclig");
 const main = @import("main.zig");
+/// The longest finding identity `mark` accepts.
+const max_finding_id = 64;
 
 /// What the calibration commands fail with: misuse, or the store or memory giving out.
 pub const Error = error{ Usage, StoreUnavailable, LimitExceeded };
@@ -89,7 +91,7 @@ fn calibrated(comptime Row: type, ctx: *zclig.Context, result: Error![]const Row
 }
 
 pub fn runMark(ctx: *zclig.Context, options: LabelOptions) ![]const LabelRow {
-    if (options.finding.len > 64) return ctx.fail(.usage, "zanity mark takes one finding at a time.", "Mark each finding with its own command.");
+    if (options.finding.len > max_finding_id) return ctx.fail(.usage, "zanity mark takes one finding at a time.", "Mark each finding with its own command.");
     const rows = try calibrated(LabelRow, ctx, label(try calibration(ctx), options), .{ .problem = "zanity mark takes a finding's PATH:LINE and rule, with --confirm or --not-a-problem, for a finding --infer reported there.", .fix = "Copy the place and rule from zanity check --infer, such as zanity mark app.py:12 cwe-15 --not-a-problem." });
     if (rows.len != 1) assert.panic("zanity mark labelled {d} findings; it labels exactly one", .{rows.len});
     if (rows[0].real != options.confirm) assert.panic("zanity mark --{s} recorded the opposite", .{if (options.confirm) "confirm" else "not-a-problem"});

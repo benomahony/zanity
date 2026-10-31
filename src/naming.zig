@@ -12,6 +12,8 @@ const Facts = facts_module.Facts;
 const Finding = facts_module.Finding;
 const Tables = @import("language.zig").Tables;
 const check = @import("check.zig");
+/// How many other holders a duplicate-name fix names before counting the rest.
+const max_others_listed = 3;
 const Context = check.Context;
 const File = check.File;
 
@@ -399,7 +401,7 @@ fn othersFix(text: *memory.Text, definitions: []const Definition, sharers: []con
     var rest: usize = 0;
     for (sharers) |k| {
         if (k.index == self_index or !sharable(definitions[k.index])) continue;
-        if (listed == 3) {
+        if (listed == max_others_listed) {
             rest += 1;
             continue;
         }

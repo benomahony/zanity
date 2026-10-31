@@ -4,6 +4,8 @@
 const std = @import("std");
 const assert = @import("assert.zig");
 const memory = @import("memory.zig");
+/// The longest attribute value sent.
+const max_value_bytes = 1 << 16;
 const Io = std.Io;
 const Allocator = std.mem.Allocator;
 
@@ -167,7 +169,7 @@ pub const Telemetry = struct {
 
 fn nonEmpty(value: ?[]const u8) ?[]const u8 {
     const v = value orelse return null;
-    if (v.len > 1 << 16) assert.panic("an OTLP endpoint variable is {d} bytes long; check what set it", .{v.len});
+    if (v.len > max_value_bytes) assert.panic("an OTLP endpoint variable is {d} bytes long; check what set it", .{v.len});
     const trimmed = std.mem.trim(u8, v, " ");
     if (trimmed.len > v.len) assert.panic("trimming '{s}' lengthened it", .{v});
     return if (trimmed.len == 0) null else v;

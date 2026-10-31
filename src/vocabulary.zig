@@ -8,6 +8,8 @@ const rules = @import("rules.zig");
 const config_module = @import("config.zig");
 const naming = @import("naming.zig");
 const facts_module = @import("facts.zig");
+/// The longest words compared for similarity.
+const max_similar_length = 64;
 const Config = config_module.Config;
 const Anchor = config_module.Anchor;
 const Term = config_module.Term;
@@ -213,8 +215,8 @@ fn conflicts(run: Run) error{LimitExceeded}!void {
 /// counting edits ignoring case.
 fn similarity(a: []const u8, b: []const u8) f64 {
     if (a.len == 0 or b.len == 0) assert.panic("comparing '{s}' with '{s}', and one is empty; TomlReader must reject an empty domain or context name, so check where it reads table headers", .{ a, b });
-    if (a.len > 64 or b.len > 64) return if (std.ascii.eqlIgnoreCase(a, b)) 1 else 0;
-    var row: [65]usize = undefined;
+    if (a.len > max_similar_length or b.len > max_similar_length) return if (std.ascii.eqlIgnoreCase(a, b)) 1 else 0;
+    var row: [max_similar_length + 1]usize = undefined;
     for (0..b.len + 1) |j| row[j] = j;
     for (a, 1..) |ca, i| {
         var diagonal = row[0];

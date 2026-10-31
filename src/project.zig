@@ -10,6 +10,10 @@ const ignore = @import("ignore.zig");
 const suppress = @import("suppress.zig");
 const strings = @import("strings.zig");
 const facts_module = @import("facts.zig");
+/// How much of a project file's line is inspected.
+const line_window_bytes = 512;
+/// The shortest password an authentication policy may allow.
+const min_password_length = 8;
 const Facts = facts_module.Facts;
 const Finding = facts_module.Finding;
 
@@ -405,7 +409,7 @@ fn authenticationPolicy(lower: []const u8) ?PolicyFinding {
     if (disabledSettingValue(value)) if (disabledAuthenticationPolicy(key)) |policy| return policy;
     const password_length = std.mem.indexOf(u8, key, "password") != null and (std.mem.indexOf(u8, key, "min_length") != null or std.mem.indexOf(u8, key, "minimum_length") != null or std.mem.indexOf(u8, key, "minlength") != null);
     const minimum = if (password_length) std.fmt.parseUnsigned(u16, value, 10) catch return null else return null;
-    if (minimum < 8) return .{ .rule = "weak-password-length", .problem = "permits passwords shorter than eight characters" };
+    if (minimum < min_password_length) return .{ .rule = "weak-password-length", .problem = "permits passwords shorter than eight characters" };
     return null;
 }
 
@@ -497,7 +501,7 @@ const access_levels = [_][]const u8{ "read", "write", "none", "read-all", "write
 const switch_values = [_][]const u8{ "true", "false", "yes", "no", "on", "off" };
 
 fn isLiteralSecret(value: []const u8) bool {
-    if (value.len > 512) assert.panic("checking a {d}-byte secret value beyond the project line inspection window", .{value.len});
+    if (value.len > line_window_bytes) assert.panic("checking a {d}-byte secret value beyond the project line inspection window", .{value.len});
     if (std.mem.indexOfAny(u8, value, "\r\n") != null) assert.panic("checking a multiline secret value; pass one trimmed project line", .{});
     if (value.len == 0 or value[0] == '$' or std.mem.startsWith(u8, value, "{{")) return false;
     const references = [_][]const u8{ "secretkeyref", "secrets.", "vault" };
@@ -510,7 +514,7 @@ fn isLiteralSecret(value: []const u8) bool {
 
 /// A setting's value without a trailing ` #` comment outside quotes, as YAML, TOML and INI allow.
 fn withoutComment(value: []const u8) []const u8 {
-    if (value.len > 512) assert.panic("stripping a comment from a {d}-byte value beyond the project line inspection window", .{value.len});
+    if (value.len > line_window_bytes) assert.panic("stripping a comment from a {d}-byte value beyond the project line inspection window", .{value.len});
     if (std.mem.indexOfAny(u8, value, "\r\n") != null) assert.panic("stripping a comment from a multiline value; pass one project line", .{});
     var quote: ?u8 = null;
     for (value, 0..) |c, i| {
@@ -588,7 +592,7 @@ fn mutableArtifact(path: []const u8, line: []const u8, lower: []const u8) ?[]con
 
 fn isHexDigest(text: []const u8, length: usize) bool {
     if (length == 0) assert.panic("checking for a zero-length digest; pass the digest algorithm's hex length", .{});
-    if (length > 512) assert.panic("checking for a {d}-byte digest, longer than a project line's 512-byte inspection window", .{length});
+    if (length > line_window_bytes) assert.panic("checking for a {d}-byte digest, longer than a project line's 512-byte inspection window", .{length});
     if (text.len != length) return false;
     for (text) |c| if (!std.ascii.isHex(c)) return false;
     return true;

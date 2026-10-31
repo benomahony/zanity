@@ -18,6 +18,8 @@ const language = @import("language.zig");
 const memory = @import("memory.zig");
 const rules = @import("rules.zig");
 const store = @import("store.zig");
+/// Bytes of the analyzer's revision kept in each cache key.
+const revision_bytes = 8;
 
 const cache_format = "source-analysis-2";
 
@@ -25,7 +27,7 @@ const cache_format = "source-analysis-2";
 /// zanity miss old rows automatically when checker logic, name tables or parser revisions change.
 const analyzer_revision = revisionOfAnalyzer();
 
-fn revisionOfAnalyzer() [8]u8 {
+fn revisionOfAnalyzer() [revision_bytes]u8 {
     @setEvalBranchQuota(10_000_000);
     var hash = std.hash.Wyhash.init(0);
     const sources = .{
@@ -59,7 +61,7 @@ fn revisionOfAnalyzer() [8]u8 {
         bytes += source.len;
     }
     if (bytes == 0) assert.panic("fingerprinting {d} empty analyzer sources; embed their contents, not empty paths", .{sources.len});
-    var revision: [8]u8 = undefined;
+    var revision: [revision_bytes]u8 = undefined;
     std.mem.writeInt(u64, &revision, hash.final(), .little);
     return revision;
 }

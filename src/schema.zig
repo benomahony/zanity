@@ -6,6 +6,8 @@ const assert = @import("assert.zig");
 const rules = @import("rules.zig");
 const config = @import("config.zig");
 const infer = @import("infer.zig");
+/// The longest text quoted into the schema.
+const max_quoted_bytes = 4096;
 
 pub const url = "https://raw.githubusercontent.com/benomahony/zanity/main/zanity.schema.json";
 
@@ -289,7 +291,7 @@ fn entry(w: *std.Io.Writer, index: usize, name: []const u8, rule: rules.Rule) !v
 /// Writes `text` as a JSON string.
 fn quoted(w: *std.Io.Writer, text: []const u8) !void {
     if (!std.unicode.utf8ValidateSlice(text)) assert.panic("'{s}' is not valid UTF-8, which JSON requires; fix that text in src/rules.zig", .{text});
-    if (text.len > 4096) assert.panic("a {d}-byte string is going into the schema; shorten that rule's advice in src/rules.zig", .{text.len});
+    if (text.len > max_quoted_bytes) assert.panic("a {d}-byte string is going into the schema; shorten that rule's advice in src/rules.zig", .{text.len});
     try w.writeByte('"');
     for (text) |c| switch (c) {
         '"' => try w.writeAll("\\\""),

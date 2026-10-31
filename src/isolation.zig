@@ -6,6 +6,10 @@ const ts = @import("ts.zig");
 const check = @import("check.zig");
 const scope = @import("scope.zig");
 const test_quality = @import("test_quality.zig");
+/// The longest text inspected for a leading name.
+const max_name_text_bytes = 1 << 20;
+/// Assignments followed to find a temporary directory.
+const max_temp_hops = 3;
 const File = check.File;
 const Context = check.Context;
 const contains = check.contains;
@@ -82,7 +86,7 @@ fn underTemp(self: *File, ctx: Context) bool {
 /// assigns from one, as `path` is after `path = tmp_path / "file.txt"`, following up to `hops`
 /// such assignments.
 fn namesTemp(roots: []const []const u8, body: []const u8, text: []const u8, hops: u32) bool {
-    if (hops > 3) assert.panic("following {d} assignments to find a temporary directory; underTemp() starts at 3", .{hops});
+    if (hops > max_temp_hops) assert.panic("following {d} assignments to find a temporary directory; underTemp() starts at 3", .{hops});
     var current = text;
     for (0..hops + 1) |_| {
         for (roots) |root| if (scope.containsWord(current, root)) return true;
@@ -94,7 +98,7 @@ fn namesTemp(roots: []const []const u8, body: []const u8, text: []const u8, hops
 
 /// The name an expression starts from: `folder` in `folder / "file.txt"` or `(folder).parent`.
 fn leadingName(text: []const u8) []const u8 {
-    if (text.len > 1 << 20) assert.panic("reading the leading name of a {d}-byte expression; expressions come from one function", .{text.len});
+    if (text.len > max_name_text_bytes) assert.panic("reading the leading name of a {d}-byte expression; expressions come from one function", .{text.len});
     const trimmed = std.mem.trimStart(u8, text, " \t(");
     var end: usize = 0;
     while (end < trimmed.len and (std.ascii.isAlphanumeric(trimmed[end]) or trimmed[end] == '_')) end += 1;

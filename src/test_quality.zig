@@ -10,6 +10,12 @@ const check = @import("check.zig");
 const strings = @import("strings.zig");
 const isolation = @import("isolation.zig");
 const naming = @import("naming.zig");
+/// The most nodes walked to decide an expression is constant.
+const max_expression_steps = 256;
+/// The longest module path text inspected.
+const max_module_text_bytes = 1 << 20;
+/// The longest callee inspected for a patch target.
+const max_callee_bytes = 256;
 const File = check.File;
 const Context = check.Context;
 const contains = check.contains;
@@ -271,7 +277,7 @@ fn checkModuleDouble(self: *File, ctx: Context, callee: []const u8) !void {
 fn modulePath(self: *File, ctx: Context) ?[]const u8 {
     const first = ctx.arguments[0] orelse return null;
     const text = first.text(self.source);
-    if (text.len > 1 << 20) assert.panic("{s}: a call argument of {d} bytes at {f}; arguments come from one file, which is smaller", .{ self.work.facts.path, text.len, first.where() });
+    if (text.len > max_module_text_bytes) assert.panic("{s}: a call argument of {d} bytes at {f}; arguments come from one file, which is smaller", .{ self.work.facts.path, text.len, first.where() });
     if (text.len < 3) return null;
     const quote = text[0];
     if ((quote != '"' and quote != '\'' and quote != '`') or text[text.len - 1] != quote) return null;
@@ -332,7 +338,7 @@ fn patches(callee: []const u8) bool {
     if (callee.len == 0) assert.panic("asked whether an empty callee patches; checkTestDouble() names the double it found", .{});
     const words = [_][]const u8{ "patch", "setattr", "spy", "replace", "stubGlobal", "mock.mock", "doMock", ".mock" };
     for (words) |word| if (std.ascii.findIgnoreCase(callee, word) != null) return true;
-    if (callee.len > 256) assert.panic("a test double's callee is {d} bytes; callees from the tables are short", .{callee.len});
+    if (callee.len > max_callee_bytes) assert.panic("a test double's callee is {d} bytes; callees from the tables are short", .{callee.len});
     return false;
 }
 
@@ -353,7 +359,7 @@ fn patchTarget(self: *File, ctx: Context, buffer: []u8) []const u8 {
 
 /// The text inside a quoted string literal that holds a dotted name, or null for anything else.
 fn unquoted(text: []const u8) ?[]const u8 {
-    if (text.len > 1 << 20) assert.panic("a call argument of {d} bytes; arguments come from one file, which is smaller", .{text.len});
+    if (text.len > max_module_text_bytes) assert.panic("a call argument of {d} bytes; arguments come from one file, which is smaller", .{text.len});
     if (text.len < 3) return null;
     const quote = text[0];
     if ((quote != '"' and quote != '\'') or text[text.len - 1] != quote) return null;
@@ -451,7 +457,7 @@ fn constantExpression(self: *File, condition: ts.Node) bool {
     defer ts.ts_tree_cursor_delete(&cursor);
     var literals: usize = 0;
     var visited: usize = 0;
-    while (visited < 256) : (visited += 1) {
+    while (visited < max_expression_steps) : (visited += 1) {
         const current = ts.ts_tree_cursor_current_node(&cursor);
         const literal = (self.index.marks(current, self.v.literal_constant) or self.index.marks(current, self.v.literal_string)) and self.index.within(current, self.v.string_format) == null and self.index.within(current, self.v.reference_name) == null;
         if (!literal and ts.ts_tree_cursor_goto_first_child(&cursor)) continue;

@@ -1,6 +1,13 @@
 const std = @import("std");
 const assert = @import("assert.zig");
 const Row = @import("baseline.zig").Row;
+const id_hex_length = @import("baseline.zig").id_hex_length;
+/// The longest command line argument handled.
+const max_argument_bytes = 1 << 20;
+/// Findings on a page of --triage output.
+const triage_page_size = 20;
+/// The most findings one page may hold.
+const max_page_size = 10000;
 
 pub const CheckOptions = struct {
     paths: []const []const u8,
@@ -31,8 +38,8 @@ pub const CheckOptions = struct {
 pub const FailOn = enum { @"error", warning };
 
 pub fn order(_: void, a: Row, b: Row) bool {
-    if (a.id.len != 64) assert.panic("identity A has {d} bytes; sort rows only after identify() has given them IDs", .{a.id.len});
-    if (b.id.len != 64) assert.panic("identity B has {d} bytes; sort rows only after identify() has given them IDs", .{b.id.len});
+    if (a.id.len != id_hex_length) assert.panic("identity A has {d} bytes; sort rows only after identify() has given them IDs", .{a.id.len});
+    if (b.id.len != id_hex_length) assert.panic("identity B has {d} bytes; sort rows only after identify() has given them IDs", .{b.id.len});
     for ([_][2][]const u8{ .{ a.rule, b.rule }, .{ a.path, b.path } }) |pair| {
         const by = std.mem.order(u8, pair[0], pair[1]);
         if (by != .eq) return by == .lt;
@@ -54,7 +61,7 @@ pub fn validate(options: anytype) !void {
     if (needsBaseline(options) and options.baseline == null) return error.BaselinePathRequired;
     if (options.@"capture-baseline" and options.@"update-baseline") return error.ConflictingBaselineActions;
     if (options.watch and (options.@"capture-baseline" or options.@"update-baseline")) return error.BaselineMutationCannotWatch;
-    if (options.@"page-size") |size| if (size == 0 or size > 10000) return error.PageSizeMustBeBetween1And10000;
+    if (options.@"page-size") |size| if (size == 0 or size > max_page_size) return error.PageSizeMustBeBetween1And10000;
     if (options.classification) |status| {
         for ([_][]const u8{ "new", "existing", "resolved", "unclassified" }) |valid| if (std.mem.eql(u8, status, valid)) return;
         return error.InvalidClassification;
@@ -78,7 +85,7 @@ pub fn selectRows(ws: anytype, options: anytype, resolved: []const Row) !void {
     std.mem.sort(Row, ws.rows.items(), {}, order);
     var kept: usize = 0;
     var matching: usize = 0;
-    const size: usize = options.@"page-size" orelse if (options.triage) @as(u32, 20) else std.math.maxInt(u32);
+    const size: usize = options.@"page-size" orelse if (options.triage) @as(u32, triage_page_size) else std.math.maxInt(u32);
     for (ws.rows.items()) |row| {
         if (!matches(row, options)) continue;
         if (matching >= options.offset and kept < size) {
@@ -108,7 +115,7 @@ pub fn renderReview(ctx: anytype, ws: anytype, options: anytype, agent: bool) !v
     if (agent) try out.writeAll(if (selectedBatch(options)) "Assignment: fix only current findings in this selected batch. Resolved findings require no work.\n" else "Assignment: fix new findings only. Inherited backlog is not a correction assignment.\n");
     const shown = try renderBatch(out, ws.rows.items(), options, agent);
     try out.print("Shown {d}; matching total {d}; omitted {d}.\n", .{ shown, review.matching, review.matching - shown });
-    try continuation(out, ws.args, review.next orelse options.offset, options.@"page-size" orelse if (options.triage) @as(u32, 20) else @as(u32, 10000));
+    try continuation(out, ws.args, review.next orelse options.offset, options.@"page-size" orelse if (options.triage) @as(u32, triage_page_size) else @as(u32, max_page_size));
     if (options.watch) try out.writeAll("Saving checks again against the unchanged baseline.\n");
 }
 
@@ -122,7 +129,7 @@ fn assigned(row: Row, options: anytype, agent: bool) bool {
 
 fn quote(out: *std.Io.Writer, arg: []const u8) !void {
     if (arg.len == 0) assert.panic("cannot quote an empty checked argument; skip empty paths before quoting", .{});
-    if (arg.len > 1 << 20) assert.panic("quoted argument has {d} bytes; refuse oversized arguments when parsing them", .{arg.len});
+    if (arg.len > max_argument_bytes) assert.panic("quoted argument has {d} bytes; refuse oversized arguments when parsing them", .{arg.len});
     try out.writeByte('\'');
     for (arg) |c| if (c == '\'') try out.writeAll("'\\''") else try out.writeByte(c);
     try out.writeByte('\'');
@@ -177,7 +184,7 @@ fn renderBatch(out: *std.Io.Writer, rows: []const Row, options: anytype, agent: 
 
 fn omitArgument(arg: []const u8) bool {
     if (arg.len == 0) assert.panic("command argument is empty; skip empty arguments before building the next command", .{});
-    if (arg.len > 1 << 20) assert.panic("command argument has {d} bytes; refuse oversized arguments when parsing them", .{arg.len});
+    if (arg.len > max_argument_bytes) assert.panic("command argument has {d} bytes; refuse oversized arguments when parsing them", .{arg.len});
     for ([_][]const u8{ "--offset=", "--page-size=", "--limit=", "--watch=", "--agent=", "--capture-baseline=", "--update-baseline=", "--fix=" }) |prefix| if (std.mem.startsWith(u8, arg, prefix)) return true;
     for ([_][]const u8{ "--agent", "--watch", "--capture-baseline", "--update-baseline", "--fix", "--json", "--plain" }) |flag| if (std.mem.eql(u8, arg, flag)) return true;
     return false;

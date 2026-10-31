@@ -28,6 +28,10 @@ const extract = @import("extract.zig");
 const loops = @import("loops.zig");
 const naming = @import("naming.zig");
 const passthrough = @import("passthrough.zig");
+/// The most test file prefixes and suffixes one language's tables hold.
+const max_test_file_affixes = 32;
+/// The most test name prefixes one language's tables hold.
+const max_test_prefixes = 16;
 
 pub const Diagnostic = struct {
     line: u32,
@@ -862,7 +866,7 @@ pub const File = struct {
 
     pub fn isTestName(self: *File, name: []const u8) bool {
         if (name.len == 0) assert.panic("{s}: asked whether an empty function name is a test name; @function.name matched an empty node", .{self.work.facts.path});
-        if (self.tables.test_prefixes.len > 16) assert.panic("{s} lists {d} test prefixes in languages/tables.zon; more than 16 means the table is wrong", .{ self.tables.ecosystem, self.tables.test_prefixes.len });
+        if (self.tables.test_prefixes.len > max_test_prefixes) assert.panic("{s} lists {d} test prefixes in languages/tables.zon; more than 16 means the table is wrong", .{ self.tables.ecosystem, self.tables.test_prefixes.len });
         for (self.tables.test_prefixes) |prefix| if (std.mem.startsWith(u8, name, prefix)) return true;
         return false;
     }
@@ -893,7 +897,7 @@ pub const File = struct {
         if (base.len == 0) assert.panic("path '{s}' has no file name, so zanity can't tell whether it holds tests", .{self.work.facts.path});
         for (self.tables.test_file_prefixes) |prefix| if (std.mem.startsWith(u8, base, prefix)) return true;
         for (self.tables.test_file_suffixes) |suffix| if (std.mem.endsWith(u8, base, suffix)) return true;
-        if (self.tables.test_file_prefixes.len + self.tables.test_file_suffixes.len > 32) assert.panic("{s} lists {d} test file prefixes and {d} suffixes in languages/tables.zon; more than 32 means the table is wrong", .{ self.tables.ecosystem, self.tables.test_file_prefixes.len, self.tables.test_file_suffixes.len });
+        if (self.tables.test_file_prefixes.len + self.tables.test_file_suffixes.len > max_test_file_affixes) assert.panic("{s} lists {d} test file prefixes and {d} suffixes in languages/tables.zon; more than 32 means the table is wrong", .{ self.tables.ecosystem, self.tables.test_file_prefixes.len, self.tables.test_file_suffixes.len });
         return false;
     }
 

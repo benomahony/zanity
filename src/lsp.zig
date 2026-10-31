@@ -54,6 +54,18 @@ const max_messages = 1 << 40;
 const check_stderr_bytes = 64 * 1024;
 /// JSON-RPC 2.0's response code for an unsupported request method.
 const method_not_found = -32601;
+/// JSON-RPC's code for a request with bad parameters.
+const invalid_params = -32602;
+/// JSON-RPC's code for a request that is not a valid request.
+const invalid_request = -32600;
+/// The most code action kinds one request may name.
+const max_action_kinds = 1 << 10;
+/// The most actions offered for one finding.
+const max_actions_per_finding = 4;
+/// The highest line number an editor position may hold.
+const max_line = 1 << 30;
+/// The most diagnostics written for one file, the default findings limit.
+const max_diagnostics = 1 << 18;
 
 /// One finding of `zanity check --json`, as the server reads it back. Lines and columns count from 1.
 pub const Record = struct {
@@ -345,7 +357,7 @@ pub const LanguageServer = struct {
             };
             if (member(parsed, "method") == null and (member(parsed, "result") != null or member(parsed, "error") != null)) continue;
             const message = requestOf(parsed) orelse {
-                try self.sendError(.null, -32600, "Send a JSON-RPC 2.0 object with a nonempty method and a string or integer id.");
+                try self.sendError(.null, invalid_request, "Send a JSON-RPC 2.0 object with a nonempty method and a string or integer id.");
                 continue;
             };
             if (std.mem.eql(u8, message.method, "exit")) return self.shut_down;
@@ -364,7 +376,7 @@ pub const LanguageServer = struct {
         const params = request.params;
         const id = request.id orelse no_value;
         if (self.outbox.len == 0) assert.panic("dispatching request {s} without reply storage; call initLanguageServer() before dispatch", .{method});
-        if (method.len == 0) return self.sendError(id, -32600, "The editor's request has an empty method; send a supported nonempty request name.");
+        if (method.len == 0) return self.sendError(id, invalid_request, "The editor's request has an empty method; send a supported nonempty request name.");
         if (!try self.accepts(method, request.id)) return;
         if (self.root.len == 0) assert.panic("dispatching request {s} without a workspace; retain the validated root in initialize() before accepting requests", .{method});
         const is = std.mem.eql;
@@ -387,12 +399,12 @@ pub const LanguageServer = struct {
         if (method.len == 0) assert.panic("checking protocol order with no method; requestOf() validates it before dispatch", .{});
         if (self.initialized and self.root.len == 0) assert.panic("initialized without a workspace root; initialize() must retain rootOf()'s validated path", .{});
         if (self.shut_down) {
-            if (request) |id| try self.sendError(id, -32600, "The server has shut down; send exit and start a new session.");
+            if (request) |id| try self.sendError(id, invalid_request, "The server has shut down; send exit and start a new session.");
             return false;
         }
         if (std.mem.eql(u8, method, "initialize")) {
             if (!self.initialized) return request != null;
-            if (request) |id| try self.sendError(id, -32600, "The server is already initialized; start a new session to change its workspace.");
+            if (request) |id| try self.sendError(id, invalid_request, "The server is already initialized; start a new session to change its workspace.");
             return false;
         }
         if (self.initialized) return true;
@@ -411,10 +423,10 @@ pub const LanguageServer = struct {
     fn initialize(self: *LanguageServer, id: json.Value, params: json.Value) !void {
         if (self.current.files.len != 0) assert.panic("initialize arrived after a check of {d} files; the editor sends it first", .{self.current.files.len});
         const root = self.rootOf(params) catch |e| switch (e) {
-            error.InvalidWorkspaceRoot, error.InvalidFileUri, error.NameTooLong => return self.sendError(id, -32602, "Name the workspace with an absolute rootPath or a local file URI in rootUri."),
+            error.InvalidWorkspaceRoot, error.InvalidFileUri, error.NameTooLong => return self.sendError(id, invalid_params, "Name the workspace with an absolute rootPath or a local file URI in rootUri."),
             else => return e,
         };
-        const utf8 = offersUtf8(params) catch return self.sendError(id, -32602, "Offer at most 1048576 position encodings in capabilities.general.positionEncodings.");
+        const utf8 = offersUtf8(params) catch return self.sendError(id, invalid_params, "Offer at most 1048576 position encodings in capabilities.general.positionEncodings.");
         self.root = root;
         self.utf8 = utf8;
         try self.respond(id, .{
@@ -593,7 +605,7 @@ pub const LanguageServer = struct {
         const only = member(member(params, "context"), "only");
         if (only) |value| if (value == .array) {
             const kinds = value.array.items;
-            if (kinds.len > 1 << 10) return self.sendError(id, -32602, "Request at most 1024 code action kinds in context.only.");
+            if (kinds.len > max_action_kinds) return self.sendError(id, invalid_params, "Request at most 1024 code action kinds in context.only.");
         };
         const range = member(params, "range");
         const first = integerOf(member(member(range, "start"), "line")) orelse 0;
@@ -605,7 +617,7 @@ pub const LanguageServer = struct {
         };
         if (wants(only, fix_all)) if (try self.fixAll(file)) |action| try actions.add(action);
         try self.respond(id, actions.items());
-        if (actions.len > 4 * entries.len + 1) assert.panic("offered {d} actions for {d} findings; offer at most a fix, a flag and two marks per finding and one for the file", .{ actions.len, entries.len });
+        if (actions.len > max_actions_per_finding * entries.len + 1) assert.panic("offered {d} actions for {d} findings; offer at most a fix, a flag and two marks per finding and one for the file", .{ actions.len, entries.len });
     }
 
     /// Adds the finding's own fix, when it has one, and the action that flags it.
@@ -663,18 +675,18 @@ pub const LanguageServer = struct {
         if (self.outbox.len == 0) assert.panic("validating command {s} without reply storage; call initLanguageServer() first", .{command});
         if (text.buffer.len == 0) assert.panic("validating command {s} without message storage; initialize the request scratch first", .{command});
         if (target.path.len == 0 or target.rule.len == 0 or target.message.len == 0) {
-            try self.sendError(id, -32602, "Use the nonempty path, rule and message from a finding offered by a code action.");
+            try self.sendError(id, invalid_params, "Use the nonempty path, rule and message from a finding offered by a code action.");
             return false;
         }
         if (target.line == 0 or target.column == 0) {
-            try self.sendError(id, -32602, try text.format("The finding is at line {d} column {d}, but both count from 1.", .{ target.line, target.column }));
+            try self.sendError(id, invalid_params, try text.format("The finding is at line {d} column {d}, but both count from 1.", .{ target.line, target.column }));
             return false;
         }
         // This acknowledgement only records telemetry for an edit already applied by the
         // editor; autosave may have advanced its check or left the document dirty meanwhile.
         if (std.mem.eql(u8, command, fixed_command)) return true;
         if (!self.current.isCurrentTarget(target) or self.isDirty(target.path)) {
-            try self.sendError(id, -32602, try text.format("The code action for {s} no longer matches checked code; save the file and request fresh code actions before marking or dismissing a finding.", .{target.path}));
+            try self.sendError(id, invalid_params, try text.format("The code action for {s} no longer matches checked code; save the file and request fresh code actions before marking or dismissing a finding.", .{target.path}));
             return false;
         }
         return true;
@@ -685,7 +697,7 @@ pub const LanguageServer = struct {
         if (self.services.version.len == 0) assert.panic("running a command with no version to record it under", .{});
         const Call = struct { command: []const u8, arguments: []const Target };
         const call = json.parseFromValueLeaky(Call, self.scratch.parse.allocator(), params, .{ .ignore_unknown_fields = true }) catch Call{ .command = "", .arguments = &.{} };
-        if (call.arguments.len != 1) return self.sendError(id, -32602, try self.scratch.text.format("zanity's commands take one argument, the finding its code action named, not {d}.", .{call.arguments.len}));
+        if (call.arguments.len != 1) return self.sendError(id, invalid_params, try self.scratch.text.format("zanity's commands take one argument, the finding its code action named, not {d}.", .{call.arguments.len}));
         const target = call.arguments[0];
         if (!try self.acceptsCommandTarget(id, call.command, target)) return;
         if (std.mem.eql(u8, call.command, flag_command)) {
@@ -822,7 +834,7 @@ const Diagnostics = struct {
     entries: []const Entry,
 
     pub fn jsonStringify(self: Diagnostics, jw: anytype) !void {
-        if (self.entries.len > 1 << 18) assert.panic("writing {d} diagnostics for one file, more than one check holds; enforce the findings limit before serializing", .{self.entries.len});
+        if (self.entries.len > max_diagnostics) assert.panic("writing {d} diagnostics for one file, more than one check holds; enforce the findings limit before serializing", .{self.entries.len});
         try jw.beginArray();
         for (self.entries) |entry| try jw.write(entry.diagnostic);
         try jw.endArray();
@@ -864,7 +876,7 @@ fn editsFirst(_: void, a: Entry, b: Entry) bool {
 }
 
 fn isBefore(a: Position, b: Position) bool {
-    if (a.line > 1 << 30 or b.line > 1 << 30) assert.panic("comparing positions on lines {d} and {d}, past any file zanity reads; validate positions before calling isBefore()", .{ a.line, b.line });
+    if (a.line > max_line or b.line > max_line) assert.panic("comparing positions on lines {d} and {d}, past any file zanity reads; validate positions before calling isBefore()", .{ a.line, b.line });
     const earlier = a.line < b.line or (a.line == b.line and a.character < b.character);
     if (earlier and a.line > b.line) assert.panic("line {d} counted as before line {d}; fix isBefore() to compare lines before characters", .{ a.line, b.line });
     return earlier;

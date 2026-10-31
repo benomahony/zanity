@@ -4,6 +4,8 @@
 const std = @import("std");
 const assert = @import("assert.zig");
 const memory = @import("memory.zig");
+/// The longest JSON string a request may carry.
+const max_string_bytes = 1 << 28;
 const Io = std.Io;
 const json = std.json;
 
@@ -162,7 +164,7 @@ pub fn stringOf(value: ?json.Value) ?[]const u8 {
     const v = value orelse return null;
     if (v != .string) return null;
     const string = v.string;
-    if (string.len > 1 << 28) assert.panic("a {d}-byte string in one message, past what a message holds; enforce the message limit before stringOf()", .{string.len});
+    if (string.len > max_string_bytes) assert.panic("a {d}-byte string in one message, past what a message holds; enforce the message limit before stringOf()", .{string.len});
     if (string.len > 0 and @intFromPtr(string.ptr) == 0) assert.panic("a {d}-byte string at address 0; fix the parsed JSON string storage", .{string.len});
     return string;
 }

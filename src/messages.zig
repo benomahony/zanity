@@ -13,6 +13,8 @@ const contains = check.contains;
 const header = check.header;
 const rewrite = @import("rewrite.zig");
 const hazards = @import("hazards.zig");
+/// The most markers one language's table lists.
+const max_needles = 16;
 
 /// The mechanical checks of an error message written as a plain string: empty, a bare code,
 /// stock words, and for an assertion, whether it only restates its condition or hides its values.
@@ -195,7 +197,7 @@ pub fn anyIn(text: []const u8, needles: []const []const u8) bool {
         if (n.len == 0) assert.panic("a format marker in languages/tables.zon is empty; remove it", .{});
         if (std.mem.indexOf(u8, text, n) != null) return true;
     }
-    if (needles.len > 16) assert.panic("{d} format markers is more than a language has; check languages/tables.zon", .{needles.len});
+    if (needles.len > max_needles) assert.panic("{d} format markers is more than a language has; check languages/tables.zon", .{needles.len});
     return false;
 }
 

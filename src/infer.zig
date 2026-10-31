@@ -16,6 +16,10 @@ const Finding = facts_module.Finding;
 const store = @import("store.zig");
 const strings = @import("strings.zig");
 const language = @import("language.zig");
+/// How often --infer progress is redrawn.
+const progress_ms = 100;
+/// A day of progress redraws, the longest one run is watched.
+const max_progress_ticks = 24 * 60 * 60 * 1000 / progress_ms;
 
 /// How sure the model must be before a judgement becomes a finding.
 pub const default_threshold = 0.8;
@@ -208,11 +212,11 @@ pub const Inference = struct {
         const reporter = self.reporter orelse assert.panic("watching --infer progress with no reporter; askAll only watches when one is set", .{});
         if (total == 0) assert.panic("watching progress over no functions; askAll() must start the watcher only when functions are queued", .{});
         if (total > self.jobs.len) assert.panic("watching {d} functions, but only {d} are queued; askAll() must pass the number of functions it queued", .{ total, self.jobs.len });
-        for (0..24 * 60 * 60 * 10) |_| {
+        for (0..max_progress_ticks) |_| {
             const done = self.answered.load(.monotonic);
             reporter.report(reporter.state, done, total);
             if (done == total) return;
-            self.io.sleep(.fromMilliseconds(100), .awake) catch return;
+            self.io.sleep(.fromMilliseconds(progress_ms), .awake) catch return;
         }
     }
 

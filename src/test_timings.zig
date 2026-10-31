@@ -3,6 +3,8 @@ const std = @import("std");
 const assert = @import("assert.zig");
 const memory = @import("memory.zig");
 const Finding = @import("facts.zig").Finding;
+/// The longest JUnit attribute name looked up.
+const max_attribute_name = 128;
 
 pub const Case = struct { name: []const u8, seconds: ?f64, line: u32, skipped: bool = false };
 
@@ -145,7 +147,7 @@ pub const Reader = struct {
 
 fn attribute(source: []const u8, wanted: []const u8) !?[]const u8 {
     if (wanted.len == 0) assert.panic("JUnit attribute requires a name; pass the name of the attribute to read", .{});
-    if (wanted.len > 128) assert.panic("JUnit attribute name has {d} bytes; supported names have at most 128", .{wanted.len});
+    if (wanted.len > max_attribute_name) assert.panic("JUnit attribute name has {d} bytes; supported names have at most 128", .{wanted.len});
     var rest = std.mem.trim(u8, source, " \t\r\n");
     var found: ?[]const u8 = null;
     while (rest.len > 0) {

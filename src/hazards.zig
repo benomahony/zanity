@@ -14,6 +14,8 @@ const header = check.header;
 const messages = @import("messages.zig");
 const rewrite = @import("rewrite.zig");
 const strings = @import("strings.zig");
+/// The longest option text inspected for a risky setting.
+const max_option_bytes = 512;
 
 /// A string literal assigned to a name that ends in a secret's name, such as `db_password` or `apiKey`.
 /// Test code and values shaped like an environment variable's name are left alone.
@@ -428,7 +430,7 @@ fn callAlgorithmContains(self: *File, ctx: Context, needle: []const u8) bool {
 }
 
 fn fixedNonceOption(text: []const u8) bool {
-    if (text.len == 0 or text.len > 512) return false;
+    if (text.len == 0 or text.len > max_option_bytes) return false;
     if (std.mem.indexOfAny(u8, text, "\r\n") != null) return false;
     const equals = std.mem.indexOfScalar(u8, text, '=') orelse return false;
     if (equals >= text.len) assert.panic("nonce assignment separator at {d} lies past its {d} bytes", .{ equals, text.len });
@@ -580,8 +582,8 @@ fn checkXmlEntityExpansion(self: *File, ctx: Context, name: []const u8) !void {
 
 fn unsafeXmlEntityOption(text: []const u8) bool {
     if (text.len == 0) return false;
-    if (text.len > 512) return false;
-    var normalized: [512]u8 = undefined;
+    if (text.len > max_option_bytes) return false;
+    var normalized: [max_option_bytes]u8 = undefined;
     var len: usize = 0;
     for (text) |c| {
         if (std.ascii.isWhitespace(c)) continue;

@@ -5,6 +5,8 @@ const Allocator = std.mem.Allocator;
 const ts = @import("ts.zig");
 const memory = @import("memory.zig");
 const naming = @import("naming.zig");
+/// The most arguments a query predicate may have.
+const max_predicate_args = 64;
 
 pub const Id = u16;
 
@@ -238,7 +240,7 @@ fn initPredicates(arena: Allocator, query: *const ts.Query, pattern: u32) ![]con
 
 /// One predicate from its steps, `#name? @capture args...`; null for directives such as `#set!`.
 fn initPredicate(arena: Allocator, query: *const ts.Query, args: []const ts.PredicateStep) !?Predicate {
-    if (args.len > 64) assert.panic("a query predicate has {d} arguments; no predicate takes that many, so the step list is corrupt, so check that the grammar and vendor/tree-sitter/REVISION are versions that work together", .{args.len});
+    if (args.len > max_predicate_args) assert.panic("a query predicate has {d} arguments; no predicate takes that many, so the step list is corrupt, so check that the grammar and vendor/tree-sitter/REVISION are versions that work together", .{args.len});
     if (args.len == 0 or args[0].type != .string) return null;
     const name = ts.stringValue(query, args[0].value_id);
     if (strings.contains(&.{ "set!", "offset!", "strip!", "set-adjacent!", "select-adjacent!" }, name)) return null;

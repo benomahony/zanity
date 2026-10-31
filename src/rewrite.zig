@@ -14,13 +14,17 @@ const header = check.header;
 const messages = @import("messages.zig");
 const hazards = @import("hazards.zig");
 const Edit = @import("facts.zig").Edit;
+/// The most values one assertion's message can show.
+pub const max_condition_values = 4;
+/// The most candidates considered for an assertion's values.
+const max_candidates = 8;
 
 /// The values an assertion condition reads, outermost first, without callees: at most `out.len`.
-pub fn conditionValues(self: *File, condition: ts.Node, out: *[4][]const u8) []const []const u8 {
+pub fn conditionValues(self: *File, condition: ts.Node, out: *[max_condition_values][]const u8) []const []const u8 {
     const start = ts.ts_node_start_byte(condition);
     const end = ts.ts_node_end_byte(condition);
     if (start > end or end > self.source.len) assert.panic("{s}: the condition spans bytes {d}..{d} of a {d}-byte file; pass the @assertion.condition node from the tree parsed from this file", .{ self.work.facts.path, start, end, self.source.len });
-    var widest: [8]ts.Node = undefined;
+    var widest: [max_candidates]ts.Node = undefined;
     const found = widestPaths(self, start, end, &widest);
     var count: usize = 0;
     for (widest[0..found]) |node| {

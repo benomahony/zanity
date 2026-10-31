@@ -4,6 +4,18 @@ const zrich = @import("zclig").zrich;
 const rules = @import("rules.zig");
 const memory = @import("memory.zig");
 const Finding = @import("facts.zig").Finding;
+/// The narrowest `line:column`, as in `1:1`.
+const min_location_width = 3;
+/// The widest `line:column`, two 10-digit numbers and a colon.
+const max_location_width = 21;
+/// Room for one preview line's location.
+const preview_line_bytes = 512;
+/// Spaces between a preview's columns.
+const column_gap = 2;
+/// The narrowest room a shortened message is still readable in.
+const min_message_room = 20;
+/// What marks a shortened message.
+const ellipsis = "...";
 
 const quiet: zrich.Style = .{ .dim = true };
 
@@ -155,20 +167,20 @@ fn renderPreview(console: zrich.Console, findings: []const Finding) !void {
     if (preview.len == 0) assert.panic("choosePreview selected nothing from {d} findings; it must choose at least one", .{findings.len});
     if (preview.len > findings.len) assert.panic("choosePreview selected {d} indices from {d} findings; it cannot select more than exist", .{ preview.len, findings.len });
     const out = console.writer;
-    var buffer: [512]u8 = undefined;
+    var buffer: [preview_line_bytes]u8 = undefined;
     for (preview.picked[0..preview.len]) |i| {
         const f = findings[i];
         const severity = rules.all[ruleIndex(f.rule)].severity;
         const location = std.fmt.bufPrint(&buffer, "{s}:{d}:{d}", .{ f.path, f.line + 1, f.column + 1 }) catch f.path;
         try out.writeAll(location);
-        try out.splatByteAll(' ', preview.where - @min(preview.where, location.len) + 2);
+        try out.splatByteAll(' ', preview.where - @min(preview.where, location.len) + column_gap);
         try console.styled(label(severity), severityStyle(severity));
-        try out.splatByteAll(' ', "warning".len - label(severity).len + 2);
+        try out.splatByteAll(' ', "warning".len - label(severity).len + column_gap);
         try console.styled(f.rule, quiet);
-        try out.splatByteAll(' ', preview.rule - f.rule.len + 2);
+        try out.splatByteAll(' ', preview.rule - f.rule.len + column_gap);
         const message = brief(f.message);
-        const room = console.options.width -| (preview.where + 2 + "warning".len + 2 + preview.rule + 2);
-        if (message.len <= room or room < 20) try out.print("{s}\n", .{message}) else try out.print("{s}...\n", .{message[0 .. room - 3]});
+        const room = console.options.width -| (preview.where + column_gap + "warning".len + column_gap + preview.rule + column_gap);
+        if (message.len <= room or room < min_message_room) try out.print("{s}\n", .{message}) else try out.print("{s}" ++ ellipsis ++ "\n", .{message[0 .. room - ellipsis.len]});
     }
     if (findings.len > preview.len) try console.styled(try std.fmt.bufPrint(&buffer, "+{d} more\n", .{findings.len - preview.len}), quiet);
 }
@@ -315,8 +327,8 @@ fn ruleIndex(name: []const u8) usize {
 
 fn locationWidth(f: Finding) usize {
     const width = digits(f.line + 1) + 1 + digits(f.column + 1);
-    if (width < 3) assert.panic("'{d}:{d}' is {d} characters wide; a location is at least '1:1', so pass line and column counted from 1", .{ f.line + 1, f.column + 1, width });
-    if (width > 21) assert.panic("'{d}:{d}' is {d} characters wide; the report pads locations to at most 21, so widen the padding in renderFile() for larger files", .{ f.line + 1, f.column + 1, width });
+    if (width < min_location_width) assert.panic("'{d}:{d}' is {d} characters wide; a location is at least '1:1', so pass line and column counted from 1", .{ f.line + 1, f.column + 1, width });
+    if (width > max_location_width) assert.panic("'{d}:{d}' is {d} characters wide; the report pads locations to at most 21, so widen the padding in renderFile() for larger files", .{ f.line + 1, f.column + 1, width });
     return width;
 }
 

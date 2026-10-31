@@ -5,6 +5,8 @@ const assert = @import("assert.zig");
 const ts = @import("ts.zig");
 const check = @import("check.zig");
 const rules = @import("rules.zig");
+/// The longest call chain walked before the tree must be wrong.
+const max_chain_links = 64;
 const File = check.File;
 const contains = check.contains;
 const header = check.header;
@@ -35,7 +37,7 @@ pub fn checkChain(self: *File, node: ts.Node) !void {
     if (own) links -|= 1;
     if (links < rules.min_chain_links) return;
     if (!own and !ownName(self, start)) return;
-    if (links > 64) assert.panic("{s}: counted {d} links in the chain at {f}, past the 64 the loop allows; checkChain() must stop counting at its loop bound", .{ self.work.facts.path, links, node.where() });
+    if (links > max_chain_links) assert.panic("{s}: counted {d} links in the chain at {f}, past the 64 the loop allows; checkChain() must stop counting at its loop bound", .{ self.work.facts.path, links, node.where() });
     try reportChain(self, node, links, if (own) ownField(header(node.text(self.source)), start) else start);
 }
 
