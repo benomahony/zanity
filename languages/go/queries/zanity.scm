@@ -376,15 +376,17 @@
   (expression_list
     (_) @expression.returned))
 
-; A call whose results are unpacked into two names, as a span start's context and span are.
-[
-  (short_var_declaration
-    left: (expression_list . (_) . (_) .)
-    right: (expression_list . (call_expression) @call.paired .))
-  (assignment_statement
-    left: (expression_list . (_) . (_) .)
-    right: (expression_list . (call_expression) @call.paired .))
-]
+; A call whose results are unpacked into two names, as a span start's context and span are; not
+; a value and its error, as in `srv, err := pool.Start(ctx, cfg)`.
+((short_var_declaration
+  left: (expression_list . (_) . (_) @_second .)
+  right: (expression_list . (call_expression) @call.paired .))
+  (#not-any-suffix? @_second "err" "Err"))
+
+((assignment_statement
+  left: (expression_list . (_) . (_) @_second .)
+  right: (expression_list . (call_expression) @call.paired .))
+  (#not-any-suffix? @_second "err" "Err"))
 
 ; The same with its first result thrown away, as in `_, span := tracer.Start(ctx, name)`.
 ((short_var_declaration
