@@ -182,7 +182,7 @@ class Answers:
 
 def live_row(question: str, rule: str, name: str, a: Answers) -> dict:
     """Both tools' answers to one question about its own fixture."""
-    assert question and rule, f"a live row needs both questions, not {question!r} and {rule!r}"
+    assert question and rule, f"a live row needs both questions, not {question!r} and {rule!r}; map this rule in QUESTIONS in tools.py"
     mine = [o for o in a.theirs if Path(o["path"]).name == name and o["rule"] == question]
     zans = [o for o in a.ours if Path(o["path"]).name == name and o["rule"] == rule]
     found = {f["rule"] for f in a.reported if Path(f["path"]).name == name}
@@ -196,7 +196,7 @@ def live_row(question: str, rule: str, name: str, a: Answers) -> dict:
         "ours_fires": rule in found or bool(settled),
         "settled": settled,
     }
-    assert row["theirs"] is None or 0 <= row["theirs"] <= 1, f"{question} has probability {row['theirs']}"
+    assert row["theirs"] is None or 0 <= row["theirs"] <= 1, f"{question} has probability {row['theirs']}; fix the adapter so it reports a value from 0 to 1"
     return row
 
 

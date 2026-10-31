@@ -214,8 +214,8 @@ def scoreboard(data: dict) -> list[str]:
             f'<div class="card-bar"><span style="width:{100 * part / whole:.0f}%"></span></div>'
             f'<div class="card-unit">{t["unit"]} matched</div></a>'
         )
-    assert cards, "no tool was tallied"
-    assert len(cards) == len(measured(data)) + 1, f"a card per tool and one for nouls, not {len(cards)}"
+    assert cards, "no tool was tallied; check that results.json holds each tool's rules"
+    assert len(cards) == len(measured(data)) + 1, f"a card per tool and one for nouls, not {len(cards)}; add the missing tool to TOOLS"
     return raw(['<div class="scoreboard">', *cards, "</div>"])
 
 

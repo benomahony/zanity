@@ -102,7 +102,7 @@ fn leadingName(text: []const u8) []const u8 {
     const trimmed = std.mem.trimStart(u8, text, " \t(");
     var end: usize = 0;
     while (end < trimmed.len and (std.ascii.isAlphanumeric(trimmed[end]) or trimmed[end] == '_')) end += 1;
-    if (end > trimmed.len) assert.panic("the name at the start of '{s}' ran past it", .{text});
+    if (end > trimmed.len) assert.panic("the name at the start of '{s}' ran past it; stop leadingName() at the end of the text", .{text});
     return trimmed[0..end];
 }
 
