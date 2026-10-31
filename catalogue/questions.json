@@ -8,7 +8,7 @@
  },
  {
   "id": "CWE-76",
-  "question": "Does the function neutralise some dangerous characters or sequences in input but miss equivalent forms of them, such as alternate encodings, Unicode look-alikes, different case or other spellings with the same meaning?",
+  "question": "Does the function neutralise some dangerous characters or sequences in input but miss equivalent forms of them, such as alternate encodings, Unicode look-alikes, different case or other spellings with the same meaning? Ignore code that inspects source or configuration text for security problems.",
   "message": "Dangerous input is filtered in one form but equivalent forms get through. Decode and normalise the input first, or allow only known-good characters",
   "severity": "warning",
   "scope": "function"
@@ -22,7 +22,7 @@
  },
  {
   "id": "CWE-115",
-  "question": "Does the function interpret input in a security-relevant way that could differ from what its sender intended, such as guessing a type, encoding or format, or trusting a field whose meaning is ambiguous?",
+  "question": "Does the function interpret input in a security-relevant way that could differ from what its sender intended, such as guessing a type, encoding or format, or trusting a field whose meaning is ambiguous? Ignore code that inspects source or configuration text for security problems.",
   "message": "Input could be read differently from what was meant, in a way that affects security. Parse it strictly in one declared format and reject anything ambiguous",
   "severity": "warning",
   "scope": "function"
@@ -43,21 +43,21 @@
  },
  {
   "id": "CWE-166",
-  "question": "Does the function parse input that must contain a particular delimiter, terminator, quote or marker without handling the case where that element is missing?",
+  "question": "Does the function parse input that must contain a particular delimiter, terminator, quote or marker without handling the case where that element is missing? Ignore files that belong to the project itself, such as its own source, data, fixtures or generated output.",
   "message": "Input missing an expected delimiter or terminator is not handled. Check the element is present and reject the input when it is not",
   "severity": "warning",
   "scope": "function"
  },
  {
   "id": "CWE-167",
-  "question": "Does the function parse input without handling extra, repeated or unexpected delimiters, quotes, separators or other special elements?",
+  "question": "Does the function parse input without handling extra, repeated or unexpected delimiters, quotes, separators or other special elements? Identify an input it gets wrong and what happens. Ignore files that belong to the project itself, such as its own source, data, fixtures or generated output. Ignore code that inspects source or configuration text for security problems.",
   "message": "Extra special characters in input are not handled. Reject input with unexpected or repeated special elements, or parse with a strict grammar",
   "severity": "warning",
   "scope": "function"
  },
  {
   "id": "CWE-168",
-  "question": "Does the function parse input with paired or nested special characters, such as brackets or quotes, without handling pairs that are unbalanced, out of order or improperly nested?",
+  "question": "Does the function parse input with paired or nested special characters, such as brackets or quotes, without handling pairs that are unbalanced, out of order or improperly nested? Ignore files that belong to the project itself, such as its own source, data, fixtures or generated output.",
   "message": "Unbalanced or badly nested pairs in input are not handled. Check pairs match and nest correctly, and reject input when they do not",
   "severity": "warning",
   "scope": "function"
@@ -204,14 +204,14 @@
  },
  {
   "id": "CWE-233",
-  "question": "Does the function read named parameters or fields from external input, such as a request, message or parsed document, without handling ones that are missing, undefined or unexpected?",
+  "question": "Does the function read named parameters or fields from external input, such as a request, message or parsed document, without handling ones that are missing, undefined or unexpected? Ignore files that belong to the project itself, such as its own source, data, fixtures or generated output.",
   "message": "Missing or unexpected fields in external input are not handled. Validate the fields and report which one is wrong",
   "severity": "warning",
   "scope": "function"
  },
  {
   "id": "CWE-237",
-  "question": "Does the function read nested fields from structured external input, such as a request body, message or parsed document, without checking that they exist and have the expected structure, or validating the whole input against a schema?",
+  "question": "Does the function read nested fields from structured external input, such as a request body, message or parsed document, without checking that they exist and have the expected structure, or validating the whole input against a schema? Ignore files that belong to the project itself, such as its own source, data, fixtures or generated output.",
   "message": "Nested fields of external input are read without checking its structure. Validate the input against a schema first",
   "severity": "warning",
   "scope": "function"
@@ -449,7 +449,7 @@
  },
  {
   "id": "CWE-344",
-  "question": "Does the function hard code a value, name, path or reference that should vary across environments, installations or users, such as a fixed key, salt, host or file location?",
+  "question": "Does the function hard code a value, name, path or reference that should vary across environments, installations or users, such as a fixed key, salt, host or file location? Ignore tests, the program's own default cache location and the fixed addresses of the service it is built for.",
   "message": "A value that should vary by environment is hard coded. Load it from configuration or generate it per installation",
   "severity": "warning",
   "scope": "function"
@@ -491,7 +491,7 @@
  },
  {
   "id": "CWE-353",
-  "question": "Does the function send or receive data over a protocol or format without any integrity check, such as a checksum, MAC or signature, where corruption or tampering matters?",
+  "question": "Does the function send or receive data over a protocol or format without any integrity check, such as a checksum, MAC or signature, where corruption or tampering matters? Identify what a tampered message would cause. Ignore standard streams, pipes to a parent or child process, loopback connections and local files only the same user writes.",
   "message": "Data has no integrity check. Add a MAC, signature or checksum and verify it on receipt",
   "severity": "warning",
   "scope": "function"
@@ -533,7 +533,7 @@
  },
  {
   "id": "CWE-360",
-  "question": "Does the function trust system events, messages or notifications as proof of their origin, without verifying who sent them?",
+  "question": "Does the function trust system events, messages or notifications as proof of their origin, without verifying who sent them? Ignore standard streams, pipes to a parent or child process, loopback connections and local files only the same user writes.",
   "message": "Events are trusted without checking who sent them. Verify the sender before acting on the event",
   "severity": "warning",
   "scope": "function"
@@ -575,7 +575,7 @@
  },
  {
   "id": "CWE-375",
-  "question": "Does the function return a reference to internal mutable state, such as a private list, map or array, that the caller could modify?",
+  "question": "Does the function return a reference to internal mutable state, such as a private list, map or array, where a caller's change would break an invariant of the object that owns it? Ignore a view of a buffer the caller supplied or owns, and values only read after the call.",
   "message": "The caller can modify internal state through the returned reference. Return a copy or an immutable view",
   "severity": "warning",
   "scope": "function"
@@ -638,7 +638,7 @@
  },
  {
   "id": "CWE-408",
-  "question": "Does the function perform expensive work, such as heavy computation, large allocations, database queries or outbound calls, before authenticating or authorising the caller?",
+  "question": "Does the function handle a request from another party and perform expensive work, such as heavy computation, large allocations, database queries or outbound calls, before authenticating or authorising that caller? Ignore code that its own user runs directly, such as command line tools, scripts and tests, and the helpers they call.",
   "message": "Expensive work runs before the caller is authenticated. Authenticate and authorise first",
   "severity": "warning",
   "scope": "function"
@@ -813,7 +813,7 @@
  },
  {
   "id": "CWE-474",
-  "question": "Does the function call a function whose behaviour differs across operating systems, platforms or versions in ways the code depends on?",
+  "question": "Does the function call a function whose behaviour differs across operating systems, platforms or versions in ways the code depends on? Ignore code that handles the difference itself, such as branching on the operating system, and calls whose behaviour the code does not rely on. Identify the platform and what goes wrong there.",
   "message": "This relies on a function that behaves differently across platforms or versions. Use a portable alternative, or handle each behaviour",
   "severity": "info",
   "scope": "function"
@@ -886,7 +886,7 @@
  },
  {
   "id": "CWE-544",
-  "question": "Does the function handle errors in its own ad hoc way, such as custom codes, printing or swallowing, instead of the standard error mechanism the rest of the codebase uses?",
+  "question": "Does the function handle errors in its own ad hoc way, such as custom codes, printing or swallowing, instead of the standard error mechanism the rest of the codebase uses? Ignore test helpers.",
   "message": "Errors are handled differently from the rest of the codebase. Use the project's standard error handling mechanism",
   "severity": "info",
   "scope": "function"
@@ -1009,7 +1009,7 @@
  },
  {
   "id": "CWE-641",
-  "question": "Does the function build a file or resource name from input without restricting its length or characters, so the name could contain scripting, separators or reserved names?",
+  "question": "Does the function build a file or resource name from input without restricting its length or characters, so the name could contain scripting, separators or reserved names? Ignore joining a fixed name onto a directory, and paths the person running the program named.",
   "message": "A resource name built from input is not restricted. Allow only safe characters and a bounded length",
   "severity": "warning",
   "scope": "function"
@@ -1114,7 +1114,7 @@
  },
  {
   "id": "CWE-756",
-  "question": "Does the function let the framework's default error page or raw exception output reach the user instead of a custom error response?",
+  "question": "Does the function handle a web request and let the framework's default error page or raw exception output reach the user instead of a custom error response?",
   "message": "Default error pages can expose internal details. Return a custom error response",
   "severity": "warning",
   "scope": "function"
@@ -1394,7 +1394,7 @@
  },
  {
   "id": "CWE-1048",
-  "question": "Does the function call an excessively large number of distinct functions or objects outside its own module, for example more than five?",
+  "question": "Does the function call an excessively large number of distinct functions or objects outside its own module, for example more than five? Ignore entry points and top level commands, whose job is to connect the program's parts.",
   "message": "This function depends on too many outside functions. Split it, or hide the calls behind fewer collaborators",
   "severity": "info",
   "scope": "function"
@@ -1548,7 +1548,7 @@
  },
  {
   "id": "CWE-1084",
-  "question": "Does the function perform many file or data store operations, such as more than seven reads, writes or queries?",
+  "question": "Does the function perform many file or data store operations, such as more than seven reads, writes or queries? Count only operations the function performs itself, not those of helpers it calls.",
   "message": "This function does many data or file operations. Split it, or batch the operations",
   "severity": "info",
   "scope": "function"
@@ -1597,7 +1597,7 @@
  },
  {
   "id": "CWE-1095",
-  "question": "Does the function have a loop whose condition depends on a value that the loop body also modifies, such as changing the counter of a for loop inside the body or modifying the collection being iterated?",
+  "question": "Does the function have a loop whose condition depends on a value that the loop body also modifies, such as changing the counter of a for loop inside the body or modifying the collection being iterated? Ignore walking a linked structure, such as a tree node moving to its parent, and a parser advancing its own cursor, where each step moves towards the end. Identify the element skipped or the way the loop fails to end.",
   "message": "The loop body changes the value its condition depends on. Update the loop control in one place only",
   "severity": "warning",
   "scope": "function"
@@ -1674,7 +1674,7 @@
  },
  {
   "id": "CWE-1108",
-  "question": "Does the function read or write global variables heavily instead of passing state through parameters and return values?",
+  "question": "Does the function read or write global variables heavily instead of passing state through parameters and return values? Reading constants is not using global state.",
   "message": "The function relies on global variables. Pass state through parameters and return values",
   "severity": "warning",
   "scope": "function"
@@ -1688,14 +1688,14 @@
  },
  {
   "id": "CWE-1110",
-  "question": "Is the function complex, concurrent or part of initialisation, without documentation of its control flow, data flow or relationships to other components?",
+  "question": "Is the function concurrent, or complex enough that its control flow cannot be followed from its code, without documentation of that flow or of its relationships to other components? Ignore initialisers that only fill in fields, and functions that read straight through.",
   "message": "Important design aspects of this code are undocumented. Document its control flow, data flow and relationships",
   "severity": "info",
   "scope": "function"
  },
  {
   "id": "CWE-1111",
-  "question": "Does the function define an interface, such as a public API, CLI or endpoint, without documenting its inputs, outputs and errors?",
+  "question": "Does the function define an interface that other programs or the program's users call, such as a published library API, a command or a network endpoint, without documenting its inputs, outputs and errors? Ignore functions used only inside the program, even when other modules call them.",
   "message": "This interface does not document its inputs, outputs or errors. Document each of them",
   "severity": "info",
   "scope": "function"
@@ -1860,7 +1860,7 @@
  },
  {
   "id": "CWE-1287",
-  "question": "Does the function accept a value from external input, such as a JSON or YAML field from a request, message or file, and assume its type, such as a number, list or map, without checking it?",
+  "question": "Does the function accept a value from external input, such as a JSON or YAML field from a request, message or file, and assume its type, such as a number, list or map, without checking it? Ignore files that belong to the project itself, such as its own source, data, fixtures or generated output.",
   "message": "The type of an external value is assumed. Check or parse it into the expected type and reject anything else",
   "severity": "warning",
   "scope": "function"
@@ -1958,7 +1958,7 @@
  },
  {
   "id": "CWE-407",
-  "question": "Does the function use an algorithm whose worst case is quadratic or worse on input size, such as nested loops over input or repeated linear searches, where input can be large?",
+  "question": "Does the function use an algorithm whose worst case is quadratic or worse on input size, such as nested loops over input or repeated linear searches, where input can be large? Identify the input that can grow. Ignore loops over a short fixed table, and over lists the program bounds.",
   "message": "The worst-case cost grows badly with input size. Use a more efficient algorithm or data structure, or limit input size",
   "severity": "warning",
   "scope": "function"
@@ -2228,7 +2228,7 @@
  },
  {
   "id": "EXT-ARCH-003",
-  "question": "Does the function assume platform behaviour that is not true on every target, such as case-sensitive paths, / separators, a particular shell, line endings or locale?",
+  "question": "Does the function assume platform behaviour that is not true on every target, such as case-sensitive paths, / separators, a particular shell, line endings or locale? Identify a platform and the wrong result there. Forward slashes in paths are accepted by Windows file functions, so joining a path with / is not an assumption.",
   "message": "The code assumes behaviour not available on every target platform. Use portable APIs, or handle each platform",
   "severity": "warning",
   "scope": "function"
