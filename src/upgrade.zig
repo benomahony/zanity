@@ -157,6 +157,8 @@ pub fn downloadInto(client: *std.http.Client, url: []const u8, out: *Io.Writer.A
 }
 
 /// Allows GitHub's HTTPS API and release links, with credentials confined to the API host.
+/// std.http.Client verifies the host's certificate, and replaceExecutable() checks each binary's
+/// SHA-256, so this function only has to choose the destination.
 fn validateDownloadDestination(url: []const u8, authenticated: bool) !bool {
     const destination = std.Uri.parse(url) catch return error.InvalidDownloadUrl;
     if (!std.ascii.eqlIgnoreCase(destination.scheme, "https") or destination.user != null or destination.password != null or destination.port != null) return error.InvalidDownloadUrl;
@@ -344,8 +346,19 @@ pub fn latestRelease(io: Io, dir: []const u8, now: i64) ?Version {
     const line = std.fmt.bufPrint(&line_buffer, "{d} {s}\n", .{ now, version.slice() }) catch return version;
     if (Seen.parse(line) == null) assert.panic("wrote '{s}', which Seen.parse() cannot read back", .{line});
     // Without the kept answer the next run asks GitHub again, which costs only time.
-    Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = line }) catch return version;
+    keepLine(io, path, line) catch return version;
     return version;
+}
+
+/// Replaces the file at `path` with `line` in one step, so a run reading it at the same time sees
+/// the old answer or the new one, never part of one.
+fn keepLine(io: Io, path: []const u8, line: []const u8) !void {
+    if (path.len == 0 or line.len == 0) assert.panic("keeping '{s}' at '{s}'; pass the kept answer and where it lives", .{ line, path });
+    var atomic = try Io.Dir.cwd().createFileAtomic(io, path, .{ .replace = true });
+    defer atomic.deinit(io);
+    try atomic.file.writeStreamingAll(io, line);
+    try atomic.replace(io);
+    if (atomic.file_open) assert.panic("kept the answer at {s} with its file still open; replace() must close it", .{path});
 }
 
 /// GitHub's latest release, or null when it cannot be reached or its answer cannot be read.

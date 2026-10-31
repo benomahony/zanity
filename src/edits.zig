@@ -44,6 +44,7 @@ pub fn shiftLines(source: []const u8, findings: []Finding) void {
     for (findings) |*f| {
         if (f.fixed) {
             const edit = f.edit orelse unreachable;
+            if (edit.end > source.len) assert.panic("the fixed {s} edit ends at byte {d} of a {d}-byte file; applyEdits() must skip an edit past the end", .{ f.rule, edit.end, source.len });
             const removed = std.mem.count(u8, source[edit.start..edit.end], "\n");
             delta += @as(i64, @intCast(std.mem.count(u8, edit.replacement, "\n"))) - @as(i64, @intCast(removed));
             continue;
