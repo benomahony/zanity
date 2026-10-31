@@ -202,7 +202,7 @@ pub fn checkSpanCall(self: *File, ctx: Context, name: []const u8) !void {
     if (function) |f| if (has_receiver and contains(t.span_end_methods, name)) {
         f.ends_span = true;
     };
-    if (t.span_start_pairs and !self.index.marks(ctx.node, self.checker.compiled.id("call.paired"))) return;
+    if (unpaired(self, ctx, name)) return;
     if (spanName(self, ctx, name)) |span_name| {
         if (self.index.marks(span_name, self.v.string_built) or self.index.marks(span_name, self.v.string_format)) {
             _ = try self.report(span_name, "dynamic-span-name", try self.say("'{s}' names the span with text built at runtime, so each value makes a new span name and traces can't be grouped by operation.", .{header(span_name.text(self.source))}));
@@ -217,6 +217,16 @@ pub fn checkSpanCall(self: *File, ctx: Context, name: []const u8) !void {
     const f = function orelse return;
     if (self.index.marks(ctx.node, self.checker.compiled.id("call.handed_off"))) return;
     if (f.span_start == null) f.span_start = at;
+}
+
+/// Whether span starts in this language return the context and the span together, as Go's
+/// `tracer.Start(ctx, name)` does, and this call does not, so it is something else, such as
+/// `cmd.Start()` or `srv, err := pool.Start(ctx, cfg)`.
+fn unpaired(self: *File, ctx: Context, name: []const u8) bool {
+    if (ctx.family != .call) assert.panic("{s}: checking whether {f} pairs a context and a span, but it is a {t}; call only from checkSpanCall", .{ self.work.facts.path, ctx.node.where(), ctx.family });
+    if (name.len == 0) assert.panic("{s}: checking whether an unnamed call pairs a context and a span; capture @call.name in the language query", .{self.work.facts.path});
+    if (!self.tables.span_start_pairs) return false;
+    return !self.index.marks(ctx.node, self.checker.compiled.id("call.paired")) or spanName(self, ctx, name) == null;
 }
 
 /// The argument naming the span a tracing call starts, at the position its table gives.

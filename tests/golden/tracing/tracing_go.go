@@ -61,6 +61,26 @@ func Sent(ctx context.Context, id string) error {
 	return use(ctx, id)
 }
 
+func Pooled(ctx context.Context, pool *Pool, cfg Config) error {
+	srv, err := pool.Start(ctx, cfg)
+	if err != nil {
+		return err
+	}
+	return srv.Serve(ctx)
+}
+
+func Restarted(ctx context.Context, pool *Pool, cfg Config) (*Server, error) {
+	var srv *Server
+	var startErr error
+	srv, startErr = pool.Start(ctx, cfg)
+	return srv, startErr
+}
+
+func Paired(engine *Engine) error {
+	first, second := engine.Start()
+	return use(first, second)
+}
+
 func Command() error {
 	cmd := exec.Command("true")
 	err := cmd.Start()
