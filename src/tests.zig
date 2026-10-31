@@ -25,6 +25,7 @@ test {
     _ = @import("lsp.zig");
     _ = @import("lsp_protocol.zig");
     _ = @import("exchange.zig");
+    _ = @import("fix_file.zig");
     _ = @import("telemetry.zig");
     _ = @import("twins.zig");
     _ = @import("passthrough.zig");
