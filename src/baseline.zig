@@ -1,3 +1,5 @@
+//! Comparing a check with a saved snapshot of findings. Each finding gets an identity from its rule,
+//! message and line text, so it survives lines moving, and is classified as new, existing or resolved.
 const triage = @import("triage.zig");
 const std = @import("std");
 const assert = @import("assert.zig");

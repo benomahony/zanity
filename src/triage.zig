@@ -1,3 +1,5 @@
+//! Choosing what a check shows: filtering and paging findings against a baseline, deciding whether
+//! the run fails, and writing the command that continues from this page.
 const std = @import("std");
 const assert = @import("assert.zig");
 const Row = @import("baseline.zig").Row;

@@ -1,3 +1,5 @@
+//! The project-wide call graph built from every file's facts, and the checks that need it, such as
+//! finding recursion through cycles. Lookups are by name, so it runs after all files are read.
 const std = @import("std");
 const assert = @import("assert.zig");
 const Allocator = std.mem.Allocator;

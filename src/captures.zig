@@ -1,3 +1,6 @@
+//! Running a language's tree-sitter queries: what each capture name means, the predicates zanity
+//! evaluates itself, and an index from syntax node to the captures that marked it, which the
+//! checks read instead of matching node kinds.
 const std = @import("std");
 const assert = @import("assert.zig");
 const strings = @import("strings.zig");

@@ -1,3 +1,5 @@
+//! The fixed limits zanity runs within. Everything is reserved at startup, so going over a limit
+//! is a reported error rather than an allocation failure partway through a check.
 const std = @import("std");
 const assert = @import("assert.zig");
 const Allocator = std.mem.Allocator;

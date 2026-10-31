@@ -1,3 +1,5 @@
+//! What each supported language gives zanity: its grammar, its query files and its tables, built
+//! at compile time from languages/manifest.zon.
 const std = @import("std");
 const manifest = @import("manifest.zig");
 
