@@ -254,6 +254,7 @@ const watch_probe =
     \\    assert after['summary'] == {'new': 0, 'existing': 10000, 'resolved': 0}, after
     \\    assert len(after['resolved_since_previous']) == 2, after['resolved_since_previous']
     \\    assert (root / 'backlog.json').read_bytes() == baseline, 'watch rewrote the baseline'
+    \\    print(len(after['resolved_since_previous']))
     \\finally:
     \\    p.terminate()
     \\    p.wait(timeout=10)
@@ -270,4 +271,5 @@ test "watch reports two new findings resolving while retaining all inherited bac
     const run = try fixture.runWatchProbe();
     if (run.term != .exited or run.term.exited != 0) std.debug.print("watch probe failed: {s}\n{s}\n", .{ run.stdout, run.stderr });
     try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, run.term);
+    try std.testing.expectEqualStrings("2\n", run.stdout);
 }
