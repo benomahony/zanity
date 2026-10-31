@@ -1,0 +1,7 @@
+rules: unended-span,dynamic-span-name,discarded-span-context
+exit: 0
+tracing_go.go:21:15: warning [unended-span]
+tracing_go.go:32:13: warning [discarded-span-context]
+tracing_go.go:38:33: warning [dynamic-span-name]
+tracing_go.go:44:49: warning [dynamic-span-name]
+tracing_go.go:54:15: warning [unended-span]

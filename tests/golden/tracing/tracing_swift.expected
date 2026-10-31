@@ -1,0 +1,5 @@
+rules: unended-span,dynamic-span-name
+exit: 0
+tracing_swift.swift:4:16: warning [unended-span]
+tracing_swift.swift:15:16: warning [unended-span]
+tracing_swift.swift:38:14: warning [dynamic-span-name]

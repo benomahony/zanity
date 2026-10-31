@@ -102,6 +102,9 @@ pub const Context = struct {
     has_sleep: bool = false,
     /// Whether the function reports an error anywhere in its body.
     has_message: bool = false,
+    /// The first span the function starts and must end itself, and whether it ends any span.
+    span_start: ?ts.Node = null,
+    ends_span: bool = false,
     /// A branch or loop that continues its parent at the same depth, like an `else if`.
     chained: bool = false,
     /// Checks a test makes: its assertions and its test framework's checks.
@@ -829,6 +832,7 @@ pub const File = struct {
             if (ctx.arguments[0]) |message| try messages.checkMessage(self, message, null);
         }
         try hazards.checkRiskyCall(self, ctx, name);
+        try hazards.checkSpanCall(self, ctx, name);
         if (self.inTest()) {
             try test_quality.checkTestCall(self, ctx, name);
         } else if (self.inTestFile()) {
@@ -995,6 +999,7 @@ pub const File = struct {
         try extract.checkExtractable(self, ctx, name);
         if (self.index.marks(ctx.span, self.v.function_passthrough) or self.index.marks(ctx.node, self.v.function_passthrough)) try passthrough.checkPassthrough(self, ctx, name_node, name);
         try self.checkAssertionDensity(ctx, ctx, name_node);
+        try hazards.checkUnendedSpan(self, ctx);
         if (ctx.decisions + 1 > rules.max_complexity) {
             if (try self.report(name_node, "complex-function", try self.say("'{s}' makes {d} decisions (cyclomatic complexity {d}), past the {d} a reader can follow and a test suite can cover.", .{ name, ctx.decisions, ctx.decisions + 1, rules.max_complexity }))) self.s.diagnostics.last().?.fix = try extract.decisionsFix(self, ctx, name);
         }

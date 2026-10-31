@@ -1,0 +1,6 @@
+rules: unended-span,dynamic-span-name,discarded-span-context
+exit: 0
+tracing_js.js:6:16: warning [unended-span]
+tracing_js.js:20:3: warning [unended-span]
+tracing_js.js:45:33: warning [dynamic-span-name]
+tracing_js.js:50:33: warning [dynamic-span-name]

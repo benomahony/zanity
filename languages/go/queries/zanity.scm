@@ -376,6 +376,42 @@
   (expression_list
     (_) @expression.returned))
 
+; A call whose results are unpacked into two names, as a span start's context and span are; not
+; a value and its error, as in `srv, err := pool.Start(ctx, cfg)`.
+((short_var_declaration
+  left: (expression_list . (_) . (_) @_second .)
+  right: (expression_list . (call_expression) @call.paired .))
+  (#not-any-suffix? @_second "err" "Err"))
+
+((assignment_statement
+  left: (expression_list . (_) . (_) @_second .)
+  right: (expression_list . (call_expression) @call.paired .))
+  (#not-any-suffix? @_second "err" "Err"))
+
+; The same with its first result thrown away, as in `_, span := tracer.Start(ctx, name)`.
+((short_var_declaration
+  left: (expression_list . (identifier) @_first . (_) .)
+  right: (expression_list . (call_expression) @call.context_discarded .))
+  (#eq? @_first "_"))
+
+((assignment_statement
+  left: (expression_list . (identifier) @_first . (_) .)
+  right: (expression_list . (call_expression) @call.context_discarded .))
+  (#eq? @_first "_"))
+
+; A call whose result something else ends, such as a span: the caller it is returned to, or the
+; struct it is stored on.
+[
+  (return_statement
+    (expression_list
+      (call_expression) @call.handed_off))
+  (assignment_statement
+    left: (expression_list
+      (selector_expression))
+    right: (expression_list
+      (call_expression) @call.handed_off))
+]
+
 ; Names the code refers to, for dead-symbol: every name other than where it is defined.
 [
   (identifier)
