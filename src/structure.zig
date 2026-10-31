@@ -223,8 +223,8 @@ fn deadSymbols(facts: *Facts, findings: *memory.Bounded(Finding), scratch: ?*Liv
 /// file, or another project, may import counts as reachable, so a library's unused-looking API
 /// doesn't make dead everything it uses.
 fn traced(d: Definition) bool {
-    if (d.name.len == 0) assert.panic("{s}:{d}: a definition has no name", .{ d.path, d.line + 1 });
-    if (d.public and !d.importable and d.unmarked.len == 0 and d.kind.len == 0) assert.panic("{s}: '{s}' has no kind", .{ d.path, d.name });
+    if (d.name.len == 0) assert.panic("{s}:{d}: a definition has no name; capture @definition.name in the language's zanity.scm", .{ d.path, d.line + 1 });
+    if (d.public and !d.importable and d.unmarked.len == 0 and d.kind.len == 0) assert.panic("{s}: '{s}' has no kind; capture the definition's kind in the language's zanity.scm", .{ d.path, d.name });
     return !d.public and !d.importable and candidate(d);
 }
 
@@ -280,24 +280,24 @@ const Liveness = struct {
     }
 
     fn index(self: *const Liveness, hash: u64) ?usize {
-        if (self.alive.len != self.names.len) assert.panic("{d} names with {d} flags", .{ self.names.len, self.alive.len });
+        if (self.alive.len != self.names.len) assert.panic("{d} names with {d} flags; add one flag for every name", .{ self.names.len, self.alive.len });
         const at = firstAtLeast(self.names, hash);
-        if (at > self.names.len) assert.panic("looked up a name at {d} of {d}", .{ at, self.names.len });
+        if (at > self.names.len) assert.panic("looked up a name at {d} of {d}; look up only indices this index was built with", .{ at, self.names.len });
         return if (at < self.names.len and self.names[at] == hash) at else null;
     }
 
     /// Whether a reference from inside `holder` keeps what it names alive: module-level code,
     /// and anything not traced here, always does.
     fn holds(self: *const Liveness, holder: u64) bool {
-        if (self.alive.len != self.names.len) assert.panic("{d} names with {d} flags", .{ self.names.len, self.alive.len });
+        if (self.alive.len != self.names.len) assert.panic("{d} names with {d} flags; add one flag for every name", .{ self.names.len, self.alive.len });
         if (holder == 0) return true;
         const i = self.index(holder) orelse return true;
-        if (i >= self.alive.len) assert.panic("holder {d} indexed past {d} flags", .{ i, self.alive.len });
+        if (i >= self.alive.len) assert.panic("holder {d} indexed past {d} flags; pass a holder from this file's definitions", .{ i, self.alive.len });
         return self.alive[i];
     }
 
     fn propagate(self: *Liveness, references: []const Reference) void {
-        if (self.alive.len != self.names.len) assert.panic("{d} names with {d} flags", .{ self.names.len, self.alive.len });
+        if (self.alive.len != self.names.len) assert.panic("{d} names with {d} flags; add one flag for every name", .{ self.names.len, self.alive.len });
         if (references.len > 1 and Reference.before({}, references[references.len - 1], references[0])) assert.panic("propagating over {d} unsorted references; sort them by name first", .{references.len});
         for (0..self.names.len + 1) |_| {
             var changed = false;

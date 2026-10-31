@@ -144,7 +144,7 @@ pub const Inference = struct {
         if (job.count == 0) return;
         job.state = try self.stateOf(unit);
         try self.jobs.add(job);
-        if (job.first + job.count > self.slots.len) assert.panic("{s}: '{s}' claims slots {d}..{d} of {d}", .{ unit.path, unit.name, job.first, job.first + job.count, self.slots.len });
+        if (job.first + job.count > self.slots.len) assert.panic("{s}: '{s}' claims slots {d}..{d} of {d}; set the unit's slots from the pool in queue()", .{ unit.path, unit.name, job.first, job.first + job.count, self.slots.len });
     }
 
     /// The unit questions are queued about, and what decides whether each is asked.
@@ -153,18 +153,18 @@ pub const Inference = struct {
     /// Adds `rule`'s question about the target unit to the pool, with its answer when the store has one.
     fn queue(self: *Inference, target: Target, rule: *const rules.Rule) !void {
         const unit = target.unit;
-        if (rule.name.len == 0) assert.panic("{s}: queueing a question with no name about '{s}'", .{ unit.path, unit.name });
+        if (rule.name.len == 0) assert.panic("{s}: queueing a question with no name about '{s}'; give every rule with a question a name in rules.zig", .{ unit.path, unit.name });
         if (rule.question.len == 0 or !target.enabled.enabled(rule.name) or !asked(rule.asks, unit) or decided(target.settled, unit, rule)) return;
         if (target.adapter) |a| if (rules.ruleIndex(rule.name) != null and !language.applies(a, rule.name)) return;
         const answer = try self.store.cached(self.model, store.digest(&.{rule.question}), target.unit_hash);
         try self.slots.add(.{ .rule = rule, .answer = answer, .known = answer != null });
-        if (self.slots.len == 0) assert.panic("{s}: queued '{s}' but the pool is empty", .{ unit.path, rule.name });
+        if (self.slots.len == 0) assert.panic("{s}: queued '{s}' but the pool is empty; add the question to the pool in queue()", .{ unit.path, rule.name });
     }
 
     /// The slots holding a job's questions.
     fn slotsOf(self: *Inference, job: *const Job) []Slot {
-        if (job.first + job.count > self.slots.len) assert.panic("{s}: '{s}' claims slots {d}..{d} of {d}", .{ job.unit.path, job.unit.name, job.first, job.first + job.count, self.slots.len });
-        if (job.count == 0) assert.panic("{s}: '{s}' was queued with no questions", .{ job.unit.path, job.unit.name });
+        if (job.first + job.count > self.slots.len) assert.panic("{s}: '{s}' claims slots {d}..{d} of {d}; set the unit's slots from the pool in queue()", .{ job.unit.path, job.unit.name, job.first, job.first + job.count, self.slots.len });
+        if (job.count == 0) assert.panic("{s}: '{s}' was queued with no questions; queue a unit only when a question applies to it", .{ job.unit.path, job.unit.name });
         return self.slots.items()[job.first..][0..job.count];
     }
 
@@ -226,7 +226,7 @@ pub const Inference = struct {
     }
 
     fn ask(self: *Inference, job: *Job, semaphore: *Io.Semaphore) !void {
-        if (job.failed != null) assert.panic("{s}: asking about '{s}' after its request failed", .{ job.unit.path, job.unit.name });
+        if (job.failed != null) assert.panic("{s}: asking about '{s}' after its request failed; stop asking about a unit once its request fails", .{ job.unit.path, job.unit.name });
         const slots = self.slotsOf(job);
         var start: usize = 0;
         for (0..slots.len) |_| {
@@ -234,14 +234,14 @@ pub const Inference = struct {
             if (start == slots.len) return;
             start = try self.askFrom(job, start, semaphore);
         }
-        if (start < slots.len) assert.panic("{s}: '{s}' still has questions from slot {d} of {d} after asking each at most once", .{ job.unit.path, job.unit.name, start, slots.len });
+        if (start < slots.len) assert.panic("{s}: '{s}' still has questions from slot {d} of {d} after asking each at most once; advance the slot past every answered question", .{ job.unit.path, job.unit.name, start, slots.len });
     }
 
     /// Asks up to max_request_questions unanswered questions from `start` in one request, and
     /// returns where the next request starts.
     fn askFrom(self: *Inference, job: *Job, start: usize, semaphore: *Io.Semaphore) !usize {
         const slots = self.slotsOf(job);
-        if (start >= slots.len) assert.panic("{s}: asking from slot {d} of {d}", .{ job.unit.path, start, slots.len });
+        if (start >= slots.len) assert.panic("{s}: asking from slot {d} of {d}; start from a slot inside the pool", .{ job.unit.path, start, slots.len });
         var questions: [max_request_questions]tai.NamedQuestion = undefined;
         var count: usize = 0;
         var next = start;
@@ -272,7 +272,7 @@ pub const Inference = struct {
         for (slots[start..next]) |*slot| if (slot.answer == null) {
             slot.known = true;
         };
-        if (count == 0) assert.panic("{s}: a request from slot {d} carried no questions", .{ job.unit.path, start });
+        if (count == 0) assert.panic("{s}: a request from slot {d} carried no questions; call askFrom() only for a unit with questions left", .{ job.unit.path, start });
         return next;
     }
 
@@ -385,7 +385,7 @@ pub const Inference = struct {
 
 /// Whether the server refused a request for its size: HTTP 413, or Jev's max_tokens_exceeded.
 fn tooLarge(job: *const Job, err: anyerror) bool {
-    if (job.failed == null) assert.panic("{s}: asking whether '{s}' was too large to send, though its request succeeded", .{ job.unit.path, job.unit.name });
+    if (job.failed == null) assert.panic("{s}: asking whether '{s}' was too large to send, though its request succeeded; call tooLarge() only after a failed request", .{ job.unit.path, job.unit.name });
     const d = job.diagnostics;
     if (d.status == .payload_too_large) return true;
     const refused = err == error.BadRequest and std.mem.indexOf(u8, d.body, "max_tokens_exceeded") != null;
@@ -432,7 +432,7 @@ fn asked(asks: rules.Asks, unit: *const Unit) bool {
         .cluster => unit.kind == .cluster,
         .file => unit.kind == .file,
     };
-    if (applies and asks == .errors and !unit.reports_error) assert.panic("{s}: asking the error questions about '{s}', which reports no error", .{ unit.path, unit.name });
+    if (applies and asks == .errors and !unit.reports_error) assert.panic("{s}: asking the error questions about '{s}', which reports no error; queue those questions only for units with reports_error set", .{ unit.path, unit.name });
     return applies;
 }
 

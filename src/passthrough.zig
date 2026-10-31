@@ -170,7 +170,7 @@ fn argumentEnd(text: []const u8, start: usize) usize {
             else => {},
         }
     }
-    if (at != text.len) assert.panic("an argument of '{s}' ran to {d}, past its end", .{ text, at });
+    if (at != text.len) assert.panic("an argument of '{s}' ran to {d}, past its end; stop argumentEnd() at the end of the command", .{ text, at });
     return at;
 }
 

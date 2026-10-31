@@ -69,7 +69,7 @@ fn holderOf(self: *File, node: ts.Node) u64 {
 /// a child of an enclosing node, or a child of that child, as in `impl Trait for Type<T>`.
 fn heldBy(self: *File, node: ts.Node) ?ts.Node {
     const self_id = self.checker.compiled.id("reference.self") orelse return null;
-    if (!self.index.marks(node, self.checker.compiled.id("reference.held"))) assert.panic("{s}: looking for what holds {f}, which isn't a @reference.held name", .{ self.work.facts.path, node.where() });
+    if (!self.index.marks(node, self.checker.compiled.id("reference.held"))) assert.panic("{s}: looking for what holds {f}, which isn't a @reference.held name; call heldBy() only for @reference.held captures", .{ self.work.facts.path, node.where() });
     var current = node.parent();
     for (0..max_holder_steps) |_| {
         const construct = current orelse return null;
@@ -83,7 +83,7 @@ fn heldBy(self: *File, node: ts.Node) ?ts.Node {
         }
         current = construct.parent();
     }
-    if (current == null) assert.panic("{s}: the walk up from {f} ran off the root without returning", .{ self.work.facts.path, node.where() });
+    if (current == null) assert.panic("{s}: the walk up from {f} ran off the root without returning; return from the walk when it reaches the root", .{ self.work.facts.path, node.where() });
     return null;
 }
 

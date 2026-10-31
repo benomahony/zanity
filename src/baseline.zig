@@ -107,13 +107,13 @@ pub fn initSnapshot(region: *std.heap.FixedBufferAllocator, io: std.Io, operator
     defer ids.deinit(gpa);
     if (snapshot.findings.len > max_baseline_findings) return error.BaselineTooLarge;
     try ids.ensureTotalCapacity(gpa, @intCast(snapshot.findings.len));
-    if (ids.count() != 0) assert.panic("baseline validation map must start empty", .{});
+    if (ids.count() != 0) assert.panic("baseline validation map must start empty; build a fresh map for each snapshot", .{});
     for (snapshot.findings) |row| {
         try validateBaselineRow(row);
         const entry = ids.getOrPutAssumeCapacity(row.id);
         if (entry.found_existing) return error.DuplicateBaselineIdentity;
     }
-    if (ids.count() != snapshot.findings.len) assert.panic("validated {d} identities among {d} rows", .{ ids.count(), snapshot.findings.len });
+    if (ids.count() != snapshot.findings.len) assert.panic("validated {d} identities among {d} rows; add every row's ID to the map in initSnapshot()", .{ ids.count(), snapshot.findings.len });
     return snapshot;
 }
 
@@ -125,15 +125,15 @@ pub fn save(gpa: std.mem.Allocator, io: std.Io, target: struct { path: []const u
     var atomic = try std.Io.Dir.cwd().createFileAtomic(io, target.path, .{ .replace = target.replace });
     defer atomic.deinit(io);
     try atomic.file.writeStreamingAll(io, data);
-    if (rows.len > data.len) assert.panic("serialized {d} findings into only {d} bytes", .{ rows.len, data.len });
-    if (data.len == 0) assert.panic("serialized baseline cannot be empty", .{});
+    if (rows.len > data.len) assert.panic("serialized {d} findings into only {d} bytes; check what the JSON writer in save() produced", .{ rows.len, data.len });
+    if (data.len == 0) assert.panic("serialized baseline cannot be empty; write the snapshot's versions and findings before saving it", .{});
     if (target.replace) try atomic.replace(io) else try atomic.link(io);
 }
 
 pub fn classifyFindings(gpa: std.mem.Allocator, rows: []Row, old: []const Row, resolved: *std.ArrayList(Row)) !Review {
     var prior: std.StringHashMapUnmanaged(Row) = .empty;
     defer prior.deinit(gpa);
-    if (resolved.items.len != 0) assert.panic("comparison received {d} old resolutions", .{resolved.items.len});
+    if (resolved.items.len != 0) assert.panic("comparison received {d} old resolutions; pass an empty list for classifyFindings() to fill", .{resolved.items.len});
     prior = try initComparisonIndex(gpa, old, resolved);
 
     var result: Review = .{};
@@ -154,15 +154,15 @@ pub fn classifyFindings(gpa: std.mem.Allocator, rows: []Row, old: []const Row, r
         resolved.appendAssumeCapacity(row);
     }
     result.resolved = resolved.items.len;
-    if (result.new + result.existing != rows.len) assert.panic("comparison counted {d} new + {d} existing among {d} rows", .{ result.new, result.existing, rows.len });
-    if (result.resolved + result.existing != old.len) assert.panic("comparison counted {d} resolved + {d} existing among {d} baseline rows", .{ result.resolved, result.existing, old.len });
+    if (result.new + result.existing != rows.len) assert.panic("comparison counted {d} new + {d} existing among {d} rows; count each row as exactly one of new or existing in classifyFindings()", .{ result.new, result.existing, rows.len });
+    if (result.resolved + result.existing != old.len) assert.panic("comparison counted {d} resolved + {d} existing among {d} baseline rows; give every baseline row exactly one outcome in classifyFindings()", .{ result.resolved, result.existing, old.len });
     return result;
 }
 
 pub fn prepare(ctx: anytype, ws: anytype, options: anytype) !void {
     try validateOptions(ctx, ws, options);
-    if (ws.rows.len > ws.limits.findings) assert.panic("review input {d} exceeds limit {d}", .{ ws.rows.len, ws.limits.findings });
-    if (ws.baseline_buffer.len == 0) assert.panic("review requires its initialized buffer", .{});
+    if (ws.rows.len > ws.limits.findings) assert.panic("review input {d} exceeds limit {d}; cap ws.rows at limits.findings before prepare()", .{ ws.rows.len, ws.limits.findings });
+    if (ws.baseline_buffer.len == 0) assert.panic("review requires its initialized buffer; allocate baseline_buffer in initWorkspace() first", .{});
     var arena = std.heap.FixedBufferAllocator.init(ws.baseline_buffer);
     const gpa = arena.allocator();
     try identify(gpa, ws);
@@ -200,8 +200,8 @@ fn initIdentityIndex(gpa: std.mem.Allocator, capacity: usize) !std.StringHashMap
     if (capacity > 1 << 18) return error.TooManyFindings;
     var index: std.StringHashMapUnmanaged(usize) = .empty;
     try index.ensureTotalCapacity(gpa, @intCast(capacity));
-    if (index.count() != 0) assert.panic("new identity index contains {d} entries", .{index.count()});
-    if (index.capacity() < capacity) assert.panic("identity index capacity {d} is below {d}", .{ index.capacity(), capacity });
+    if (index.count() != 0) assert.panic("new identity index contains {d} entries; build a fresh map in initIdentityIndex()", .{index.count()});
+    if (index.capacity() < capacity) assert.panic("identity index capacity {d} is below {d}; reserve one entry per row in initIdentityIndex()", .{ index.capacity(), capacity });
     return index;
 }
 
@@ -212,15 +212,15 @@ fn initComparisonIndex(gpa: std.mem.Allocator, old: []const Row, resolved: *std.
     try index.ensureTotalCapacity(gpa, @intCast(old.len));
     try resolved.ensureTotalCapacity(gpa, old.len);
     for (old) |row| index.putAssumeCapacity(row.id, row);
-    if (index.count() != old.len) assert.panic("baseline has {d} unique IDs among {d} findings", .{ index.count(), old.len });
-    if (resolved.capacity < old.len) assert.panic("resolution capacity {d} is below {d}", .{ resolved.capacity, old.len });
+    if (index.count() != old.len) assert.panic("baseline has {d} unique IDs among {d} findings; reject duplicate IDs when loading, as initSnapshot() does", .{ index.count(), old.len });
+    if (resolved.capacity < old.len) assert.panic("resolution capacity {d} is below {d}; reserve one resolution per baseline row in initComparisonIndex()", .{ resolved.capacity, old.len });
     return index;
 }
 
 pub fn validateOptions(ctx: anytype, ws: anytype, options: anytype) !void {
-    if (options.paths.len == 0) assert.panic("validation requires checked paths", .{});
+    if (options.paths.len == 0) assert.panic("validation requires checked paths; pass at least one path to validateOptions()", .{});
     const text = &ws.text;
-    if (text.used > text.buffer.len) assert.panic("validation text used {d} exceeds capacity", .{text.used});
+    if (text.used > text.buffer.len) assert.panic("validation text used {d} exceeds capacity; write to ws.text only through its copy() and format()", .{text.used});
     triage.validate(options) catch |e| return ctx.fail(.usage, try ws.text.format("Invalid baseline/triage options: {t}.", .{e}), "Use --baseline PATH; capture and update are explicit, separate actions without --watch.");
 }
 

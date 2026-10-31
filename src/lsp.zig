@@ -97,7 +97,7 @@ const Entry = struct {
 /// Keeps the unit of the first answer `eachObserved` reads.
 fn firstUnit(found: *?store.Digest, observed: store.Observed) anyerror!bool {
     if (found.* != null) assert.panic("kept a second answer at {s}:{d}; firstUnit() stops after one", .{ observed.path, observed.line });
-    if (observed.rule.len == 0) assert.panic("a kept answer at {s}:{d} has no rule", .{ observed.path, observed.line });
+    if (observed.rule.len == 0) assert.panic("a kept answer at {s}:{d} has no rule; restore a good copy of the store or choose a new ZANITY_STORE", .{ observed.path, observed.line });
     found.* = observed.unit;
     return false;
 }
@@ -639,7 +639,7 @@ pub const LanguageServer = struct {
     /// `--fix` applies them; null when the file has none.
     fn fixAll(self: *LanguageServer, file: *const CheckedFile) !?Action {
         const s = &self.scratch;
-        if (s.fixes.len != 0 or s.edits.len != 0) assert.panic("fix-all started with {d} fixes and {d} edits left over", .{ s.fixes.len, s.edits.len });
+        if (s.fixes.len != 0 or s.edits.len != 0) assert.panic("fix-all started with {d} fixes and {d} edits left over; clear both lists before starting", .{ s.fixes.len, s.edits.len });
         for (self.current.entriesOf(file)) |entry| if (entry.edit != null) try s.fixes.add(entry);
         std.mem.sort(Entry, s.fixes.items(), {}, editsFirst);
         var end: ?Position = null;
@@ -725,7 +725,7 @@ pub const LanguageServer = struct {
 
     /// Keeps a finding the editor flagged as a false positive, sends it as a span, and hides it.
     fn flag(self: *LanguageServer, target: Target) !void {
-        if (target.rule.len == 0) assert.panic("flagging a finding with no rule at {s}:{d}", .{ target.path, target.line });
+        if (target.rule.len == 0) assert.panic("flagging a finding with no rule at {s}:{d}; take the rule from a published diagnostic", .{ target.path, target.line });
         const file = self.current.find(target.path) orelse return;
         const entries = self.current.entriesOf(file);
         const index = for (entries, 0..) |entry, i| {
@@ -741,7 +741,7 @@ pub const LanguageServer = struct {
         file.count -= 1;
         try self.publish(file.uri, entries[0 .. entries.len - 1]);
         try self.show(3, try self.scratch.text.format("zanity: flagged {s} as a false positive; {s}.", .{ target.rule, kept }));
-        if (file.count + 1 != entries.len) assert.panic("{s} has {d} findings after hiding one of {d}", .{ file.path, file.count, entries.len });
+        if (file.count + 1 != entries.len) assert.panic("{s} has {d} findings after hiding one of {d}; remove exactly the matching finding in hide()", .{ file.path, file.count, entries.len });
     }
 
     /// Keeps the flag in the store, and says where it went.

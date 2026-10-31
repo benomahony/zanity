@@ -79,12 +79,12 @@ const Misuse = struct { problem: []const u8, fix: []const u8 };
 
 /// A calibration command's rows, or its misuse told as a usage error.
 fn calibrated(comptime Row: type, ctx: *zclig.Context, result: Error![]const Row, misuse: Misuse) ![]const Row {
-    if (misuse.problem.len == 0 or misuse.fix.len == 0) assert.panic("a calibration command has no words for being misused", .{});
+    if (misuse.problem.len == 0 or misuse.fix.len == 0) assert.panic("a calibration command has no words for being misused; give the command its usage text in calibrated()", .{});
     const rows = result catch |e| switch (e) {
         error.Usage => return ctx.fail(.usage, misuse.problem, misuse.fix),
         else => return e,
     };
-    if (rows.len > max_rows) assert.panic("a calibration command returned {d} rows, past its {d}", .{ rows.len, max_rows });
+    if (rows.len > max_rows) assert.panic("a calibration command returned {d} rows, past its {d}; bound the command's output to its row limit", .{ rows.len, max_rows });
     return rows;
 }
 
@@ -136,7 +136,7 @@ const Copy = struct {
     found: *?Observed,
 
     fn first(self: *Copy, observed: Observed) anyerror!bool {
-        if (observed.rule.len == 0) assert.panic("a kept answer at {s}:{d} has no rule", .{ observed.path, observed.line });
+        if (observed.rule.len == 0) assert.panic("a kept answer at {s}:{d} has no rule; restore a good copy of the store or choose a new ZANITY_STORE", .{ observed.path, observed.line });
         if (self.found.* != null) assert.panic("kept a second answer at {s}:{d}; first() stops after one", .{ observed.path, observed.line });
         var kept = observed;
         kept.rule = try self.text.copy(observed.rule);
@@ -157,8 +157,8 @@ pub fn review(c: Calibration, options: ReviewOptions) Error![]const ReviewRow {
     if (options.rules[0].len == 0) return error.Usage;
     var sample: Sample = .{ .text = c.text, .per_band = (limit + bands - 1) / bands, .limit = limit };
     c.store.eachObserved(.{ .rule = options.rules[0] }, &sample, Sample.take) catch |e| return mapped(e);
-    if (sample.count > limit) assert.panic("review kept {d} answers past its limit of {d}", .{ sample.count, limit });
-    if (sample.per_band * bands < limit) assert.panic("{d} answers per band can't fill a limit of {d}", .{ sample.per_band, limit });
+    if (sample.count > limit) assert.panic("review kept {d} answers past its limit of {d}; stop sampling at the limit in review()", .{ sample.count, limit });
+    if (sample.per_band * bands < limit) assert.panic("{d} answers per band can't fill a limit of {d}; raise the answers kept per band until the bands can fill the limit", .{ sample.per_band, limit });
     return review_rows[0..sample.count];
 }
 
@@ -193,7 +193,7 @@ pub fn stats(c: Calibration, options: StatsOptions) Error![]const StatsRow {
     if (options.rule) |rule| if (rule.len == 0) return error.Usage;
     var tally: Tally = .{ .text = c.text };
     c.store.eachObserved(.{ .rule = options.rule orelse "" }, &tally, Tally.add) catch |e| return mapped(e);
-    if (tally.count > max_rows) assert.panic("tallied {d} questions in room for {d}", .{ tally.count, max_rows });
+    if (tally.count > max_rows) assert.panic("tallied {d} questions in room for {d}; size the tally for every rule", .{ tally.count, max_rows });
     if (!options.thresholds) {
         for (tally.rules[0..tally.count], 0..) |r, i| stats_rows[i] = r.row;
         return stats_rows[0..tally.count];
@@ -225,9 +225,9 @@ const Tally = struct {
     count: usize = 0,
 
     fn add(self: *Tally, o: Observed) anyerror!bool {
-        if (o.rule.len == 0) assert.panic("a kept answer at {s}:{d} has no rule", .{ o.path, o.line });
+        if (o.rule.len == 0) assert.panic("a kept answer at {s}:{d} has no rule; restore a good copy of the store or choose a new ZANITY_STORE", .{ o.path, o.line });
         const r = try self.of(o.rule);
-        if (r.labelled > max_labelled) assert.panic("'{s}' kept {d} labels in room for {d}", .{ o.rule, r.labelled, max_labelled });
+        if (r.labelled > max_labelled) assert.panic("'{s}' kept {d} labels in room for {d}; size the tally's labels for every rule", .{ o.rule, r.labelled, max_labelled });
         r.row.answers += 1;
         r.row.fired += @intFromBool(o.probability >= o.threshold);
         r.row.unsure += @intFromBool(o.probability >= 0.35 and o.probability <= 0.65);
@@ -242,8 +242,8 @@ const Tally = struct {
     }
 
     fn of(self: *Tally, rule: []const u8) !*Counts {
-        if (rule.len == 0) assert.panic("tallying an answer with no rule", .{});
-        if (self.count > max_rows) assert.panic("tallied {d} questions in room for {d}", .{ self.count, max_rows });
+        if (rule.len == 0) assert.panic("tallying an answer with no rule; keep a rule with every answer in Store.observe()", .{});
+        if (self.count > max_rows) assert.panic("tallied {d} questions in room for {d}; size the tally for every rule", .{ self.count, max_rows });
         for (self.rules[0..self.count]) |*r| if (std.mem.eql(u8, r.row.rule, rule)) return r;
         if (self.count == max_rows) {
             memory.exceeded = "questions in the store";
@@ -257,7 +257,7 @@ const Tally = struct {
 
 /// The question's precision and recall at threshold `t`, against its labels.
 fn measured(r: *const Counts, t: f64) StatsRow {
-    if (r.labelled == 0) assert.panic("measuring '{s}' with no labels", .{r.row.rule});
+    if (r.labelled == 0) assert.panic("measuring '{s}' with no labels; skip rules with no labels before calling measured()", .{r.row.rule});
     var true_positive: f64 = 0;
     var fired: f64 = 0;
     var real: f64 = 0;
@@ -267,7 +267,7 @@ fn measured(r: *const Counts, t: f64) StatsRow {
         real += @floatFromInt(@intFromBool(is_real));
         true_positive += @floatFromInt(@intFromBool(fires and is_real));
     }
-    if (true_positive > fired or true_positive > real) assert.panic("'{s}' has {d} true positives from {d} fired and {d} real", .{ r.row.rule, true_positive, fired, real });
+    if (true_positive > fired or true_positive > real) assert.panic("'{s}' has {d} true positives from {d} fired and {d} real; count a true positive only when an answer both fired and is labelled real", .{ r.row.rule, true_positive, fired, real });
     var row = r.row;
     row.threshold = t;
     row.precision = if (fired > 0) true_positive / fired else 0;
@@ -279,6 +279,6 @@ fn measured(r: *const Counts, t: f64) StatsRow {
 fn mapped(err: anyerror) error{ StoreUnavailable, LimitExceeded } {
     if (err == error.Usage) assert.panic("the store raised a usage error; only the commands decide misuse", .{});
     const reported: error{ StoreUnavailable, LimitExceeded } = if (err == error.LimitExceeded) error.LimitExceeded else error.StoreUnavailable;
-    if (reported == error.StoreUnavailable and store_module.failure_len == 0 and err == error.StoreUnavailable) assert.panic("the store failed without saying why", .{});
+    if (reported == error.StoreUnavailable and store_module.failure_len == 0 and err == error.StoreUnavailable) assert.panic("the store failed without saying why; set store.failure in the store call that failed", .{});
     return reported;
 }

@@ -201,8 +201,8 @@ pub fn anyIn(text: []const u8, needles: []const []const u8) bool {
 
 /// Check whether an assertion has a useful failure message.
 pub fn checkAssertion(self: *File, ctx: Context) !void {
-    if (ctx.family != .assertion) assert.panic("message check received a {t}, expected an assertion", .{ctx.family});
-    if (ts.ts_node_end_byte(ctx.node) > self.source.len) assert.panic("assertion ends at {d}, beyond {d} source bytes", .{ ts.ts_node_end_byte(ctx.node), self.source.len });
+    if (ctx.family != .assertion) assert.panic("message check received a {t}, expected an assertion; call checkAssertion() only for assertion nodes", .{ctx.family});
+    if (ts.ts_node_end_byte(ctx.node) > self.source.len) assert.panic("assertion ends at {d}, beyond {d} source bytes; pass a node from the tree parsed from this file", .{ ts.ts_node_end_byte(ctx.node), self.source.len });
     if (ctx.message == null) {
         if (try self.report(ctx.node, "assertion-message", try self.say("This assertion has no message, so when it fails nobody will know which invariant broke, why it must hold, or with what values.", .{}))) {
             if (ctx.condition) |condition| try rewrite.explainAssertion(self, ctx.node, condition);

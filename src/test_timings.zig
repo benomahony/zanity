@@ -24,15 +24,15 @@ pub const Reader = struct {
     root_seen: bool = false,
 
     fn advance(self: *Reader, end: usize) void {
-        if (end < self.offset) assert.panic("JUnit reader cannot move from {d} backwards to {d}", .{ self.offset, end });
-        if (end > self.source.len) assert.panic("JUnit reader advanced to {d} beyond {d} report bytes", .{ end, self.source.len });
+        if (end < self.offset) assert.panic("JUnit reader cannot move from {d} backwards to {d}; advance only to later offsets", .{ self.offset, end });
+        if (end > self.source.len) assert.panic("JUnit reader advanced to {d} beyond {d} report bytes; stop advancing at the end of the report", .{ end, self.source.len });
         self.line += @intCast(std.mem.count(u8, self.source[self.offset..end], "\n"));
         self.offset = end;
     }
 
     fn tag(self: *Reader) !?Tag {
-        if (self.offset > self.source.len) assert.panic("JUnit offset {d} exceeds {d} report bytes", .{ self.offset, self.source.len });
-        if (self.depth > self.stack.len) assert.panic("JUnit depth {d} exceeds stack {d}", .{ self.depth, self.stack.len });
+        if (self.offset > self.source.len) assert.panic("JUnit offset {d} exceeds {d} report bytes; move the offset only through advance()", .{ self.offset, self.source.len });
+        if (self.depth > self.stack.len) assert.panic("JUnit depth {d} exceeds stack {d}; refuse a deeper report when pushing a tag", .{ self.depth, self.stack.len });
         while (self.offset < self.source.len) {
             const start = std.mem.indexOfScalarPos(u8, self.source, self.offset, '<') orelse {
                 if (std.mem.trim(u8, self.source[self.offset..], " \t\r\n").len != 0 and self.depth == 0) return error.InvalidJUnit;
@@ -65,8 +65,8 @@ pub const Reader = struct {
     }
 
     fn tagEnd(self: *Reader, start: usize) !usize {
-        if (start >= self.source.len) assert.panic("JUnit tag starts at {d}, outside {d} report bytes", .{ start, self.source.len });
-        if (self.source[start] != '<') assert.panic("JUnit tag starts with byte {d}, expected '<'", .{self.source[start]});
+        if (start >= self.source.len) assert.panic("JUnit tag starts at {d}, outside {d} report bytes; call tagEnd() only for a tag found in the report", .{ start, self.source.len });
+        if (self.source[start] != '<') assert.panic("JUnit tag starts with byte {d}, expected '<'; call tagEnd() at the tag's '<'", .{self.source[start]});
         var end = start + 1;
         var quote: u8 = 0;
         while (end < self.source.len) : (end += 1) {
@@ -81,8 +81,8 @@ pub const Reader = struct {
     }
 
     fn openCase(self: *Reader, t: Tag) !void {
-        if (t.closing) assert.panic("cannot open closing JUnit tag '{s}'", .{t.name});
-        if (self.depth > self.stack.len) assert.panic("JUnit depth {d} exceeds stack {d}", .{ self.depth, self.stack.len });
+        if (t.closing) assert.panic("cannot open closing JUnit tag '{s}'; call openCase() only for opening tags", .{t.name});
+        if (self.depth > self.stack.len) assert.panic("JUnit depth {d} exceeds stack {d}; refuse a deeper report when pushing a tag", .{ self.depth, self.stack.len });
         if (self.current != null or self.depth == 0) return error.InvalidJUnit;
         if (!std.mem.eql(u8, self.stack[self.depth - 1], "testsuite")) return error.InvalidJUnit;
         const name = try attribute(t.attributes, "name") orelse return error.InvalidJUnit;
@@ -93,8 +93,8 @@ pub const Reader = struct {
     }
 
     fn closeTag(self: *Reader, t: Tag) !?Case {
-        if (!t.closing) assert.panic("cannot close opening JUnit tag '{s}'", .{t.name});
-        if (self.depth > self.stack.len) assert.panic("JUnit depth {d} exceeds stack {d}", .{ self.depth, self.stack.len });
+        if (!t.closing) assert.panic("cannot close opening JUnit tag '{s}'; call closeTag() only for closing tags", .{t.name});
+        if (self.depth > self.stack.len) assert.panic("JUnit depth {d} exceeds stack {d}; refuse a deeper report when pushing a tag", .{ self.depth, self.stack.len });
         if (t.empty or std.mem.trim(u8, t.attributes, " \t\r\n").len != 0 or self.depth == 0) return error.InvalidJUnit;
         self.depth -= 1;
         if (!std.mem.eql(u8, self.stack[self.depth], t.name)) return error.InvalidJUnit;
@@ -105,8 +105,8 @@ pub const Reader = struct {
     }
 
     fn checkRoot(self: *Reader, t: Tag) !void {
-        if (t.closing) assert.panic("root check received closing tag '{s}'", .{t.name});
-        if (self.depth > self.stack.len) assert.panic("JUnit depth {d} exceeds stack {d}", .{ self.depth, self.stack.len });
+        if (t.closing) assert.panic("root check received closing tag '{s}'; pass the report's first opening tag to checkRoot()", .{t.name});
+        if (self.depth > self.stack.len) assert.panic("JUnit depth {d} exceeds stack {d}; refuse a deeper report when pushing a tag", .{ self.depth, self.stack.len });
         if (self.depth == 0) {
             if (self.root_seen or (!std.mem.eql(u8, t.name, "testsuites") and !std.mem.eql(u8, t.name, "testsuite"))) return error.InvalidJUnit;
             self.root_seen = true;
@@ -114,8 +114,8 @@ pub const Reader = struct {
     }
 
     pub fn next(self: *Reader) !?Case {
-        if (self.offset > self.source.len) assert.panic("JUnit offset {d} exceeds {d} report bytes", .{ self.offset, self.source.len });
-        if (self.depth > self.stack.len) assert.panic("JUnit depth {d} exceeds stack {d}", .{ self.depth, self.stack.len });
+        if (self.offset > self.source.len) assert.panic("JUnit offset {d} exceeds {d} report bytes; move the offset only through advance()", .{ self.offset, self.source.len });
+        if (self.depth > self.stack.len) assert.panic("JUnit depth {d} exceeds stack {d}; refuse a deeper report when pushing a tag", .{ self.depth, self.stack.len });
         while (try self.tag()) |t| {
             if (t.closing) {
                 if (try self.closeTag(t)) |case| return case;
@@ -144,7 +144,7 @@ pub const Reader = struct {
 };
 
 fn attribute(source: []const u8, wanted: []const u8) !?[]const u8 {
-    if (wanted.len == 0) assert.panic("JUnit attribute requires a name", .{});
+    if (wanted.len == 0) assert.panic("JUnit attribute requires a name; pass the name of the attribute to read", .{});
     if (wanted.len > 128) assert.panic("JUnit attribute name has {d} bytes; supported names have at most 128", .{wanted.len});
     var rest = std.mem.trim(u8, source, " \t\r\n");
     var found: ?[]const u8 = null;

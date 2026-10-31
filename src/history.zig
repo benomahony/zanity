@@ -11,19 +11,19 @@ pub const History = struct {
     current: std.AutoHashMapUnmanaged([64]u8, void) = .empty,
 
     pub fn initHistory(gpa: std.mem.Allocator, capacity: usize) !History {
-        if (capacity == 0) assert.panic("history requires a positive finding capacity", .{});
+        if (capacity == 0) assert.panic("history requires a positive finding capacity; pass limits.findings of at least 1 to initHistory()", .{});
         var history: History = .{
             .previous = try .initBounded(gpa, capacity, "new findings on previous check"),
             .resolved = try .initBounded(gpa, capacity, "new findings resolved since previous check"),
         };
         try history.current.ensureTotalCapacity(gpa, @intCast(capacity));
-        if (history.previous.capacity() != capacity) assert.panic("history capacity differs from {d}", .{capacity});
+        if (history.previous.capacity() != capacity) assert.panic("history capacity differs from {d}; reserve exactly the requested capacity in initHistory()", .{capacity});
         return history;
     }
 
     pub fn describeChanges(self: *History, text: *memory.Text, rows: []const Row) !void {
-        if (rows.len > 2 * self.previous.capacity()) assert.panic("history input {d} exceeds capacity", .{rows.len});
-        if (self.previous.len > self.previous.capacity()) assert.panic("history holds {d} IDs over capacity", .{self.previous.len});
+        if (rows.len > 2 * self.previous.capacity()) assert.panic("history input {d} exceeds capacity; cap the findings at limits.findings before describeChanges()", .{rows.len});
+        if (self.previous.len > self.previous.capacity()) assert.panic("history holds {d} IDs over capacity; clear the history before recording a new check", .{self.previous.len});
         self.resolved.clear();
         self.current.clearRetainingCapacity();
         for (rows) |row| {

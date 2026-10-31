@@ -590,7 +590,7 @@ fn runLsp(ctx: *zclig.Context, options: LspOptions) ![]const LspRow {
     if (!try server.serveEditorStdio()) ctx.status = .failure;
     ctx.format = .plain;
     if (exe.len == 0) assert.panic("found this zanity at an empty path; executablePathAlloc() returns a path or fails", .{});
-    if (ctx.format != .plain) assert.panic("zanity lsp left the {t} format on, which would print an empty result after the protocol", .{ctx.format});
+    if (ctx.format != .plain) assert.panic("zanity lsp left the {t} format on, which would print an empty result after the protocol; clear the output format before runLsp() returns", .{ctx.format});
     return &.{};
 }
 

@@ -31,8 +31,8 @@ pub const CheckOptions = struct {
 pub const FailOn = enum { @"error", warning };
 
 pub fn order(_: void, a: Row, b: Row) bool {
-    if (a.id.len != 64) assert.panic("identity A has {d} bytes", .{a.id.len});
-    if (b.id.len != 64) assert.panic("identity B has {d} bytes", .{b.id.len});
+    if (a.id.len != 64) assert.panic("identity A has {d} bytes; sort rows only after identify() has given them IDs", .{a.id.len});
+    if (b.id.len != 64) assert.panic("identity B has {d} bytes; sort rows only after identify() has given them IDs", .{b.id.len});
     for ([_][2][]const u8{ .{ a.rule, b.rule }, .{ a.path, b.path } }) |pair| {
         const by = std.mem.order(u8, pair[0], pair[1]);
         if (by != .eq) return by == .lt;
@@ -71,8 +71,8 @@ fn matches(row: Row, options: anytype) bool {
 }
 
 pub fn selectRows(ws: anytype, options: anytype, resolved: []const Row) !void {
-    if (ws.rows.len > ws.rows.capacity()) assert.panic("selection has {d} rows over capacity", .{ws.rows.len});
-    if (resolved.len > ws.limits.findings) assert.panic("selection has {d} resolutions over capacity", .{resolved.len});
+    if (ws.rows.len > ws.rows.capacity()) assert.panic("selection has {d} rows over capacity; bound the rows before adding to the selection", .{ws.rows.len});
+    if (resolved.len > ws.limits.findings) assert.panic("selection has {d} resolutions over capacity; bound the resolutions before adding to the selection", .{resolved.len});
     if (!special(options)) return;
     for (resolved) |row| try ws.rows.add(row);
     std.mem.sort(Row, ws.rows.items(), {}, order);
@@ -121,8 +121,8 @@ fn assigned(row: Row, options: anytype, agent: bool) bool {
 }
 
 fn quote(out: *std.Io.Writer, arg: []const u8) !void {
-    if (arg.len == 0) assert.panic("cannot quote an empty checked argument", .{});
-    if (arg.len > 1 << 20) assert.panic("quoted argument has {d} bytes", .{arg.len});
+    if (arg.len == 0) assert.panic("cannot quote an empty checked argument; skip empty paths before quoting", .{});
+    if (arg.len > 1 << 20) assert.panic("quoted argument has {d} bytes; refuse oversized arguments when parsing them", .{arg.len});
     try out.writeByte('\'');
     for (arg) |c| if (c == '\'') try out.writeAll("'\\''") else try out.writeByte(c);
     try out.writeByte('\'');
@@ -158,7 +158,7 @@ fn writeCommand(out: *std.Io.Writer, args: []const []const u8, offset: usize, si
 }
 
 fn renderBatch(out: *std.Io.Writer, rows: []const Row, options: anytype, agent: bool) !usize {
-    if (options.paths.len == 0) assert.panic("batch requires checked paths", .{});
+    if (options.paths.len == 0) assert.panic("batch requires checked paths; pass the checked paths to renderBatch()", .{});
     var shown: usize = 0;
     var last_rule: []const u8 = "";
     var last_path: []const u8 = "";
@@ -171,13 +171,13 @@ fn renderBatch(out: *std.Io.Writer, rows: []const Row, options: anytype, agent: 
         try out.print("{s}:{d}:{d} [{s}] {s} {s}\n  {s}\n  Fix: {s}\n", .{ row.path, row.line, row.column, row.severity, row.classification, row.id, row.message, row.fix });
         shown += 1;
     }
-    if (shown > rows.len) assert.panic("showed {d} findings among {d}", .{ shown, rows.len });
+    if (shown > rows.len) assert.panic("showed {d} findings among {d}; show only rows from this page", .{ shown, rows.len });
     return shown;
 }
 
 fn omitArgument(arg: []const u8) bool {
-    if (arg.len == 0) assert.panic("command argument is empty", .{});
-    if (arg.len > 1 << 20) assert.panic("command argument has {d} bytes", .{arg.len});
+    if (arg.len == 0) assert.panic("command argument is empty; skip empty arguments before building the next command", .{});
+    if (arg.len > 1 << 20) assert.panic("command argument has {d} bytes; refuse oversized arguments when parsing them", .{arg.len});
     for ([_][]const u8{ "--offset=", "--page-size=", "--limit=", "--watch=", "--agent=", "--capture-baseline=", "--update-baseline=", "--fix=" }) |prefix| if (std.mem.startsWith(u8, arg, prefix)) return true;
     for ([_][]const u8{ "--agent", "--watch", "--capture-baseline", "--update-baseline", "--fix", "--json", "--plain" }) |flag| if (std.mem.eql(u8, arg, flag)) return true;
     return false;
@@ -196,8 +196,8 @@ fn selectedBatch(options: anytype) bool {
 }
 
 pub fn failsReview(options: anytype, counts: @import("report.zig").Counts, review: @import("baseline.zig").Review) bool {
-    if (counts.errors + counts.warnings < review.new) assert.panic("{d} new findings exceeds {d} current findings", .{ review.new, counts.errors + counts.warnings });
-    if (review.new_counts.errors + review.new_counts.warnings > review.new) assert.panic("new severity counts exceed {d} new findings", .{review.new});
+    if (counts.errors + counts.warnings < review.new) assert.panic("{d} new findings exceeds {d} current findings; count new findings only among the current ones", .{ review.new, counts.errors + counts.warnings });
+    if (review.new_counts.errors + review.new_counts.warnings > review.new) assert.panic("new severity counts exceed {d} new findings; count each new finding once in classifyFindings()", .{review.new});
     if (options.@"capture-baseline" or options.@"update-baseline") return false;
     const considered = if (options.@"new-only") review.new_counts else counts;
     return considered.errors > 0 or (options.@"fail-on" == .warning and considered.warnings > 0);
@@ -228,8 +228,8 @@ pub const check_options: []const @import("zclig").OptionInfo = &.{
 };
 
 pub fn renderOutput(ctx: anytype, ws: anytype, options: anytype, agent: bool) !void {
-    if (ws.rows.len > ws.review.matching) assert.panic("output has {d} rows over matching total", .{ws.rows.len});
-    if (options.paths.len == 0) assert.panic("output requires checked paths", .{});
+    if (ws.rows.len > ws.review.matching) assert.panic("output has {d} rows over matching total; count every selected row in review.matching", .{ws.rows.len});
+    if (options.paths.len == 0) assert.panic("output requires checked paths; pass the checked paths to renderOutput()", .{});
     if (ctx.format == .human or agent) return renderReview(ctx, ws, options, agent);
     const output = ctx.runtime.out;
     if (ctx.format == .json) {
@@ -253,8 +253,8 @@ pub fn renderOutput(ctx: anytype, ws: anytype, options: anytype, agent: bool) !v
 
 fn nextCommand(ws: anytype, options: anytype) !?[]const u8 {
     const text = &ws.text;
-    if (text.used > text.buffer.len) assert.panic("command text used {d} exceeds buffer", .{text.used});
-    if (ws.rows.len > ws.review.matching) assert.panic("command selection has {d} rows over matching total", .{ws.rows.len});
+    if (text.used > text.buffer.len) assert.panic("command text used {d} exceeds buffer; write the command only through its fixed writer", .{text.used});
+    if (ws.rows.len > ws.review.matching) assert.panic("command selection has {d} rows over matching total; count every selected row in review.matching", .{ws.rows.len});
     const offset = ws.review.next orelse return null;
     var command: std.Io.Writer = .fixed(text.buffer[text.used..]);
     try writeCommand(&command, ws.args, offset, options.@"page-size" orelse 20);

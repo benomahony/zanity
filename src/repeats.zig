@@ -82,7 +82,7 @@ fn constructs(self: *File, text: []const u8) bool {
     if (!self.tables.constructors_capitalised or text[text.len - 1] != ')') return false;
     const callee = text[0 .. std.mem.indexOfScalar(u8, text, '(') orelse return false];
     const name = callee[if (std.mem.lastIndexOfScalar(u8, callee, '.')) |at| at + 1 else 0..];
-    if (name.len > callee.len) assert.panic("{s}: the called name '{s}' is longer than its callee '{s}'", .{ self.work.facts.path, name, callee });
+    if (name.len > callee.len) assert.panic("{s}: the called name '{s}' is longer than its callee '{s}'; capture the name inside the callee in the language's zanity.scm", .{ self.work.facts.path, name, callee });
     return name.len > 0 and std.ascii.isUpper(name[0]);
 }
 

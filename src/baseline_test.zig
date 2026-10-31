@@ -21,8 +21,8 @@ const Fixture = struct {
         errdefer tmp.cleanup();
         const exe = try Io.Dir.cwd().realPathFileAlloc(std.testing.io, paths.zanity, arena);
         const work = try tmp.dir.realPathFileAlloc(std.testing.io, ".", arena);
-        if (!std.fs.path.isAbsolute(exe)) assert.panic("test executable is relative: {s}", .{exe});
-        if (!std.fs.path.isAbsolute(work)) assert.panic("test workspace is relative: {s}", .{work});
+        if (!std.fs.path.isAbsolute(exe)) assert.panic("test executable is relative: {s}; resolve it to an absolute path in initFixture()", .{exe});
+        if (!std.fs.path.isAbsolute(work)) assert.panic("test workspace is relative: {s}; resolve it to an absolute path in initFixture()", .{work});
         return .{ .tmp = tmp, .arena = arena, .exe = exe, .work = work };
     }
 
@@ -50,8 +50,8 @@ const Fixture = struct {
     }
 
     fn json(self: *Fixture, flags: []const []const u8, code: u8) !Envelope {
-        if (code > 2) assert.panic("fixture expects non-CLI status {d}", .{code});
-        if (flags.len > 64) assert.panic("JSON fixture has {d} flags", .{flags.len});
+        if (code > 2) assert.panic("fixture expects non-CLI status {d}; expect one of the exit statuses the CLI returns", .{code});
+        if (flags.len > 64) assert.panic("JSON fixture has {d} flags; pass only as many flags as this fixture's argument array holds", .{flags.len});
         var args: std.ArrayList([]const u8) = .empty;
         try args.appendSlice(self.arena, flags);
         try args.append(self.arena, "--json");
@@ -70,8 +70,8 @@ fn initLegacy(arena: std.mem.Allocator) !Fixture {
     try fixture.write(source.written());
     const capture = try fixture.json(&.{ "--baseline", "backlog.json", "--capture-baseline", "--limit", "1" }, 0);
     try std.testing.expectEqual(@as(usize, 10000), capture.findings.len);
-    if (source.written().len < 10000) assert.panic("legacy source has only {d} bytes", .{source.written().len});
-    if (capture.pagination.matching_total != 10000) assert.panic("legacy capture matched {d} findings", .{capture.pagination.matching_total});
+    if (source.written().len < 10000) assert.panic("legacy source has only {d} bytes; extend the legacy fixture to the text this test reads", .{source.written().len});
+    if (capture.pagination.matching_total != 10000) assert.panic("legacy capture matched {d} findings; update the legacy fixture to produce the findings this test expects", .{capture.pagination.matching_total});
     return fixture;
 }
 

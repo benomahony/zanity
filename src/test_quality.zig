@@ -57,7 +57,7 @@ const Runs = struct { first_check: ?u32 = null, first_step: u32 = 0, count: usiz
 /// style call, between steps that act.
 fn checkRuns(self: *File, ctx: Context) Runs {
     var runs: Runs = .{};
-    if (ctx.family != .@"test" and !ctx.is_test) assert.panic("{s}: grouping the checks of {f}, which is not a test", .{ self.work.facts.path, ctx.node.where() });
+    if (ctx.family != .@"test" and !ctx.is_test) assert.panic("{s}: grouping the checks of {f}, which is not a test; call checkRuns() only for test bodies", .{ self.work.facts.path, ctx.node.where() });
     if (ctx.inner == null) return runs;
     var statements: [256]ts.Node = undefined;
     const count = extract.topStatements(self, ctx, &statements);
@@ -79,7 +79,7 @@ fn checkRuns(self: *File, ctx: Context) Runs {
         }
         in_run = checking;
     }
-    if (runs.first_check) |row| if (row < runs.first_step) assert.panic("{s}: the first check of {f} is on line {d}, before its first step on {d}", .{ self.work.facts.path, ctx.node.where(), row + 1, runs.first_step + 1 });
+    if (runs.first_check) |row| if (row < runs.first_step) assert.panic("{s}: the first check of {f} is on line {d}, before its first step on {d}; record a test's steps in source order", .{ self.work.facts.path, ctx.node.where(), row + 1, runs.first_step + 1 });
     return runs;
 }
 
@@ -134,7 +134,7 @@ fn documented(self: *File, ctx: Context) bool {
 fn sentence(name: []const u8) bool {
     if (name.len == 0) assert.panic("a test's name node has no text; the @name capture matched an empty node", .{});
     const quoted = std.mem.indexOfScalar(u8, "\"'`", name[0]) != null;
-    if (quoted and (name.len < 2 or name[name.len - 1] != name[0])) assert.panic("the test name {s} opens with a quote it doesn't close with", .{name});
+    if (quoted and (name.len < 2 or name[name.len - 1] != name[0])) assert.panic("the test name {s} opens with a quote it doesn't close with; capture the whole quoted name in the language's zanity.scm", .{name});
     return quoted and std.mem.indexOfScalar(u8, name, ' ') != null;
 }
 
@@ -419,8 +419,8 @@ pub fn checkConstantAssertion(self: *File, node: ts.Node, condition: ts.Node) !v
     if (self.index.marks(node, self.v.test_constant)) return;
     // A constant failure inside a branch can be a guard against reaching that branch.
     if (self.innermost(.control) != null or self.innermost(.loop) != null) return;
-    if (ts.ts_node_end_byte(condition) > self.source.len) assert.panic("constant assertion ends at {d}, beyond its {d}-byte source", .{ ts.ts_node_end_byte(condition), self.source.len });
-    if (ts.ts_node_start_byte(condition) < ts.ts_node_start_byte(node)) assert.panic("assertion condition starts at {d}, before its assertion at {d}", .{ ts.ts_node_start_byte(condition), ts.ts_node_start_byte(node) });
+    if (ts.ts_node_end_byte(condition) > self.source.len) assert.panic("constant assertion ends at {d}, beyond its {d}-byte source; pass a node from the tree parsed from this file", .{ ts.ts_node_end_byte(condition), self.source.len });
+    if (ts.ts_node_start_byte(condition) < ts.ts_node_start_byte(node)) assert.panic("assertion condition starts at {d}, before its assertion at {d}; capture the condition inside the assertion in the language's zanity.scm", .{ ts.ts_node_start_byte(condition), ts.ts_node_start_byte(node) });
     if (constantExpression(self, condition)) _ = try self.report(node, "constant-test-assertion", "This assertion checks only constants and operators, so it exercises no code under test.");
 }
 
@@ -430,8 +430,8 @@ pub fn checkConstantCheck(self: *File, node: ts.Node) !void {
     if (self.innermost(.control) != null or self.innermost(.loop) != null) return;
     const start = ts.ts_node_start_byte(node);
     const end = ts.ts_node_end_byte(node);
-    if (end > self.source.len) assert.panic("framework check ends at {d}, beyond {d} source bytes", .{ end, self.source.len });
-    if (start >= end) assert.panic("framework check has empty span {d}..{d}", .{ start, end });
+    if (end > self.source.len) assert.panic("framework check ends at {d}, beyond {d} source bytes; pass a node from the tree parsed from this file", .{ end, self.source.len });
+    if (start >= end) assert.panic("framework check has empty span {d}..{d}; capture the whole check in the language's zanity.scm", .{ start, end });
     const value = self.checker.compiled.id("test.value") orelse return;
     const first = std.sort.lowerBound(captures.Triple, self.index.triples, start, @import("hazards.zig").startsBefore);
     var count: usize = 0;
@@ -445,8 +445,8 @@ pub fn checkConstantCheck(self: *File, node: ts.Node) !void {
 }
 
 fn constantExpression(self: *File, condition: ts.Node) bool {
-    if (ts.ts_node_end_byte(condition) > self.source.len) assert.panic("constant expression ends at {d}, beyond {d} source bytes", .{ ts.ts_node_end_byte(condition), self.source.len });
-    if (ts.ts_node_is_null(condition)) assert.panic("cannot inspect a null expression in {s}", .{self.work.facts.path});
+    if (ts.ts_node_end_byte(condition) > self.source.len) assert.panic("constant expression ends at {d}, beyond {d} source bytes; pass a node from the tree parsed from this file", .{ ts.ts_node_end_byte(condition), self.source.len });
+    if (ts.ts_node_is_null(condition)) assert.panic("cannot inspect a null expression in {s}; skip a missing condition before calling constantExpression()", .{self.work.facts.path});
     var cursor = ts.ts_tree_cursor_new(condition);
     defer ts.ts_tree_cursor_delete(&cursor);
     var literals: usize = 0;

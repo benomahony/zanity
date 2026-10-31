@@ -69,7 +69,7 @@ pub fn versionOrder(a: []const u8, b: []const u8) ?std.math.Order {
     const order = for (x, y) |p, q| {
         if (p != q) break std.math.order(p, q);
     } else .eq;
-    if (order != .eq and std.mem.eql(u8, trimV(a), trimV(b))) assert.panic("compared {s} with itself as {t}", .{ a, order });
+    if (order != .eq and std.mem.eql(u8, trimV(a), trimV(b))) assert.panic("compared {s} with itself as {t}; order equal versions as .eq in versionOrder()", .{ a, order });
     if ((order == .eq) != std.mem.eql(u32, &x, &y)) assert.panic("compared {s} and {s} as {t}; versions are equal exactly when every part is", .{ a, b, order });
     return order;
 }
@@ -313,7 +313,7 @@ pub const Seen = struct {
         const version = Version.of(words.next() orelse return null) orelse return null;
         if (words.next() != null) return null;
         if (version.len == 0) assert.panic("parsed an empty version from '{s}'; Version.of() must refuse it", .{text});
-        if (std.mem.indexOf(u8, text, version.slice()) == null) assert.panic("parsed version {s} from '{s}', which does not hold it", .{ version.slice(), text });
+        if (std.mem.indexOf(u8, text, version.slice()) == null) assert.panic("parsed version {s} from '{s}', which does not hold it; copy the version out of the text in Version.of()", .{ version.slice(), text });
         return .{ .at = at, .version = version };
     }
 
@@ -321,8 +321,8 @@ pub const Seen = struct {
     pub fn fresh(seen: Seen, now: i64) bool {
         const age = std.math.sub(i64, now, seen.at) catch return false;
         const trusted = age >= 0 and age < notice_seconds;
-        if (trusted and seen.at > now) assert.panic("trusted an answer kept at {d}, after now, {d}", .{ seen.at, now });
-        if (trusted and age >= notice_seconds) assert.panic("trusted an answer {d} seconds old, past the {d} it is trusted for", .{ age, notice_seconds });
+        if (trusted and seen.at > now) assert.panic("trusted an answer kept at {d}, after now, {d}; refuse an age below 0 in fresh()", .{ seen.at, now });
+        if (trusted and age >= notice_seconds) assert.panic("trusted an answer {d} seconds old, past the {d} it is trusted for; refuse an age of notice_seconds or more in fresh()", .{ age, notice_seconds });
         return trusted;
     }
 };

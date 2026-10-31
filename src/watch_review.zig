@@ -34,8 +34,8 @@ pub fn isolatedCheck(ctx: anytype, ws: anytype, rerun: anytype, options: anytype
 }
 
 fn machineArgs(buffer: [][]const u8, original: []const []const u8) []const []const u8 {
-    if (buffer.len < original.len + 1) assert.panic("machine argument capacity {d} is below {d}", .{ buffer.len, original.len + 1 });
-    if (original.len == 0) assert.panic("isolated command is empty", .{});
+    if (buffer.len < original.len + 1) assert.panic("machine argument capacity {d} is below {d}; reserve room for the added flags", .{ buffer.len, original.len + 1 });
+    if (original.len == 0) assert.panic("isolated command is empty; pass the command to isolate", .{});
     var count: usize = 0;
     var skip = false;
     for (original) |arg| {
@@ -56,15 +56,15 @@ fn machineArgs(buffer: [][]const u8, original: []const []const u8) []const []con
 }
 
 fn reportValueFlag(arg: []const u8) bool {
-    if (arg.len == 0) assert.panic("isolated argument is empty", .{});
-    if (arg.len > 1 << 20) assert.panic("isolated argument has {d} bytes", .{arg.len});
+    if (arg.len == 0) assert.panic("isolated argument is empty; skip empty arguments before isolating the command", .{});
+    if (arg.len > 1 << 20) assert.panic("isolated argument has {d} bytes; refuse oversized arguments when parsing them", .{arg.len});
     for ([_][]const u8{ "--rule", "--file", "--classification", "--page-size", "--offset" }) |flag| if (std.mem.eql(u8, arg, flag)) return true;
     return false;
 }
 
 fn omitReportFlag(arg: []const u8) bool {
-    if (arg.len == 0) assert.panic("report argument is empty", .{});
-    if (arg.len > 1 << 20) assert.panic("report argument has {d} bytes", .{arg.len});
+    if (arg.len == 0) assert.panic("report argument is empty; skip empty arguments before filtering report flags", .{});
+    if (arg.len > 1 << 20) assert.panic("report argument has {d} bytes; refuse oversized arguments when parsing them", .{arg.len});
     for ([_][]const u8{ "--agent", "--json", "--plain", "--triage", "--rule=", "--file=", "--classification=", "--page-size=", "--offset=" }) |prefix| if (std.mem.startsWith(u8, arg, prefix)) return true;
     return false;
 }

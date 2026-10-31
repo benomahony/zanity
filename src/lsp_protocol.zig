@@ -29,7 +29,7 @@ pub fn position(source: []const u8, offset: usize, utf8: bool) Position {
 
 /// Reads one message's JSON body into `inbox`, or null when the editor closed stdin between messages.
 pub fn readMessage(in: *Io.Reader, inbox: []u8) !?[]u8 {
-    if (inbox.len == 0) assert.panic("reading a message into no room", .{});
+    if (inbox.len == 0) assert.panic("reading a message into no room; pass a non-empty buffer to readMessage()", .{});
     var length: ?usize = null;
     for (0..max_header_lines) |i| {
         const raw = in.takeDelimiterInclusive('\n') catch |e| switch (e) {
@@ -44,7 +44,7 @@ pub fn readMessage(in: *Io.Reader, inbox: []u8) !?[]u8 {
     const n = length orelse return error.MissingContentLength;
     if (n > inbox.len) return error.MessageTooLong;
     try in.readSliceAll(inbox[0..n]);
-    if (n > inbox.len) assert.panic("read a {d}-byte message into {d} bytes", .{ n, inbox.len });
+    if (n > inbox.len) assert.panic("read a {d}-byte message into {d} bytes; refuse a Content-Length larger than the buffer before reading", .{ n, inbox.len });
     return inbox[0..n];
 }
 

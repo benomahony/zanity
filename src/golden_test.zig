@@ -650,10 +650,10 @@ test "zanity mark --not-a-problem stops --infer reporting that finding for that 
 
 /// The text after `start` up to `end` in `record`.
 fn between(record: []const u8, start: []const u8, end: []const u8) ?[]const u8 {
-    if (start.len == 0 or end.len == 0) assert.panic("looking between an empty marker in '{s}'", .{record});
+    if (start.len == 0 or end.len == 0) assert.panic("looking between an empty marker in '{s}'; pass non-empty markers to between()", .{record});
     const from = (std.mem.indexOf(u8, record, start) orelse return null) + start.len;
     const to = std.mem.indexOfPos(u8, record, from, end) orelse return null;
-    if (to < from) assert.panic("found '{s}' at {d}, before the text it ends, at {d}", .{ end, to, from });
+    if (to < from) assert.panic("found '{s}' at {d}, before the text it ends, at {d}; search for the closing marker after the opening one", .{ end, to, from });
     return record[from..to];
 }
 
