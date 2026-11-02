@@ -289,6 +289,8 @@ const Inotify = struct {
         for (targets.directories) |directory| try self.watch(directory);
     }
 
+    /// Adds `directory` to the watch. A directory removed since the walk found it is skipped, as
+    /// there is nothing left in it to watch.
     fn watch(self: *Inotify, directory: []const u8) Error!void {
         if (directory.len == 0) assert.panic("watching a directory with an empty path; pass the absolute path the walk found", .{});
         if (self.fd < 0) assert.panic("adding a watch on '{s}' to inotify descriptor {d}; initWatcher() must open it first", .{ directory, self.fd });

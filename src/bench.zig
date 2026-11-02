@@ -182,6 +182,8 @@ fn checkAll(arena: Allocator, corpus: *const Corpus, work: check.Work) !void {
     }
 }
 
+/// Runs one full check of `dir`. Exit 1 means zanity found something, which is a finished run
+/// here; a higher code or a signal is a failure.
 fn runZanity(io: Io, zanity: []const u8, dir: []const u8) !void {
     if (!std.fs.path.isAbsolute(zanity)) assert.panic("running zanity from '{s}', a relative path, inside {s}; resolve it before changing directory", .{ zanity, dir });
     if (dir.len == 0) assert.panic("running zanity on an empty corpus path; Corpus.initCorpus() rejects one", .{});

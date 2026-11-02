@@ -586,6 +586,9 @@ fn runLsp(ctx: *zclig.Context, options: LspOptions) ![]const LspRow {
     var session_memory = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer session_memory.deinit();
     const session_allocator = session_memory.allocator();
+    // Both are optional for an editor session: without the store, marking a finding from the
+    // editor says there is nowhere to keep it, and without telemetry nothing is traced, so a
+    // failure to open either must not stop the server.
     ws.source_cache = store.Store.initStore(std.heap.page_allocator, ws.io, environ, ws.limits.store_bytes) catch null;
     var telemetry = Telemetry.initTelemetry(session_allocator, ws.io, environ, app.version) catch null;
     const services: lsp.Services = .{

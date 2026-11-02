@@ -28,7 +28,8 @@ MAX_MESSAGE_BYTES = 64 * 1024 * 1024
 
 def hyperfine(commands: dict[str, list[str]], runs: int) -> dict[str, dict]:
     """hyperfine's mean, deviation and minimum per command; a command's second item, when not
-    empty, runs before each timing."""
+    empty, runs before each timing. --ignore-failure is needed because the linters exit nonzero
+    when they find something, which is a completed run here."""
     with tempfile.TemporaryDirectory(prefix="parity-hyperfine-") as temporary:
         out_file = Path(temporary) / "times.json"
         args = ["hyperfine", "-N", "--warmup", "1", "--runs", str(runs), "--ignore-failure", "--export-json", str(out_file)]
