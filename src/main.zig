@@ -896,7 +896,6 @@ fn reportInference(state: *anyopaque, done: usize, total: usize) void {
     live.update("Asking the model", done, total);
 }
 
-/// Says how much of --infer came from the store and how long the model took, so a slow run explains itself.
 /// Says why the answer store could not be used, in SQLite's words when it gave some.
 fn storeProblem(ws: *Workspace) ![]const u8 {
     if (store.failure_len > store.failure.len) assert.panic("the store kept {d} bytes of failure message in room for {d}; the store must cut its message to fit its buffer", .{ store.failure_len, store.failure.len });

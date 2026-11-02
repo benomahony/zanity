@@ -88,8 +88,8 @@ def comparison_results(args: argparse.Namespace, zanity: Zanity) -> dict:
 
 
 def publish_comparison(data: dict) -> None:
-    """Atomically replace our fixed results artifact, then derive the comparison pages from
-    that complete snapshot. The sibling staging directory is removed even if publication fails."""
+    """Replace results.json in one step, then regenerate the comparison pages from it. The
+    staging directory is removed whether or not the replacement succeeds."""
     assert "cli" in data, "no timings in comparison data: run once without --skip-bench"
     assert data["commit"], f"git found no commit in {REPO}; run parity from a checkout with a commit"
     with tempfile.TemporaryDirectory(prefix=".parity-results-", dir=page.RESULTS.parent) as pending:

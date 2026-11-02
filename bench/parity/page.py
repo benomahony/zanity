@@ -349,8 +349,8 @@ def benchmark_number(data: dict, path: tuple[str, ...]) -> int | float:
 
 
 def cli_timings(data: dict, required: tuple[str, ...]) -> dict[str, CliTiming]:
-    """Validate command-record shape once, then expose named timing values to the renderer.
-    Missing fields, wrong types, NaN/infinite durations and zero divisors fail before calculations."""
+    """Each CLI command's timings from results.json, by command name. A malformed record or a
+    missing required command raises ValueError naming what to rerun."""
     assert required, "name the baseline commands required by the CLI comparison"
     assert len(required) == len(set(required)), f"duplicate baseline commands {required}; list each required command once"
     if not isinstance(data, dict):

@@ -20,7 +20,9 @@ ASKS = {"function": "function", "file": "file", "project": "project"}
 
 
 def zig_string(text: str) -> str:
-    assert "\n" not in text, f"a question or message spans lines: {text[:60]!r}"
+    """`text` as a Zig string literal. JSON's escapes for quotes and backslashes are Zig's too;
+    its \\u escapes for control characters are not, so those are refused."""
+    assert text.isprintable(), f"a question or message holds a control character or line break: {text[:60]!r}"
     assert text.strip() == text, f"trim the spaces around {text[:60]!r}"
     return json.dumps(text, ensure_ascii=False)
 

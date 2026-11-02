@@ -372,10 +372,9 @@ def populate_corpus(destination: Path, sources: dict[str, Path]) -> dict[str, in
 
 
 def publish_corpus() -> dict[str, int]:
-    """Construct and validate a replacement for the fixed harness-owned CORPUS cache. All
-    staging/backup paths are private directories created here beneath HERE, not caller input.
-    The caller holds the build lock. Rollback runs in finally, including on interruption; if a
-    filesystem failure prevents restoration, its rename error names the retained recovery backup."""
+    """Build a new corpus in a staging directory, check its size, then swap it in for CORPUS,
+    putting the previous one back if the swap fails. The caller holds the build lock. The backup
+    is deleted unless restoring it failed, in which case it stays beside CORPUS."""
     with tempfile.TemporaryDirectory(prefix=".corpus-build-", dir=HERE) as temporary:
         staged = Path(temporary) / "corpus"
         sources = {name: SOURCES / source for name, source in CORPUS_SOURCES.items()}

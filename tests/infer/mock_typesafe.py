@@ -140,10 +140,9 @@ class Handler(BaseHTTPRequestHandler):
             raise OSError(f"mock response wrote {written} of {response_bytes} bytes; check the test client's connection")
 
     def do_POST(self) -> None:
-        """Serve only the local fixture route. The main block binds 127.0.0.1; OS pipe lifetime
-        ties this process to its parent test. No source/header grants authority or changes policy.
-        Invalid requests get 400, body stalls 408 and log failures 500; disconnected clients
-        are reported on stderr. Concurrent log appends are serialized and each file is closed."""
+        """Answer POST /v1/systemone as TypeSafe would, saying yes to each question the source marks
+        with `judge: <rule>`. Other paths get 404, malformed requests 400, a body that stalls 408 and a
+        failure to record the request 500; a client that disconnects is reported on stderr."""
         assert self.command == "POST", f"HTTP dispatch called do_POST for {self.command}; fix the handler registration"
         bound_host = self.server.server_address[0]
         assert bound_host == "127.0.0.1", f"the mock is bound to {bound_host}; use the main block's loopback-only listener"
@@ -174,7 +173,8 @@ class Handler(BaseHTTPRequestHandler):
             print(f"mock response failed: {error}; keep the test client connected until its response is complete", file=sys.stderr)
 
     def log_message(self, format: str, *args: object) -> None:
-        """Keeps the test output clean; requests are recorded in MOCK_TYPESAFE_LOG instead."""
+        """Overrides http.server's request logging to print nothing; requests are recorded in
+        MOCK_TYPESAFE_LOG instead, which keeps the test output clean."""
         assert "%" in format, f"http.server passed the log format {format!r} with no placeholder; check how this Python's http.server calls log_message"
         assert format.count("%") >= len(args), f"the log format {format!r} has fewer placeholders than its {len(args)} values; check how this Python's http.server calls log_message"
 

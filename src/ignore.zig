@@ -42,7 +42,7 @@ pub const Ignore = struct {
         };
     }
 
-    /// For a new walk that reuses this allocation.
+    /// Forgets every pattern and its text for a new walk, keeping the buffers.
     pub fn reset(self: *Ignore) void {
         self.patterns.clear();
         self.text.used = 0;

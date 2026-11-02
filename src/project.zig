@@ -234,9 +234,9 @@ fn onlyContradicted(line: []const u8) bool {
 /// Whether `word` reads as a linter's rule code: capitals then digits, as in `S101` or `E501`.
 fn ruleCode(word: []const u8) bool {
     if (std.mem.indexOfNone(u8, word, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789") != null) assert.panic("'{s}' is not one word; onlyContradicted() splits at every other byte", .{word});
-    const letters = std.mem.indexOfNone(u8, word, "ABCDEFGHIJKLMNOPQRSTUVWXYZ") orelse return false;
-    if (letters > word.len) assert.panic("found {d} capitals in the {d}-byte '{s}'", .{ letters, word.len, word });
-    return letters > 0 and letters < word.len and std.mem.indexOfNone(u8, word[letters..], "0123456789") == null;
+    const capitals = std.mem.indexOfNone(u8, word, "ABCDEFGHIJKLMNOPQRSTUVWXYZ") orelse return false;
+    if (capitals > word.len) assert.panic("found {d} leading capitals in the {d}-byte '{s}'; indexOfNone() returns a position inside the word", .{ capitals, word.len, word });
+    return capitals > 0 and capitals < word.len and std.mem.indexOfNone(u8, word[capitals..], "0123456789") == null;
 }
 
 test "a setting that only turns off rules banning what zanity requires weakens nothing" {

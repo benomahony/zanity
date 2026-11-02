@@ -38,7 +38,8 @@ const max_baseline_findings = 1 << 18;
 const snapshot_schema_version = 1;
 const snapshot_identity_version = 1;
 
-/// Identity v1: path, rule, trimmed source line and duplicate ordinal.
+/// A finding's identity: the hex SHA-256 of identity v1's parts, which are the path, rule, trimmed
+/// source line and duplicate ordinal.
 /// Locations are deliberately excluded. Identical anchors are numbered in source order.
 pub fn identity(text: *@import("memory.zig").Text, row: Row, anchor: []const u8, ordinal: usize) ![]const u8 {
     if (row.path.len == 0 or row.rule.len == 0) assert.panic("identity requires a file and rule", .{});
@@ -97,9 +98,7 @@ pub fn identify(gpa: std.mem.Allocator, ws: anytype) !void {
 /// Reads an operator-selected baseline into a caller-owned bounded region. The returned rows
 /// remain valid until that region is reset; missing, malformed and incompatible files return errors.
 pub fn initSnapshot(region: *std.heap.FixedBufferAllocator, io: std.Io, operator_baseline_path: []const u8) !Snapshot {
-    // The invoking user chooses this local baseline file; no remote caller selects it.
-    // Source bytes and parsed rows belong to prepare()'s bounded region and are invalid after
-    // that region is reset. Leaky JSON parsing deliberately shares that single lifetime.
+    // The file's bytes and the parsed rows share the region's lifetime, so leaky parsing frees nothing early.
     const gpa = region.allocator();
     const path = operator_baseline_path;
     if (path.len == 0) return error.EmptyBaselinePath;

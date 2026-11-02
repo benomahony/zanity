@@ -492,7 +492,8 @@ fn describeStoreFailure(comptime template: []const u8, args: anytype) void {
     if (failure_len == 0) assert.panic("the store diagnostic template '{s}' formatted to no diagnostic; retain its description for the caller", .{template});
 }
 
-/// Adds bounded cleanup context without overwriting the calling thread's original failure prefix.
+/// Appends the rollback status to the calling thread's failure, cutting the original cause short
+/// when needed so the appended context always fits.
 fn appendAnswerRollbackFailure(status: c_int) void {
     if (status == ok) assert.panic("recording answer rollback failure with successful SQLite status {d}; only append cleanup context on failure", .{status});
     if (failure_len > failure.len) assert.panic("the original SQLite cause has {d} bytes in room for {d}; bound it before adding rollback context", .{ failure_len, failure.len });

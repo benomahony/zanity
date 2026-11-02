@@ -123,6 +123,8 @@ pub fn cancelled(self: *File, node: ts.Node, rule: []const u8) !bool {
     return false;
 }
 
+/// Whether `rule` is a contract between methods, such as equals without hashCode, whose
+/// `@unless` excuse counts only inside the finding's own declaration, up to a `@declaration.barrier`.
 fn cancellationIsScopeBound(rule: []const u8) bool {
     if (rule.len == 0) assert.panic("checking cancellation scope for an empty rule; cancelled rejects it first", .{});
     const contracts = [_][]const u8{ "missing-super-finalizer", "missing-super-clone", "equals-without-hashcode", "hashcode-without-equals" };

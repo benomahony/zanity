@@ -167,11 +167,13 @@ pub const Telemetry = struct {
     }
 };
 
+/// The variable's value, or null when it is unset, blank, or too long to be an address.
 fn nonEmpty(value: ?[]const u8) ?[]const u8 {
     const v = value orelse return null;
-    if (v.len > max_value_bytes) assert.panic("an OTLP endpoint variable is {d} bytes long; check what set it", .{v.len});
+    if (v.len > max_value_bytes) return null;
     const trimmed = std.mem.trim(u8, v, " ");
-    if (trimmed.len > v.len) assert.panic("trimming '{s}' lengthened it", .{v});
+    if (trimmed.len > v.len) assert.panic("trimming '{s}' lengthened it; trim only spaces off the ends", .{v});
+    if (trimmed.len > max_value_bytes) assert.panic("kept a {d}-byte value past the {d}-byte limit; check the length before trimming", .{ trimmed.len, max_value_bytes });
     return if (trimmed.len == 0) null else v;
 }
 
