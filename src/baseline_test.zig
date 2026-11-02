@@ -7,6 +7,8 @@ const Row = @import("baseline.zig").Row;
 const max_fixture_flags = 64;
 /// Findings the legacy capture holds.
 const legacy_findings = 10000;
+/// Findings on each page when the triage test walks the legacy backlog.
+const legacy_page_size = 1000;
 /// The highest status the CLI exits with.
 const max_cli_status = 2;
 
@@ -72,7 +74,7 @@ fn initLegacy(arena: std.mem.Allocator) !Fixture {
     var fixture = try Fixture.initFixture(arena);
     errdefer fixture.tmp.cleanup();
     var source: std.Io.Writer.Allocating = .init(arena);
-    for (0..10000) |i| try source.writer.print("assert value_{d}\n", .{i});
+    for (0..legacy_findings) |i| try source.writer.print("assert value_{d}\n", .{i});
     try fixture.write(source.written());
     const capture = try fixture.json(&.{ "--baseline", "backlog.json", "--capture-baseline", "--limit", "1" }, 0);
     try std.testing.expectEqual(@as(usize, legacy_findings), capture.findings.len);
@@ -89,9 +91,9 @@ test "explicit baseline records all 10000 findings and unchanged new-only succee
     defer fixture.tmp.cleanup();
     const original = try fixture.tmp.dir.readFileAlloc(std.testing.io, "backlog.json", arena, .unlimited);
     const saved = try std.json.parseFromSliceLeaky(struct { findings: []const Row }, arena, original, .{ .ignore_unknown_fields = true });
-    try std.testing.expectEqual(@as(usize, 10000), saved.findings.len);
+    try std.testing.expectEqual(@as(usize, legacy_findings), saved.findings.len);
     const unchanged = try fixture.json(&.{ "--baseline", "backlog.json", "--new-only", "--fail-on", "warning" }, 0);
-    try std.testing.expectEqual(@as(usize, 10000), unchanged.summary.existing);
+    try std.testing.expectEqual(@as(usize, legacy_findings), unchanged.summary.existing);
     try std.testing.expectEqual(@as(usize, 0), unchanged.summary.new);
     try std.testing.expectEqual(@as(usize, 0), unchanged.summary.resolved);
 }
@@ -104,7 +106,7 @@ test "triage pages traverse 10000 IDs without duplication or loss" {
     defer fixture.tmp.cleanup();
     var seen: std.StringHashMapUnmanaged(void) = .empty;
     var offset: usize = 0;
-    while (offset < 10000) : (offset += 1000) {
+    while (offset < legacy_findings) : (offset += legacy_page_size) {
         const page = try fixture.json(&.{ "--baseline", "backlog.json", "--new-only", "--triage", "--page-size", "1000", "--offset", try std.fmt.allocPrint(arena, "{d}", .{offset}) }, 0);
         try std.testing.expectEqual(@as(usize, 10000), page.pagination.matching_total);
         for (page.findings) |row| {

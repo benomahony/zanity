@@ -15,6 +15,8 @@ const header = check.header;
 
 /// Statements a body is searched in; a longer body is searched in its first this-many.
 const max_statements = 128;
+/// The most single-child wrappers, such as a block inside a body, unwrapped to reach the statements.
+const max_wrappers = 4;
 /// Distinct names a body is tracked with; names past it are not tracked.
 const max_names = 256;
 const Mask = u128;
@@ -227,7 +229,7 @@ pub fn topStatements(self: *File, ctx: Context, out: []ts.Node) usize {
         container = parent;
     };
     if (ts.ts_node_end_byte(container) > ts.ts_node_end_byte(ctx.span)) assert.panic("{s}: the body {f} ends after its construct {f}; @inner must be inside @outer", .{ self.work.facts.path, container.where(), ctx.span.where() });
-    for (0..4) |_| {
+    for (0..max_wrappers) |_| {
         if (ts.ts_node_named_child_count(container) != 1) break;
         container = ts.ts_node_named_child(container, 0);
     }

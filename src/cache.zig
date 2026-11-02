@@ -20,6 +20,8 @@ const rules = @import("rules.zig");
 const store = @import("store.zig");
 /// Bytes of the analyzer's revision kept in each cache key.
 const revision_bytes = 8;
+/// Comptime branches allowed for hashing every source file of the analyzer into its revision.
+const analyzer_hash_quota = 10_000_000;
 
 const cache_format = "source-analysis-2";
 
@@ -28,7 +30,7 @@ const cache_format = "source-analysis-2";
 const analyzer_revision = revisionOfAnalyzer();
 
 fn revisionOfAnalyzer() [revision_bytes]u8 {
-    @setEvalBranchQuota(10_000_000);
+    @setEvalBranchQuota(analyzer_hash_quota);
     var hash = std.hash.Wyhash.init(0);
     const sources = .{
         cache_format,

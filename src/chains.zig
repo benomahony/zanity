@@ -25,7 +25,7 @@ pub fn checkChain(self: *File, node: ts.Node) !void {
     if (self.inTest() or self.inTestFile()) return;
     var links: u32 = 1;
     var root = objectOf(node);
-    for (0..64) |_| {
+    for (0..max_chain_links) |_| {
         if (!self.index.marks(root, link)) break;
         links += 1;
         root = objectOf(root);
@@ -37,7 +37,7 @@ pub fn checkChain(self: *File, node: ts.Node) !void {
     if (own) links -|= 1;
     if (links < rules.min_chain_links) return;
     if (!own and !ownName(self, start)) return;
-    if (links > max_chain_links) assert.panic("{s}: counted {d} links in the chain at {f}, past the 64 the loop allows; checkChain() must stop counting at its loop bound", .{ self.work.facts.path, links, node.where() });
+    if (links > max_chain_links) assert.panic("{s}: counted {d} links in the chain at {f}, past the max_chain_links the loop allows; checkChain() must stop counting at its loop bound", .{ self.work.facts.path, links, node.where() });
     try reportChain(self, node, links, if (own) ownField(header(node.text(self.source)), start) else start);
 }
 

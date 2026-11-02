@@ -48,6 +48,8 @@ const rules = @import("rules.zig");
 const ignore = @import("ignore.zig");
 /// One step up a directory, as written in a relative path.
 const parent_step = "../";
+/// The most directories searched upwards for zanity.toml, deeper than any real path.
+const max_parent_dirs = 64;
 
 pub const file_name = "zanity.toml";
 pub const max_excludes = 256;
@@ -280,7 +282,7 @@ pub fn initConfig(gpa: Allocator, io: Io) !Config {
     const start = try Io.Dir.cwd().realPathFileAlloc(io, ".", gpa);
     if (!std.fs.path.isAbsolute(start)) assert.panic("looking for {s} from '{s}', which is relative; pass the real path", .{ file_name, start });
     var dir: ?[]const u8 = start;
-    for (0..64) |_| {
+    for (0..max_parent_dirs) |_| {
         const d = dir orelse break;
         const path = try std.fs.path.join(gpa, &.{ d, file_name });
         const bytes = Io.Dir.cwd().readFileAlloc(io, path, gpa, .limited(max_file_bytes)) catch null;

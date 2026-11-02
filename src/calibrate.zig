@@ -12,6 +12,9 @@ const zclig = @import("zclig");
 const main = @import("main.zig");
 /// The longest finding identity `mark` accepts.
 const max_finding_id = 64;
+/// The band of answers that count as unsure: the model leans neither way.
+const unsure_low = 0.35;
+const unsure_high = 0.65;
 
 /// What the calibration commands fail with: misuse, or the store or memory giving out.
 pub const Error = error{ Usage, StoreUnavailable, LimitExceeded };
@@ -47,7 +50,7 @@ pub const StatsRow = struct {
     rule: []const u8,
     answers: u32,
     fired: u32,
-    /// Answers between 0.35 and 0.65, where the model is unsure; a well-posed question has few.
+    /// Answers between unsure_low and unsure_high, where the model is unsure; a well-posed question has few.
     unsure: u32,
     confirmed: u32,
     not_a_problem: u32,
@@ -232,7 +235,7 @@ const Tally = struct {
         if (r.labelled > max_labelled) assert.panic("'{s}' kept {d} labels in room for {d}; size the tally's labels for every rule", .{ o.rule, r.labelled, max_labelled });
         r.row.answers += 1;
         r.row.fired += @intFromBool(o.probability >= o.threshold);
-        r.row.unsure += @intFromBool(o.probability >= 0.35 and o.probability <= 0.65);
+        r.row.unsure += @intFromBool(o.probability >= unsure_low and o.probability <= unsure_high);
         const real = o.real orelse return true;
         if (real) r.row.confirmed += 1 else r.row.not_a_problem += 1;
         if (r.labelled < max_labelled) {
