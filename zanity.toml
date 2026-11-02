@@ -25,11 +25,12 @@ exclude = [
 # about, and caches every answer. By default it asks TypeSafe's Jev, which needs
 # TYPESAFE_API_KEY; any other System One server works, such as Kev on your own machine.
 [infer]
-# url = "http://127.0.0.1:8009"    # default: TYPESAFE_BASE_URL, then TypeSafe's API
-# model = "kev-latest"             # default: TYPESAFE_DEFAULT_MODEL, then jev-latest
-# api_key_env = "KEV_API_KEY"      # default: TYPESAFE_API_KEY; optional except for TypeSafe
-# Requests sent to the model at once, 1 to 64.
-concurrency = 8
+# LM Studio's local System One server, so --infer costs nothing and no code leaves the machine.
+url = "http://127.0.0.1:1234"      # default: TYPESAFE_BASE_URL, then TypeSafe's API
+model = "pplx-decider-flash-v1.2"  # default: TYPESAFE_DEFAULT_MODEL, then jev-latest
+api_key_env = "LMSTUDIO_API_KEY"   # default: TYPESAFE_API_KEY; LM Studio needs none, so the TypeSafe key is never sent
+# Requests sent to the model at once, 1 to 64; LM Studio serves this model 4 at a time.
+concurrency = 4
 # How sure the model must be for a judgement to become a finding, above 0 and at most 1: 0.9
 # reports only what it is at least 90% sure of, and a lower value reports more.
 threshold = 0.8
