@@ -126,9 +126,11 @@ pub const Inference = struct {
         self.json.used = 0;
         const started = Io.Timestamp.now(self.io, .awake);
         for (units) |*unit| try self.plan(unit, findings.items()[0..before], enabled);
-        try self.askAll();
+        // A failed request still leaves every other answer worth keeping, so the next run resumes.
+        const outcome = self.askAll();
         self.stats.seconds = started.durationTo(Io.Timestamp.now(self.io, .awake)).toSeconds();
         for (self.jobs.items()) |*job| if (job.failed == null) try self.record(job, findings);
+        try outcome;
         try self.recordRun();
         if (findings.len < before) assert.panic("--infer removed findings: {d} before, {d} after; judge() must only add findings", .{ before, findings.len });
     }

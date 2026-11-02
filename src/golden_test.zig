@@ -327,10 +327,15 @@ test "environment variables zanity did not set never crash it" {
     try agent.put("CLAUDECODE", unusual);
     const speaking = try checkForAgent(arena, std.testing.io, &agent, &.{});
     try std.testing.expectEqual(std.process.Child.Term{ .exited = 1 }, speaking.term);
-    var keyed = std.process.Environ.Map.init(arena);
-    try keyed.put("TYPESAFE_API_KEY", "abc\ndef");
-    try keyed.put("ZANITY_STORE", ":memory:");
-    const inferring = try checkForAgent(arena, std.testing.io, &keyed, &.{"--infer"});
+    // The mock project's zanity.toml sets nothing and its URL is dropped, so zanity would ask
+    // TypeSafe, which requires the key; a key it cannot send stops the run before any request.
+    var project = try InferRun.initInferRun(arena, std.testing.io);
+    defer project.tmp.cleanup();
+    defer project.mock.child.kill(std.testing.io);
+    try project.mock.env.put("TYPESAFE_API_KEY", "abc\ndef");
+    const dropped = project.mock.env.swapRemove("TYPESAFE_BASE_URL");
+    if (!dropped) assert.panic("startMock() set no TYPESAFE_BASE_URL to drop; it points zanity at the mock", .{});
+    const inferring = try project.checkInferring(arena, std.testing.io);
     try std.testing.expectEqual(std.process.Child.Term{ .exited = 2 }, inferring.term);
 }
 
@@ -509,7 +514,7 @@ fn startMock(arena: std.mem.Allocator, io: Io, dir: []const u8) !MockTypeSafe {
 
 /// Writes the project the --infer test checks into `scratch`, the test's temporary directory, which
 /// the test deletes when it ends: Python functions and tests, a Zig file that only gathers tests,
-/// and a pyproject.toml with a weakened check.
+/// a pyproject.toml with a weakened check and a zanity.toml that sets nothing.
 fn writeInferProject(arena: std.mem.Allocator, io: Io, scratch: Io.Dir) !void {
     const service = try Io.Dir.cwd().readFileAlloc(io, "tests/infer/project/service.py", arena, .unlimited);
     const support = try Io.Dir.cwd().readFileAlloc(io, "tests/infer/project/test_support.py", arena, .unlimited);
@@ -522,6 +527,9 @@ fn writeInferProject(arena: std.mem.Allocator, io: Io, scratch: Io.Dir) !void {
     try scratch.writeFile(io, .{ .sub_path = "tsconfig.json", .data = "{\n  \"compilerOptions\": {\n    \"strict\": true\n  }\n}\n" });
     try scratch.writeFile(io, .{ .sub_path = "all_test.zig", .data = "test {\n    _ = @import(\"service_test.zig\");\n}\n" });
     try scratch.writeFile(io, .{ .sub_path = "pyproject.toml", .data = "[tool.ruff]\nline-length = 200  # judge: weakened-check\n# judge: unscheduled-analysis\n" });
+    // The project sits under this repository's .zig-cache, so without a zanity.toml of its own it
+    // would take the repository's, whose [infer] url names a local server instead of the mock.
+    try scratch.writeFile(io, .{ .sub_path = "zanity.toml", .data = "# The mock project's own settings: none.\n" });
 }
 
 /// writeInferProject's project in a temporary directory, and the mock TypeSafe it asks.
@@ -586,6 +594,22 @@ test "--infer names a unit too large to send and keeps every other answer, but s
     const locked = try project.checkInferring(arena, io);
     try std.testing.expectEqual(std.process.Child.Term{ .exited = 74 }, locked.term);
     try expectOutput(locked.stderr, &.{ "could not judge", "Unauthorized (HTTP 401", "Check the API key in TYPESAFE_API_KEY" }, &.{"Check TYPESAFE_BASE_URL"});
+}
+
+test "--infer keeps the answers it got before a request failed, so the next run asks only what is left" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    const io = std.testing.io;
+    var project = try InferRun.initInferRun(arena, io);
+    defer project.tmp.cleanup();
+    defer project.mock.child.kill(io);
+    try project.tmp.dir.writeFile(io, .{ .sub_path = "locked.py", .data = "def locked():\n    # mock: unauthorized\n    return 1\n" });
+    const locked = try project.checkInferring(arena, io);
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 74 }, locked.term);
+    try project.tmp.dir.deleteFile(io, "locked.py");
+    const resumed = try project.checkInferring(arena, io);
+    try expectOutput(resumed.stderr, &.{", 0 asked of jev-latest"}, &.{});
 }
 
 test "--infer asks the System One server zanity.toml names, with only the key it names" {
