@@ -33,4 +33,5 @@ test {
     _ = @import("history.zig");
     _ = @import("triage.zig");
     _ = @import("watch_review.zig");
+    _ = @import("release.zig");
 }

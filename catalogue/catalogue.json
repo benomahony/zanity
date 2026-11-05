@@ -46438,7 +46438,8 @@
       "negative_example": "Release is blocked on failure",
       "implementation_status": "partial",
       "rule_ids": [
-        "relaxed-check"
+        "relaxed-check",
+        "ungated-release"
       ],
       "cwe_mapping_status": "not_reviewed",
       "assessment_kind": "policy_violation",

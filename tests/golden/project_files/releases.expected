@@ -1,0 +1,5 @@
+rules: ungated-release
+exit: 1
+.github/workflows/gated.yml:26:11: error [ungated-release]
+.github/workflows/tag.yml:12:14: error [ungated-release]
+.github/workflows/tag.yml:17:7: error [ungated-release]

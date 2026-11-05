@@ -10,6 +10,7 @@ const ignore = @import("ignore.zig");
 const suppress = @import("suppress.zig");
 const strings = @import("strings.zig");
 const facts_module = @import("facts.zig");
+const release = @import("release.zig");
 /// How much of a project file's line is inspected.
 const line_window_bytes = 512;
 /// The shortest password an authentication policy may allow.
@@ -116,6 +117,7 @@ pub fn checkProjectFiles(run: ProjectRun, paths: []const []const u8) !void {
         }
         if (first == null) first = path;
         try checkProjectFile(run, path, source);
+        if (run.enabled.enabled("ungated-release") and release.isWorkflow(path)) try release.checkWorkflow(run.findings, facts.text, path, source);
         if (facts.collect_units) _ = try facts.text.format("=== {s} ===\n{s}\n", .{ path, source });
     }
     const whole = facts.text.buffer[project_start..facts.text.used];

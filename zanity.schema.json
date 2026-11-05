@@ -288,6 +288,7 @@
         { "const": "fixture-hides-behaviour", "description": "warning, on by default. Use the real implementation, and stub only external dependencies." },
         { "const": "repeated-mechanics", "description": "information, on by default. Write the shared steps once as a builder, helper or table of cases named in the domain's words, so each one says only what differs." },
         { "const": "relaxed-check", "description": "warning, on by default. Remove it, or fix what the check reports and turn it back on at its strictest." },
+        { "const": "ungated-release", "description": "error, on by default. Make the release job need the job that runs the tests, directly or through the jobs between, and with if: always() also require needs.<job>.result == 'success'." },
         { "const": "mutable-artifact-reference", "description": "warning, on by default. Pin the artifact by immutable digest or commit, and let an update tool propose reviewed changes." },
         { "const": "download-execution", "description": "error, on by default. Download a versioned artifact, verify its published digest or signature, then execute the verified local file." },
         { "const": "plaintext-config-secret", "description": "error, on by default. Replace the literal with a reference to an environment variable or secret manager, and rotate any credential already committed." },
