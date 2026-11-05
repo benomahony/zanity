@@ -64,7 +64,8 @@ pub const Ignore = struct {
             if (exists(io, d, ".git")) break d;
         } else null;
         const top = repository orelse return;
-        try self.loadFile(io, top, ".git/info/exclude");
+        var exclude_buffer: [std.fs.max_path_bytes]u8 = undefined;
+        try self.loadAt(io, top, try excludePath(io, top, &exclude_buffer));
         for (1..depth) |i| try self.loadFile(io, chain[depth - i], ".gitignore");
         if (depth == 0) assert.panic("walking up from '{s}' visited no directory; it should visit at least '{s}' itself", .{ root, root });
     }
@@ -74,7 +75,13 @@ pub const Ignore = struct {
         if (!std.fs.path.isAbsolute(base)) assert.panic("'{s}/{s}' has a relative directory; ignore patterns are matched against absolute paths, so pass the real path", .{ base, name });
         if (name.len == 0) assert.panic("asked to load an ignore file with no name from '{s}'; pass '.gitignore' or '.git/info/exclude'", .{base});
         var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
-        const path = std.fmt.bufPrint(&path_buffer, "{s}/{s}", .{ base, name }) catch return error.NameTooLong;
+        try self.loadAt(io, base, std.fmt.bufPrint(&path_buffer, "{s}/{s}", .{ base, name }) catch return error.NameTooLong);
+    }
+
+    /// Loads the ignore file at `path`, if it exists, with its patterns relative to the absolute directory `base`.
+    fn loadAt(self: *Ignore, io: Io, base: []const u8, path: []const u8) !void {
+        if (!std.fs.path.isAbsolute(base)) assert.panic("loading '{s}' relative to '{s}', which is relative; ignore patterns are matched against absolute paths, so pass the real path", .{ path, base });
+        if (path.len == 0) assert.panic("asked to load an ignore file with no path for '{s}'; pass the file to read", .{base});
         const bytes = Io.Dir.cwd().readFile(io, path, self.file) catch |e| switch (e) {
             error.FileNotFound => return,
             else => return e,
@@ -128,6 +135,46 @@ pub const Ignore = struct {
         return result;
     }
 };
+
+/// The `info/exclude` file of the repository whose working tree is the absolute directory `top`.
+/// In a clone `.git` is that directory. In a linked worktree or a submodule, `.git` is a file
+/// naming the git directory, and a worktree's git directory names, in `commondir`, the shared
+/// one that holds `info/exclude`, as git itself reads it.
+fn excludePath(io: Io, top: []const u8, buffer: []u8) ![]const u8 {
+    if (!std.fs.path.isAbsolute(top)) assert.panic("finding the exclude file of '{s}', which is relative; pass the repository's real path", .{top});
+    var git_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const dot_git = std.fmt.bufPrint(&git_buffer, "{s}/.git", .{top}) catch return error.NameTooLong;
+    var link_buffer: [std.fs.max_path_bytes + 16]u8 = undefined;
+    const link = Io.Dir.cwd().readFile(io, dot_git, &link_buffer) catch |e| switch (e) {
+        error.IsDir => return std.fmt.bufPrint(buffer, "{s}/info/exclude", .{dot_git}) catch error.NameTooLong,
+        else => return e,
+    };
+    const named = std.mem.trimEnd(u8, link, " \t\r\n");
+    if (!std.mem.startsWith(u8, named, "gitdir: ") or named.len == "gitdir: ".len) return error.UnreadableGitFile;
+    var dir_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const git_dir = try resolveFrom(top, named["gitdir: ".len..], &dir_buffer);
+    var common_path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const common_path = std.fmt.bufPrint(&common_path_buffer, "{s}/commondir", .{git_dir}) catch return error.NameTooLong;
+    var common_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const common = Io.Dir.cwd().readFile(io, common_path, &common_buffer) catch |e| switch (e) {
+        error.FileNotFound => return std.fmt.bufPrint(buffer, "{s}/info/exclude", .{git_dir}) catch error.NameTooLong,
+        else => return e,
+    };
+    var shared_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const shared = try resolveFrom(git_dir, std.mem.trimEnd(u8, common, " \t\r\n"), &shared_buffer);
+    const exclude = std.fmt.bufPrint(buffer, "{s}/info/exclude", .{shared}) catch return error.NameTooLong;
+    if (!std.mem.endsWith(u8, exclude, "/info/exclude") or !std.fs.path.isAbsolute(exclude)) assert.panic("the exclude file of '{s}' came out as '{s}'; it must be an absolute path ending in info/exclude", .{ top, exclude });
+    return exclude;
+}
+
+/// `path` as an absolute path: itself when absolute, else joined to the absolute directory `base`.
+fn resolveFrom(base: []const u8, path: []const u8, buffer: []u8) ![]const u8 {
+    if (!std.fs.path.isAbsolute(base)) assert.panic("resolving '{s}' from '{s}', which is relative; pass an absolute directory", .{ path, base });
+    if (path.len == 0) return error.UnreadableGitFile;
+    const resolved = if (std.fs.path.isAbsolute(path)) path else std.fmt.bufPrint(buffer, "{s}/{s}", .{ base, path }) catch return error.NameTooLong;
+    if (!std.fs.path.isAbsolute(resolved)) assert.panic("resolving '{s}' from '{s}' gave '{s}', which is relative; join it to the base", .{ path, base, resolved });
+    return resolved;
+}
 
 fn exists(io: Io, dir: []const u8, name: []const u8) bool {
     if (!std.fs.path.isAbsolute(dir)) assert.panic("looking for '{s}' in relative directory '{s}'; pass the real path", .{ name, dir });
@@ -307,4 +354,35 @@ test "missing ignore files are optional but invalid paths are reported" {
     try std.testing.expectError(error.NotDir, ignore.loadFile(io, root, "file/.gitignore"));
     const oversized: [std.fs.max_path_bytes]u8 = @splat('a');
     try std.testing.expectError(error.NameTooLong, ignore.loadFile(io, root, &oversized));
+}
+
+test "a clone and its linked worktree read the same info/exclude, and a broken .git file is named" {
+    const io = std.testing.io;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var root_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const root = root_buffer[0..try tmp.dir.realPath(io, &root_buffer)];
+    try tmp.dir.createDirPath(io, "clone/.git/info");
+    try tmp.dir.createDirPath(io, "clone/.git/worktrees/tree");
+    try tmp.dir.createDirPath(io, "tree");
+    try tmp.dir.createDirPath(io, "broken");
+    try tmp.dir.writeFile(io, .{ .sub_path = "clone/.git/info/exclude", .data = "*.secret\n" });
+    try tmp.dir.writeFile(io, .{ .sub_path = "clone/.git/worktrees/tree/commondir", .data = "../..\n" });
+    var link_buffer: [std.fs.max_path_bytes + 16]u8 = undefined;
+    try tmp.dir.writeFile(io, .{ .sub_path = "tree/.git", .data = try std.fmt.bufPrint(&link_buffer, "gitdir: {s}/clone/.git/worktrees/tree\n", .{root}) });
+    try tmp.dir.writeFile(io, .{ .sub_path = "broken/.git", .data = "not a gitdir line\n" });
+    var ignore = try Ignore.initIgnore(std.testing.allocator, .{ .ignore_patterns = 16, .ignore_bytes = 1024 });
+    defer std.testing.allocator.free(ignore.patterns.buffer);
+    defer std.testing.allocator.free(ignore.text.buffer);
+    defer std.testing.allocator.free(ignore.file);
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    inline for (.{ "clone", "tree" }) |checkout| {
+        ignore.reset();
+        try ignore.loadAncestors(io, try std.fmt.bufPrint(&path_buffer, "{s}/" ++ checkout, .{root}));
+        var file_buffer: [std.fs.max_path_bytes]u8 = undefined;
+        try std.testing.expect(ignore.ignored(try std.fmt.bufPrint(&file_buffer, "{s}/" ++ checkout ++ "/key.secret", .{root}), .file));
+        try std.testing.expect(!ignore.ignored(try std.fmt.bufPrint(&file_buffer, "{s}/" ++ checkout ++ "/main.zig", .{root}), .file));
+    }
+    ignore.reset();
+    try std.testing.expectError(error.UnreadableGitFile, ignore.loadAncestors(io, try std.fmt.bufPrint(&path_buffer, "{s}/broken", .{root})));
 }

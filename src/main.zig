@@ -1002,7 +1002,10 @@ fn collect(ctx: *zclig.Context, ws: *Workspace, path: []const u8) !void {
     defer dir.close(ws.io);
     var root_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const root = root_buffer[0..try dir.realPath(ws.io, &root_buffer)];
-    try ws.ignore.loadAncestors(ws.io, root);
+    ws.ignore.loadAncestors(ws.io, root) catch |e| switch (e) {
+        error.LimitExceeded => return e,
+        else => return ctx.fail(.io, try ws.text.format("Could not read the git ignore files that apply to {s}: {t}.", .{ root, e }), "Check that the repository's .git, and the git directory a .git file names, are readable."),
+    };
     try ws.ignore.loadFile(ws.io, root, ".gitignore");
     try ws.dirs.add(try ws.text.copy(root));
     var walker = try dir.walkSelectively(std.heap.page_allocator);
