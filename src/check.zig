@@ -1016,6 +1016,7 @@ pub const File = struct {
 
     /// A function's assertions against the function minimum, or a test's checks against the test
     /// minimum: a test is itself the check on the code it calls, so one check that can fail is enough.
+    /// A fixture or helper in a test file is not measured: the tests that use it check what it does.
     /// A function marked as a test by an attribute or annotation is measured by closeTest, which
     /// holds its checks; `function` is the function context, which owns its weak assertions.
     pub fn checkAssertionDensity(self: *File, ctx: Context, function: Context, name_node: ts.Node) !void {
@@ -1023,6 +1024,7 @@ pub const File = struct {
         if (ctx.family != .function and ctx.family != .@"test") assert.panic("{s}: counting the assertions of {f}, which is a {t}, not a function or test; call checkAssertionDensity() only from closeFunction() or closeTest()", .{ self.work.facts.path, ctx.node.where(), ctx.family });
         if (!function.node.eql(ctx.node)) assert.panic("{s}: counting the assertions of {f} against the weak assertions of {f}; pass the function on the same node", .{ self.work.facts.path, ctx.node.where(), function.node.where() });
         if (ctx.family == .function and self.index.marks(ctx.node, self.v.test_outer)) return;
+        if (!ctx.is_test and self.inTestFile()) return;
         const counted = if (ctx.is_test) ctx.checks else ctx.asserts;
         const meaningful = counted -| weak.weakLines(self, function);
         const minimum: u32 = if (ctx.is_test) rules.min_checks_per_test else rules.min_asserts_per_function;

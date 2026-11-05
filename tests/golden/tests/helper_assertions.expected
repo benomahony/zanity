@@ -1,0 +1,5 @@
+rules: assertion-density
+exit: 1
+src/steps.ts:1:17: error [assertion-density]
+src/users.py:1:5: error [assertion-density]
+test_login.py:9:5: error [assertion-density]
