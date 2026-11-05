@@ -892,13 +892,16 @@ pub const File = struct {
         _ = try self.report(ctx.node, "dynamic-allocation", try self.say("'{s}' allocates memory after initialization in '{s}', so memory use depends on input and can fail at any point.", .{ shown, owner }));
     }
 
+    /// Whether the file holds tests: its name has one of the language's test affixes, or it sits
+    /// in a test directory.
     pub fn inTestFile(self: *File) bool {
-        const base = std.fs.path.basename(self.work.facts.path);
-        if (base.len == 0) assert.panic("path '{s}' has no file name, so zanity can't tell whether it holds tests", .{self.work.facts.path});
+        const path = self.work.facts.path;
+        const base = std.fs.path.basename(path);
+        if (base.len == 0) assert.panic("path '{s}' has no file name, so zanity can't tell whether it holds tests", .{path});
         for (self.tables.test_file_prefixes) |prefix| if (std.mem.startsWith(u8, base, prefix)) return true;
         for (self.tables.test_file_suffixes) |suffix| if (std.mem.endsWith(u8, base, suffix)) return true;
         if (self.tables.test_file_prefixes.len + self.tables.test_file_suffixes.len > max_test_file_affixes) assert.panic("{s} lists {d} test file prefixes and {d} suffixes in languages/tables.zon; more than 32 means the table is wrong", .{ self.tables.ecosystem, self.tables.test_file_prefixes.len, self.tables.test_file_suffixes.len });
-        return false;
+        return test_quality.inTestDirectory(path);
     }
 
     pub fn calleeIn(self: *File, ctx: Context, name: []const u8, table: []const []const u8) ?[]const u8 {

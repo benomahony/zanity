@@ -167,7 +167,7 @@ test "a run ends with a summary on stderr" {
     const clean = try std.process.run(arena, io, .{ .argv = &.{ zanity, "check", "--rules", "parse-error", "tests/golden/zig/empty_containers.zig" } });
     try std.testing.expectEqualStrings("", clean.stdout);
     try std.testing.expectEqualStrings("zanity: checked 1 file, no issues found\n", clean.stderr);
-    const dirty = try std.process.run(arena, io, .{ .argv = &.{ zanity, "check", "--rules", "assertion-density,long-parameter-list", "tests/golden/structure/shapes.py", "tests/golden/structure/shapes_zig.zig" } });
+    const dirty = try std.process.run(arena, io, .{ .argv = &.{ zanity, "check", "--rules", "assertion-density,long-parameter-list", "shapes.py", "shapes_zig.zig" }, .cwd = .{ .path = "tests/golden/structure" } });
     try std.testing.expectEqualStrings("zanity: 15 errors and 3 warnings in 2 of 2 files\n", dirty.stderr);
 }
 

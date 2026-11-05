@@ -151,6 +151,8 @@ def checks_of_tests() -> list[str]:
     return [
         f"zanity has {len(rules)} checks of test code, written out here from `src/rules.zig`, so this page always matches the binary. The [rules page]($link.page('rules')) says more about each.",
         "",
+        "A test file is one named as the language's tests are, such as `test_*.py`, `*_test.go` or `*.test.ts`, or one under a `tests`, `test`, `__tests__` or `acceptance` directory of the path zanity was given. Every function in a test file that is not itself a test is a fixture or helper.",
+        "",
         "# [Found in the code]($heading.id('found-in-the-code'))",
         "",
         f"These {len(found)} use syntax trees or measured test durations, with no model.",
