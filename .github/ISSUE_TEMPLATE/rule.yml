@@ -1,0 +1,71 @@
+name: Rule
+description: A new rule, or a change to what an existing rule catches or how it fixes it.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A rule change is done when its fixtures become golden cases in `tests/golden/` and pass. Give one fixture the rule must report and one it must leave alone, so the change can't pass by catching too much.
+  - type: input
+    id: rule
+    attributes:
+      label: Rule
+      description: The existing rule's name, or the proposed name for a new one.
+      placeholder: ungated-release
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What goes wrong
+      description: The failure the rule should prevent, and why the current behaviour misses it or gets it wrong.
+    validations:
+      required: true
+  - type: textarea
+    id: reported
+    attributes:
+      label: Must be reported
+      description: The smallest files the rule must report, each with its path, and what zanity prints for them today.
+      placeholder: |
+        `.github/workflows/release.yml`:
+
+        ```yaml
+        jobs:
+          publish:
+            steps:
+              - run: npm publish
+        ```
+
+        Today: `zanity check --rules ungated-release .` finds nothing, exit 0.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected output
+      description: |
+        For the files above, as a golden `.expected` file: a `rules:` line, an `exit:` line, then one `path:line:column: severity [rule]` line per finding, with lines and columns counted from 1.
+      render: text
+      placeholder: |
+        rules: ungated-release
+        exit: 1
+        .github/workflows/release.yml:4:14: error [ungated-release]
+    validations:
+      required: true
+  - type: textarea
+    id: clean
+    attributes:
+      label: Must not be reported
+      description: "The smallest files that look similar but are correct, which the rule must leave alone. Their expected output is `exit: 0` with no finding lines."
+    validations:
+      required: true
+  - type: textarea
+    id: fix
+    attributes:
+      label: Fix
+      description: The fix message each finding should carry, naming the specific code to change, and, where the change is exact, the file as it should read after `zanity check --fix`.
+  - type: textarea
+    id: decisions
+    attributes:
+      label: Decisions needed first
+      description: Anything that has to be settled before building, with a proposal for each.

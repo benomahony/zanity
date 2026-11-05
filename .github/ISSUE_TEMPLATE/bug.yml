@@ -1,0 +1,66 @@
+name: Bug
+description: zanity reports something it shouldn't, misses something it should, crashes, or gives a wrong fix.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A bug report is done when its repro becomes a golden case in `tests/golden/` and passes. Give the smallest input that shows the problem, and the output you expect in the golden `.expected` format.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The output of `zanity --version`.
+      placeholder: zanity 0.4.2
+    validations:
+      required: true
+  - type: textarea
+    id: input
+    attributes:
+      label: Input files
+      description: The smallest files that show the problem, each with its path relative to where you run zanity.
+      placeholder: |
+        `.github/workflows/release.yml`:
+
+        ```yaml
+        jobs:
+          publish:
+            steps:
+              - run: npm publish
+        ```
+    validations:
+      required: true
+  - type: input
+    id: command
+    attributes:
+      label: Command
+      description: The exact command, limited to the rules involved with `--rules`.
+      placeholder: zanity check --rules ungated-release .
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual output
+      description: What zanity printed, and its exit code.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected output
+      description: |
+        As a golden `.expected` file: a `rules:` line, an `exit:` line, then one `path:line:column: severity [rule]` line per finding, with lines and columns counted from 1. No finding lines means nothing should be reported.
+      render: text
+      placeholder: |
+        rules: ungated-release
+        exit: 1
+        .github/workflows/release.yml:4:14: error [ungated-release]
+    validations:
+      required: true
+  - type: textarea
+    id: fix
+    attributes:
+      label: Expected fix
+      description: If the bug is in a fix message or a `--fix` edit, the message or the file as it should read after `zanity check --fix`.
