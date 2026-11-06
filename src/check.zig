@@ -13,6 +13,7 @@ const messages = @import("messages.zig");
 const rewrite = @import("rewrite.zig");
 const hazards = @import("hazards.zig");
 const tracing = @import("tracing.zig");
+const secrets = @import("secrets.zig");
 const weak = @import("weak.zig");
 const suppress = @import("suppress.zig");
 const types = @import("types.zig");
@@ -947,7 +948,7 @@ pub const File = struct {
         if (self.index.marks(ctx.node, self.v.assignment_compound)) return;
         const lhs = ctx.lhs orelse return;
         const rhs = ctx.rhs orelse return;
-        try hazards.checkSecret(self, ctx.node, lhs, rhs);
+        try secrets.checkSecret(self, ctx.node, lhs, rhs);
         if (ts.ts_node_end_byte(lhs) > ts.ts_node_start_byte(rhs)) assert.panic("{s}: in the assignment {f}, @assignment.lhs {f} overlaps @assignment.rhs {f}; the query captured the wrong nodes", .{ self.work.facts.path, ctx.node.where(), lhs.where(), rhs.where() });
         const statement = self.statementOf(ctx.node) orelse return;
         statement.summary = .{ .assignment = .{ .lhs = lhs, .rhs = rhs } };
