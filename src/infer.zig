@@ -14,6 +14,7 @@ const facts_module = @import("facts.zig");
 const Unit = facts_module.Unit;
 const Finding = facts_module.Finding;
 const store = @import("store.zig");
+const sqlite = @import("sqlite.zig");
 const strings = @import("strings.zig");
 const language = @import("language.zig");
 /// How often --infer progress is redrawn.
@@ -94,8 +95,8 @@ pub const Inference = struct {
     stats: Stats = .{},
     /// Held while one request's answers are written, since requests share the store's statements.
     keeping: Io.Mutex = .init,
-    /// Why keeping an answer failed, in SQLite's words; store.failure belongs to the worker that failed.
-    keep_failure: [store.failure.len]u8 = undefined,
+    /// Why keeping an answer failed, in SQLite's words; sqlite.failure belongs to the worker that failed.
+    keep_failure: [sqlite.failure.len]u8 = undefined,
     keep_failure_len: usize = 0,
 
     /// Fails with `error.MissingApiKey` when asking TypeSafe's API and the key variable is not set.
@@ -206,8 +207,8 @@ pub const Inference = struct {
             defer job.diagnostics.deinit();
             const err = job.failed orelse continue;
             if (err == error.StoreUnavailable) {
-                @memcpy(store.failure[0..self.keep_failure_len], self.keep_failure[0..self.keep_failure_len]);
-                store.failure_len = self.keep_failure_len;
+                @memcpy(sqlite.failure[0..self.keep_failure_len], self.keep_failure[0..self.keep_failure_len]);
+                sqlite.failure_len = self.keep_failure_len;
                 return err;
             }
             job.too_large = tooLarge(job, err);
@@ -308,8 +309,8 @@ pub const Inference = struct {
             const answer: store.Answer = .{ .model = self.model, .question = store.digest(&.{slot.rule.question}), .unit = job.unit_hash, .language = unit.language, .source = unit.source, .probability = p };
             self.store.keepAnswer(answer) catch |err| {
                 if (self.keep_failure_len == 0) {
-                    self.keep_failure_len = store.failure_len;
-                    @memcpy(self.keep_failure[0..store.failure_len], store.failure[0..store.failure_len]);
+                    self.keep_failure_len = sqlite.failure_len;
+                    @memcpy(self.keep_failure[0..sqlite.failure_len], sqlite.failure[0..sqlite.failure_len]);
                 }
                 return err;
             };

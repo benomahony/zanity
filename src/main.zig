@@ -21,6 +21,7 @@ const memory = @import("memory.zig");
 const Ignore = @import("ignore.zig").Ignore;
 const infer = @import("infer.zig");
 const store = @import("store.zig");
+const sqlite = @import("sqlite.zig");
 const Live = @import("live.zig").Live;
 const config = @import("config.zig");
 const starter = @import("init.zig");
@@ -901,8 +902,8 @@ fn reportInference(state: *anyopaque, done: usize, total: usize) void {
 
 /// Says why the answer store could not be used, in SQLite's words when it gave some.
 fn storeProblem(ws: *Workspace) ![]const u8 {
-    if (store.failure_len > store.failure.len) assert.panic("the store kept {d} bytes of failure message in room for {d}; the store must cut its message to fit its buffer", .{ store.failure_len, store.failure.len });
-    const reason = store.failure[0..store.failure_len];
+    if (sqlite.failure_len > sqlite.failure.len) assert.panic("the store kept {d} bytes of failure message in room for {d}; the store must cut its message to fit its buffer", .{ sqlite.failure_len, sqlite.failure.len });
+    const reason = sqlite.failure[0..sqlite.failure_len];
     const text = try ws.text.format("--infer could not use its answer store{s}{s}.", .{ if (reason.len > 0) ": " else "", reason });
     if (text.len == 0) assert.panic("describing a store failure produced no text; storeProblem() must write the store's message, so check its format call", .{});
     return text;

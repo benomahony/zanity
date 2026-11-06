@@ -6,6 +6,7 @@ const std = @import("std");
 const assert = @import("assert.zig");
 const memory = @import("memory.zig");
 const store_module = @import("store.zig");
+const sqlite = @import("sqlite.zig");
 const Store = store_module.Store;
 const Observed = store_module.Observed;
 const zclig = @import("zclig");
@@ -71,7 +72,7 @@ fn calibration(ctx: *zclig.Context) !Calibration {
     const ws = main.workspaceOf(ctx);
     const environ = ws.environ orelse assert.panic("a calibration command ran without the environment; main() passes it to the workspace", .{});
     if (ws.source_cache == null) ws.source_cache = Store.initStore(std.heap.page_allocator, ws.io, environ, ws.limits.store_bytes) catch |e| {
-        if (e == error.StoreUnavailable) return ctx.fail(.io, try ws.text.format("Could not open the store: {s}.", .{store_module.failure[0..store_module.failure_len]}), "Check ZANITY_STORE names a writable file.");
+        if (e == error.StoreUnavailable) return ctx.fail(.io, try ws.text.format("Could not open the store: {s}.", .{sqlite.failure[0..sqlite.failure_len]}), "Check ZANITY_STORE names a writable file.");
         return e;
     };
     if (ws.limits.text_bytes == 0) assert.panic("the workspace allows no text for calibration rows; initWorkspace() reserves it", .{});
@@ -284,6 +285,6 @@ fn measured(r: *const Counts, t: f64) StatsRow {
 fn mapped(err: anyerror) error{ StoreUnavailable, LimitExceeded } {
     if (err == error.Usage) assert.panic("the store raised a usage error; only the commands decide misuse", .{});
     const reported: error{ StoreUnavailable, LimitExceeded } = if (err == error.LimitExceeded) error.LimitExceeded else error.StoreUnavailable;
-    if (reported == error.StoreUnavailable and store_module.failure_len == 0 and err == error.StoreUnavailable) assert.panic("the store failed without saying why; set store.failure in the store call that failed", .{});
+    if (reported == error.StoreUnavailable and sqlite.failure_len == 0 and err == error.StoreUnavailable) assert.panic("the store failed without saying why; set store.failure in the store call that failed", .{});
     return reported;
 }
