@@ -10,7 +10,7 @@ const sqlite = @import("sqlite.zig");
 const Store = store_module.Store;
 const Observed = store_module.Observed;
 const zclig = @import("zclig");
-const main = @import("main.zig");
+const workspace = @import("workspace.zig");
 /// The longest finding identity `mark` accepts.
 const max_finding_id = 64;
 /// The band of answers that count as unsure: the model leans neither way.
@@ -69,7 +69,7 @@ var stats_rows: [max_rows]StatsRow = undefined;
 
 /// The store of answers and labels, opened for the calibration commands.
 fn calibration(ctx: *zclig.Context) !Calibration {
-    const ws = main.workspaceOf(ctx);
+    const ws = workspace.workspaceOf(ctx);
     const environ = ws.environ orelse assert.panic("a calibration command ran without the environment; main() passes it to the workspace", .{});
     if (ws.source_cache == null) ws.source_cache = Store.initStore(std.heap.page_allocator, ws.io, environ, ws.limits.store_bytes) catch |e| {
         if (e == error.StoreUnavailable) return ctx.fail(.io, try ws.text.format("Could not open the store: {s}.", .{sqlite.failure[0..sqlite.failure_len]}), "Check ZANITY_STORE names a writable file.");
