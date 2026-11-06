@@ -45,6 +45,12 @@ threshold = 0.8
 [paths."src/golden_test.zig"]
 disable = ["filesystem-in-test", "process-in-test"]
 
+[paths."src/infer_test.zig"]
+disable = ["filesystem-in-test", "process-in-test"]
+
+[paths."src/lsp_test.zig"]
+disable = ["filesystem-in-test", "process-in-test"]
+
 [paths."src/architecture_test.zig"]
 disable = ["filesystem-in-test"]
 
