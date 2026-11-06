@@ -35,4 +35,5 @@ test {
     _ = @import("triage.zig");
     _ = @import("watch_review.zig");
     _ = @import("release.zig");
+    _ = @import("release_test.zig");
 }
