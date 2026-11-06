@@ -12,6 +12,7 @@ const Facts = facts_module.Facts;
 const messages = @import("messages.zig");
 const rewrite = @import("rewrite.zig");
 const hazards = @import("hazards.zig");
+const tracing = @import("tracing.zig");
 const weak = @import("weak.zig");
 const suppress = @import("suppress.zig");
 const types = @import("types.zig");
@@ -138,7 +139,7 @@ pub const FileScratch = struct {
     signature: memory.Bounded(Parameter),
     weak: memory.Bounded(Weak),
     locals: memory.Bounded(Owned),
-    spans: hazards.Spans,
+    spans: tracing.Spans,
     declared: memory.Bounded(types.Declared),
     /// A declared type waiting for the name it declares, which comes after it.
     pending_type: ?ts.Node = null,
@@ -835,7 +836,7 @@ pub const File = struct {
             if (ctx.arguments[0]) |message| try messages.checkMessage(self, message, null);
         }
         try hazards.checkRiskyCall(self, ctx, name);
-        try hazards.checkSpanCall(self, ctx, name);
+        try tracing.checkSpanCall(self, ctx, name);
         if (self.inTest()) {
             try test_quality.checkTestCall(self, ctx, name);
         } else if (self.inTestFile()) {
@@ -1005,7 +1006,7 @@ pub const File = struct {
         try extract.checkExtractable(self, ctx, name);
         if (self.index.marks(ctx.span, self.v.function_passthrough) or self.index.marks(ctx.node, self.v.function_passthrough)) try passthrough.checkPassthrough(self, ctx, name_node, name);
         try weak.checkAssertionDensity(self, ctx, ctx, name_node);
-        try hazards.checkUnendedSpan(self, ctx);
+        try tracing.checkUnendedSpan(self, ctx);
         if (ctx.decisions + 1 > rules.max_complexity) {
             if (try self.report(name_node, "complex-function", try self.say("'{s}' makes {d} decisions (cyclomatic complexity {d}), past the {d} a reader can follow and a test suite can cover.", .{ name, ctx.decisions, ctx.decisions + 1, rules.max_complexity }))) self.s.diagnostics.last().?.fix = try extract.decisionsFix(self, ctx, name);
         }
