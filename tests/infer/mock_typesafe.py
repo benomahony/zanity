@@ -28,6 +28,8 @@ SOURCE_FIELDS = ("function", "line", "files", "repeated", "source")
 YES_PROBABILITY = 0.95
 NO_PROBABILITY = 0.05
 MOCK_TOKENS_PER_REQUEST = 1
+# zanity's largest [infer] concurrency, max_concurrency in src/config.zig.
+MAX_CONCURRENCY = 64
 LOG_LOCK = threading.Lock()
 
 
@@ -179,6 +181,14 @@ class Handler(BaseHTTPRequestHandler):
         assert format.count("%") >= len(args), f"the log format {format!r} has fewer placeholders than its {len(args)} values; check how this Python's http.server calls log_message"
 
 
+class MockServer(ThreadingHTTPServer):
+    """ThreadingHTTPServer with a listen backlog for zanity's most concurrent requests. Python's
+    default of 5 overflows under [infer] concurrency, so the client retries and the abandoned
+    connection's response fails with a broken pipe."""
+
+    request_queue_size = MAX_CONCURRENCY
+
+
 def exit_when_parent_goes() -> None:
     """Exits once stdin reaches end of file, which happens when the test that started the mock ends."""
     assert not sys.stdin.closed, "the mock's stdin was closed before it could watch for its parent exiting"
@@ -189,6 +199,6 @@ def exit_when_parent_goes() -> None:
 
 if __name__ == "__main__":
     threading.Thread(target=exit_when_parent_goes, daemon=True).start()
-    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    server = MockServer(("127.0.0.1", 0), Handler)
     print(server.server_address[1], flush=True)
     sys.exit(server.serve_forever())
