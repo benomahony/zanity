@@ -2,6 +2,7 @@
 //! settings, and the checks on their values. The first thing it doesn't recognise is an error
 //! naming the line, written to `config.problem`.
 const std = @import("std");
+const toml_values = @import("toml_values.zig");
 const assert = @import("assert.zig");
 const rules = @import("rules.zig");
 const config_module = @import("config.zig");
@@ -60,9 +61,9 @@ pub fn parseConfig(bytes: []u8) Error!Config {
 
 const Table = enum { root, rules, infer, paths, vocabulary, synonyms, scope, questions };
 
-const max_items = max_excludes;
+pub const max_items = max_excludes;
 
-const TomlReader = struct {
+pub const TomlReader = struct {
     bytes: []u8,
     at: usize = 0,
     table: Table = .root,
@@ -81,7 +82,7 @@ const TomlReader = struct {
         return @intCast(counted);
     }
 
-    fn fail(self: *const TomlReader, comptime fmt: []const u8, args: anytype) Error {
+    pub fn fail(self: *const TomlReader, comptime fmt: []const u8, args: anytype) Error {
         if (self.at > self.bytes.len) assert.panic("reporting a problem at byte {d} of a {d}-byte file; fail() must be called with the reader inside the file", .{ self.at, self.bytes.len });
         const written = std.fmt.bufPrint(&config_module.problem, "{s}:{d}: " ++ fmt, .{ file_name, self.line() } ++ args) catch config_module.problem[0..];
         config_module.problem_len = written.len;
@@ -90,7 +91,7 @@ const TomlReader = struct {
     }
 
     /// The byte at the reading position, or null at the end of the file.
-    fn peek(self: *const TomlReader) ?u8 {
+    pub fn peek(self: *const TomlReader) ?u8 {
         if (self.at > self.bytes.len) assert.panic("reading at byte {d} of a {d}-byte file; nothing may move self.at past the end", .{ self.at, self.bytes.len });
         if (self.at == self.bytes.len) return null;
         const c = self.bytes[self.at];
@@ -110,7 +111,7 @@ const TomlReader = struct {
     }
 
     /// Skips spaces, newlines and comments between entries and list items.
-    fn skipBlank(self: *TomlReader) void {
+    pub fn skipBlank(self: *TomlReader) void {
         const start = self.at;
         for (0..self.bytes.len + 1) |_| {
             if (self.at == self.bytes.len) break;
@@ -142,7 +143,7 @@ const TomlReader = struct {
         if (self.bytes[self.at] == '[') {
             try self.readHeader(config);
         } else {
-            const key = self.readKey() orelse return self.fail("expected a setting such as 'rules = [...]' or a table such as '[infer]'.", .{});
+            const key = toml_values.readKey(self) orelse return self.fail("expected a setting such as 'rules = [...]' or a table such as '[infer]'.", .{});
             self.skipSpaces();
             if (self.peek() != '=') return self.fail("expected '=' after '{s}'; write each setting as name = value.", .{key});
             self.at += 1;
@@ -158,7 +159,7 @@ const TomlReader = struct {
         if (self.bytes[self.at] != '[') assert.panic("reading a table header at byte {d}, which is not '['; call readHeader() only at a '['", .{self.at});
         const start = self.at;
         self.at += 1;
-        const name = self.readKey() orelse return self.fail("expected a table name after '['; write [infer] or [paths.\"<pattern>\"].", .{});
+        const name = toml_values.readKey(self) orelse return self.fail("expected a table name after '['; write [infer] or [paths.\"<pattern>\"].", .{});
         try self.finishQuestion(config);
         if (std.mem.eql(u8, name, "questions")) {
             try self.readQuestionHeader(config);
@@ -174,7 +175,7 @@ const TomlReader = struct {
             if (self.peek() != '.') return self.fail("'[paths]' needs a pattern for the files it covers, such as [paths.\"tests/**\"].", .{});
             self.at += 1;
             if (self.at >= self.bytes.len) return self.fail("expected a quoted pattern after '[paths.'; write it as [paths.\"tests/**\"].", .{});
-            self.pending_glob = try self.readString("paths");
+            self.pending_glob = try toml_values.readString(self, "paths");
         }
         if (self.peek() != ']') return self.fail("expected ']' after '[{s}'; close the table name with ']'.", .{name});
         self.at += 1;
@@ -194,13 +195,13 @@ const TomlReader = struct {
             const header_line = self.line();
             if (self.peek() != '.') return self.fail("'[{s}]' needs a name, such as [{s}.billing].", .{ kind, kind });
             self.at += 1;
-            const name = (if (self.peek() == '"') try self.readString(kind) else self.readKey()) orelse return self.fail("expected a name after '[{s}.', such as [{s}.billing].", .{ kind, kind });
+            const name = (if (self.peek() == '"') try toml_values.readString(self, kind) else toml_values.readKey(self)) orelse return self.fail("expected a name after '[{s}.', such as [{s}.billing].", .{ kind, kind });
             self.scope = try self.scopeNamed(config, .{ .name = name, .context = std.mem.eql(u8, kind, "contexts"), .line = header_line });
         }
         self.table = if (self.scope == 0) .vocabulary else .scope;
         if (self.peek() == '.') {
             self.at += 1;
-            const part = self.readKey() orelse "";
+            const part = toml_values.readKey(self) orelse "";
             if (!std.mem.eql(u8, part, "synonyms")) return self.fail("'[{s}.{s}]' isn't a table zanity knows; the only one inside [{s}] is synonyms.", .{ kind, part, kind });
             self.table = .synonyms;
         }
@@ -237,7 +238,7 @@ const TomlReader = struct {
         if (key.len == 0) assert.panic("a vocabulary setting with no name at byte {d}; readEntry() reads a key first", .{self.at});
         const at_line = self.line();
         if (self.table == .scope and self.scope == 0) assert.panic("reading '{s}' in a domain or context table without one; readVocabularyHeader() sets the scope", .{key});
-        const items = try self.readStrings(key);
+        const items = try toml_values.readStrings(self, key);
         if (self.table == .synonyms) {
             for (items) |alias| try self.addTerm(config, .{ .scope = self.scope, .word = alias, .canonical = key, .line = at_line });
             return;
@@ -257,17 +258,6 @@ const TomlReader = struct {
         } else return self.fail("'{s}' isn't a setting here; [vocabulary] takes forbidden and directional, a domain or context takes include and forbidden, and a synonyms table takes canonical = [aliases].", .{key});
     }
 
-    fn readKey(self: *TomlReader) ?[]const u8 {
-        const start = self.at;
-        while (self.at < self.bytes.len) : (self.at += 1) {
-            const c = self.bytes[self.at];
-            if (!(std.ascii.isAlphanumeric(c) or c == '_' or c == '-')) break;
-        }
-        if (self.at < start) assert.panic("reading a key moved back from byte {d} to {d}; readKey() must only move self.at forward", .{ start, self.at });
-        if (self.at > self.bytes.len) assert.panic("reading a key ran to byte {d} of {d}; readKey() must stop at the end of the file", .{ self.at, self.bytes.len });
-        return if (self.at == start) null else self.bytes[start..self.at];
-    }
-
     fn readPathSection(self: *TomlReader, config: *Config) Error!void {
         if (self.table != .paths) assert.panic("starting a [paths] section while reading [{t}]; readHeader() must set the table to paths before starting a section", .{self.table});
         const glob = self.pending_glob;
@@ -283,7 +273,7 @@ const TomlReader = struct {
         if (self.table != .paths or config.paths_len == 0) assert.panic("reading '{s}' as a [paths] setting outside a [paths] section; readSetting() must hand [paths] settings over only inside a section", .{key});
         if (!std.mem.eql(u8, key, "disable")) return self.fail("'{s}' isn't a [paths] setting; the only one is disable.", .{key});
         const section = &config.paths[config.paths_len - 1];
-        for (try self.readStrings(key)) |name| section.disable.include((rules.find(name) orelse return self.fail("'{s}' isn't a rule; the rules are listed in the README, and 'zanity check --rules' takes the same names.", .{name})).name);
+        for (try toml_values.readStrings(self, key)) |name| section.disable.include((rules.find(name) orelse return self.fail("'{s}' isn't a rule; the rules are listed in the README, and 'zanity check --rules' takes the same names.", .{name})).name);
         if (section.disable.len > rules.all.len) assert.panic("[paths.\"{s}\"] disables {d} rules of {d}; Set.include() must add each rule once", .{ section.glob, section.disable.len, rules.all.len });
     }
 
@@ -292,15 +282,15 @@ const TomlReader = struct {
         const InferSetting = enum { enabled, url, model, api_key_env, concurrency, threshold };
         const setting = std.meta.stringToEnum(InferSetting, key) orelse return self.fail("'{s}' isn't an [infer] setting; the settings are enabled, url, model, api_key_env, concurrency and threshold.", .{key});
         switch (setting) {
-            .enabled => config.infer = try self.readBoolean(key),
+            .enabled => config.infer = try toml_values.readBoolean(self, key),
             .url, .model, .api_key_env => try self.readServerSetting(config, key),
             .concurrency => {
-                const value = try self.readInteger(key);
+                const value = try toml_values.readInteger(self, key);
                 if (value < 1 or value > max_concurrency) return self.fail("concurrency is {d}; it must be between 1 and {d}.", .{ value, max_concurrency });
                 config.concurrency = @intCast(value);
             },
             .threshold => {
-                const value = try self.readDecimal(key);
+                const value = try toml_values.readDecimal(self, key);
                 if (!(value > 0 and value <= 1)) return self.fail("threshold is {d}; it must be above 0 and at most 1, such as 0.9 to report only what the model is at least 90% sure of.", .{value});
                 config.threshold = value;
             },
@@ -312,7 +302,7 @@ const TomlReader = struct {
     /// The [infer] settings naming the server: `url`, `model` and `api_key_env`, each held to the
     /// characters its kind of name uses.
     fn readServerSetting(self: *TomlReader, config: *Config, key: []const u8) Error!void {
-        const text = try self.readString(key);
+        const text = try toml_values.readString(self, key);
         const form = for (server_forms) |f| {
             if (std.mem.eql(u8, f.key, key)) break f;
         } else assert.panic("read '{s}' as a server setting; readInferSetting() must hand over only url, model and api_key_env", .{key});
@@ -350,7 +340,7 @@ const TomlReader = struct {
         const start = self.at;
         if (self.peek() != '.') return self.fail("'[questions]' needs the question's name, such as [questions.\"payment-without-key\"].", .{});
         self.at += 1;
-        const name = (if (self.peek() == '"') try self.readString("questions") else self.readKey()) orelse return self.fail("expected a name after '[questions.', such as [questions.\"payment-without-key\"].", .{});
+        const name = (if (self.peek() == '"') try toml_values.readString(self, "questions") else toml_values.readKey(self)) orelse return self.fail("expected a name after '[questions.', such as [questions.\"payment-without-key\"].", .{});
         if (self.peek() != ']') return self.fail("expected ']' after the question's name; close the table with ']'.", .{});
         self.at += 1;
         if (name.len == 0) return self.fail("a question's name is empty; name it, such as [questions.\"payment-without-key\"].", .{});
@@ -374,12 +364,12 @@ const TomlReader = struct {
         const setting = std.meta.stringToEnum(QuestionSetting, key) orelse return self.fail("'{s}' isn't a question setting; the settings are question, finding, fix, severity, asks and threshold.", .{key});
         const q = &config.questions[config.questions_len - 1];
         if (setting == .threshold) {
-            const value = try self.readDecimal(key);
+            const value = try toml_values.readDecimal(self, key);
             if (!(value > 0 and value <= 1)) return self.fail("threshold is {d}; it must be above 0 and at most 1, such as 0.9 to report only what the model is at least 90% sure of.", .{value});
             q.threshold = value;
             return;
         }
-        const text = try self.readString(key);
+        const text = try toml_values.readString(self, key);
         switch (setting) {
             .threshold => unreachable,
             .severity => q.severity = std.meta.stringToEnum(rules.Severity, text) orelse return self.fail("severity must be \"error\", \"warning\" or \"information\".", .{}),
@@ -441,7 +431,7 @@ const TomlReader = struct {
 
     /// Reads and stores a top-level or [rules] setting: exclude, or a rule list.
     fn storeSetting(self: *TomlReader, config: *Config, which: Setting, key: []const u8) Error!void {
-        const items = try self.readStrings(key);
+        const items = try toml_values.readStrings(self, key);
         if (key.len == 0) assert.panic("storing a setting with no name; readEntry() reads its key first", .{});
         switch (which) {
             .exclude => {
@@ -457,110 +447,5 @@ const TomlReader = struct {
             },
         }
         if (which == .exclude and config.exclude_len != items.len) assert.panic("read {d} exclude patterns but stored {d}", .{ items.len, config.exclude_len });
-    }
-
-    fn readInteger(self: *TomlReader, key: []const u8) Error!i64 {
-        const start = self.at;
-        while (self.peek()) |c| {
-            if (!std.ascii.isDigit(c) and c != '_' and c != '-' and c != '+') break;
-            self.at += 1;
-        }
-        var digits: [32]u8 = undefined;
-        var n: usize = 0;
-        for (self.bytes[start..self.at]) |c| if (c != '_' and n < digits.len) {
-            digits[n] = c;
-            n += 1;
-        };
-        const value = std.fmt.parseInt(i64, digits[0..n], 10) catch return self.fail("'{s}' needs a whole number, such as {s} = 8.", .{ key, key });
-        if (self.at <= start) assert.panic("parsed {d} for '{s}' without reading a digit at byte {d}; readInteger() must fail before parsing when it read no digit", .{ value, key, start });
-        if (n > digits.len) assert.panic("kept {d} digits in room for {d}; readInteger() must keep at most the digit buffer's length", .{ n, digits.len });
-        return value;
-    }
-
-    fn readBoolean(self: *TomlReader, key: []const u8) Error!bool {
-        const rest = self.bytes[self.at..];
-        const value = if (std.mem.startsWith(u8, rest, "true")) true else if (std.mem.startsWith(u8, rest, "false")) false else return self.fail("'{s}' needs true or false, such as {s} = true.", .{ key, key });
-        const length: usize = if (value) "true".len else "false".len;
-        if (rest.len > length and (std.ascii.isAlphanumeric(rest[length]) or rest[length] == '_')) return self.fail("'{s}' needs true or false, not '{s}'; write {s} = true or {s} = false.", .{ key, std.mem.sliceTo(rest, '\n'), key, key });
-        self.at += length;
-        if (self.at > self.bytes.len) assert.panic("read '{s}' past the end of the {d}-byte file; readBoolean() must advance only over the word it matched", .{ key, self.bytes.len });
-        if (!std.mem.eql(u8, self.bytes[self.at - length .. self.at], if (value) "true" else "false")) assert.panic("read '{s}' for '{s}' as {s}; readBoolean() must advance over the word it matched", .{ self.bytes[self.at - length .. self.at], key, if (value) "true" else "false" });
-        return value;
-    }
-
-    fn readDecimal(self: *TomlReader, key: []const u8) Error!f64 {
-        const start = self.at;
-        while (self.peek()) |c| {
-            if (!std.ascii.isDigit(c) and c != '.' and c != '_') break;
-            self.at += 1;
-        }
-        var digits: [32]u8 = undefined;
-        var n: usize = 0;
-        for (self.bytes[start..self.at]) |c| if (c != '_' and n < digits.len) {
-            digits[n] = c;
-            n += 1;
-        };
-        if (n == 0) return self.fail("'{s}' needs a number, such as {s} = 0.9.", .{ key, key });
-        const value = std.fmt.parseFloat(f64, digits[0..n]) catch return self.fail("'{s}' needs a number, such as {s} = 0.9.", .{ key, key });
-        if (n > digits.len) assert.panic("kept {d} digits in room for {d}; readDecimal() must keep at most the digit buffer's length", .{ n, digits.len });
-        if (n > self.at - start) assert.panic("kept {d} digits from {d} bytes read for '{s}'; readDecimal() must copy only bytes it read", .{ n, self.at - start, key });
-        return value;
-    }
-
-    /// Reads a list of strings, which may span lines and end with a comma.
-    fn readStrings(self: *TomlReader, key: []const u8) Error![]const []const u8 {
-        if (self.peek() != '[') return self.fail("'{s}' needs a list of strings, such as {s} = [\"a\", \"b\"].", .{ key, key });
-        const start = self.at;
-        self.at += 1;
-        var count: usize = 0;
-        for (0..self.bytes.len) |_| {
-            self.skipBlank();
-            if (self.at >= self.bytes.len) break;
-            if (self.bytes[self.at] == ']') {
-                self.at += 1;
-                if (count > max_items) assert.panic("read {d} items of '{s}' in room for {d}; readStrings() must refuse lists longer than max_items", .{ count, key, max_items });
-                return self.items[0..count];
-            }
-            if (count == max_items) return self.fail("'{s}' has more than {d} items; use fewer, broader ones.", .{ key, max_items });
-            self.items[count] = try self.readString(key);
-            count += 1;
-            self.skipBlank();
-            if (self.peek() == ',') {
-                self.at += 1;
-            } else if (self.peek() != ']') {
-                return self.fail("items in '{s}' must be separated by commas, such as [\"a\", \"b\"].", .{key});
-            }
-        }
-        if (self.at <= start) assert.panic("reading '{s}' at byte {d} consumed nothing; readStrings() must consume at least the '[' it starts at", .{ key, start });
-        return self.fail("'{s}' opens a list that is never closed with ']'; add ']' after its last item.", .{key});
-    }
-
-    fn readString(self: *TomlReader, key: []const u8) Error![]const u8 {
-        if (self.at >= self.bytes.len) assert.panic("reading a string for '{s}' at byte {d} of {d}; call readString() only inside the file", .{ key, self.at, self.bytes.len });
-        const quote = self.bytes[self.at];
-        if (quote != '"' and quote != '\'') return self.fail("items in '{s}' must be quoted strings, such as \"recursion\".", .{key});
-        self.at += 1;
-        const start = self.at;
-        var written = start;
-        while (self.at < self.bytes.len and self.bytes[self.at] != quote) : (self.at += 1) {
-            var c = self.bytes[self.at];
-            if (c == '\n') return self.fail("a string in '{s}' is not closed before the end of the line; add the closing quote on the same line.", .{key});
-            if (quote == '"' and c == '\\' and self.at + 1 < self.bytes.len) {
-                self.at += 1;
-                c = switch (self.bytes[self.at]) {
-                    'n' => '\n',
-                    't' => '\t',
-                    '"' => '"',
-                    '\\' => '\\',
-                    else => return self.fail("'\\{c}' isn't an escape zanity understands; use \\\\, \\\", \\n or \\t.", .{self.bytes[self.at]}),
-                };
-            }
-            self.bytes[written] = c;
-            written += 1;
-        }
-        if (self.at >= self.bytes.len) return self.fail("a string in '{s}' is never closed; add the matching closing quote.", .{key});
-        if (written > self.at) assert.panic("decoding a string for '{s}' wrote {d} bytes but read only {d}; decoding escapes can only shrink a string, so check how readString() writes", .{ key, written - start, self.at - start });
-        self.at += 1;
-        return self.bytes[start..written];
     }
 };
