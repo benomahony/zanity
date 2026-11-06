@@ -238,6 +238,26 @@ pub fn checkFix(self: *File, ctx: Context, name: []const u8) ![]const u8 {
     return fix;
 }
 
+/// A function or test with fewer assertions or checks than its minimum, once weak ones are
+/// counted out.
+pub fn checkAssertionDensity(self: *File, ctx: Context, function: Context, name_node: ts.Node) !void {
+    const name = name_node.text(self.source);
+    if (ctx.family != .function and ctx.family != .@"test") assert.panic("{s}: counting the assertions of {f}, which is a {t}, not a function or test; call checkAssertionDensity() only from closeFunction() or closeTest()", .{ self.work.facts.path, ctx.node.where(), ctx.family });
+    if (!function.node.eql(ctx.node)) assert.panic("{s}: counting the assertions of {f} against the weak assertions of {f}; pass the function on the same node", .{ self.work.facts.path, ctx.node.where(), function.node.where() });
+    if (ctx.family == .function and self.index.marks(ctx.node, self.v.test_outer)) return;
+    if (!ctx.is_test and self.inTestFile()) return;
+    const counted = if (ctx.is_test) ctx.checks else ctx.asserts;
+    const meaningful = counted -| weakLines(self, function);
+    const minimum: u32 = if (ctx.is_test) rules.min_checks_per_test else rules.min_asserts_per_function;
+    if (meaningful >= minimum) return;
+    const message = if (ctx.is_test)
+        try self.say("'{s}' makes no check that can catch a bug; a test needs at least {d}.", .{ name, minimum })
+    else
+        try self.say("'{s}' has {d} {s} that can catch a bug; it needs at least {d}.", .{ name, meaningful, if (meaningful == 1) "assertion" else "assertions", minimum });
+    if (!try self.report(name_node, "assertion-density", message)) return;
+    self.s.diagnostics.last().?.fix = if (ctx.is_test) try checkFix(self, function, name) else try assertionFix(self, function, name);
+}
+
 pub fn weakLines(self: *File, ctx: Context) u32 {
     var lines: u32 = 0;
     for (self.s.weak.items()) |w| lines += @intFromBool(w.owner == ctx.serial);

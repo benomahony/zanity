@@ -1,0 +1,9 @@
+rules: unended-span,dynamic-span-name
+exit: 0
+tracing.py:7:12: warning [unended-span]
+tracing.py:39:39: warning [dynamic-span-name]
+tracing.py:44:39: warning [dynamic-span-name]
+tracing.py:76:14: warning [unended-span]
+tracing.py:82:12: warning [unended-span]
+tracing.py:88:5: warning [unended-span]
+tracing.py:93:12: warning [unended-span]

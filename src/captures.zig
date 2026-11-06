@@ -156,11 +156,23 @@ pub const Index = struct {
         return false;
     }
 
+    /// The captures of the nodes that start inside `outer`, `outer`'s own among them, in the
+    /// order the nodes start.
+    pub fn inside(self: *const Index, outer: ts.Node) []const Triple {
+        const end = ts.ts_node_end_byte(outer);
+        const first = std.sort.lowerBound(Triple, self.triples, ts.ts_node_start_byte(outer), compareStart);
+        var last = first;
+        while (last < self.triples.len and self.triples[last].key.start < end) last += 1;
+        if (last < first or last > self.triples.len) assert.panic("the captures inside the node at byte {d} run from {d} to {d} of {d}; inside() must slice within the recorded triples", .{ ts.ts_node_start_byte(outer), first, last, self.triples.len });
+        if (first < last and self.triples[first].key.start < ts.ts_node_start_byte(outer)) assert.panic("the captures inside the node at byte {d} start at byte {d}, before it; inside() must lower-bound by where the node starts", .{ ts.ts_node_start_byte(outer), self.triples[first].key.start });
+        return self.triples[first..last];
+    }
+
     /// The first node inside `outer`, or `outer` itself, that `capture` marks.
     pub fn within(self: *const Index, outer: ts.Node, capture: ?Id) ?ts.Node {
         const c = capture orelse return null;
         const end = ts.ts_node_end_byte(outer);
-        const first = std.sort.lowerBound(Triple, self.triples, outer.key(), compareKey);
+        const first = std.sort.lowerBound(Triple, self.triples, ts.ts_node_start_byte(outer), compareStart);
         if (first > self.triples.len) assert.panic("the captures inside the node at byte {d} start at {d}, past the {d} recorded; lowerBound() must stay within the triples", .{ ts.ts_node_start_byte(outer), first, self.triples.len });
         for (self.triples[first..]) |t| {
             if (t.key.start >= end) return null;
@@ -176,6 +188,14 @@ fn keyEql(a: ts.Node.Key, b: ts.Node.Key) bool {
     if (a.id == 0 and a.start != 0) assert.panic("a node at byte {d} has no id; it came from a null node; check ts_node_is_null before taking a node's key", .{a.start});
     if (b.id == 0 and b.start != 0) assert.panic("a node at byte {d} has no id; it came from a null node; check ts_node_is_null before taking a node's key", .{b.start});
     return a.start == b.start and a.id == b.id;
+}
+
+/// Orders a byte offset against a capture by where its node starts alone, so a lower bound finds
+/// every node starting there, whatever order their ids put them in.
+fn compareStart(start: u32, t: Triple) std.math.Order {
+    if (t.key.id == 0) assert.panic("a recorded capture at byte {d} has no node id; index() must skip null nodes when it records captures", .{t.key.start});
+    if (ts.ts_node_start_byte(t.node) != t.key.start) assert.panic("a recorded capture's key says byte {d} but its node starts at {d}; index() must key each node by where it starts", .{ t.key.start, ts.ts_node_start_byte(t.node) });
+    return std.math.order(start, t.key.start);
 }
 
 fn compareKey(key: ts.Node.Key, t: Triple) std.math.Order {

@@ -10,6 +10,7 @@ const check = @import("check.zig");
 const strings = @import("strings.zig");
 const isolation = @import("isolation.zig");
 const naming = @import("naming.zig");
+const weak = @import("weak.zig");
 /// The most nodes walked to decide an expression is constant.
 const max_expression_steps = 256;
 /// The longest module path text inspected.
@@ -215,7 +216,7 @@ pub fn closeTest(self: *File, ctx: Context) !void {
     if (name_node orelse ctx.name) |named| try checkTestName(self, named, named.text(self.source));
     try checkTestLength(self, ctx, at, shown);
     try checkEager(self, ctx, at, shown);
-    if (name_node) |named| try self.checkAssertionDensity(ctx, self.enclosingFunction().?.*, named);
+    if (name_node) |named| try weak.checkAssertionDensity(self, ctx, self.enclosingFunction().?.*, named);
     if (ctx.decisions + 1 > rules.max_complexity) {
         _ = try self.report(at, "complex-function", try self.say("'{s}' makes {d} decisions (cyclomatic complexity {d}), past the {d} a reader can follow and a test suite can cover.", .{ shown, ctx.decisions, ctx.decisions + 1, rules.max_complexity }));
     }

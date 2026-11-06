@@ -582,6 +582,40 @@
 (return_statement
   (_) @expression.returned)
 
+; A call whose result something else ends, such as a span: the caller it is returned to, or the
+; object it is stored on.
+[
+  (return_statement
+    (call_expression) @call.handed_off)
+  (arrow_function
+    body: (call_expression) @call.handed_off)
+  (assignment_expression
+    left: (member_expression)
+    right: (call_expression) @call.handed_off)
+]
+
+; The name a call's result is bound to, such as the span a start returns, or the callback
+; parameter it is passed to, as in `tracer.startActiveSpan(name, (span) => ...)`.
+(variable_declarator
+  name: (identifier) @binding.name
+  value: (call_expression) @binding.value)
+
+(call_expression
+  arguments: (arguments
+    [
+      (arrow_function
+        parameter: (identifier) @binding.name)
+      (arrow_function
+        parameters: (formal_parameters . (identifier) @binding.name))
+      (function_expression
+        parameters: (formal_parameters . (identifier) @binding.name))
+    ])) @binding.value
+
+; A name stored on an object, which then owns what it holds.
+(assignment_expression
+  left: (member_expression)
+  right: (identifier) @binding.handed_off)
+
 ; Functions, classes and methods, which the upstream tags leave to JavaScript's.
 (function_declaration
   name: (identifier) @name) @definition.function

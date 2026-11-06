@@ -588,6 +588,31 @@
 (return_statement
   (_) @expression.returned)
 
+; A call whose result something else ends, such as a span: a `with` block, the caller it is
+; returned to, or the object it is stored on.
+[
+  (with_item
+    value: (call) @call.handed_off)
+  (with_item
+    value: (as_pattern
+      (call) @call.handed_off))
+  (return_statement
+    (call) @call.handed_off)
+  (assignment
+    left: (attribute)
+    right: (call) @call.handed_off)
+]
+
+; The name a call's result is bound to, such as the span a start returns.
+(assignment
+  left: (identifier) @binding.name
+  right: (call) @binding.value)
+
+; A name stored on an object, which then owns what it holds.
+(assignment
+  left: (attribute)
+  right: (identifier) @binding.handed_off)
+
 ; Names the code refers to, for dead-symbol: every identifier other than where it is defined.
 (identifier) @reference.name
 
