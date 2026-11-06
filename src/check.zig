@@ -106,9 +106,6 @@ pub const Context = struct {
     has_sleep: bool = false,
     /// Whether the function reports an error anywhere in its body.
     has_message: bool = false,
-    /// The first span the function starts and must end itself, and whether it ends any span.
-    span_start: ?ts.Node = null,
-    ends_span: bool = false,
     /// A branch or loop that continues its parent at the same depth, like an `else if`.
     chained: bool = false,
     /// Checks a test makes: its assertions and its test framework's checks.
@@ -141,6 +138,7 @@ pub const FileScratch = struct {
     signature: memory.Bounded(Parameter),
     weak: memory.Bounded(Weak),
     locals: memory.Bounded(Owned),
+    spans: hazards.Spans,
     declared: memory.Bounded(types.Declared),
     /// A declared type waiting for the name it declares, which comes after it.
     pending_type: ?ts.Node = null,
@@ -172,6 +170,7 @@ pub const FileScratch = struct {
             .signature = try .initBounded(gpa, limits.per_file, "parameters in one file"),
             .weak = try .initBounded(gpa, limits.per_file, "weak assertions in one file"),
             .locals = try .initBounded(gpa, limits.per_file, "local names in one file"),
+            .spans = try .initSpans(gpa, limits.per_file),
             .declared = try .initBounded(gpa, limits.per_file, "declared names in one file"),
             .bare_calls = try .initBounded(gpa, limits.per_file, "unqualified calls in one file"),
             .async_names = try .initBounded(gpa, limits.per_file, "async functions in one file"),
@@ -188,7 +187,7 @@ pub const FileScratch = struct {
     }
 
     pub fn clearFile(self: *FileScratch) void {
-        inline for (.{ "contexts", "opened", "diagnostics", "suppressions", "codes", "trail", "calls", "signature", "weak", "locals", "declared", "bare_calls", "async_names", "statement_calls", "repeats", "writes", "path", "ancestors" }) |field| {
+        inline for (.{ "contexts", "opened", "diagnostics", "suppressions", "codes", "trail", "calls", "signature", "weak", "locals", "spans", "declared", "bare_calls", "async_names", "statement_calls", "repeats", "writes", "path", "ancestors" }) |field| {
             @field(self, field).clear();
         }
         self.names.reset();

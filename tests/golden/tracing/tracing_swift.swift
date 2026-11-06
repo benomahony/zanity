@@ -39,3 +39,22 @@ func formatted(orderID: String) -> String {
         orderID
     }
 }
+
+func firstOfTwo(orderID: String) -> String {
+    let first = InstrumentationSystem.tracer.startSpan("first")
+    let second = InstrumentationSystem.tracer.startSpan("second")
+    first.end()
+    return orderID
+}
+
+func otherEnded(orderID: String, timer: Timer) -> String {
+    let span = InstrumentationSystem.tracer.startSpan("otherEnded")
+    timer.end()
+    return orderID
+}
+
+func finished(orderID: String) -> String {
+    let span = InstrumentationSystem.tracer.startSpan("finished")
+    finish(span)
+    return orderID
+}

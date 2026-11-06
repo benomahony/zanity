@@ -239,7 +239,7 @@ pub const core = [_]Rule{
     .{ .name = "parameter-log-message", .advice = "Use a fixed log message and record caller-controlled data in a structured field after removing line breaks and control characters.", .severity = .warning, .tier = .default, .catalogue = &.{"CWE-117"}, .needs = &.{ "call.outer", "call.name", "call.argument", "expression.path", "function.outer", "function.parameter" } },
     .{ .name = "wall-clock-duration", .advice = "Measure durations with a monotonic clock, such as time.monotonic(), performance.now() or Instant::now().", .severity = .warning, .tier = .default, .catalogue = &.{"EXT-TIME-001"}, .needs = &.{ "call.outer", "call.name", "arith.difference" } },
     .{ .name = "unawaited-call", .advice = "Await it, or keep the task and await it later, so it runs and its errors are seen.", .severity = .@"error", .tier = .default, .catalogue = &.{ "EXT-ASYNC-002", "EXT-ASYNC-003" }, .needs = &.{ "async.name", "statement.call" } },
-    .{ .name = "unended-span", .advice = "End the span on every path, with a with block, defer span.end() or a finally, or start it with the scoped form, such as start_as_current_span or withSpan.", .severity = .warning, .tier = .default, .needs = &.{ "call.outer", "call.name", "call.receiver", "call.handed_off", "function.outer", "function.name" } },
+    .{ .name = "unended-span", .advice = "End the span on every path, with a with block, defer span.end() or a finally, or start it with the scoped form, such as start_as_current_span or withSpan.", .severity = .warning, .tier = .default, .needs = &.{ "call.outer", "call.name", "call.receiver", "call.argument", "call.discarded", "call.handed_off", "binding.name", "binding.value", "binding.handed_off", "reference.name", "expression.returned", "function.outer", "function.name" } },
     .{ .name = "dynamic-span-name", .advice = "Name the span for the operation with fixed text, and record the varying value as a span attribute.", .severity = .warning, .tier = .default, .needs = &.{ "call.outer", "call.name", "call.argument", "string.built" } },
     .{ .name = "discarded-span-context", .advice = "Keep the context the span start returns and pass it to the calls the span covers, such as ctx, span := tracer.Start(ctx, name).", .severity = .warning, .tier = .default, .needs = &.{ "call.outer", "call.name", "call.receiver", "call.context_discarded" } },
     .{ .name = "deep-nesting", .advice = "Return early for the edge cases, or move the inner block into its own function.", .severity = .warning, .tier = .default, .catalogue = &.{"CWE-1124"}, .needs = &.{"control.outer"} },
@@ -294,7 +294,7 @@ pub fn ruleIndex(code: []const u8) ?u16 {
     return positions.get(code);
 }
 
-pub const max_needs = 8;
+pub const max_needs = 16;
 
 pub fn missing(rule: Rule, has: anytype, out: *[max_needs][]const u8) []const []const u8 {
     if (rule.name.len == 0) assert.panic("a rule in rules.all has no name (advice: '{s}'); give every entry in rules.all a .name", .{rule.advice});

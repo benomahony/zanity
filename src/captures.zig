@@ -156,6 +156,18 @@ pub const Index = struct {
         return false;
     }
 
+    /// The captures of the nodes that start inside `outer`, `outer`'s own among them, in the
+    /// order the nodes start.
+    pub fn inside(self: *const Index, outer: ts.Node) []const Triple {
+        const end = ts.ts_node_end_byte(outer);
+        const first = std.sort.lowerBound(Triple, self.triples, ts.ts_node_start_byte(outer), compareStart);
+        var last = first;
+        while (last < self.triples.len and self.triples[last].key.start < end) last += 1;
+        if (last < first or last > self.triples.len) assert.panic("the captures inside the node at byte {d} run from {d} to {d} of {d}; inside() must slice within the recorded triples", .{ ts.ts_node_start_byte(outer), first, last, self.triples.len });
+        if (first < last and self.triples[first].key.start < ts.ts_node_start_byte(outer)) assert.panic("the captures inside the node at byte {d} start at byte {d}, before it; inside() must lower-bound by where the node starts", .{ ts.ts_node_start_byte(outer), self.triples[first].key.start });
+        return self.triples[first..last];
+    }
+
     /// The first node inside `outer`, or `outer` itself, that `capture` marks.
     pub fn within(self: *const Index, outer: ts.Node, capture: ?Id) ?ts.Node {
         const c = capture orelse return null;

@@ -412,6 +412,25 @@
       (call_expression) @call.handed_off))
 ]
 
+; The name a call's last result is bound to, such as the span in `ctx, span := tracer.Start(ctx, name)`.
+[
+  (short_var_declaration
+    left: (expression_list
+      (identifier) @binding.name .)
+    right: (expression_list . (call_expression) @binding.value .))
+  (assignment_statement
+    left: (expression_list
+      (identifier) @binding.name .)
+    right: (expression_list . (call_expression) @binding.value .))
+]
+
+; A name stored on a struct, which then owns what it holds.
+(assignment_statement
+  left: (expression_list
+    (selector_expression))
+  right: (expression_list
+    (identifier) @binding.handed_off))
+
 ; Names the code refers to, for dead-symbol: every name other than where it is defined.
 [
   (identifier)

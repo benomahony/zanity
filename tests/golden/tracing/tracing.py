@@ -43,3 +43,53 @@ def formatted(order_id):
 def concatenated(order_id):
     with tracer.start_as_current_span("charge " + order_id):
         return order_id
+
+
+def used(order_id):
+    span = tracer.start_span("used")
+    with trace.use_span(span, end_on_exit=True):
+        return order_id
+
+
+def finished(order_id):
+    span = tracer.start_span("finished")
+    finish(span)
+    return order_id
+
+
+def collected(spans):
+    spans.append(tracer.start_span("collected"))
+
+
+def kept(job):
+    span = tracer.start_span("kept")
+    job.span = span
+
+
+def paired(context):
+    span = tracer.start_span("paired")
+    return context, span
+
+
+def first_of_two(order_id):
+    first = tracer.start_span("first")
+    second = tracer.start_span("second")
+    first.end()
+    return order_id
+
+
+def other_ended(order_id, timer):
+    span = tracer.start_span("other_ended")
+    timer.end()
+    return order_id
+
+
+def discarded(order_id):
+    tracer.start_span("discarded")
+    return order_id
+
+
+def dropped(order_id):
+    span = tracer.start_span("dropped")
+    span.set_attribute("order", order_id)
+    return order_id

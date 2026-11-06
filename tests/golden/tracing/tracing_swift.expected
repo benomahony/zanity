@@ -3,3 +3,5 @@ exit: 0
 tracing_swift.swift:4:16: warning [unended-span]
 tracing_swift.swift:15:16: warning [unended-span]
 tracing_swift.swift:38:14: warning [dynamic-span-name]
+tracing_swift.swift:45:18: warning [unended-span]
+tracing_swift.swift:51:16: warning [unended-span]

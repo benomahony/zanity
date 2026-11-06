@@ -86,3 +86,29 @@ func Command() error {
 	err := cmd.Start()
 	return err
 }
+
+func startOp(ctx context.Context) (context.Context, trace.Span) {
+	ctx, span := tracer.Start(ctx, "op")
+	span.SetAttributes()
+	return ctx, span
+}
+
+func FirstOfTwo(ctx context.Context, id string) error {
+	ctx, first := tracer.Start(ctx, "first")
+	defer first.End()
+	ctx, second := tracer.Start(ctx, "second")
+	second.SetName(id)
+	return use(ctx, id)
+}
+
+func OtherEnded(ctx context.Context, timer *Timer, id string) error {
+	ctx, span := tracer.Start(ctx, "other")
+	timer.End()
+	return use(ctx, id)
+}
+
+func (j *Job) Keep(ctx context.Context) {
+	ctx, span := tracer.Start(ctx, "keep")
+	j.span = span
+	j.ctx = ctx
+}

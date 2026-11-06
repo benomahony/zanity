@@ -31,3 +31,29 @@ fn formatted(tracer: *Tracer, gpa: std.mem.Allocator, order: u64) !u64 {
     defer span.end();
     return order;
 }
+
+fn firstOfTwo(tracer: *Tracer, order: u64) u64 {
+    const first = tracer.startSpan("first");
+    defer first.end();
+    const second = tracer.startSpan("second");
+    _ = second;
+    return order;
+}
+
+fn otherEnded(tracer: *Tracer, timer: *Timer, order: u64) u64 {
+    const span = tracer.startSpan("otherEnded");
+    defer timer.end();
+    _ = span;
+    return order;
+}
+
+fn finished(tracer: *Tracer, order: u64) u64 {
+    const span = tracer.startSpan("finished");
+    finish(span);
+    return order;
+}
+
+fn kept(job: *Job, tracer: *Tracer) void {
+    const span = tracer.startSpan("kept");
+    job.span = span;
+}

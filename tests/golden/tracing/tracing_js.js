@@ -50,3 +50,29 @@ function concatenated(id) {
   const span = tracer.startSpan("charge " + id);
   span.end();
 }
+
+function firstOfTwo(id) {
+  const first = tracer.startSpan("first");
+  const second = tracer.startSpan("second");
+  first.end();
+  return id;
+}
+
+function otherEnded(id, timer) {
+  const span = tracer.startSpan("otherEnded");
+  timer.end();
+  return id;
+}
+
+function finished(id) {
+  const span = tracer.startSpan("finished");
+  finish(span);
+  return id;
+}
+
+class Keeper {
+  keep() {
+    const span = tracer.startSpan("keep");
+    this.span = span;
+  }
+}

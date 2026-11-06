@@ -755,6 +755,18 @@
     result: (call_expression) @call.handed_off)
 ]
 
+; The name a call's result is bound to, such as the span a start returns.
+(property_declaration
+  name: (pattern
+    bound_identifier: (simple_identifier) @binding.name)
+  value: (call_expression) @binding.value)
+
+; A name stored on an object, which then owns what it holds.
+(assignment
+  target: (directly_assignable_expression
+    (navigation_expression))
+  result: (simple_identifier) @binding.handed_off)
+
 ; `public` or `open`, so code outside the module can use it.
 ((_
   (modifiers

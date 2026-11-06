@@ -488,6 +488,18 @@
       (call_expression) @call.handed_off))
 ]
 
+; The name a call's result is bound to, such as the span a start returns.
+(variable_declaration
+  (identifier) @binding.name
+  "="
+  (call_expression) @binding.value)
+
+; A name stored on a struct, which then owns what it holds.
+(variable_declaration
+  (field_expression)
+  "="
+  (identifier) @binding.handed_off)
+
 ; Text formatted at runtime, into a buffer or a new allocation.
 ((call_expression
   function: (field_expression
