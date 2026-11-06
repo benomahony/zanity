@@ -5,6 +5,8 @@ files it is about: a comment
 `judge: <rule>` makes that rule's question answer 0.95, anything else 0.05.
 `mock: too-large` refuses the request as Jev refuses one over its input limit, and
 `mock: unauthorized` refuses it as a wrong key is refused.
+While the file named by MOCK_TYPESAFE_HANG holds a number N, the Nth request is never answered,
+so a test can stop zanity while it waits.
 Each request is appended to the file named by MOCK_TYPESAFE_LOG, with the model and the
 Authorization header it carried, so tests can see what was asked and with which key. Prints the port it listens on, then serves until killed or until its
 stdin closes: the test holds stdin open, so a test that dies without killing the mock still
@@ -31,6 +33,25 @@ MOCK_TOKENS_PER_REQUEST = 1
 # zanity's largest [infer] concurrency, max_concurrency in src/config.zig.
 MAX_CONCURRENCY = 64
 LOG_LOCK = threading.Lock()
+# Never set: the request MOCK_TYPESAFE_HANG names waits on it until the mock exits.
+NEVER = threading.Event()
+REQUESTS = [0]
+
+
+def hangs() -> bool:
+    """Counts this request and says whether it is the one the test's MOCK_TYPESAFE_HANG file names.
+    The file is absent unless a test writes it, so every other test is answered as before."""
+    assert REQUESTS[0] >= 0, f"{REQUESTS[0]} requests counted; the counter starts at 0 and only goes up"
+    with LOG_LOCK:
+        REQUESTS[0] += 1
+        number = REQUESTS[0]
+    path = os.environ.get("MOCK_TYPESAFE_HANG")
+    if not path or not os.path.exists(path):
+        return False
+    with open(path, encoding="utf-8") as hang:
+        named = hang.read().strip()
+    assert named.isdigit() and int(named) > 0, f"the hang file holds {named!r}; write the number of the request to leave unanswered, from 1"
+    return int(named) == number
 
 
 def validated_questions(questions: dict) -> dict:
@@ -157,6 +178,8 @@ class Handler(BaseHTTPRequestHandler):
                 judged = set(re.findall(r"judge: ([a-z-]+)", source))
                 answers = {name: {"type": "noul", "noul": YES_PROBABILITY if name in judged else NO_PROBABILITY} for name in questions}
                 record_request(source, questions, model, self.headers.get("Authorization", ""))
+                if hangs():
+                    NEVER.wait()
                 status, payload = 200, {"model": model, "answers": answers, "usage": {"input_tokens": MOCK_TOKENS_PER_REQUEST, "output_tokens": MOCK_TOKENS_PER_REQUEST}}
                 if "mock: too-large" in source:
                     status, payload = 400, {"detail": {"error_type": "max_tokens_exceeded"}}

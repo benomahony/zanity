@@ -92,6 +92,11 @@ pub const Inference = struct {
     threshold: f64 = default_threshold,
     answered: std.atomic.Value(usize) = .init(0),
     stats: Stats = .{},
+    /// Held while one request's answers are written, since requests share the store's statements.
+    keeping: Io.Mutex = .init,
+    /// Why keeping an answer failed, in SQLite's words; store.failure belongs to the worker that failed.
+    keep_failure: [store.failure.len]u8 = undefined,
+    keep_failure_len: usize = 0,
 
     /// Fails with `error.MissingApiKey` when asking TypeSafe's API and the key variable is not set.
     pub fn initInference(gpa: Allocator, io: Io, limits: memory.Limits, server: Server) !Inference {
@@ -200,6 +205,11 @@ pub const Inference = struct {
         for (self.jobs.items()) |*job| {
             defer job.diagnostics.deinit();
             const err = job.failed orelse continue;
+            if (err == error.StoreUnavailable) {
+                @memcpy(store.failure[0..self.keep_failure_len], self.keep_failure[0..self.keep_failure_len]);
+                store.failure_len = self.keep_failure_len;
+                return err;
+            }
             job.too_large = tooLarge(job, err);
             if (job.too_large) continue;
             failure = try self.describe(job, err);
@@ -258,6 +268,7 @@ pub const Inference = struct {
             questions[count] = .{ .name = rule.name, .question = .{ .noul = .{ .instructions = .{ .text = rule.question } } } };
             count += 1;
         }
+        const sent = slots[start..next];
         semaphore.waitUncancelable(self.io);
         defer semaphore.post(self.io);
         var response = try self.client.systemOne(.{ .state = .{ .raw = job.state }, .questions = questions[0..count] }, .{ .diagnostics = &job.diagnostics });
@@ -270,28 +281,49 @@ pub const Inference = struct {
                 .noul => |n| n.noul,
                 else => continue,
             };
-            for (slots[start..next]) |*slot| {
+            for (sent) |*slot| {
                 if (std.mem.eql(u8, slot.rule.name, named.name)) slot.answer = p;
             }
         }
         // A question the server didn't answer is left unanswered rather than asked forever.
-        for (slots[start..next]) |*slot| if (slot.answer == null) {
+        for (sent) |*slot| if (slot.answer == null) {
             slot.known = true;
         };
         if (count == 0) assert.panic("{s}: a request from slot {d} carried no questions; call askFrom() only for a unit with questions left", .{ job.unit.path, start });
+        try self.keep(job, sent);
         return next;
     }
 
-    /// Adds findings for the confident answers and caches the fresh ones.
+    /// Stores the fresh answers from one response before its request ends, so a run that is
+    /// interrupted or fails later keeps every answer it was sent.
+    fn keep(self: *Inference, job: *const Job, sent: []const Slot) !void {
+        const unit = job.unit;
+        if (sent.len == 0 or sent.len > job.count) assert.panic("{s}: keeping {d} answers about '{s}', which has {d} questions; pass the slots one request asked", .{ unit.path, sent.len, unit.name, job.count });
+        if (self.model.len == 0) assert.panic("keeping answers under no model; initInference() names it", .{});
+        self.keeping.lockUncancelable(self.io);
+        defer self.keeping.unlock(self.io);
+        for (sent) |slot| {
+            if (slot.known) continue;
+            const p = slot.answer orelse assert.panic("{s}: '{s}' has an unanswered question for {s} that is not marked known; askFrom() marks every question the server skipped", .{ unit.path, unit.name, slot.rule.name });
+            const answer: store.Answer = .{ .model = self.model, .question = store.digest(&.{slot.rule.question}), .unit = job.unit_hash, .language = unit.language, .source = unit.source, .probability = p };
+            self.store.keepAnswer(answer) catch |err| {
+                if (self.keep_failure_len == 0) {
+                    self.keep_failure_len = store.failure_len;
+                    @memcpy(self.keep_failure[0..store.failure_len], store.failure[0..store.failure_len]);
+                }
+                return err;
+            };
+        }
+    }
+
+    /// Adds findings for the confident answers; keep() has already stored the fresh ones.
     fn record(self: *Inference, job: *const Job, findings: *memory.Bounded(Finding)) !void {
         const unit = job.unit;
         if (job.failed) |err| assert.panic("{s}: recording answers about '{s}' after the request failed with {t}; askOne() must skip record() when the job failed", .{ unit.path, unit.name, err });
         for (self.slotsOf(job)) |slot| {
             const rule = slot.rule;
-            const known = slot.known;
             const p = slot.answer orelse continue;
             const question = store.digest(&.{rule.question});
-            if (!known) try self.store.keepAnswer(.{ .model = self.model, .question = question, .unit = job.unit_hash, .language = unit.language, .source = unit.source, .probability = p });
             const threshold = rule.threshold orelse self.threshold;
             const fired = p >= threshold;
             try self.store.observe(.{ .path = unit.path, .rule = rule.name, .unit = job.unit_hash, .unit_name = unit.name, .line = unit.line + 1, .language = unit.language, .model = self.model, .question = question, .probability = p, .threshold = threshold, .fired = fired });

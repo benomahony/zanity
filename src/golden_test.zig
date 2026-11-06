@@ -501,6 +501,7 @@ fn startMock(arena: std.mem.Allocator, io: Io, dir: []const u8) !MockTypeSafe {
     if (!std.fs.path.isAbsolute(dir)) assert.panic("the mock's directory '{s}' is relative; pass an absolute path, since zanity runs in another directory", .{dir});
     var env = std.process.Environ.Map.init(arena);
     try env.put("MOCK_TYPESAFE_LOG", try std.fs.path.join(arena, &.{ dir, "requests.log" }));
+    try env.put("MOCK_TYPESAFE_HANG", try std.fs.path.join(arena, &.{ dir, "hang" }));
     var child = try std.process.spawn(io, .{ .argv = &.{ "python3", "tests/infer/mock_typesafe.py" }, .stdin = .pipe, .stdout = .pipe, .environ_map = &env });
     var buffer: [64]u8 = undefined;
     var reader = child.stdout.?.reader(io, &buffer);
@@ -611,6 +612,40 @@ test "--infer keeps the answers it got before a request failed, so the next run 
     const resumed = try project.checkInferring(arena, io);
     try expectOutput(resumed.stderr, &.{", 0 asked of jev-latest"}, &.{});
 }
+
+test "--infer keeps each answer as it arrives, so a run stopped mid-way never asks for them again" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    const io = std.testing.io;
+    var project = try InferRun.initInferRun(arena, io);
+    defer project.tmp.cleanup();
+    defer project.mock.child.kill(io);
+    // One request at a time, so every answer sent before the hanging request is already stored.
+    try project.tmp.dir.writeFile(io, .{ .sub_path = "zanity.toml", .data = "[infer]\nconcurrency = 1\n" });
+    try project.tmp.dir.writeFile(io, .{ .sub_path = "hang", .data = std.fmt.comptimePrint("{d}", .{answered_before_hang + 1}) });
+    var stopped = try std.process.spawn(io, .{ .argv = &.{ project.zanity, "check", ".", "--infer", "--plain" }, .cwd = .{ .path = project.work }, .environ_map = &project.mock.env, .stdout = .ignore, .stderr = .ignore });
+    defer stopped.kill(io);
+    var before: []const u8 = "";
+    for (0..max_hang_polls) |_| {
+        before = project.tmp.dir.readFileAlloc(io, "requests.log", arena, .unlimited) catch "";
+        if (std.mem.count(u8, before, "\n") > answered_before_hang) break;
+        try io.sleep(.fromMilliseconds(hang_poll_ms), .awake);
+    } else return error.HangingRequestNeverSent;
+    stopped.kill(io);
+    try project.tmp.dir.deleteFile(io, "hang");
+    try project.tmp.dir.deleteFile(io, "requests.log");
+    _ = try project.checkInferring(arena, io);
+    const after = project.tmp.dir.readFileAlloc(io, "requests.log", arena, .unlimited) catch "";
+    var lines = std.mem.splitScalar(u8, before, '\n');
+    for (0..answered_before_hang) |_| try expectOutput(after, &.{}, &.{lines.next().?});
+}
+
+/// Requests the mock answers before it leaves one hanging, in the stopped-run test.
+const answered_before_hang = 2;
+/// How long the stopped-run test waits for zanity to send the request the mock never answers.
+const hang_poll_ms = 50;
+const max_hang_polls = 600;
 
 test "--infer asks the System One server zanity.toml names, with only the key it names" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
