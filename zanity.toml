@@ -51,6 +51,12 @@ disable = ["filesystem-in-test", "process-in-test"]
 [paths."src/lsp_test.zig"]
 disable = ["filesystem-in-test", "process-in-test"]
 
+[paths."src/fix_test.zig"]
+disable = ["filesystem-in-test", "process-in-test"]
+
+[paths."src/agent_test.zig"]
+disable = ["filesystem-in-test", "process-in-test"]
+
 [paths."src/architecture_test.zig"]
 disable = ["filesystem-in-test"]
 

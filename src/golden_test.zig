@@ -172,73 +172,6 @@ test "a run ends with a summary on stderr" {
     try std.testing.expectEqualStrings("zanity: 15 errors and 3 warnings in 2 of 2 files\n", dirty.stderr);
 }
 
-/// One --fix fixture, fixed twice in its own copy on its own thread.
-const FixRun = struct {
-    name: []const u8,
-    zanity: []const u8,
-    fixtures: Io.Dir,
-    work: []const u8,
-    io: Io,
-    arena: std.heap.ArenaAllocator,
-    matched: bool = false,
-    err: ?anyerror = null,
-
-    fn fixTwice(job: *FixRun) void {
-        if (job.name.len == 0) assert.panic("a --fix fixture has no name; the directory listing never gives empty names", .{});
-        job.matched = job.compare() catch |e| {
-            job.err = e;
-            return;
-        };
-        if (job.matched and job.err != null) assert.panic("tests/fix/{s} both matched and errored; fixTwice() records one or the other", .{job.name});
-    }
-
-    fn compare(job: *FixRun) !bool {
-        if (!std.fs.path.isAbsolute(job.zanity)) assert.panic("running --fix with zanity at '{s}', a relative path, from {s}; resolve it before changing directory", .{ job.zanity, job.work });
-        if (std.mem.endsWith(u8, job.name, ".fixed")) assert.panic("treating the expected output tests/fix/{s} as a fixture; the test must skip .fixed files", .{job.name});
-        const arena = job.arena.allocator();
-        const input = try job.fixtures.readFileAlloc(job.io, job.name, arena, .unlimited);
-        const expected = try job.fixtures.readFileAlloc(job.io, try std.fmt.allocPrint(arena, "{s}.fixed", .{job.name}), arena, .unlimited);
-        var work = try Io.Dir.cwd().openDir(job.io, job.work, .{});
-        defer work.close(job.io);
-        try work.writeFile(job.io, .{ .sub_path = job.name, .data = input });
-        for (0..2) |_| _ = try std.process.run(arena, job.io, .{ .argv = &.{ job.zanity, "check", "--fix", job.name }, .cwd = .{ .path = job.work } });
-        const actual = try work.readFileAlloc(job.io, job.name, arena, .unlimited);
-        if (std.mem.eql(u8, expected, actual)) return true;
-        std.debug.print("\n--fix of tests/fix/{s} differs from its .fixed file\n--- expected\n{s}--- actual\n{s}", .{ job.name, expected, actual });
-        return false;
-    }
-};
-
-test "--fix rewrites each fixture into its .fixed file and leaves nothing more to fix" {
-    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena_state.deinit();
-    const arena = arena_state.allocator();
-    const io = std.testing.io;
-    const zanity = try Io.Dir.cwd().realPathFileAlloc(io, paths.zanity, arena);
-    var fixtures = try Io.Dir.cwd().openDir(io, "tests/fix", .{ .iterate = true });
-    defer fixtures.close(io);
-    var tmp = std.testing.tmpDir(.{});
-    defer tmp.cleanup();
-    const work = try std.fs.path.join(arena, &.{ ".zig-cache", "tmp", &tmp.sub_path });
-    var jobs: std.ArrayList(FixRun) = .empty;
-    defer for (jobs.items) |*job| job.arena.deinit();
-    var it = fixtures.iterate();
-    while (try it.next(io)) |entry| {
-        if (entry.kind != .file or std.mem.endsWith(u8, entry.name, ".fixed")) continue;
-        try jobs.append(arena, .{ .name = try arena.dupe(u8, entry.name), .zanity = zanity, .fixtures = fixtures, .work = work, .io = io, .arena = .init(std.heap.page_allocator) });
-    }
-    var group: Io.Group = .init;
-    for (jobs.items) |*job| group.async(io, FixRun.fixTwice, .{job});
-    try group.await(io);
-    var differ: usize = 0;
-    for (jobs.items) |job| {
-        if (job.err) |e| return e;
-        differ += @intFromBool(!job.matched);
-    }
-    try std.testing.expect(jobs.items.len > 0);
-    try std.testing.expectEqual(@as(usize, 0), differ);
-}
-
 test "zanity.schema.json matches the rules and settings in the code" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
@@ -273,136 +206,6 @@ pub fn expectOutput(output: []const u8, has: []const []const u8, lacks: []const 
     if (misses == 0) return;
     std.debug.print("\nin:\n{s}\n", .{output});
     return error.TestUnexpectedOutput;
-}
-
-fn checkForAgent(arena: std.mem.Allocator, io: Io, environ: *const std.process.Environ.Map, flags: []const []const u8) !std.process.RunResult {
-    if (flags.len > 2) assert.panic("checkForAgent() takes at most 2 flags, got {d}; add room in argv", .{flags.len});
-    const zanity = try Io.Dir.cwd().realPathFileAlloc(io, paths.zanity, arena);
-    if (!std.fs.path.isAbsolute(zanity)) assert.panic("zanity resolved to the relative path '{s}'; the check runs in tests/agent, so it needs an absolute one", .{zanity});
-    var argv: [5][]const u8 = .{ zanity, "check", "a.py", "", "" };
-    for (flags, 3..) |flag, i| argv[i] = flag;
-    return exited(try std.process.run(arena, io, .{ .argv = argv[0 .. 3 + flags.len], .cwd = .{ .path = "tests/agent" }, .environ_map = environ }), "zanity check for an agent");
-}
-
-test "--agent puts the totals and the next command first, then findings up to --limit, then the other rules by name" {
-    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena_state.deinit();
-    const arena = arena_state.allocator();
-    var plain = std.process.Environ.Map.init(arena);
-    const run = try checkForAgent(arena, std.testing.io, &plain, &.{ "--agent", "--limit=1" });
-    try std.testing.expectEqual(std.process.Child.Term{ .exited = 1 }, run.term);
-    try std.testing.expect(std.mem.startsWith(u8, run.stdout, "zanity: 2 errors, 2 warnings in 1/1 file; 1 [--fix].\nNext: fix this displayed batch"));
-    try expectOutput(run.stdout, &.{
-        "rerun the full check with --fail-on warning. This is a selected batch. Resolve the displayed findings in code. If the code is correct, make that correctness explicit enough for the rule to verify; never suppress the finding, disable its rule or exclude its path.\n",
-        "\n\nassertion-density [error] 2 in 1 file\n",
-        "\n  +1 more: --rules assertion-density --limit 0\n",
-        "\nAlso, to see with --rules <name>:\n  unbounded-loop [warning] 1 in 1 file\n  assertion-message [warning] 1 in 1 file\n",
-    }, &.{});
-}
-
-test "under Claude Code, check speaks to the agent unless --json or --plain asks otherwise" {
-    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena_state.deinit();
-    const arena = arena_state.allocator();
-    var claude = std.process.Environ.Map.init(arena);
-    try claude.put("CLAUDECODE", "1");
-    const auto = try checkForAgent(arena, std.testing.io, &claude, &.{});
-    try std.testing.expect(std.mem.startsWith(u8, auto.stdout, "zanity: 2 errors"));
-    const plain = try checkForAgent(arena, std.testing.io, &claude, &.{"--plain"});
-    try std.testing.expect(std.mem.startsWith(u8, plain.stdout, "path=\"a.py\""));
-    const both = try checkForAgent(arena, std.testing.io, &claude, &.{ "--agent", "--json" });
-    try std.testing.expectEqual(std.process.Child.Term{ .exited = 2 }, both.term);
-}
-
-test "environment variables zanity did not set never crash it" {
-    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena_state.deinit();
-    const arena = arena_state.allocator();
-    var watched = std.process.Environ.Map.init(arena);
-    try watched.put("ZANITY_WATCH", "12");
-    const rerun = try checkForAgent(arena, std.testing.io, &watched, &.{});
-    try std.testing.expectEqual(std.process.Child.Term{ .exited = 1 }, rerun.term);
-    var agent = std.process.Environ.Map.init(arena);
-    const unusual = try arena.alloc(u8, 100);
-    @memset(unusual, 'x');
-    try agent.put("CLAUDECODE", unusual);
-    const speaking = try checkForAgent(arena, std.testing.io, &agent, &.{});
-    try std.testing.expectEqual(std.process.Child.Term{ .exited = 1 }, speaking.term);
-    // The mock project's zanity.toml sets nothing and its URL is dropped, so zanity would ask
-    // TypeSafe, which requires the key; a key it cannot send stops the run before any request.
-    var project = try infer_test.InferRun.initInferRun(arena, std.testing.io);
-    defer project.tmp.cleanup();
-    defer project.mock.child.kill(std.testing.io);
-    try project.mock.env.put("TYPESAFE_API_KEY", "abc\ndef");
-    const dropped = project.mock.env.swapRemove("TYPESAFE_BASE_URL");
-    if (!dropped) assert.panic("startMock() set no TYPESAFE_BASE_URL to drop; it points zanity at the mock", .{});
-    const inferring = try project.checkInferring(arena, std.testing.io);
-    try std.testing.expectEqual(std.process.Child.Term{ .exited = 2 }, inferring.term);
-}
-
-test "--all lists every finding on its own line after the totals, with or without Claude Code, and refuses --json" {
-    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena_state.deinit();
-    const arena = arena_state.allocator();
-    var claude = std.process.Environ.Map.init(arena);
-    try claude.put("CLAUDECODE", "1");
-    const run = try checkForAgent(arena, std.testing.io, &claude, &.{"--all"});
-    try std.testing.expectEqual(std.process.Child.Term{ .exited = 1 }, run.term);
-    try std.testing.expect(std.mem.startsWith(u8, run.stdout,
-        \\zanity: 2 errors, 2 warnings in 1/1 file; 1 [--fix].
-        \\a.py:1:5: error [assertion-density] 'f' has 1 assertion that can catch a bug; it needs at least 2.
-        \\a.py:2:5: warning [unbounded-loop] 'while True' has no bound, so it can run forever.
-        \\a.py:3:9: warning [assertion-message] This assertion has no message, so when it fails nobody will know which invariant broke, why it must hold, or with what values.
-        \\a.py:6:5: error [assertion-density] 'g' has 0 assertions that can catch a bug; it needs at least 2.
-        \\Inspect/export:
-    ));
-    var plain = std.process.Environ.Map.init(arena);
-    const outside = try checkForAgent(arena, std.testing.io, &plain, &.{"--all"});
-    try std.testing.expectEqualStrings(run.stdout, outside.stdout);
-    const both = try checkForAgent(arena, std.testing.io, &claude, &.{ "--all", "--json" });
-    try std.testing.expectEqual(std.process.Child.Term{ .exited = 2 }, both.term);
-}
-
-test "unbounded-loop's fix names where the loop stops, leaving out breaks of inner loops and continues" {
-    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena_state.deinit();
-    const arena = arena_state.allocator();
-    const io = std.testing.io;
-    const zanity = try Io.Dir.cwd().realPathFileAlloc(io, paths.zanity, arena);
-    var tmp = std.testing.tmpDir(.{});
-    defer tmp.cleanup();
-    try tmp.dir.writeFile(io, .{ .sub_path = "loops.py", .data = "def poll(q):\n    while True:\n        for x in q.get():\n            if x:\n                break\n        if q.empty():\n            return None\n        continue\n\n\ndef spin():\n    while True:\n        pass\n" });
-    const work = try std.fs.path.join(arena, &.{ ".zig-cache", "tmp", &tmp.sub_path });
-    const run = try std.process.run(arena, io, .{ .argv = &.{ zanity, "check", "--rules", "unbounded-loop", "--plain", "loops.py" }, .cwd = .{ .path = work } });
-    try expectOutput(run.stdout, &.{ "fix=\"It stops only at line 7 (`return None`); add a limit", "fix=\"Give it a condition, or a limit such as a maximum number of attempts: nothing in it stops it" }, &.{});
-}
-
-test "--fix deletes a null check that the type check after it makes redundant" {
-    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena_state.deinit();
-    const arena = arena_state.allocator();
-    const io = std.testing.io;
-    const zanity = try Io.Dir.cwd().realPathFileAlloc(io, paths.zanity, arena);
-    var tmp = std.testing.tmpDir(.{});
-    defer tmp.cleanup();
-    try tmp.dir.writeFile(io, .{ .sub_path = "checks.py", .data = "def f(x):\n    assert x is not None\n    assert isinstance(x, int)\n    return x\n" });
-    const work = try std.fs.path.join(arena, &.{ ".zig-cache", "tmp", &tmp.sub_path });
-    _ = try std.process.run(arena, io, .{ .argv = &.{ zanity, "check", "--fix", "--rules", "redundant-null-check", "checks.py" }, .cwd = .{ .path = work } });
-    try std.testing.expectEqualStrings("def f(x):\n    assert isinstance(x, int)\n    return x\n", try tmp.dir.readFileAlloc(io, "checks.py", arena, .unlimited));
-}
-
-test "precedence-trap's fix shows how the code runs and the grouping it reads as" {
-    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena_state.deinit();
-    const arena = arena_state.allocator();
-    const io = std.testing.io;
-    const zanity = try Io.Dir.cwd().realPathFileAlloc(io, paths.zanity, arena);
-    var tmp = std.testing.tmpDir(.{});
-    defer tmp.cleanup();
-    try tmp.dir.writeFile(io, .{ .sub_path = "traps.ts", .data = "export function f(a: number, b: number, c: number, y: boolean): void {\n  if (!y == true) {}\n  if (a & b == c) {}\n  if (a == b & c) {}\n}\n" });
-    const work = try std.fs.path.join(arena, &.{ ".zig-cache", "tmp", &tmp.sub_path });
-    const run = try std.process.run(arena, io, .{ .argv = &.{ zanity, "check", "--rules", "precedence-trap", "--plain", "traps.ts" }, .cwd = .{ .path = work } });
-    try expectOutput(run.stdout, &.{ "It runs as `(!y) == true`; if you meant `!(y == true)`", "It runs as `a & (b == c)`; if you meant `(a & b) == c`", "It runs as `(a == b) & c`; if you meant `a == (b & c)`" }, &.{});
 }
 
 test "zanity init writes a zanity.toml that check reads, with [rules] last, and won't overwrite it unasked" {
@@ -520,6 +323,8 @@ test {
     _ = @import("baseline_test.zig");
     _ = infer_test;
     _ = @import("lsp_test.zig");
+    _ = @import("fix_test.zig");
+    _ = @import("agent_test.zig");
 }
 
 test "slow-test uses measured JUnit durations without inference and honors the time budget" {
