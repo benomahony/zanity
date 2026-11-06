@@ -326,8 +326,6 @@ fn runCheck(ctx: *zclig.Context, requested: CheckOptions) ![]const Row {
     return ws.rows.items();
 }
 
-/// Whether to write for a coding agent: when --agent asks, or when one is running zanity and the
-/// command line chose no other format.
 /// Each change starts one check, so this many is far more than any session makes.
 const max_watch_runs = 1 << 40;
 /// The most arguments a watched command line may have, which the rerun copies.
@@ -509,6 +507,8 @@ fn loadSettings(ctx: *zclig.Context, ws: *Workspace, gpa: Allocator) !config.Con
     return settings;
 }
 
+/// Whether to write for a coding agent: when --agent asks, or when one is running zanity and the
+/// command line chose no other format.
 fn speaksToAgent(ctx: *zclig.Context, ws: *const Workspace, asked: bool) !bool {
     if (asked and ws.chose_format) return ctx.fail(.usage, "--agent and --all cannot be combined with --json or --plain.", "Choose one: --agent or --all to read, --json or --plain for a program to parse; --json and --plain always list every finding.");
     const agent = asked or (!ws.chose_format and agentRunning(ws));
