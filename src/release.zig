@@ -1,6 +1,9 @@
 //! Release gates: a GitHub Actions job that publishes a release must not run unless the tests
 //! passed, either earlier in the same job or in a job it needs, through every job between.
 const std = @import("std");
+const release_checks = @import("release_checks.zig");
+const checkingAction = release_checks.checkingAction;
+const isCheck = release_checks.isCheck;
 const assert = @import("assert.zig");
 const memory = @import("memory.zig");
 const strings = @import("strings.zig");
@@ -11,10 +14,8 @@ const max_jobs = 64;
 /// The most jobs one job may need.
 const max_needs = 16;
 /// How much of a command line is inspected for check and release commands.
-const command_window_bytes = 512;
+pub const command_window_bytes = 512;
 
-/// Words in a command that run tests, a linter or a type checker.
-const check_words = [_][]const u8{ "test", "tests", "check", "lint", "pytest", "tox", "nox", "mypy", "pyright", "clippy", "vet", "eslint", "ctest", "phpunit", "rspec", "jest", "vitest" };
 /// Words in a reusable workflow's path that say it runs the checks.
 const check_workflow_words = [_][]const u8{ "test", "tests", "check", "checks", "ci", "lint", "verify" };
 /// Commands that publish a release or a package, lowercased.
@@ -305,6 +306,7 @@ fn step(workflow: *Workflow, job: *Job, at: SourceLine) !void {
         const lowered = std.ascii.lowerString(lower[0..@min(action.len, lower.len)], action[0..@min(action.len, lower.len)]);
         if (strings.contains(&release_actions, lowered)) job.release = .{ .row = row, .column = @intCast(raw.len - content.len), .text = value };
     }
+    if (std.mem.startsWith(u8, bare, "uses:") and job.first_check == null and checkingAction(bare["uses:".len..])) job.first_check = row;
 }
 
 fn openBlock(workflow: *Workflow, indent: usize, condition: bool) void {
@@ -320,7 +322,7 @@ fn command(job: *Job, raw: []const u8, text: []const u8, row: u32) !void {
     var buffer: [command_window_bytes]u8 = undefined;
     const unquoted = unquote(&buffer, text);
     if (unquoted.len > buffer.len) assert.panic("unquoted a command into {d} bytes past its buffer", .{unquoted.len});
-    if (job.first_check == null and hasWord(unquoted, &check_words)) job.first_check = row;
+    if (job.first_check == null and isCheck(unquoted)) job.first_check = row;
     if (job.release != null) return;
     for (release_commands) |release| if (startsCommand(unquoted, release)) {
         job.release = .{ .row = row, .column = @intCast(@intFromPtr(text.ptr) - @intFromPtr(raw.ptr)), .text = strings.header(text) };
@@ -396,7 +398,7 @@ fn blockScalar(value: []const u8) bool {
     return indicator.len > 0 and (indicator[0] == '|' or indicator[0] == '>');
 }
 
-fn withoutComment(value: []const u8) []const u8 {
+pub fn withoutComment(value: []const u8) []const u8 {
     if (std.mem.indexOfScalar(u8, value, '\n') != null) assert.panic("'{s}' spans lines, but comments are stripped one line at a time", .{value});
     const comment = std.mem.indexOf(u8, value, " #") orelse value.len;
     if (comment > value.len) assert.panic("found a comment past the end of '{s}'", .{value});

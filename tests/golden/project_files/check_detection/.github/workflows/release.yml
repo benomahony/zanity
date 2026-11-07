@@ -1,0 +1,32 @@
+on:
+  push:
+    tags: ["v*"]
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - run: git diff --exit-code
+      - run: npx tsc --noEmit
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: golangci/golangci-lint-action@v6
+  scratch:
+    runs-on: ubuntu-latest
+    steps:
+      - run: mkdir test-output
+  publish:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - run: npm publish
+  publish-go:
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - run: goreleaser release
+  publish-scratch:
+    needs: scratch
+    runs-on: ubuntu-latest
+    steps:
+      - run: npm publish
