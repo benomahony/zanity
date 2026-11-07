@@ -417,7 +417,7 @@ pub const min_extract_statements = 5;
 pub const max_nesting = 4;
 /// McCabe complexity: one plus the decisions a function makes.
 pub const max_complexity = 15;
-pub const max_file_lines = 1000;
+pub const max_file_lines = 400;
 /// Words an error message can be made of and still not say what failed, such as "invalid input".
 /// Plurals match their singular, so only singulars are listed.
 pub const vague_words = [_][]const u8{ "a", "an", "the", "error", "failed", "failure", "fail", "invalid", "bad", "wrong", "unexpected", "unknown", "something", "went", "occurred", "happened", "has", "have", "is", "was", "input", "value", "argument", "parameter", "data", "state", "request", "response", "operation", "result", "oops", "problem", "issue", "internal", "an", "unable", "could", "not", "cannot", "can't", "process", "please", "try", "again", "later", "assertion", "check", "condition", "violated", "error occurred" };
