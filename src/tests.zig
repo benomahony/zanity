@@ -7,6 +7,7 @@ test {
     _ = @import("fuzz_test.zig");
     _ = @import("architecture_test.zig");
     _ = @import("naming.zig");
+    _ = @import("name_words.zig");
     _ = @import("graph.zig");
     _ = @import("memory.zig");
     _ = @import("store.zig");
