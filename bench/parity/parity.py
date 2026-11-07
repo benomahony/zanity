@@ -21,7 +21,8 @@ import time
 from pathlib import Path
 
 import page
-from score import Server, Zanity, build_corpus, score_inference_live, score_corpus, score_fixtures, score_inference, score_languages, zanity_rules
+from score import Server, Zanity, build_corpus, score_corpus, score_fixtures, score_languages, zanity_rules
+from inference_scores import score_inference, score_inference_live
 from timing import LSP_FILE, bench_cli, bench_lsp
 from tools import REPO, TOOLS
 
