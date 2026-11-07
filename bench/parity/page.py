@@ -3,150 +3,19 @@
 Usage: python3 bench/parity/page.py
 """
 
-import html
 import json
-from dataclasses import dataclass
 from pathlib import Path
 
 from score import LANGUAGES
-from tools import BY_NAME, HERE, REPO, TOOLS, Tool
+from tools import BY_NAME, HERE, REPO, TOOLS
+from cells import LINKS, badge, codes, generated, mark, measured, pct, raw, score, table
+from performance import cli_speed, lsp_speed
 
 RESULTS = HERE / "results.json"
-MEGABYTE = 1 << 20
-# No process measured here could hold a terabyte; a peak this large means the units are wrong.
-MAX_PLAUSIBLE_PEAK = 1 << 40
 CONTENT = REPO / "docs" / "content"
 SECTION = CONTENT / "comparison"
 OVERVIEW = SECTION / "index.smd"
 PERFORMANCE = SECTION / "performance.smd"
-LINKS = {
-    "nasa-lsp": "https://github.com/benomahony/nasa-lsp",
-    "testdesiderata": "https://github.com/benomahony/testdesiderata",
-    "mockbuster": "https://github.com/benomahony/mockbuster",
-    "dddlint": "https://github.com/benomahony/dddlint",
-    "bonsai": "",
-    "lizard": "https://github.com/terryyin/lizard",
-    "nouls": "https://github.com/benomahony/nouls",
-}
-
-
-def badge(text: str, kind: str) -> str:
-    """text in a coloured badge: pass, partial, fail or none."""
-    assert kind in {"pass", "partial", "fail", "none"}, f"no badge style called {kind!r}"
-    assert "]" not in text, f"a ] in {text!r} would end the badge early"
-    return f"[{text}]($text.attrs('badge','{kind}'))"
-
-
-def mark(value: bool | None) -> str:
-    assert value in (True, False, None), f"mark takes a yes, a no or nothing, not {value!r}"
-    assert not isinstance(value, int) or isinstance(value, bool), f"mark got the number {value}; pass a bool"
-    return {True: badge("✓ yes", "pass"), False: badge("✗ no", "fail"), None: badge("– n/a", "none")}[value]
-
-
-def score(part: int, whole: int, text: str = "") -> str:
-    """part of whole in a badge: green when all of it, red when none, amber between."""
-    assert 0 <= part <= whole, f"{part} of {whole} is not a share of it; fix the benchmark counts"
-    assert whole or not part, f"{part} of nothing; fix the benchmark counts so a match has a measured total"
-    kind = "none" if not whole else "pass" if part == whole else "fail" if not part else "partial"
-    return badge(text or f"{part}/{whole}", kind)
-
-
-def megabytes(value: float) -> str:
-    assert value > 0, f"a process holds some memory, not {value} bytes"
-    assert value < MAX_PLAUSIBLE_PEAK, f"{value} bytes is not a plausible peak; check the units"
-    return f"{value / MEGABYTE:.0f} MB"
-
-
-def raw(lines: list[str]) -> list[str]:
-    """lines of HTML, passed through Zine as they are."""
-    assert lines, f"a raw block needs some HTML, but got {lines!r}"
-    fences = [line for line in lines if line.startswith("```")]
-    assert not fences, f"the fences {fences} inside the HTML would end the block"
-    return ["```=html", *lines, "```", ""]
-
-
-# A chart row: label, value, the value as text, and whether it is zanity's.
-Row = tuple[str, float, str, bool]
-
-
-def bar(row: Row, most: float) -> str:
-    """One chart row: a bar as long as its value is against most, with the text at its end."""
-    label, value, text, zanity = row
-    assert 0 <= value <= most, f"{value} is outside the chart's 0 to {most}; fix the benchmark value or chart maximum"
-    assert most > 0, f"a chart scaled to {most} has no length; pass the largest positive benchmark value"
-    width = max(85 * value / most, 0.6)
-    side = "zanity" if zanity else "other"
-    return (
-        f'<div class="chart-row {side}"><span class="chart-label">{html.escape(label)}</span>'
-        f'<span class="chart-track"><span class="chart-bar" style="width:{width:.1f}%"></span>'
-        f'<span class="chart-value">{html.escape(text)}</span></span></div>'
-    )
-
-
-def chart(rows: list[Row], caption: str) -> list[str]:
-    """Bars for rows, all on one scale."""
-    assert rows, f"the chart {caption!r} has no rows"
-    assert caption, "a chart needs a caption saying what it measures"
-    most = max(row[1] for row in rows)
-    return raw([f'<figure class="chart"><figcaption>{html.escape(caption)}</figcaption>', *(bar(row, most) for row in rows), "</figure>"])
-
-
-def verdict(theirs: float, ours: float, words: tuple[str, str]) -> str:
-    """How many times better or worse zanity's figure is, in a badge, as HTML."""
-    assert theirs > 0, f"the other tool's figure is {theirs}, so there is nothing to compare; rerun its benchmark"
-    assert ours > 0, f"zanity's figure is {ours}, so there is nothing to compare; rerun zanity's benchmark"
-    better, worse = words
-    if theirs >= ours:
-        return f'<span class="badge pass">zanity {theirs / ours:.1f}× {better}</span>'
-    return f'<span class="badge fail">zanity {ours / theirs:.1f}× {worse}</span>'
-
-
-def duel(groups: list[tuple[str, float, float]], show, words: tuple[str, str], caption: str) -> list[str]:
-    """Each tool beside zanity, one pair of bars per tool, each pair on its own scale."""
-    assert groups, f"the chart {caption!r} has no tools"
-    assert callable(show), f"show formats a value for the chart, not {show!r}"
-    body = []
-    for name, theirs, ours in groups:
-        most = max(theirs, ours)
-        body += [
-            f'<div class="duel"><div class="duel-head">{html.escape(name)} {verdict(theirs, ours, words)}</div>',
-            bar((name, theirs, show(theirs), False), most),
-            bar(("zanity", ours, show(ours), True), most),
-            "</div>",
-        ]
-    return raw([f'<figure class="chart"><figcaption>{html.escape(caption)}</figcaption>', *body, "</figure>"])
-
-
-def pct(part: int, whole: int) -> str:
-    assert part >= 0, f"a count is never negative, but got {part} of {whole}; fix the benchmark counts"
-    assert part <= whole or whole == 0, f"{part} of {whole} can't be more than all of it; fix the benchmark counts"
-    return f"{100 * part / whole:.0f}%" if whole else "–"
-
-
-def seconds(duration_seconds: float) -> str:
-    """Round a timing's display label to milliseconds or hundredths of a second.
-    Formatting never replaces or converts the numeric measurement kept in results.json."""
-    assert duration_seconds >= 0, f"a duration is never negative, but got {duration_seconds} s"
-    assert duration_seconds < 3600, f"{duration_seconds} s is not a plausible timing; check the units"
-    if duration_seconds < 1:
-        milliseconds = duration_seconds * 1000
-        return f"{milliseconds:.0f} ms"
-    return f"{duration_seconds:.2f} s"
-
-
-def codes(names: list[str]) -> str:
-    assert all(names), f"a rule name is empty in {names}"
-    assert all("`" not in n for n in names), f"a backtick in {names} would break the code span"
-    return ", ".join(f"`{n}`" for n in names) or "–"
-
-
-def table(header: list[str], rows: list[list[str]], right: int = 0) -> list[str]:
-    """A Markdown table; the last `right` columns align right, for numbers."""
-    ragged = [row for row in rows if len(row) != len(header)]
-    assert header, f"a table needs columns; got rows like {rows[:1]}"
-    assert not ragged, f"every row fills the {len(header)} columns {header}, but these don't: {ragged[:2]}"
-    rule = ["---"] * (len(header) - right) + ["---:"] * right
-    return ["| " + " | ".join(cells) + " |" for cells in [header, rule, *rows]] + [""]
 
 
 def language_rows(data: dict) -> list[dict]:
@@ -169,14 +38,6 @@ def tally(name: str, mine: list[dict]) -> dict:
     assert mine, f"{name} has no scored rules; rerun parity.py or add its results"
     assert name in BY_NAME, f"{name} is not a tool in tools.py; add it to TOOLS before rendering it"
     return {"name": name, "rules": len(mine), "whole": len(valid), "part": sum(bool(r["zanity_fires"]) for r in valid), "gaps": gaps, "unit": "rules"}
-
-
-def measured(data: dict, key: str = "corpus") -> list[Tool]:
-    """The tools results.json has scored, or timed with key "cli", so a tool added to tools.py appears once parity.py has run it."""
-    assert key in data, f"results.json has no {key!r}; run parity.py"
-    tools = [tool for tool in TOOLS if tool.name in data[key]]
-    assert tools, "results.json scored none of the tools in tools.py; run parity.py"
-    return tools
 
 
 def tallies(data: dict) -> list[dict]:
@@ -308,187 +169,10 @@ def live(data: dict) -> list[str]:
     ]
 
 
-@dataclass(frozen=True)
-class CliTiming:
-    """One validated command measurement; times are seconds and memory is bytes."""
-
-    mean: float
-    stddev: float
-    minimum: float
-    memory: float
-
-
-MAX_REPORT_SECONDS = 3600
-MAX_REPORT_MEMORY_BYTES = 1 << 40
-ALL_RULES_COLD = "zanity, all rules, cold"
-ALL_RULES_WARM = "zanity, all rules, warm"
-
-
-def benchmark_number(data: dict, path: tuple[str, ...]) -> int | float:
-    """Read one required numeric report field, checking nesting, type and units before use.
-    Invalid generated JSON raises ValueError with its field path and regeneration instructions."""
-    assert path, "name the benchmark field to validate before formatting it"
-    field = path[-1]
-    assert field in {"mean", "stddev", "min", "memory", "runs", "lines"}, f"unknown numeric benchmark field {field}; add its validation policy before rendering it"
-    value = data
-    label = ".".join(path)
-    for segment in path:
-        if not isinstance(value, dict) or segment not in value:
-            raise ValueError(f"results.json is missing {label}; run parity.py again without --skip-bench")
-        value = value[segment]
-    accepted_types = (int,) if field in {"memory", "runs", "lines"} else (int, float)
-    if type(value) not in accepted_types:
-        raise ValueError(f"results.json {label} has type {type(value).__name__}; rerun parity.py to produce numeric measurements")
-    invalid = not value >= 0
-    invalid |= field in {"mean", "runs", "memory"} and not value > 0
-    invalid |= field in {"mean", "stddev", "min"} and not value < MAX_REPORT_SECONDS
-    invalid |= field == "memory" and not value < MAX_REPORT_MEMORY_BYTES
-    if invalid:
-        raise ValueError(f"results.json {label}={value} has an invalid count or duration; check benchmark units and rerun parity.py")
-    return value
-
-
-def cli_timings(data: dict, required: tuple[str, ...]) -> dict[str, CliTiming]:
-    """Each CLI command's timings from results.json, by command name. A malformed record or a
-    missing required command raises ValueError naming what to rerun."""
-    assert required, "name the baseline commands required by the CLI comparison"
-    assert len(required) == len(set(required)), f"duplicate baseline commands {required}; list each required command once"
-    if not isinstance(data, dict):
-        raise ValueError("results.json must contain an object; regenerate the benchmark report with parity.py")
-    cli = data.get("cli")
-    if not isinstance(cli, dict) or not cli:
-        raise ValueError("results.json needs a nonempty cli object; run parity.py without --skip-bench")
-    timings = {}
-    for name in cli:
-        if not isinstance(name, str) or not name:
-            raise ValueError("each CLI timing needs a nonempty command name; regenerate results.json with parity.py")
-        timings[name] = CliTiming(
-            mean=benchmark_number(data, ("cli", name, "mean")),
-            stddev=benchmark_number(data, ("cli", name, "stddev")),
-            minimum=benchmark_number(data, ("cli", name, "min")),
-            memory=benchmark_number(data, ("cli", name, "memory")),
-        )
-    missing = set(required) - timings.keys()
-    missing |= {f"zanity, {tool.name} rules, cold" for tool in TOOLS if tool.name in timings} - timings.keys()
-    if missing:
-        raise ValueError(f"results.json lacks CLI comparisons {sorted(missing)}; rerun parity.py without --skip-bench")
-    return timings
-
-
-def cli_headline(pairs: list[tuple[str, CliTiming, CliTiming]], base: float) -> list[str]:
-    """Summarise validated command pairs without assuming every optional tool was measured."""
-    assert pairs, "the CLI headline needs a measured tool pair; validate the report first"
-    assert base > 0, f"headline baseline is {base}; validate a positive cold-cache mean first"
-    name, fastest, _ = min(pairs, key=lambda pair: pair[1].mean)
-    first = f'<div><strong>{fastest.mean / base:.1f}×</strong> faster on every rule, from an empty cache, than the fastest tool, {name}, on its own {len(BY_NAME[name].rules)}: {seconds(base)} against {seconds(fastest.mean)}.</div>'
-    quick = [(label, theirs.mean / ours.mean) for label, theirs, ours in pairs if label != "bonsai"]
-    summary = ""
-    if quick:
-        ratios = [ratio for _, ratio in quick]
-        summary = f'<strong>{min(ratios):.1f}–{max(ratios):.1f}×</strong> faster than {", ".join(label for label, _ in quick)}, each on its own rules'
-    bonsai = next(((theirs, ours) for label, theirs, ours in pairs if label == "bonsai"), None)
-    if bonsai:
-        separator = "; " if summary else ""
-        summary += f'{separator}bonsai, which rebuilds its index on every run, is {bonsai[0].mean / bonsai[1].mean:.0f}× slower'
-    return raw(['<div class="headline">', first, f'<div>{summary}.</div>', "</div>"])
-
-
-def cli_command_rows(timings: dict[str, CliTiming], base: float) -> list[list[str]]:
-    """Format the already validated command measurements as the comparison table's cells."""
-    assert timings, "the CLI table needs command measurements; validate the report first"
-    assert base > 0, f"table baseline is {base}; validate a positive cold-cache mean first"
-    return [[name, seconds(result.mean), seconds(result.stddev), seconds(result.minimum), megabytes(result.memory), f"{result.mean / base:.1f}×"] for name, result in timings.items()]
-
-
-def cli_speed(data: dict) -> list[str]:
-    """Validate a persisted report before deriving ratios, headlines, charts and table cells.
-    Named timing records keep JSON structure and error handling out of the presentation phase."""
-    cli = cli_timings(data, (ALL_RULES_COLD, ALL_RULES_WARM))
-    corpus_lines = benchmark_number(data, ("corpus_stats", "lines"))
-    runs = benchmark_number(data, ("runs",))
-    pairs = [(tool.name, cli[tool.name], cli[f"zanity, {tool.name} rules, cold"]) for tool in TOOLS if tool.name in cli]
-    if not pairs:
-        raise ValueError("results.json has no measured comparison tool pairs; rerun parity.py without --skip-bench")
-    tool_count = len(pairs)
-    base = cli[ALL_RULES_COLD].mean
-    warm = cli[ALL_RULES_WARM].mean
-    assert base > 0, f"validated cold baseline is {base}; fix CLI report validation before dividing"
-    assert len({name for name, _, _ in pairs}) == tool_count, "TOOLS contains duplicate measured names; give each comparison tool a unique name"
-    means = [(name, theirs.mean, ours.mean) for name, theirs, ours in pairs]
-    together = sum(theirs.memory for _, theirs, _ in pairs)
-    if together >= MAX_REPORT_MEMORY_BYTES:
-        raise ValueError(f"combined CLI memory is {together} bytes; check result units and rerun parity.py before rendering")
-    memory = cli[ALL_RULES_COLD].memory
-    rows = cli_command_rows(cli, base)
-    all_tools = "all five at once" if tool_count == 5 else f"all {tool_count} measured tools at once"
-    tool_coverage = "all five tools" if tool_count == 5 else f"all {tool_count} measured tools"
-    chart_caption = "Each tool on its own rules beside zanity on all of them, shorter is better"
-    if any(name == "bonsai" for name, _, _ in pairs):
-        chart_caption += "; bonsai, off this scale, is above"
-    return [
-        *cli_headline(pairs, base),
-        "## Head to head",
-        "",
-        f"Each tool on the whole corpus, {corpus_lines:,} lines, beside zanity running only the rules that answer that tool's, from an empty cache. Each pair has its own scale. The mean of {runs} runs after a warm-up, with [hyperfine](https://github.com/sharkdp/hyperfine).",
-        "",
-        *duel(means, seconds, ("faster", "slower"), "Time to check the corpus, shorter is better"),
-        *chart([*((name, theirs, seconds(theirs), False) for name, theirs, _ in means if name != "bonsai"), ("zanity, every rule, cold", base, seconds(base), True), ("zanity, every rule, warm", warm, seconds(warm), True)], chart_caption),
-        "## Memory",
-        "",
-        f"The most memory each run held, from the kernel's accounting of the process. One zanity run covers every rule, where the same coverage takes {tool_coverage}: run side by side, as in a pre-commit hook, they hold {megabytes(together)} at once.",
-        "",
-        *chart([*((name, t.memory, megabytes(t.memory), False) for name, t, _ in pairs), (all_tools, together, megabytes(together), False), ("zanity, cold", memory, megabytes(memory), True)], "Peak memory checking the corpus, smaller is better"),
-        "## Every command",
-        "",
-        "The tools ran through the same adapters as above. Cold zanity starts each run with an empty cache; warm reuses the last run's.",
-        "",
-        *table(["Command", "Mean", "±", "Fastest", "Peak memory", "Against zanity, all rules, cold"], rows, right=5),
-    ]
-
-
-def lsp_speed(data: dict) -> list[str]:
-    servers = data["lsp"]
-    timed = [(name, r) for name, r in servers.items() if "error" not in r]
-
-    def rows(key: str, show) -> list[Row]:
-        assert callable(show), f"show formats a {key} for the chart, not {show!r}"
-        measured = [(name, r) for name, r in timed if key in r]
-        assert measured, f"no timed server has a {key!r}; run parity.py again"
-        return [(name, r[key], show(r[key]), name.startswith("zanity")) for name, r in measured]
-
-    table_rows = []
-    for name, r in servers.items():
-        if "error" in r:
-            table_rows.append([name, r["error"], "", "", ""])
-            continue
-        table_rows.append([name, seconds(r["first"]), seconds(r["save"]), megabytes(r["memory"]) if "memory" in r else "–", str(r["diagnostics"])])
-    assert any(name == "zanity" for name, _ in timed), f"zanity's language server wasn't timed; results.json has {sorted(servers)}"
-    assert timed, f"no language server was timed; each failed: {servers}"
-    assert timed[-1][0].startswith("zanity"), f"zanity is timed last, so its bars end each chart, not {timed[-1][0]}"
-    others = sum(r["memory"] for name, r in timed if not name.startswith("zanity"))
-    held = rows("memory", megabytes)
-    return [
-        "## As language servers, and watching",
-        "",
-        f"rich's `console.py`, {data['lsp_lines']:,} lines, alone in a workspace; the median of {data['runs']}. First: from starting the server to diagnostics for the opened file. Save: from a change and save to fresh diagnostics. Memory: what the process held with the file open; an editor runs every language server at once, so the others' memory adds up. `zanity check --watch` listens to the system's file events outside any editor and keeps its workspace and parsed-file cache alive between checks. nouls' server needs `TYPESAFE_API_KEY` and did not run.",
-        "",
-        *chart(rows("first", seconds), "Start to first diagnostics, shorter is better"),
-        *chart(rows("save", seconds), "Save to fresh diagnostics, shorter is better"),
-        *chart([*held[:-1], ("all of them at once", others, megabytes(others), False), held[-1]], "Memory with the file open, smaller is better"),
-        *table(["Server", "First", "Save", "Memory", "Diagnostics"], table_rows, right=4),
-    ]
-
-
 def front(title: str, description: str, newer: int = 2) -> list[str]:
     assert title, "a comparison page needs a title"
     assert description, "a comparison page needs a description"
     return ['---', f'.title = "{title}",', f'.description = "{description}",', f'.date = .date("2026-10-17T00:00:{newer:02}"),', '.layout = "page.shtml",', '---', ""]
-
-
-def generated(data: dict) -> list[str]:
-    assert data["when"], "results.json needs the date it was generated"
-    assert data["commit"], "results.json needs the zanity commit it measured"
-    return [f"Generated by `bench/parity/parity.py` on {data['when']}, against zanity `{data['commit']}`.", ""]
 
 
 def document(lines: list[str]) -> str:
