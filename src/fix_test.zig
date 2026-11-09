@@ -35,6 +35,7 @@ const FixRun = struct {
         const expected = try job.fixtures.readFileAlloc(job.io, try std.fmt.allocPrint(arena, "{s}.fixed", .{job.name}), arena, .unlimited);
         var work = try Io.Dir.cwd().openDir(job.io, job.work, .{});
         defer work.close(job.io);
+        if (std.fs.path.dirname(job.name)) |parent| try work.createDirPath(job.io, parent);
         try work.writeFile(job.io, .{ .sub_path = job.name, .data = input });
         for (0..2) |_| _ = try std.process.run(arena, job.io, .{ .argv = &.{ job.zanity, "check", "--fix", job.name }, .cwd = .{ .path = job.work } });
         const actual = try work.readFileAlloc(job.io, job.name, arena, .unlimited);
@@ -57,10 +58,12 @@ test "--fix rewrites each fixture into its .fixed file and leaves nothing more t
     const work = try std.fs.path.join(arena, &.{ ".zig-cache", "tmp", &tmp.sub_path });
     var jobs: std.ArrayList(FixRun) = .empty;
     defer for (jobs.items) |*job| job.arena.deinit();
-    var it = fixtures.iterate();
-    while (try it.next(io)) |entry| {
-        if (entry.kind != .file or std.mem.endsWith(u8, entry.name, ".fixed")) continue;
-        try jobs.append(arena, .{ .name = try arena.dupe(u8, entry.name), .zanity = zanity, .fixtures = fixtures, .work = work, .io = io, .arena = .init(std.heap.page_allocator) });
+    // A fixture keeps its path under tests/fix, so one under .github/workflows/ is read as a workflow.
+    var walker = try fixtures.walk(arena);
+    defer walker.deinit();
+    while (try walker.next(io)) |entry| {
+        if (entry.kind != .file or std.mem.endsWith(u8, entry.basename, ".fixed")) continue;
+        try jobs.append(arena, .{ .name = try arena.dupe(u8, entry.path), .zanity = zanity, .fixtures = fixtures, .work = work, .io = io, .arena = .init(std.heap.page_allocator) });
     }
     var group: Io.Group = .init;
     for (jobs.items) |*job| group.async(io, FixRun.fixTwice, .{job});
