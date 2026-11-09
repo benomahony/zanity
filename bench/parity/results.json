@@ -1,6 +1,6 @@
 {
-  "when": "2026-10-18",
-  "commit": "68a6651",
+  "when": "2026-11-09",
+  "commit": "7139f98",
   "runs": 5,
   "fixtures": [
     {
@@ -198,7 +198,8 @@
       "zanity_fires": true,
       "same_line": true,
       "others": [
-        "assertion-message"
+        "assertion-message",
+        "constant-test-assertion"
       ],
       "note": ""
     },
@@ -382,7 +383,8 @@
       "zanity_fires": true,
       "same_line": true,
       "others": [
-        "assertion-message"
+        "assertion-message",
+        "constant-test-assertion"
       ],
       "note": ""
     },
@@ -497,7 +499,8 @@
       "zanity_fires": true,
       "same_line": true,
       "others": [
-        "assertion-message"
+        "assertion-message",
+        "constant-test-assertion"
       ],
       "note": ""
     },
@@ -525,7 +528,8 @@
       "zanity_fires": true,
       "same_line": true,
       "others": [
-        "assertion-message"
+        "assertion-message",
+        "constant-test-assertion"
       ],
       "note": ""
     },
@@ -539,7 +543,8 @@
       "zanity_fires": true,
       "same_line": true,
       "others": [
-        "assertion-message"
+        "assertion-message",
+        "constant-test-assertion"
       ],
       "note": ""
     },
@@ -553,7 +558,8 @@
       "zanity_fires": true,
       "same_line": true,
       "others": [
-        "assertion-message"
+        "assertion-message",
+        "constant-test-assertion"
       ],
       "note": ""
     },
@@ -567,7 +573,8 @@
       "zanity_fires": true,
       "same_line": true,
       "others": [
-        "assertion-message"
+        "assertion-message",
+        "constant-test-assertion"
       ],
       "note": ""
     },
@@ -719,7 +726,7 @@
       "zanity_fires": null,
       "same_line": null,
       "others": [],
-      "note": "No fixture: it reads test durations from a JUnit report, not the source. zanity asks slow-test with --infer, and reads no JUnit timings"
+      "note": "No fixture: it reads test durations from a JUnit report, not the source. zanity measures slow-test from --junit reports; source-only fixtures cannot establish elapsed time"
     },
     {
       "tool": "mockbuster",
@@ -759,7 +766,8 @@
       "zanity_fires": false,
       "same_line": false,
       "others": [
-        "assertion-message"
+        "assertion-message",
+        "constant-test-assertion"
       ],
       "note": "zanity reports monkeypatch.setattr, which replaces behaviour, not setenv or the parameter"
     },
@@ -1493,7 +1501,7 @@
         },
         "NASA05": {
           "old": 1742,
-          "matched": 1519
+          "matched": 1465
         },
         "NASA05-A": {
           "old": 1026,
@@ -1510,8 +1518,8 @@
       },
       "agreement": {
         "assertion-density": {
-          "zanity": 1519,
-          "matched": 1519
+          "zanity": 1465,
+          "matched": 1465
         },
         "assertion-message": {
           "zanity": 1026,
@@ -1656,7 +1664,7 @@
     "bonsai": {
       "recall": {
         "dead-parameter": {
-          "old": 320,
+          "old": 318,
           "matched": 44
         },
         "dead-symbol": {
@@ -1775,7 +1783,6 @@
     }
   },
   "inference": {
-    "asked": 327,
     "key": false,
     "questions": [
       {
@@ -1929,6 +1936,7 @@
         "present": true
       }
     ],
+    "asked": 327,
     "catalogue": 475,
     "unknown": 0,
     "deterministic": 105,
@@ -2014,7 +2022,8 @@
       "redundant-null-check": 1,
       "restated-type": 1,
       "test-double": 1,
-      "relaxed-check": 1
+      "relaxed-check": 1,
+      "ungated-release": 1
     }
   },
   "inference_live": {
