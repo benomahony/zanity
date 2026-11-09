@@ -1,4 +1,4 @@
-//! Release gates across workflow files: a job calling a local reusable workflow is judged by what
+//! Release and deploy gates across workflow files: a job calling a local reusable workflow is judged by what
 //! that workflow's jobs do, not its file name, and a workflow that only runs when called is judged
 //! through its callers.
 const std = @import("std");
@@ -21,6 +21,8 @@ pub const Calls = struct {
     call_only: [max_workflows]bool = @splat(false),
     /// Whether the workflow releases from a job the tests do not gate.
     releases: [max_workflows]bool = @splat(false),
+    /// Whether the workflow deploys from a job the tests do not gate.
+    deploys: [max_workflows]bool = @splat(false),
 
     /// The project's workflow file a job's `uses:` names, when it names a local one.
     pub fn find(self: *const Calls, uses: []const u8) ?usize {
@@ -38,7 +40,7 @@ pub const Calls = struct {
 };
 
 /// Which fact of each workflow a settling pass works out.
-const Fact = enum { checks, releases };
+const Fact = enum { checks, releases, deploys };
 
 /// Reads workflow files into one buffer, a file at a time, as checkProjectFiles reads them.
 pub const WorkflowFiles = struct {
@@ -58,7 +60,7 @@ pub const WorkflowFiles = struct {
     }
 };
 
-/// Reports each release in the workflows among `paths` that runs without the tests having passed,
+/// Reports each release and deploy in the workflows among `paths` that runs without the tests having passed,
 /// following each job's calls to the project's own reusable workflows.
 pub fn checkWorkflows(files: WorkflowFiles, report: release.Report, paths: []const []const u8) !void {
     if (files.buffer.len == 0) assert.panic("reading workflows into an empty buffer; size it from memory.Limits.file_bytes", .{});
@@ -72,10 +74,11 @@ pub fn checkWorkflows(files: WorkflowFiles, report: release.Report, paths: []con
         calls.paths[calls.len] = path;
         calls.len += 1;
     };
-    // Whether a workflow releases ungated depends on which workflows run the checks, so the checks
-    // settle first and stay fixed while the releases settle.
+    // Whether a workflow releases or deploys ungated depends on which workflows run the checks, so
+    // the checks settle first and stay fixed while the releases and deploys settle.
     try settle(files, report.text, &calls, .checks);
     try settle(files, report.text, &calls, .releases);
+    try settle(files, report.text, &calls, .deploys);
     for (calls.paths[0..calls.len]) |path| _ = try release.checkWorkflow(report, path, try files.read(path), &calls);
     if (calls.len > paths.len) assert.panic("found {d} workflows among {d} paths", .{ calls.len, paths.len });
 }
@@ -87,6 +90,7 @@ fn settle(files: WorkflowFiles, text: *memory.Text, calls: *Calls, fact: Fact) !
     const known = switch (fact) {
         .checks => &calls.checks,
         .releases => &calls.releases,
+        .deploys => &calls.deploys,
     };
     var pass: usize = 0;
     while (pass <= calls.len) : (pass += 1) {
@@ -97,6 +101,7 @@ fn settle(files: WorkflowFiles, text: *memory.Text, calls: *Calls, fact: Fact) !
             const now = switch (fact) {
                 .checks => gating.checks,
                 .releases => gating.releases,
+                .deploys => gating.deploys,
             };
             if (known[i] == now) continue;
             if (!now) assert.panic("{s} stopped having its {s} fact while the workflows it calls only gain theirs", .{ path, @tagName(fact) });

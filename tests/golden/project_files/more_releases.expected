@@ -1,0 +1,6 @@
+rules: ungated-release,ungated-deployment
+exit: 1
+.github/workflows/release.yml:8:7: error [ungated-release]
+.github/workflows/release.yml:21:14: error [ungated-release]
+.github/workflows/release.yml:25:7: error [ungated-deployment]
+.github/workflows/release.yml:28:5: error [ungated-deployment]

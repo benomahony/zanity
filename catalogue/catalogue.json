@@ -46439,6 +46439,7 @@
       "implementation_status": "partial",
       "rule_ids": [
         "relaxed-check",
+        "ungated-deployment",
         "ungated-release"
       ],
       "cwe_mapping_status": "not_reviewed",

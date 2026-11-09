@@ -123,7 +123,9 @@ pub fn checkProjectFiles(run: ProjectRun, paths: []const []const u8) !void {
         try facts.unit("the project's build and CI files", whole, .{ .kind = .project, .reports_error = false, .at = .{ 0, 0, 0 } });
     };
     if (first == null and whole.len > 0) assert.panic("wrote {d} bytes of project files without reading one; only files read are added", .{whole.len});
-    if (run.enabled.enabled("ungated-release")) try release_calls.checkWorkflows(.{ .io = run.io, .buffer = run.buffer }, .{ .findings = run.findings, .text = facts.text }, paths);
+    const releases = run.enabled.enabled("ungated-release");
+    const deploys = run.enabled.enabled("ungated-deployment");
+    if (releases or deploys) try release_calls.checkWorkflows(.{ .io = run.io, .buffer = run.buffer }, .{ .findings = run.findings, .text = facts.text, .releases = releases, .deploys = deploys }, paths);
 }
 
 test "project files must be readable in full before the check succeeds" {

@@ -95,6 +95,30 @@ test "monorepo and registry publish commands are releases" {
     , &.{ "Job 'lerna'", "Job 'workspace'", "Job 'hex'" });
 }
 
+test "deploy commands and production environments are deploys, unless the job checks first" {
+    try expectFindings(
+        \\jobs:
+        \\  cluster:
+        \\    steps:
+        \\      - run: kubectl apply -f k8s/
+        \\  infra:
+        \\    environment:
+        \\      name: prod
+        \\      url: https://example.com
+        \\    steps:
+        \\      - run: ./deploy.sh
+        \\  staging:
+        \\    environment: staging
+        \\    steps:
+        \\      - run: ./deploy.sh
+        \\  tested:
+        \\    environment: production
+        \\    steps:
+        \\      - run: uv run pytest
+        \\      - run: ./deploy.sh
+    , &.{ "Job 'cluster' deploys with 'kubectl apply -f k8s/'", "Job 'infra' deploys to the 'prod' environment" });
+}
+
 test "a shell equality comparison before publishing is not a release check" {
     try expectFindings(
         \\jobs:

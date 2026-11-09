@@ -39,6 +39,7 @@ const Job = struct {
     calls_checks: bool = false,
     first_check: ?u32 = null,
     release: ?Release = null,
+    deploy: ?Release = null,
     /// The image_action step still being read, which releases once its `with:` sets `push`, and
     /// the indent of its first line, where the next step starts.
     image_step: ?Release = null,
@@ -70,7 +71,9 @@ const Job = struct {
     }
 };
 
-const Release = struct { row: u32, column: u32, text: []const u8 };
+/// Where a job ships, and the command, action or workflow that does it; for a deploy to a
+/// production `environment:`, `text` is the environment's name.
+const Release = struct { row: u32, column: u32, text: []const u8, environment: bool = false };
 
 /// The parse of one workflow: its jobs, and the block a multi-line value is still being read for.
 const Workflow = struct {
@@ -89,6 +92,8 @@ const Workflow = struct {
     block_indent: ?usize = null,
     block_is_condition: bool = false,
     needs_indent: ?usize = null,
+    /// The indent of a job's `environment:` key whose `name:` the following lines may give.
+    environment_indent: ?usize = null,
 
     fn current(self: *Workflow) ?*Job {
         if (self.len > max_jobs) assert.panic("parsed {d} jobs past the {d} slots; addJob() must refuse the extra", .{ self.len, max_jobs });
@@ -107,6 +112,7 @@ const Workflow = struct {
         self.len += 1;
         self.block_indent = null;
         self.needs_indent = null;
+        self.environment_indent = null;
         if (self.current() == null) assert.panic("added job '{s}' but the workflow has no current job", .{id});
     }
 
@@ -127,35 +133,54 @@ pub fn isWorkflow(path: []const u8) bool {
 }
 
 /// How a workflow's releases are gated, for the workflows that call it.
-pub const Gating = struct { checks: bool, call_only: bool, releases: bool };
+pub const Gating = struct { checks: bool, call_only: bool, releases: bool, deploys: bool };
 
-/// Where a workflow's findings go: none are kept without `findings`, and `text` holds their messages.
-pub const Report = struct { findings: ?*memory.Bounded(Finding), text: *memory.Text };
+/// Where a workflow's findings go: none are kept without `findings`, and `text` holds their
+/// messages; `releases` and `deploys` say which of ungated-release and ungated-deployment run.
+pub const Report = struct { findings: ?*memory.Bounded(Finding), text: *memory.Text, releases: bool = true, deploys: bool = true };
 
-/// Reports each step in the workflow `source` that releases without the tests having passed,
-/// unless the workflow only runs when called; `calls` says what the workflows it calls do.
+/// Reports each step in the workflow `source` that releases or deploys without the tests having
+/// passed, unless the workflow only runs when called; `calls` says what the workflows it calls do.
 pub fn checkWorkflow(report: Report, path: []const u8, source: []const u8, calls: *const Calls) !Gating {
     if (!isWorkflow(path)) assert.panic("'{s}' is not a GitHub Actions workflow; call checkWorkflow() only when isWorkflow() holds", .{path});
-    const text = report.text;
     var workflow: Workflow = .{ .calls = calls };
     var lines = std.mem.splitScalar(u8, source, '\n');
     var row: u32 = 0;
     while (lines.next()) |raw| : (row += 1) try line(&workflow, std.mem.trimEnd(u8, raw, "\r"), row);
     var gated: [max_jobs]bool = @splat(false);
     settle(&workflow, &gated);
-    var gating: Gating = .{ .checks = false, .call_only = workflow.called and !workflow.triggered, .releases = false };
+    var gating: Gating = .{ .checks = false, .call_only = workflow.called and !workflow.triggered, .releases = false, .deploys = false };
     for (workflow.jobs[0..workflow.len], 0..) |*job, i| {
         gating.checks = gating.checks or job.checks();
-        const release = job.release orelse continue;
-        const checked_first = if (job.first_check) |at| at < release.row else false;
-        if (checked_first or gated[i]) continue;
-        gating.releases = true;
+        if (gated[i]) continue;
+        const release = ungated(job, job.release);
+        const deploy = ungated(job, job.deploy);
+        gating.releases = gating.releases or release != null;
+        gating.deploys = gating.deploys or deploy != null;
         if (gating.call_only) continue;
         const into = report.findings orelse continue;
-        try into.add(.{ .path = path, .line = release.row, .column = release.column, .rule = "ungated-release", .message = try text.format("Job '{s}' releases with '{s}' without the tests having passed, so a commit that fails them is still released.", .{ job.id, release.text }), .fix = try fix(text, &workflow, job) });
+        if (report.releases) if (release) |at| try into.add(.{ .path = path, .line = at.row, .column = at.column, .rule = "ungated-release", .message = try report.text.format("Job '{s}' releases with '{s}' without the tests having passed, so a commit that fails them is still released.", .{ job.id, at.text }), .fix = try fix(report.text, &workflow, job) });
+        if (report.deploys) if (deploy) |at| try into.add(.{ .path = path, .line = at.row, .column = at.column, .rule = "ungated-deployment", .message = try deployMessage(report.text, job, at), .fix = try fix(report.text, &workflow, job) });
     }
     if (row == 0 and source.len > 0) assert.panic("{s}: read {d} bytes as no lines; splitting on newlines always gives at least one", .{ path, source.len });
     return gating;
+}
+
+/// `shipped`, unless the job ran the checks before it: before the step that ships, or anywhere in
+/// the job for a deploy to a production environment, since its steps all run in that environment.
+fn ungated(job: *const Job, shipped: ?Release) ?Release {
+    const at = shipped orelse return null;
+    if (at.row < job.row) assert.panic("job '{s}' at line {d} ships at line {d}, before the job starts", .{ job.id, job.row + 1, at.row + 1 });
+    const checked = job.first_check orelse return at;
+    if (checked < job.row) assert.panic("job '{s}' at line {d} checks at line {d}, before the job starts", .{ job.id, job.row + 1, checked + 1 });
+    return if (at.environment or checked < at.row) null else at;
+}
+
+fn deployMessage(text: *memory.Text, job: *const Job, deploy: Release) ![]const u8 {
+    if (job.deploy == null) assert.panic("describing a deploy of job '{s}', which deploys nothing", .{job.id});
+    if (deploy.text.len == 0) assert.panic("job '{s}' deploys at line {d} with nothing named", .{ job.id, deploy.row + 1 });
+    if (deploy.environment) return text.format("Job '{s}' deploys to the '{s}' environment without the tests having passed, so a commit that fails them is still deployed.", .{ job.id, deploy.text });
+    return text.format("Job '{s}' deploys with '{s}' without the tests having passed, so a commit that fails them is still deployed.", .{ job.id, deploy.text });
 }
 
 /// Marks each job that runs only once the checks passed: itself, or through a job it needs that
@@ -215,7 +240,7 @@ fn holds(condition: []const u8, need: []const u8) bool {
 
 /// The finding's own fix: which need to add, or which condition lets the release past a failure.
 fn fix(text: *memory.Text, workflow: *const Workflow, job: *const Job) ![]const u8 {
-    if (job.release == null) assert.panic("writing a release fix for job '{s}', which releases nothing", .{job.id});
+    if (job.release == null and job.deploy == null) assert.panic("writing a release fix for job '{s}', which releases and deploys nothing", .{job.id});
     for (job.needed()) |need| {
         if (workflow.find(need) == null or holds(job.condition, need)) continue;
         return text.format("Its 'if: {s}' runs it after '{s}' fails; add '&& needs.{s}.result == 'success'' to it.", .{ strings.header(job.condition), need, need });
@@ -259,18 +284,40 @@ fn line(workflow: *Workflow, raw: []const u8, row: u32) !void {
     const job = workflow.current() orelse return;
     const at: SourceLine = .{ .raw = raw, .content = content, .indent = indent, .row = row };
     if (indent < job_indent) assert.panic("line {d} is indented {d}, less than the jobs' {d}, yet still read as a job's", .{ row + 1, indent, job_indent });
-    if (workflow.block_indent) |block| {
-        if (indent > block) return blockLine(workflow, job, at);
-        workflow.block_indent = null;
-    }
-    if (workflow.needs_indent) |needs| {
-        if (indent > needs and std.mem.startsWith(u8, content, "- ")) return job.addNeed(withoutComment(content[2..]));
-        workflow.needs_indent = null;
-    }
+    if (try continued(workflow, job, at)) return;
     const key_indent = job.key_indent orelse indent;
     job.key_indent = key_indent;
     if (indent == key_indent) return setting(workflow, job, at);
     return step(workflow, job, at);
+}
+
+/// Reads `at` into the block, `needs:` list or `environment:` it continues, if any, and says
+/// whether it did; a line indented no deeper than the key ends that key's block.
+fn continued(workflow: *Workflow, job: *Job, at: SourceLine) !bool {
+    if (workflow.current() != job) assert.panic("continuing a block of job '{s}', which is not the job being parsed", .{job.id});
+    if (at.indent == 0) assert.panic("line {d} continues a job's block from indent 0", .{at.row + 1});
+    if (workflow.block_indent) |block| {
+        if (at.indent > block) {
+            try blockLine(workflow, job, at);
+            return true;
+        }
+        workflow.block_indent = null;
+    }
+    if (workflow.needs_indent) |needs| {
+        if (at.indent > needs and std.mem.startsWith(u8, at.content, "- ")) {
+            try job.addNeed(withoutComment(at.content[2..]));
+            return true;
+        }
+        workflow.needs_indent = null;
+    }
+    const environment_key = workflow.environment_indent orelse return false;
+    if (at.indent <= environment_key) {
+        workflow.environment_indent = null;
+        return false;
+    }
+    if (!std.mem.startsWith(u8, at.content, "name:")) return false;
+    environment(job, at, at.content["name:".len..]);
+    return true;
 }
 
 /// Records one event the workflow's `on:` lists, given as a name, a list entry or an inline list item.
@@ -318,12 +365,23 @@ fn setting(workflow: *Workflow, job: *Job, at: SourceLine) !void {
         job.condition = value;
     } else if (std.mem.startsWith(u8, content, "uses:")) {
         calling(workflow, job, at, std.mem.trim(u8, value, "\"'"));
+    } else if (std.mem.startsWith(u8, content, "environment:")) {
+        if (value.len == 0) workflow.environment_indent = indent else environment(job, at, value);
     }
+}
+
+/// Records a deploy at `at` when the job's environment, named by `value`, is production.
+fn environment(job: *Job, at: SourceLine, value: []const u8) void {
+    if (at.indent == 0) assert.panic("job '{s}' names an environment at indent 0", .{job.id});
+    if (std.mem.indexOfScalar(u8, value, '\n') != null) assert.panic("job '{s}' names an environment spanning lines, but settings are read one line at a time", .{job.id});
+    const name = std.mem.trim(u8, withoutComment(value), " \"'");
+    if (job.deploy != null or !release_steps.productionEnvironment(name)) return;
+    job.deploy = .{ .row = at.row, .column = @intCast(at.indent), .text = name, .environment = true };
 }
 
 /// Records what job `job` gets from the reusable workflow its `uses:` names: whether it runs the
 /// checks, by what its jobs do when it is one of the project's own and by its name when it is not,
-/// and the release it makes ungated when it only runs when called.
+/// and the release or deploy it makes ungated when it only runs when called.
 fn calling(workflow: *Workflow, job: *Job, at: SourceLine, uses: []const u8) void {
     if (workflow.current() != job) assert.panic("reading the uses: of job '{s}', which is not the job being parsed", .{job.id});
     if (at.indent == 0) assert.panic("job '{s}' calls '{s}' from indent 0", .{ job.id, uses });
@@ -332,15 +390,15 @@ fn calling(workflow: *Workflow, job: *Job, at: SourceLine, uses: []const u8) voi
         return;
     };
     job.calls_checks = workflow.calls.checks[callee];
-    if (job.release != null or !workflow.calls.call_only[callee] or !workflow.calls.releases[callee]) return;
-    job.release = .{ .row = at.row, .column = @intCast(at.indent), .text = uses };
+    if (!workflow.calls.call_only[callee]) return;
+    const called: Release = .{ .row = at.row, .column = @intCast(at.indent), .text = uses };
+    if (job.release == null and workflow.calls.releases[callee]) job.release = called;
+    if (job.deploy == null and workflow.calls.deploys[callee]) job.deploy = called;
 }
 
 /// A line inside a job's steps: a `run:` command, a step's `uses:` action, or anything else.
 fn step(workflow: *Workflow, job: *Job, at: SourceLine) !void {
     const content = at.content;
-    const raw = at.raw;
-    const row = at.row;
     if (at.indent == 0) assert.panic("job '{s}' has a step at indent 0", .{job.id});
     if (workflow.current() != job) assert.panic("reading a step of job '{s}', which is not the job being parsed", .{job.id});
     const bare = if (std.mem.startsWith(u8, content, "- ")) content[2..] else content;
@@ -349,21 +407,27 @@ fn step(workflow: *Workflow, job: *Job, at: SourceLine) !void {
     if (std.mem.startsWith(u8, bare, "run:")) {
         const value = std.mem.trim(u8, bare["run:".len..], " ");
         if (blockScalar(withoutComment(value))) return openBlock(workflow, at.indent + (content.len - bare.len), false);
-        if (value.len > 0) return command(job, raw, value, row);
+        if (value.len > 0) return command(job, at.raw, value, at.row);
     }
-    if (std.mem.startsWith(u8, bare, "uses:") and job.release == null) {
-        const value = std.mem.trim(u8, withoutComment(bare["uses:".len..]), " \"'");
-        const action = value[0 .. std.mem.indexOfScalar(u8, value, '@') orelse value.len];
-        var lower: [command_window_bytes]u8 = undefined;
-        const lowered = std.ascii.lowerString(lower[0..@min(action.len, lower.len)], action[0..@min(action.len, lower.len)]);
-        const found: Release = .{ .row = row, .column = @intCast(raw.len - content.len), .text = value };
-        if (release_steps.releaseAction(lowered)) job.release = found;
-        if (std.mem.eql(u8, lowered, release_steps.image_action)) {
-            job.image_step = found;
-            job.image_indent = at.indent;
-        }
-    }
-    if (std.mem.startsWith(u8, bare, "uses:") and job.first_check == null and checkingAction(bare["uses:".len..])) job.first_check = row;
+    if (std.mem.startsWith(u8, bare, "uses:")) action(job, at, bare["uses:".len..]);
+}
+
+/// Records what the action a step's `uses:` names does: run the checks, release, deploy, or
+/// build an image that releases once its `with:` sets `push`.
+fn action(job: *Job, at: SourceLine, uses: []const u8) void {
+    if (at.indent == 0) assert.panic("job '{s}' uses an action at indent 0", .{job.id});
+    if (std.mem.indexOfScalar(u8, uses, '\n') != null) assert.panic("job '{s}' has a uses: spanning lines, but steps are read one line at a time", .{job.id});
+    if (job.first_check == null and checkingAction(uses)) job.first_check = at.row;
+    const value = std.mem.trim(u8, withoutComment(uses), " \"'");
+    const name = value[0 .. std.mem.indexOfScalar(u8, value, '@') orelse value.len];
+    var lower: [command_window_bytes]u8 = undefined;
+    const lowered = std.ascii.lowerString(lower[0..@min(name.len, lower.len)], name[0..@min(name.len, lower.len)]);
+    const found: Release = .{ .row = at.row, .column = @intCast(at.raw.len - at.content.len), .text = value };
+    if (job.release == null and release_steps.shipsAction(.release, lowered)) job.release = found;
+    if (job.deploy == null and release_steps.shipsAction(.deployment, lowered)) job.deploy = found;
+    if (job.release != null or !std.mem.eql(u8, lowered, release_steps.image_action)) return;
+    job.image_step = found;
+    job.image_indent = at.indent;
 }
 
 /// Reads the `push:` of the image_action step being read: anything but `false`, such as `true` or
@@ -384,13 +448,14 @@ fn openBlock(workflow: *Workflow, indent: usize, condition: bool) void {
     if (workflow.block_indent != indent) assert.panic("opened a block at indent {d} but recorded a different one; openBlock() must store the indent it opens", .{indent});
 }
 
-/// Records whether one command line of `job` runs the checks or releases.
+/// Records whether one command line of `job` runs the checks, releases or deploys.
 fn command(job: *Job, raw: []const u8, text: []const u8, row: u32) !void {
     if (text.len == 0) assert.panic("reading an empty command at line {d}; callers skip empty values", .{row + 1});
     var buffer: [command_window_bytes]u8 = undefined;
     const unquoted = unquote(&buffer, text);
     if (unquoted.len > buffer.len) assert.panic("unquoted a command into {d} bytes past its buffer", .{unquoted.len});
     if (job.first_check == null and isCheck(unquoted)) job.first_check = row;
-    if (job.release != null) return;
-    if (release_steps.releaseCommand(unquoted)) job.release = .{ .row = row, .column = @intCast(@intFromPtr(text.ptr) - @intFromPtr(raw.ptr)), .text = strings.header(text) };
+    const found: Release = .{ .row = row, .column = @intCast(@intFromPtr(text.ptr) - @intFromPtr(raw.ptr)), .text = strings.header(text) };
+    if (job.release == null and release_steps.shipsCommand(.release, unquoted)) job.release = found;
+    if (job.deploy == null and release_steps.shipsCommand(.deployment, unquoted)) job.deploy = found;
 }
