@@ -55,6 +55,46 @@ test "a called workflow that another event also starts is still judged on its ow
     , &.{"Job 'publish'"});
 }
 
+test "an image build releases only when its with: pushes the image" {
+    try expectFindings(
+        \\jobs:
+        \\  image:
+        \\    steps:
+        \\      - name: Build
+        \\        uses: docker/build-push-action@v6
+        \\        with:
+        \\          tags:
+        \\            - ghcr.io/example/app:latest
+        \\          push: ${{ github.ref_type == 'tag' }}
+        \\  build-only:
+        \\    steps:
+        \\      - uses: docker/build-push-action@v6
+        \\        with:
+        \\          push: false
+        \\  later-step:
+        \\    steps:
+        \\      - uses: docker/build-push-action@v6
+        \\      - uses: actions/upload-artifact@v4
+        \\        with:
+        \\          push: true
+    , &.{"Job 'image'"});
+}
+
+test "monorepo and registry publish commands are releases" {
+    try expectFindings(
+        \\jobs:
+        \\  lerna:
+        \\    steps:
+        \\      - run: npx lerna publish from-git
+        \\  workspace:
+        \\    steps:
+        \\      - run: pnpm -r publish --access public
+        \\  hex:
+        \\    steps:
+        \\      - run: mix hex.publish --yes
+    , &.{ "Job 'lerna'", "Job 'workspace'", "Job 'hex'" });
+}
+
 test "a shell equality comparison before publishing is not a release check" {
     try expectFindings(
         \\jobs:

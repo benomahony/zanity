@@ -5,6 +5,7 @@ const release_checks = @import("release_checks.zig");
 const checkingAction = release_checks.checkingAction;
 const isCheck = release_checks.isCheck;
 const Calls = @import("release_calls.zig").Calls;
+const release_steps = @import("release_steps.zig");
 const assert = @import("assert.zig");
 const memory = @import("memory.zig");
 const strings = @import("strings.zig");
@@ -19,10 +20,6 @@ pub const command_window_bytes = 512;
 
 /// Words in the path of a reusable workflow zanity cannot read that say it runs the checks.
 const check_workflow_words = [_][]const u8{ "test", "tests", "check", "checks", "ci", "lint", "verify" };
-/// Commands that publish a release or a package, lowercased.
-const release_commands = [_][]const u8{ "gh release create", "npm publish", "pnpm publish", "yarn publish", "yarn npm publish", "cargo publish", "uv publish", "twine upload", "poetry publish", "flit publish", "hatch publish", "gem push", "docker push", "goreleaser release", "mvn deploy", "gradle publish", "gradlew publish", "dotnet nuget push", "nuget push", "semantic-release", "vsce publish", "helm push" };
-/// Actions that publish a release or a package, lowercased, without the version.
-const release_actions = [_][]const u8{ "softprops/action-gh-release", "ncipollo/release-action", "actions/create-release", "marvinpinto/action-automatic-releases", "goreleaser/goreleaser-action", "pypa/gh-action-pypi-publish", "js-devtools/npm-publish", "changesets/action", "katyo/publish-crates", "googleapis/release-please-action", "google-github-actions/release-please-action", "cycjimmy/semantic-release-action" };
 /// Status functions that let a job run after a job it needs has failed.
 const failure_tolerant = [_][]const u8{ "always()", "failure()", "cancelled()" };
 
@@ -38,6 +35,10 @@ const Job = struct {
     calls_checks: bool = false,
     first_check: ?u32 = null,
     release: ?Release = null,
+    /// The image_action step still being read, which releases once its `with:` sets `push`, and
+    /// the indent of its first line, where the next step starts.
+    image_step: ?Release = null,
+    image_indent: usize = 0,
 
     fn needed(self: *const Job) []const []const u8 {
         if (self.id.len == 0) assert.panic("listing the needs of a job with no id; addJob() names every job", .{});
@@ -353,6 +354,8 @@ fn step(workflow: *Workflow, job: *Job, at: SourceLine) !void {
     if (at.indent == 0) assert.panic("job '{s}' has a step at indent 0", .{job.id});
     if (workflow.current() != job) assert.panic("reading a step of job '{s}', which is not the job being parsed", .{job.id});
     const bare = if (std.mem.startsWith(u8, content, "- ")) content[2..] else content;
+    if (bare.len < content.len and at.indent <= job.image_indent) job.image_step = null;
+    if (std.mem.startsWith(u8, bare, "push:")) return imagePush(job, withoutComment(bare["push:".len..]));
     if (std.mem.startsWith(u8, bare, "run:")) {
         const value = std.mem.trim(u8, bare["run:".len..], " ");
         if (blockScalar(withoutComment(value))) return openBlock(workflow, at.indent + (content.len - bare.len), false);
@@ -363,9 +366,25 @@ fn step(workflow: *Workflow, job: *Job, at: SourceLine) !void {
         const action = value[0 .. std.mem.indexOfScalar(u8, value, '@') orelse value.len];
         var lower: [command_window_bytes]u8 = undefined;
         const lowered = std.ascii.lowerString(lower[0..@min(action.len, lower.len)], action[0..@min(action.len, lower.len)]);
-        if (strings.contains(&release_actions, lowered)) job.release = .{ .row = row, .column = @intCast(raw.len - content.len), .text = value };
+        const found: Release = .{ .row = row, .column = @intCast(raw.len - content.len), .text = value };
+        if (release_steps.releaseAction(lowered)) job.release = found;
+        if (std.mem.eql(u8, lowered, release_steps.image_action)) {
+            job.image_step = found;
+            job.image_indent = at.indent;
+        }
     }
     if (std.mem.startsWith(u8, bare, "uses:") and job.first_check == null and checkingAction(bare["uses:".len..])) job.first_check = row;
+}
+
+/// Reads the `push:` of the image_action step being read: anything but `false`, such as `true` or
+/// an expression that is true on a release event, publishes the image.
+fn imagePush(job: *Job, value: []const u8) void {
+    if (std.mem.indexOfScalar(u8, value, '\n') != null) assert.panic("job '{s}' has a push: setting spanning lines, but settings are read one line at a time", .{job.id});
+    const pending = job.image_step orelse return;
+    if (job.release != null) return;
+    if (std.ascii.eqlIgnoreCase(std.mem.trim(u8, value, " \"'"), "false")) return;
+    job.release = pending;
+    if (job.release.?.row != pending.row) assert.panic("job '{s}' recorded its image release at line {d}, not its step's line {d}", .{ job.id, job.release.?.row + 1, pending.row + 1 });
 }
 
 fn openBlock(workflow: *Workflow, indent: usize, condition: bool) void {
@@ -383,10 +402,7 @@ fn command(job: *Job, raw: []const u8, text: []const u8, row: u32) !void {
     if (unquoted.len > buffer.len) assert.panic("unquoted a command into {d} bytes past its buffer", .{unquoted.len});
     if (job.first_check == null and isCheck(unquoted)) job.first_check = row;
     if (job.release != null) return;
-    for (release_commands) |release| if (startsCommand(unquoted, release)) {
-        job.release = .{ .row = row, .column = @intCast(@intFromPtr(text.ptr) - @intFromPtr(raw.ptr)), .text = strings.header(text) };
-        return;
-    };
+    if (release_steps.releaseCommand(unquoted)) job.release = .{ .row = row, .column = @intCast(@intFromPtr(text.ptr) - @intFromPtr(raw.ptr)), .text = strings.header(text) };
 }
 
 /// `text` lowercased, with quoted strings and comments blanked, so words in messages don't count.
@@ -416,20 +432,6 @@ fn hasWord(text: []const u8, words: []const []const u8) bool {
     for (words) |word| if (word.len == 0) assert.panic("looking for an empty word in '{s}'; every listed word must have letters", .{text});
     var tokens = std.mem.tokenizeAny(u8, text, " \t-_./:;&|()=$,[]{}<>!");
     while (tokens.next()) |token| if (strings.contains(words, token)) return true;
-    return false;
-}
-
-/// Whether `text` runs `release`: it appears at the start of a word, followed by the end or a space.
-fn startsCommand(text: []const u8, release: []const u8) bool {
-    if (release.len == 0) assert.panic("looking for an empty release command in '{s}'", .{text});
-    var from: usize = 0;
-    while (std.mem.indexOfPos(u8, text, from, release)) |at| : (from = at + 1) {
-        const before_ok = at == 0 or !(std.ascii.isAlphanumeric(text[at - 1]) or text[at - 1] == '-');
-        const after = at + release.len;
-        const after_ok = after == text.len or text[after] == ' ' or text[after] == '\t';
-        if (before_ok and after_ok) return true;
-    }
-    if (from > text.len) assert.panic("searched past the end of a {d}-byte command", .{text.len});
     return false;
 }
 
