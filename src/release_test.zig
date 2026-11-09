@@ -31,6 +31,19 @@ test "a release job that needs no job running the tests is reported" {
     , &.{"Job 'publish'"});
 }
 
+test "a shell equality comparison before publishing is not a release check" {
+    try expectFindings(
+        \\jobs:
+        \\  publish:
+        \\    steps:
+        \\      - run: |
+        \\          if [ "$GITHUB_EVENT_NAME" = workflow_run ]; then
+        \\            echo "preparing release"
+        \\          fi
+        \\      - run: npm publish
+    , &.{"Job 'publish'"});
+}
+
 test "a release job that needs the tests, directly or through another job, is not reported" {
     try expectFindings(
         \\jobs:
