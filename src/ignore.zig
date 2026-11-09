@@ -14,6 +14,8 @@ const Pattern = struct {
     directories_only: bool,
     /// Matches against the whole path below `base` rather than the basename.
     anchored: bool,
+    /// Comes from zanity.toml's `exclude` rather than git's ignore files.
+    excluded: bool = false,
 };
 
 pub const Kind = enum { file, directory };
@@ -90,17 +92,17 @@ pub const Ignore = struct {
             memory.exceeded = "bytes in one ignore file";
             return error.LimitExceeded;
         }
-        try self.parse(try self.text.copy(base), bytes);
+        try self.parse(try self.text.copy(base), bytes, false);
     }
 
     /// Adds one pattern in gitignore syntax, relative to the absolute directory `base`, as zanity.toml's `exclude` does.
     pub fn exclude(self: *Ignore, base: []const u8, glob: []const u8) !void {
         if (!std.fs.path.isAbsolute(base)) assert.panic("excluding '{s}' relative to '{s}', which is relative; pass the real path", .{ glob, base });
         if (glob.len == 0) assert.panic("excluding an empty pattern relative to '{s}'; readStrings() must refuse empty exclude patterns", .{base});
-        try self.parse(try self.text.copy(base), glob);
+        try self.parse(try self.text.copy(base), glob, true);
     }
 
-    fn parse(self: *Ignore, base: []const u8, bytes: []const u8) !void {
+    fn parse(self: *Ignore, base: []const u8, bytes: []const u8, from_exclude: bool) !void {
         if (base.len == 0) assert.panic("parsing ignore patterns with no directory to anchor them; pass the directory the ignore file is in", .{});
         const before = self.patterns.len;
         var lines = std.mem.splitScalar(u8, bytes, '\n');
@@ -115,7 +117,7 @@ pub const Ignore = struct {
             const anchored = std.mem.indexOfScalar(u8, line, '/') != null;
             if (line.len > 0 and line[0] == '/') line = line[1..];
             if (line.len == 0) continue;
-            try self.patterns.add(.{ .base = base, .glob = try self.text.copy(line), .negated = negated, .directories_only = directories_only, .anchored = anchored });
+            try self.patterns.add(.{ .base = base, .glob = try self.text.copy(line), .negated = negated, .directories_only = directories_only, .anchored = anchored, .excluded = from_exclude });
         }
         if (self.patterns.len < before) assert.panic("parsing the ignore file in {s} removed patterns: {d} before, {d} after; parse() must only add patterns", .{ base, before, self.patterns.len });
     }
@@ -123,15 +125,33 @@ pub const Ignore = struct {
     /// Whether the entry at absolute `path` is ignored. The last matching pattern decides.
     pub fn ignored(self: *const Ignore, path: []const u8, kind: Kind) bool {
         if (!std.fs.path.isAbsolute(path)) assert.panic("asked whether '{s}' is ignored, but ignore patterns match absolute paths; join it to the walk's real root first", .{path});
+        const deciding = self.decider(path, kind) orelse return false;
+        if (deciding.directories_only and kind != .directory) assert.panic("the directory pattern '{s}' decided whether the {t} '{s}' is ignored; decider() must skip directory patterns for files", .{ deciding.glob, kind, path });
+        return !deciding.negated;
+    }
+
+    /// Whether the entry at absolute `path` is left out by zanity.toml's `exclude` rather than by git.
+    pub fn excluded(self: *const Ignore, path: []const u8, kind: Kind) bool {
+        if (!std.fs.path.isAbsolute(path)) assert.panic("asked whether '{s}' is excluded, but exclude patterns match absolute paths; join it to the walk's real root first", .{path});
+        const deciding = self.decider(path, kind) orelse return false;
+        const result = deciding.excluded and !deciding.negated;
+        if (result and !self.ignored(path, kind)) assert.panic("'{s}' is excluded by '{s}' but not ignored; an exclude is an ignore pattern, so ignored() must agree", .{ path, deciding.glob });
+        return result;
+    }
+
+    /// The last pattern matching the entry at absolute `path`, which decides whether it is ignored.
+    fn decider(self: *const Ignore, path: []const u8, kind: Kind) ?*const Pattern {
+        if (!std.fs.path.isAbsolute(path)) assert.panic("matching '{s}' against ignore patterns, which match absolute paths; join it to the walk's real root first", .{path});
         if (self.patterns.len > self.patterns.capacity()) assert.panic("{d} ignore patterns recorded in room for {d}; raise memory.Limits for ignore patterns, or trim the ignore files", .{ self.patterns.len, self.patterns.capacity() });
-        var result = false;
-        for (self.patterns.items()) |p| {
+        var result: ?*const Pattern = null;
+        for (self.patterns.items()) |*p| {
             if (p.directories_only and kind != .directory) continue;
             if (!std.mem.startsWith(u8, path, p.base) or path.len <= p.base.len + 1 or path[p.base.len] != '/') continue;
             const relative = path[p.base.len + 1 ..];
             const subject = if (p.anchored) relative else std.fs.path.basename(relative);
-            if (matchPath(p.glob, subject)) result = !p.negated;
+            if (matchPath(p.glob, subject)) result = p;
         }
+        if (result) |p| if (!std.mem.startsWith(u8, path, p.base)) assert.panic("the pattern '{s}' from {s} decided the {t} '{s}', which is outside it; only patterns under their base apply", .{ p.glob, p.base, kind, path });
         return result;
     }
 };
@@ -328,7 +348,7 @@ test "the last matching pattern decides and negation re-includes" {
     defer std.testing.allocator.free(ignore.patterns.buffer);
     defer std.testing.allocator.free(ignore.text.buffer);
     defer std.testing.allocator.free(ignore.file);
-    try ignore.parse("/r", "# comment\n*.log\n!keep.log\nbuild/\n/top.py\ndocs/**/*.md\n");
+    try ignore.parse("/r", "# comment\n*.log\n!keep.log\nbuild/\n/top.py\ndocs/**/*.md\n", false);
     try std.testing.expect(ignore.ignored("/r/a/x.log", .file));
     try std.testing.expect(!ignore.ignored("/r/a/keep.log", .file));
     try std.testing.expect(ignore.ignored("/r/a/build", .directory));
@@ -337,6 +357,24 @@ test "the last matching pattern decides and negation re-includes" {
     try std.testing.expect(!ignore.ignored("/r/a/top.py", .file));
     try std.testing.expect(ignore.ignored("/r/docs/a/b/c.md", .file));
     try std.testing.expect(!ignore.ignored("/other/x.log", .file));
+}
+
+test "an exclude is told apart from a git ignore, and the last matching pattern still decides" {
+    var ignore = try Ignore.initIgnore(std.testing.allocator, .{ .ignore_patterns = 16, .ignore_bytes = 1024 });
+    defer std.testing.allocator.free(ignore.patterns.buffer);
+    defer std.testing.allocator.free(ignore.text.buffer);
+    defer std.testing.allocator.free(ignore.file);
+    try ignore.parse("/r", "*.log\nvendor/\n", false);
+    try ignore.exclude("/r", "examples/");
+    try ignore.exclude("/r", "*.log");
+    try ignore.parse("/r", "!keep.log\n", false);
+    try std.testing.expect(ignore.excluded("/r/examples", .directory));
+    try std.testing.expect(ignore.ignored("/r/examples", .directory));
+    try std.testing.expect(!ignore.excluded("/r/vendor", .directory));
+    try std.testing.expect(ignore.ignored("/r/vendor", .directory));
+    try std.testing.expect(ignore.excluded("/r/a/x.log", .file));
+    try std.testing.expect(!ignore.excluded("/r/a/keep.log", .file));
+    try std.testing.expect(!ignore.excluded("/r/app.py", .file));
 }
 
 test "missing ignore files are optional but invalid paths are reported" {

@@ -71,7 +71,7 @@ fn readByCheck(name: []const u8, relative: []const u8) bool {
 }
 
 /// Whether `path` is `root` or lies under it.
-fn within(path: []const u8, root: []const u8) bool {
+pub fn within(path: []const u8, root: []const u8) bool {
     if (root.len == 0) assert.panic("checking '{s}' against an empty root; roots are absolute paths", .{path});
     if (path.len == 0) assert.panic("checking an empty path against '{s}'; pass the changed file's absolute path", .{root});
     if (!std.mem.startsWith(u8, path, root)) return false;

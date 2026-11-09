@@ -78,6 +78,8 @@ pub const Workspace = struct {
     workers: [batch.max_workers]?*batch.Worker = @splat(null),
     worker_view: [batch.max_workers]*batch.Worker = undefined,
     checked: usize = 0,
+    /// Checkable files under the walk that zanity.toml's `exclude` left out.
+    skipped: usize = 0,
     io: Io,
     review: baseline.Review = .{},
     baseline_buffer: []u8,
@@ -123,6 +125,7 @@ pub const Workspace = struct {
         ws.settings = null;
         ws.live = null;
         ws.checked = 0;
+        ws.skipped = 0;
         ws.cache_hits = 0;
         if (ws.files.len != 0 or ws.findings.len != 0 or ws.text.used != 0) assert.panic("reset workspace kept {d} files, {d} findings and {d} bytes; resetCheck() must empty the run", .{ ws.files.len, ws.findings.len, ws.text.used });
         if (ws.settings != null or ws.live != null) assert.panic("reset workspace kept settings={d} or progress={d}; both must be 0 between checks", .{ @intFromBool(ws.settings != null), @intFromBool(ws.live != null) });

@@ -227,7 +227,7 @@ test "zanity init writes a zanity.toml that check reads, with [rules] last, and 
     try expectOutput(written, &.{"exclude = [\"vendor/\"]"}, &.{});
     const checked = try std.process.run(arena, io, .{ .argv = &.{ zanity, "check", "." }, .cwd = .{ .path = work } });
     try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, checked.term);
-    try std.testing.expectEqualStrings("zanity: checked 1 file, no issues found\n", checked.stderr);
+    try std.testing.expectEqualStrings("zanity: checked 1 file, skipped 1 file, no issues found\n", checked.stderr);
     const again = try std.process.run(arena, io, .{ .argv = &.{ zanity, "init" }, .cwd = .{ .path = work } });
     try std.testing.expectEqual(std.process.Child.Term{ .exited = 2 }, again.term);
     const forced = try std.process.run(arena, io, .{ .argv = &.{ zanity, "init", "--force" }, .cwd = .{ .path = work } });
@@ -305,7 +305,7 @@ test "zanity.toml disables rules and excludes paths" {
     const run = try std.process.run(arena, io, .{ .argv = &.{ zanity, "check", "--plain", "." }, .cwd = .{ .path = "tests/config/project" } });
     try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, run.term);
     try expectOutput(run.stdout, &.{}, &.{ "long-parameter-list", "vendor/" });
-    try std.testing.expectEqualStrings("zanity: checked 1 file, no issues found\n", run.stderr);
+    try std.testing.expectEqualStrings("zanity: checked 1 file, skipped 1 file, no issues found\n", run.stderr);
 }
 
 test "a mistake in zanity.toml stops the run and says where" {

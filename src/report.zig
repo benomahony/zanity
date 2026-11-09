@@ -29,6 +29,8 @@ pub const Counts = struct {
     /// Warnings and information findings together: both fail a check at `--fail-on warning`.
     warnings: usize = 0,
     flagged: usize = 0,
+    /// Checkable files that zanity.toml's `exclude` left out.
+    skipped: usize = 0,
 };
 
 pub fn sortFindings(findings: []Finding) void {
@@ -47,8 +49,8 @@ fn findingOrder(_: void, a: Finding, b: Finding) bool {
     return std.mem.order(u8, a.rule, b.rule) == .lt;
 }
 
-pub fn count(findings: []const Finding, files: usize) Counts {
-    var counts: Counts = .{ .files = files };
+pub fn count(findings: []const Finding, files: usize, skipped: usize) Counts {
+    var counts: Counts = .{ .files = files, .skipped = skipped };
     var previous: []const u8 = "";
     for (findings) |f| {
         switch ((rules.find(f.rule) orelse unreachable).severity) {
@@ -358,6 +360,15 @@ fn severityStyle(severity: rules.Severity) zrich.Style {
     return .{ .fg = .{ .named = colour }, .bold = severity == .@"error" };
 }
 
+/// ", skipped 3 files" for the files zanity.toml's `exclude` left out, or nothing when it left none.
+fn skippedNote(buffer: []u8, skipped: usize) ![]const u8 {
+    if (buffer.len < 40) assert.panic("{d} bytes cannot hold the skipped note for {d} files; pass at least 40", .{ buffer.len, skipped });
+    if (skipped == 0) return "";
+    const note = try std.fmt.bufPrint(buffer, ", skipped {d} {s}", .{ skipped, if (skipped == 1) "file" else "files" });
+    if (note.len == 0) assert.panic("the note for {d} skipped files came out empty; bufPrint writes the whole format", .{skipped});
+    return note;
+}
+
 fn digits(value: usize) usize {
     if (value == 0) assert.panic("counting the digits of 0; line and column numbers start at 1, so pass them counted from 1", .{});
     const result = std.math.log10_int(value) + 1;
@@ -369,10 +380,13 @@ fn digits(value: usize) usize {
 pub fn renderTotals(out: *std.Io.Writer, findings: []const Finding, counts: Counts) !void {
     if (counts.errors + counts.warnings != findings.len) assert.panic("totalling {d} findings for {d} errors and {d} warnings; count() the findings being rendered", .{ findings.len, counts.errors, counts.warnings });
     const files = if (counts.files == 1) "file" else "files";
-    if (findings.len == 0) return out.print("zanity: checked {d} {s}, no issues found.\n", .{ counts.files, files });
+    var skipped_buffer: [64]u8 = undefined;
+    const skipped = try skippedNote(&skipped_buffer, counts.skipped);
+    if (findings.len == 0) return out.print("zanity: checked {d} {s}{s}, no issues found.\n", .{ counts.files, files, skipped });
     var fixable: usize = 0;
     for (findings) |f| fixable += @intFromBool(f.edit != null);
     try out.print("zanity: {d} {s}, {d} {s} in {d}/{d} {s}", .{ counts.errors, if (counts.errors == 1) "error" else "errors", counts.warnings, if (counts.warnings == 1) "warning" else "warnings", counts.flagged, counts.files, files });
+    try out.writeAll(skipped);
     if (fixable > 0) try out.print("; {d} [--fix]", .{fixable});
     try out.writeAll(".\n");
     if (fixable > findings.len) assert.panic("{d} fixable findings out of {d}; each finding has at most one edit", .{ fixable, findings.len });
@@ -395,14 +409,16 @@ pub fn summarise(console: zrich.Console, counts: Counts) !void {
     if (counts.flagged > counts.files) assert.panic("{d} files flagged out of {d} checked; summarise() must count a file at most once", .{ counts.flagged, counts.files });
     const files = if (counts.files == 1) "file" else "files";
     var buffer: [256]u8 = undefined;
+    var skipped_buffer: [64]u8 = undefined;
+    const skipped = try skippedNote(&skipped_buffer, counts.skipped);
     if (counts.errors + counts.warnings == 0) {
-        const line = try std.fmt.bufPrint(&buffer, "zanity: checked {d} {s}, no issues found", .{ counts.files, files });
+        const line = try std.fmt.bufPrint(&buffer, "zanity: checked {d} {s}{s}, no issues found", .{ counts.files, files, skipped });
         try console.styled(line, .{ .fg = .{ .named = .green } });
         try console.writer.writeByte('\n');
         return;
     }
     if (counts.flagged == 0) assert.panic("{d} errors and {d} warnings but no file flagged; count() must flag the file of every finding", .{ counts.errors, counts.warnings });
-    const line = try std.fmt.bufPrint(&buffer, "zanity: {d} {s} and {d} {s} in {d} of {d} {s}", .{
+    const line = try std.fmt.bufPrint(&buffer, "zanity: {d} {s} and {d} {s} in {d} of {d} {s}{s}", .{
         counts.errors,
         if (counts.errors == 1) "error" else "errors",
         counts.warnings,
@@ -410,6 +426,7 @@ pub fn summarise(console: zrich.Console, counts: Counts) !void {
         counts.flagged,
         counts.files,
         files,
+        skipped,
     });
     const colour: zrich.NamedColor = if (counts.errors > 0) .red else .yellow;
     try console.styled(line, .{ .fg = .{ .named = colour } });

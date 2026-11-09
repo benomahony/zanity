@@ -24,6 +24,7 @@ const Live = @import("live.zig").Live;
 const config = @import("config.zig");
 const fix_file = @import("fix_file.zig");
 const watch = @import("watch.zig");
+pub const collect = @import("collect.zig").collect;
 const CheckOptions = triage.CheckOptions;
 const triage = @import("triage.zig");
 const baseline = @import("baseline.zig");
@@ -155,7 +156,7 @@ pub fn renderHuman(ctx: *zclig.Context, rows: []const Row) !void {
     const findings = ws.findings.items();
     if (rows.len != findings.len) assert.panic("rendering {d} rows for {d} findings; rows are built one per finding", .{ rows.len, findings.len });
     try report.render(.{ .console = console(ctx, ctx.runtime.out), .scratch = &ws.table, .text = &ws.text }, findings);
-    try report.summarise(console(ctx, ctx.runtime.err), report.count(findings, ws.checked + ws.project_files.len));
+    try report.summarise(console(ctx, ctx.runtime.err), report.count(findings, ws.checked + ws.project_files.len, ws.skipped));
     if (ws.checked > ws.files.len) assert.panic("checked {d} files out of {d} collected; count a file as checked only once, in checkFiles()", .{ ws.checked, ws.files.len });
     const err = ctx.runtime.err;
     try ws.notice.finish(ws.io, err.writer, app.version);
@@ -244,7 +245,7 @@ pub fn checkPaths(ctx: *zclig.Context, ws: *Workspace, options: CheckOptions, se
         });
     }
     try baseline.prepare(ctx, ws, options);
-    return report.count(findings, ws.checked + ws.project_files.len);
+    return report.count(findings, ws.checked + ws.project_files.len, ws.skipped);
 }
 
 fn checkFiles(ctx: *zclig.Context, ws: *Workspace, selected: rules.Set) !void {
@@ -382,60 +383,4 @@ fn dropDisabled(ws: *Workspace) !void {
     }
     if (kept > findings.len) assert.panic("kept {d} of {d} findings; dropping findings in place can only shrink the list, so the loop wrote past what it read", .{ kept, findings.len });
     ws.findings.len = kept;
-}
-
-/// Adds the checkable files under `path`, skipping what git ignores. A file named directly is always checked.
-pub fn collect(ctx: *zclig.Context, ws: *Workspace, path: []const u8) !void {
-    if (path.len == 0) assert.panic("asked to collect files from an empty path; zclig supplies '.' when none are given", .{});
-    const before = ws.files.len;
-    var dir = Io.Dir.cwd().openDir(ws.io, path, .{ .iterate = true }) catch |e| switch (e) {
-        error.NotDir => {
-            try ws.files.add(path);
-            return;
-        },
-        error.FileNotFound => return ctx.fail(.usage, try ws.text.format("{s} does not exist.", .{path}), "Pass a file or directory to check."),
-        else => return e,
-    };
-    defer dir.close(ws.io);
-    var root_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const root = root_buffer[0..try dir.realPath(ws.io, &root_buffer)];
-    ws.ignore.loadAncestors(ws.io, root) catch |e| switch (e) {
-        error.LimitExceeded => return e,
-        else => return ctx.fail(.io, try ws.text.format("Could not read the git ignore files that apply to {s}: {t}.", .{ root, e }), "Check that the repository's .git, and the git directory a .git file names, are readable."),
-    };
-    try ws.ignore.loadFile(ws.io, root, ".gitignore");
-    try ws.dirs.add(try ws.text.copy(root));
-    var walker = try dir.walkSelectively(std.heap.page_allocator);
-    defer walker.deinit();
-    var absolute_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    for (0..ws.limits.files * 2) |_| {
-        const entry = try walker.next(ws.io) orelse break;
-        const absolute = std.fmt.bufPrint(&absolute_buffer, "{s}/{s}", .{ root, entry.path }) catch return ctx.fail(.io, try ws.text.format("Cannot check {s}/{s}: its absolute path is too long.", .{ root, entry.path }), "Move the project to a shorter path, or shorten the nested directory names.");
-        switch (entry.kind) {
-            .directory => if (!project.skippedDir(entry.basename) and !ws.ignore.ignored(absolute, .directory)) {
-                try ws.ignore.loadFile(ws.io, absolute, ".gitignore");
-                try ws.dirs.add(try ws.text.copy(absolute));
-                try walker.enter(ws.io, entry);
-            },
-            .file => if (!ws.ignore.ignored(absolute, .file)) try addFile(ws, path, entry),
-            else => {},
-        }
-    } else {
-        memory.exceeded = "directory entries";
-        return error.LimitExceeded;
-    }
-    if (ws.files.len < before) assert.panic("collecting {s} dropped files: {d} before, {d} after; collect() must only add files", .{ path, before, ws.files.len });
-}
-
-/// Adds a file the walk found under `path` to the source files or the project files, or neither.
-fn addFile(ws: *Workspace, path: []const u8, entry: Io.Dir.Walker.Entry) !void {
-    if (entry.path.len == 0) assert.panic("the walk under {s} found a file with no path; Walker gives each entry its path", .{path});
-    const source = language.forPath(entry.basename) != null;
-    if (!source and !project.isProjectFile(entry.path)) return;
-    const joined = if (std.mem.eql(u8, path, "."))
-        try ws.text.copy(entry.path)
-    else
-        try ws.text.format("{s}{s}{s}", .{ path, if (std.mem.endsWith(u8, path, "/")) "" else "/", entry.path });
-    if (joined.len < entry.path.len) assert.panic("joined '{s}' under '{s}' into the shorter '{s}'; addFile() must keep the whole path", .{ entry.path, path, joined });
-    if (source) try ws.files.add(joined) else try ws.project_files.add(joined);
 }
