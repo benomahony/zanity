@@ -3,9 +3,9 @@
 const std = @import("std");
 const assert = @import("assert.zig");
 const strings = @import("strings.zig");
-const release = @import("release.zig");
-const command_window_bytes = release.command_window_bytes;
-const withoutComment = release.withoutComment;
+const release_text = @import("release_text.zig");
+const command_window_bytes = release_text.command_window_bytes;
+const withoutComment = release_text.withoutComment;
 
 /// Commands that run tests, a linter or a type checker, lowercased, matched as a whole command
 /// or its start, so `cargo test` counts and `mkdir test-output` doesn't.
