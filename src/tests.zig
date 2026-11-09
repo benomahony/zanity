@@ -37,5 +37,6 @@ test {
     _ = @import("watch_review.zig");
     _ = @import("release.zig");
     _ = @import("release_test.zig");
+    _ = @import("release_fix_test.zig");
     _ = @import("release_checks.zig");
 }

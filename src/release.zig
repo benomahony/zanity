@@ -6,6 +6,7 @@ const checkingAction = release_checks.checkingAction;
 const isCheck = release_checks.isCheck;
 const Calls = @import("release_calls.zig").Calls;
 const release_steps = @import("release_steps.zig");
+const release_fix = @import("release_fix.zig");
 const release_text = @import("release_text.zig");
 const command_window_bytes = release_text.command_window_bytes;
 const unquote = release_text.unquote;
@@ -27,14 +28,21 @@ const max_needs = 16;
 /// Status functions that let a job run after a job it needs has failed.
 const failure_tolerant = [_][]const u8{ "always()", "failure()", "cancelled()" };
 
-const Job = struct {
+pub const Job = struct {
     id: []const u8,
-    /// The line of the job's key.
+    /// The line of the job's key, and that whole line in the workflow's source.
     row: u32,
+    key_line: []const u8,
     key_indent: ?usize = null,
     needs: [max_needs][]const u8 = undefined,
     needs_len: u8 = 0,
+    /// An inline `needs:` value as written, such as `test` or `[lint, test]`, or the last line of a
+    /// block `needs:` list; both are slices of the workflow's source.
+    needs_value: []const u8 = "",
+    needs_last: []const u8 = "",
+    /// The job's `if:` condition, a slice of the workflow's source, and whether a block scalar holds it.
     condition: []const u8 = "",
+    condition_block: bool = false,
     /// Whether the job calls a reusable workflow that runs the checks.
     calls_checks: bool = false,
     first_check: ?u32 = null,
@@ -45,7 +53,7 @@ const Job = struct {
     image_step: ?Release = null,
     image_indent: usize = 0,
 
-    fn needed(self: *const Job) []const []const u8 {
+    pub fn needed(self: *const Job) []const []const u8 {
         if (self.id.len == 0) assert.panic("listing the needs of a job with no id; addJob() names every job", .{});
         if (self.needs_len > max_needs) assert.panic("job '{s}' records {d} needs past its {d} slots; addNeed() must refuse the extra", .{ self.id, self.needs_len, max_needs });
         return self.needs[0..self.needs_len];
@@ -64,7 +72,7 @@ const Job = struct {
         if (!std.mem.eql(u8, self.needed()[self.needs_len - 1], id)) assert.panic("job '{s}' added need '{s}' but its last need is '{s}'", .{ self.id, id, self.needed()[self.needs_len - 1] });
     }
 
-    fn checks(self: *const Job) bool {
+    pub fn checks(self: *const Job) bool {
         if (self.id.len == 0) assert.panic("asked whether a job with no id runs the checks; parse() names every job", .{});
         if (self.first_check) |row| if (row < self.row) assert.panic("job '{s}' at line {d} records a check at line {d}, before the job starts", .{ self.id, self.row + 1, row + 1 });
         return self.calls_checks or self.first_check != null;
@@ -76,7 +84,10 @@ const Job = struct {
 const Release = struct { row: u32, column: u32, text: []const u8, environment: bool = false };
 
 /// The parse of one workflow: its jobs, and the block a multi-line value is still being read for.
-const Workflow = struct {
+pub const Workflow = struct {
+    /// The workflow's path and source, which every job's slices point into.
+    path: []const u8,
+    source: []const u8,
     /// What the project's workflows do, for the jobs that call them.
     calls: *const Calls,
     jobs: [max_jobs]Job = undefined,
@@ -102,13 +113,13 @@ const Workflow = struct {
         return &self.jobs[self.len - 1];
     }
 
-    fn addJob(self: *Workflow, id: []const u8, row: u32) !void {
+    fn addJob(self: *Workflow, id: []const u8, key_line: []const u8, row: u32) !void {
         if (id.len == 0) assert.panic("a job key at line {d} has no name; line() passes only keys before a colon", .{row + 1});
         if (self.len == max_jobs) {
             memory.exceeded = "jobs in one GitHub Actions workflow";
             return error.LimitExceeded;
         }
-        self.jobs[self.len] = .{ .id = std.mem.trim(u8, id, "\"'"), .row = row };
+        self.jobs[self.len] = .{ .id = std.mem.trim(u8, id, "\"'"), .row = row, .key_line = key_line };
         self.len += 1;
         self.block_indent = null;
         self.needs_indent = null;
@@ -116,7 +127,7 @@ const Workflow = struct {
         if (self.current() == null) assert.panic("added job '{s}' but the workflow has no current job", .{id});
     }
 
-    fn find(self: *const Workflow, id: []const u8) ?usize {
+    pub fn find(self: *const Workflow, id: []const u8) ?usize {
         if (id.len == 0) assert.panic("looking up a job with an empty id; addNeed() drops empty names", .{});
         if (self.len > max_jobs) assert.panic("looking up '{s}' among {d} jobs past the {d} slots", .{ id, self.len, max_jobs });
         for (self.jobs[0..self.len], 0..) |job, i| if (std.mem.eql(u8, job.id, id)) return i;
@@ -143,7 +154,7 @@ pub const Report = struct { findings: ?*memory.Bounded(Finding), text: *memory.T
 /// passed, unless the workflow only runs when called; `calls` says what the workflows it calls do.
 pub fn checkWorkflow(report: Report, path: []const u8, source: []const u8, calls: *const Calls) !Gating {
     if (!isWorkflow(path)) assert.panic("'{s}' is not a GitHub Actions workflow; call checkWorkflow() only when isWorkflow() holds", .{path});
-    var workflow: Workflow = .{ .calls = calls };
+    var workflow: Workflow = .{ .path = path, .source = source, .calls = calls };
     var lines = std.mem.splitScalar(u8, source, '\n');
     var row: u32 = 0;
     while (lines.next()) |raw| : (row += 1) try line(&workflow, std.mem.trimEnd(u8, raw, "\r"), row);
@@ -157,13 +168,28 @@ pub fn checkWorkflow(report: Report, path: []const u8, source: []const u8, calls
         const deploy = ungated(job, job.deploy);
         gating.releases = gating.releases or release != null;
         gating.deploys = gating.deploys or deploy != null;
-        if (gating.call_only) continue;
-        const into = report.findings orelse continue;
-        if (report.releases) if (release) |at| try into.add(.{ .path = path, .line = at.row, .column = at.column, .rule = "ungated-release", .message = try report.text.format("Job '{s}' releases with '{s}' without the tests having passed, so a commit that fails them is still released.", .{ job.id, at.text }), .fix = try fix(report.text, &workflow, job) });
-        if (report.deploys) if (deploy) |at| try into.add(.{ .path = path, .line = at.row, .column = at.column, .rule = "ungated-deployment", .message = try deployMessage(report.text, job, at), .fix = try fix(report.text, &workflow, job) });
+        if (!gating.call_only) try reportJob(report, &workflow, job, .{ .release = if (report.releases) release else null, .deploy = if (report.deploys) deploy else null });
     }
     if (row == 0 and source.len > 0) assert.panic("{s}: read {d} bytes as no lines; splitting on newlines always gives at least one", .{ path, source.len });
     return gating;
+}
+
+/// What a job ships without the tests having passed, among the rules that run.
+const Ungated = struct { release: ?Release, deploy: ?Release };
+
+/// Reports what `job` ships ungated. Both findings name the same fix, and only the first carries
+/// its edit, so --fix makes it once.
+fn reportJob(report: Report, workflow: *const Workflow, job: *const Job, shipped: Ungated) !void {
+    if (shipped.release != null and job.release == null) assert.panic("job '{s}' is reported for a release it does not make", .{job.id});
+    if (shipped.deploy != null and job.deploy == null) assert.panic("job '{s}' is reported for a deploy it does not make", .{job.id});
+    const into = report.findings orelse return;
+    if (shipped.release == null and shipped.deploy == null) return;
+    var fixed = try release_fix.fix(report.text, workflow, job);
+    if (shipped.release) |at| {
+        try into.add(.{ .path = workflow.path, .line = at.row, .column = at.column, .rule = "ungated-release", .message = try report.text.format("Job '{s}' releases with '{s}' without the tests having passed, so a commit that fails them is still released.", .{ job.id, at.text }), .fix = fixed.text, .edit = fixed.edit });
+        fixed.edit = null;
+    }
+    if (shipped.deploy) |at| try into.add(.{ .path = workflow.path, .line = at.row, .column = at.column, .rule = "ungated-deployment", .message = try deployMessage(report.text, job, at), .fix = fixed.text, .edit = fixed.edit });
 }
 
 /// `shipped`, unless the job ran the checks before it: before the step that ships, or anywhere in
@@ -225,7 +251,7 @@ fn passedWorkflowRun(condition: []const u8) bool {
 
 /// Whether a job with `condition` stops when `need` fails: it does unless a status function lets
 /// it run after a failure without also requiring that need, or every need, to have succeeded.
-fn holds(condition: []const u8, need: []const u8) bool {
+pub fn holds(condition: []const u8, need: []const u8) bool {
     if (need.len == 0) assert.panic("checking a condition against a need with no name; addNeed() drops empty names", .{});
     var buffer: [command_window_bytes]u8 = undefined;
     const squeezed = squeeze(&buffer, condition);
@@ -236,20 +262,6 @@ fn holds(condition: []const u8, need: []const u8) bool {
     const required = std.fmt.bufPrint(&wanted, "needs.{s}.result=='success'", .{need}) catch return false;
     if (required.len <= need.len) assert.panic("the requirement for '{s}' came out shorter than the name", .{need});
     return std.mem.indexOf(u8, squeezed, required) != null or std.mem.indexOf(u8, squeezed, "!contains(needs.*.result,'failure')") != null;
-}
-
-/// The finding's own fix: which need to add, or which condition lets the release past a failure.
-fn fix(text: *memory.Text, workflow: *const Workflow, job: *const Job) ![]const u8 {
-    if (job.release == null and job.deploy == null) assert.panic("writing a release fix for job '{s}', which releases and deploys nothing", .{job.id});
-    for (job.needed()) |need| {
-        if (workflow.find(need) == null or holds(job.condition, need)) continue;
-        return text.format("Its 'if: {s}' runs it after '{s}' fails; add '&& needs.{s}.result == 'success'' to it.", .{ strings.header(job.condition), need, need });
-    }
-    for (workflow.jobs[0..workflow.len]) |*other| if (other != job and other.checks()) {
-        return text.format("Add 'needs: {s}' to job '{s}', so it runs only after '{s}' passes.", .{ other.id, job.id, other.id });
-    };
-    if (workflow.len == 0) assert.panic("writing a release fix for job '{s}' in a workflow with no jobs", .{job.id});
-    return text.format("Run the tests in a job of this workflow, such as one calling the CI workflow with 'uses: ./.github/workflows/<ci>.yml', and add 'needs: <that job>' to job '{s}'.", .{job.id});
 }
 
 /// One line of a workflow: the whole line, the part after its indent, and where it is.
@@ -280,7 +292,7 @@ fn line(workflow: *Workflow, raw: []const u8, row: u32) !void {
     if (!workflow.in_jobs) return;
     const job_indent = workflow.job_indent orelse indent;
     workflow.job_indent = job_indent;
-    if (indent == job_indent) return workflow.addJob(content[0 .. std.mem.indexOfScalar(u8, content, ':') orelse content.len], row);
+    if (indent == job_indent) return workflow.addJob(content[0 .. std.mem.indexOfScalar(u8, content, ':') orelse content.len], raw, row);
     const job = workflow.current() orelse return;
     const at: SourceLine = .{ .raw = raw, .content = content, .indent = indent, .row = row };
     if (indent < job_indent) assert.panic("line {d} is indented {d}, less than the jobs' {d}, yet still read as a job's", .{ row + 1, indent, job_indent });
@@ -306,6 +318,7 @@ fn continued(workflow: *Workflow, job: *Job, at: SourceLine) !bool {
     if (workflow.needs_indent) |needs| {
         if (at.indent > needs and std.mem.startsWith(u8, at.content, "- ")) {
             try job.addNeed(withoutComment(at.content[2..]));
+            job.needs_last = at.raw;
             return true;
         }
         workflow.needs_indent = null;
@@ -357,11 +370,13 @@ fn setting(workflow: *Workflow, job: *Job, at: SourceLine) !void {
             workflow.needs_indent = indent;
             return;
         }
+        job.needs_value = value;
         var names = std.mem.tokenizeAny(u8, std.mem.trim(u8, value, "[]"), ",");
         while (names.next()) |name| try job.addNeed(name);
     } else if (std.mem.startsWith(u8, content, "if:")) {
         job.condition = "";
-        if (blockScalar(value)) return openBlock(workflow, indent, true);
+        job.condition_block = blockScalar(value);
+        if (job.condition_block) return openBlock(workflow, indent, true);
         job.condition = value;
     } else if (std.mem.startsWith(u8, content, "uses:")) {
         calling(workflow, job, at, std.mem.trim(u8, value, "\"'"));

@@ -1,0 +1,18 @@
+on:
+  push:
+    tags: ["v*"]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: cargo test
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - run: cargo publish
+  github:
+    needs: test
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: softprops/action-gh-release@v2
