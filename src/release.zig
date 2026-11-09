@@ -4,6 +4,7 @@ const std = @import("std");
 const release_checks = @import("release_checks.zig");
 const checkingAction = release_checks.checkingAction;
 const isCheck = release_checks.isCheck;
+const Calls = @import("release_calls.zig").Calls;
 const assert = @import("assert.zig");
 const memory = @import("memory.zig");
 const strings = @import("strings.zig");
@@ -16,7 +17,7 @@ const max_needs = 16;
 /// How much of a command line is inspected for check and release commands.
 pub const command_window_bytes = 512;
 
-/// Words in a reusable workflow's path that say it runs the checks.
+/// Words in the path of a reusable workflow zanity cannot read that say it runs the checks.
 const check_workflow_words = [_][]const u8{ "test", "tests", "check", "checks", "ci", "lint", "verify" };
 /// Commands that publish a release or a package, lowercased.
 const release_commands = [_][]const u8{ "gh release create", "npm publish", "pnpm publish", "yarn publish", "yarn npm publish", "cargo publish", "uv publish", "twine upload", "poetry publish", "flit publish", "hatch publish", "gem push", "docker push", "goreleaser release", "mvn deploy", "gradle publish", "gradlew publish", "dotnet nuget push", "nuget push", "semantic-release", "vsce publish", "helm push" };
@@ -33,7 +34,7 @@ const Job = struct {
     needs: [max_needs][]const u8 = undefined,
     needs_len: u8 = 0,
     condition: []const u8 = "",
-    /// Whether the job calls a reusable workflow named for running the checks.
+    /// Whether the job calls a reusable workflow that runs the checks.
     calls_checks: bool = false,
     first_check: ?u32 = null,
     release: ?Release = null,
@@ -68,9 +69,16 @@ const Release = struct { row: u32, column: u32, text: []const u8 };
 
 /// The parse of one workflow: its jobs, and the block a multi-line value is still being read for.
 const Workflow = struct {
+    /// What the project's workflows do, for the jobs that call them.
+    calls: *const Calls,
     jobs: [max_jobs]Job = undefined,
     len: usize = 0,
     in_jobs: bool = false,
+    in_on: bool = false,
+    on_indent: ?usize = null,
+    /// Whether `on:` lists workflow_call, and whether it lists any other event.
+    called: bool = false,
+    triggered: bool = false,
     job_indent: ?usize = null,
     /// The indent of the `run:` or `if:` key whose block scalar the following lines continue.
     block_indent: ?usize = null,
@@ -113,22 +121,36 @@ pub fn isWorkflow(path: []const u8) bool {
     return std.mem.indexOf(u8, path, ".github/workflows/") != null and (std.mem.eql(u8, extension, ".yml") or std.mem.eql(u8, extension, ".yaml"));
 }
 
-/// Reports each step in the workflow `source` that releases without the tests having passed.
-pub fn checkWorkflow(findings: *memory.Bounded(Finding), text: *memory.Text, path: []const u8, source: []const u8) !void {
+/// How a workflow's releases are gated, for the workflows that call it.
+pub const Gating = struct { checks: bool, call_only: bool, releases: bool };
+
+/// Where a workflow's findings go: none are kept without `findings`, and `text` holds their messages.
+pub const Report = struct { findings: ?*memory.Bounded(Finding), text: *memory.Text };
+
+/// Reports each step in the workflow `source` that releases without the tests having passed,
+/// unless the workflow only runs when called; `calls` says what the workflows it calls do.
+pub fn checkWorkflow(report: Report, path: []const u8, source: []const u8, calls: *const Calls) !Gating {
     if (!isWorkflow(path)) assert.panic("'{s}' is not a GitHub Actions workflow; call checkWorkflow() only when isWorkflow() holds", .{path});
-    var workflow: Workflow = .{};
+    const text = report.text;
+    var workflow: Workflow = .{ .calls = calls };
     var lines = std.mem.splitScalar(u8, source, '\n');
     var row: u32 = 0;
     while (lines.next()) |raw| : (row += 1) try line(&workflow, std.mem.trimEnd(u8, raw, "\r"), row);
     var gated: [max_jobs]bool = @splat(false);
     settle(&workflow, &gated);
+    var gating: Gating = .{ .checks = false, .call_only = workflow.called and !workflow.triggered, .releases = false };
     for (workflow.jobs[0..workflow.len], 0..) |*job, i| {
+        gating.checks = gating.checks or job.checks();
         const release = job.release orelse continue;
         const checked_first = if (job.first_check) |at| at < release.row else false;
         if (checked_first or gated[i]) continue;
-        try findings.add(.{ .path = path, .line = release.row, .column = release.column, .rule = "ungated-release", .message = try text.format("Job '{s}' releases with '{s}' without the tests having passed, so a commit that fails them is still released.", .{ job.id, release.text }), .fix = try fix(text, &workflow, job) });
+        gating.releases = true;
+        if (gating.call_only) continue;
+        const into = report.findings orelse continue;
+        try into.add(.{ .path = path, .line = release.row, .column = release.column, .rule = "ungated-release", .message = try text.format("Job '{s}' releases with '{s}' without the tests having passed, so a commit that fails them is still released.", .{ job.id, release.text }), .fix = try fix(text, &workflow, job) });
     }
     if (row == 0 and source.len > 0) assert.panic("{s}: read {d} bytes as no lines; splitting on newlines always gives at least one", .{ path, source.len });
+    return gating;
 }
 
 /// Marks each job that runs only once the checks passed: itself, or through a job it needs that
@@ -226,6 +248,17 @@ fn line(workflow: *Workflow, raw: []const u8, row: u32) !void {
     if (indent == 0) {
         workflow.in_jobs = std.mem.eql(u8, std.mem.trimEnd(u8, content, " "), "jobs:");
         workflow.block_indent = null;
+        workflow.in_on = std.mem.startsWith(u8, content, "on:");
+        if (workflow.in_on) {
+            var events = std.mem.tokenizeScalar(u8, withoutComment(content["on:".len..]), ',');
+            while (events.next()) |event| trigger(workflow, event);
+        }
+        return;
+    }
+    if (workflow.in_on) {
+        const on_indent = workflow.on_indent orelse indent;
+        workflow.on_indent = on_indent;
+        if (indent == on_indent) trigger(workflow, content[0 .. std.mem.indexOfScalar(u8, content, ':') orelse content.len]);
         return;
     }
     if (!workflow.in_jobs) return;
@@ -245,8 +278,17 @@ fn line(workflow: *Workflow, raw: []const u8, row: u32) !void {
     }
     const key_indent = job.key_indent orelse indent;
     job.key_indent = key_indent;
-    if (indent == key_indent) return setting(workflow, job, content, indent);
+    if (indent == key_indent) return setting(workflow, job, at);
     return step(workflow, job, at);
+}
+
+/// Records one event the workflow's `on:` lists, given as a name, a list entry or an inline list item.
+fn trigger(workflow: *Workflow, listed: []const u8) void {
+    if (!workflow.in_on) assert.panic("recording the event '{s}' outside the workflow's on: block", .{listed});
+    const event = std.mem.trim(u8, listed, " -[]\"'");
+    if (event.len == 0) return;
+    if (std.mem.eql(u8, event, "workflow_call")) workflow.called = true else workflow.triggered = true;
+    if (!workflow.called and !workflow.triggered) assert.panic("recorded the event '{s}' as neither a call nor another trigger", .{event});
 }
 
 fn blockLine(workflow: *Workflow, job: *Job, at: SourceLine) !void {
@@ -266,7 +308,9 @@ fn blockLine(workflow: *Workflow, job: *Job, at: SourceLine) !void {
 }
 
 /// A job's own setting, such as `needs:`, `if:` or `uses:`.
-fn setting(workflow: *Workflow, job: *Job, content: []const u8, indent: usize) !void {
+fn setting(workflow: *Workflow, job: *Job, at: SourceLine) !void {
+    const content = at.content;
+    const indent = at.indent;
     if (indent == 0) assert.panic("job '{s}' has a setting at indent 0; line() treats those as top-level keys", .{job.id});
     if (workflow.current() != job) assert.panic("reading a setting of job '{s}', which is not the job being parsed", .{job.id});
     const value = std.mem.trim(u8, withoutComment(afterKey(content) orelse return), " ");
@@ -282,8 +326,23 @@ fn setting(workflow: *Workflow, job: *Job, content: []const u8, indent: usize) !
         if (blockScalar(value)) return openBlock(workflow, indent, true);
         job.condition = value;
     } else if (std.mem.startsWith(u8, content, "uses:")) {
-        job.calls_checks = namesChecks(value);
+        calling(workflow, job, at, std.mem.trim(u8, value, "\"'"));
     }
+}
+
+/// Records what job `job` gets from the reusable workflow its `uses:` names: whether it runs the
+/// checks, by what its jobs do when it is one of the project's own and by its name when it is not,
+/// and the release it makes ungated when it only runs when called.
+fn calling(workflow: *Workflow, job: *Job, at: SourceLine, uses: []const u8) void {
+    if (workflow.current() != job) assert.panic("reading the uses: of job '{s}', which is not the job being parsed", .{job.id});
+    if (at.indent == 0) assert.panic("job '{s}' calls '{s}' from indent 0", .{ job.id, uses });
+    const callee = workflow.calls.find(uses) orelse {
+        job.calls_checks = namesChecks(uses);
+        return;
+    };
+    job.calls_checks = workflow.calls.checks[callee];
+    if (job.release != null or !workflow.calls.call_only[callee] or !workflow.calls.releases[callee]) return;
+    job.release = .{ .row = at.row, .column = @intCast(at.indent), .text = uses };
 }
 
 /// A line inside a job's steps: a `run:` command, a step's `uses:` action, or anything else.

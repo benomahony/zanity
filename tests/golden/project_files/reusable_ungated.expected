@@ -1,0 +1,3 @@
+rules: ungated-release
+exit: 1
+.github/workflows/release.yml:10:5: error [ungated-release]

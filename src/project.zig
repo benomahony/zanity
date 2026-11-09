@@ -10,7 +10,7 @@ const ignore = @import("ignore.zig");
 const suppress = @import("suppress.zig");
 const strings = @import("strings.zig");
 const facts_module = @import("facts.zig");
-const release = @import("release.zig");
+const release_calls = @import("release_calls.zig");
 const artifacts = @import("artifacts.zig");
 const Facts = facts_module.Facts;
 const Finding = facts_module.Finding;
@@ -114,7 +114,6 @@ pub fn checkProjectFiles(run: ProjectRun, paths: []const []const u8) !void {
         }
         if (first == null) first = path;
         try checkProjectFile(run, path, source);
-        if (run.enabled.enabled("ungated-release") and release.isWorkflow(path)) try release.checkWorkflow(run.findings, facts.text, path, source);
         if (facts.collect_units) _ = try facts.text.format("=== {s} ===\n{s}\n", .{ path, source });
     }
     const whole = facts.text.buffer[project_start..facts.text.used];
@@ -124,6 +123,7 @@ pub fn checkProjectFiles(run: ProjectRun, paths: []const []const u8) !void {
         try facts.unit("the project's build and CI files", whole, .{ .kind = .project, .reports_error = false, .at = .{ 0, 0, 0 } });
     };
     if (first == null and whole.len > 0) assert.panic("wrote {d} bytes of project files without reading one; only files read are added", .{whole.len});
+    if (run.enabled.enabled("ungated-release")) try release_calls.checkWorkflows(.{ .io = run.io, .buffer = run.buffer }, .{ .findings = run.findings, .text = facts.text }, paths);
 }
 
 test "project files must be readable in full before the check succeeds" {

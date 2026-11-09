@@ -15,7 +15,7 @@ fn expectFindings(source: []const u8, expected: []const []const u8) !void {
     const arena = arena_state.allocator();
     var findings = try memory.Bounded(Finding).initBounded(arena, 8, "test findings");
     var text = try memory.Text.initText(arena, 1 << 16);
-    try checkWorkflow(&findings, &text, ".github/workflows/release.yml", source);
+    _ = try checkWorkflow(.{ .findings = &findings, .text = &text }, ".github/workflows/release.yml", source, &.{});
     try std.testing.expectEqual(expected.len, findings.len);
     for (findings.items(), expected) |finding, job| try std.testing.expect(std.mem.indexOf(u8, finding.message, job) != null);
 }
@@ -26,6 +26,30 @@ test "a release job that needs no job running the tests is reported" {
         \\jobs:
         \\  publish:
         \\    runs-on: ubuntu-latest
+        \\    steps:
+        \\      - run: npm publish
+    , &.{"Job 'publish'"});
+}
+
+test "a workflow that only runs when called is judged through its callers, not on its own" {
+    try expectFindings(
+        \\on:
+        \\  workflow_call:
+        \\    inputs:
+        \\      version:
+        \\        type: string
+        \\jobs:
+        \\  publish:
+        \\    steps:
+        \\      - run: npm publish
+    , &.{});
+}
+
+test "a called workflow that another event also starts is still judged on its own" {
+    try expectFindings(
+        \\on: [workflow_call, workflow_dispatch]
+        \\jobs:
+        \\  publish:
         \\    steps:
         \\      - run: npm publish
     , &.{"Job 'publish'"});

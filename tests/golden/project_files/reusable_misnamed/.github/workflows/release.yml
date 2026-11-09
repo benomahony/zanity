@@ -1,0 +1,11 @@
+on:
+  push:
+    tags: ["v*"]
+jobs:
+  check:
+    uses: ./.github/workflows/ci-build.yml
+  publish:
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - run: uv publish

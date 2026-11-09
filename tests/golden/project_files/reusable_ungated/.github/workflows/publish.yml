@@ -1,0 +1,7 @@
+on: workflow_call
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    steps:
+      - run: uv build
+      - run: uv publish
