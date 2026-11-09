@@ -296,6 +296,19 @@ pub fn exited(run: std.process.RunResult, what: []const u8) !std.process.RunResu
     return error.ZanityDidNotExit;
 }
 
+test "a workflow named directly is checked as a project file" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    const io = std.testing.io;
+    const zanity = try Io.Dir.cwd().realPathFileAlloc(io, paths.zanity, arena);
+    for ([_][]const u8{ ".github/workflows/tag.yml", "./.github/workflows/tag.yml" }) |named| {
+        const run = try std.process.run(arena, io, .{ .argv = &.{ zanity, "check", "--rules", "ungated-release", "--plain", named }, .cwd = .{ .path = "tests/golden/project_files/releases" } });
+        try std.testing.expectEqual(std.process.Child.Term{ .exited = 1 }, run.term);
+        try expectOutput(run.stdout, &.{ "line=12", "line=17", "rule=\"ungated-release\"" }, &.{"gated.yml"});
+    }
+}
+
 test "zanity.toml disables rules and excludes paths" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();

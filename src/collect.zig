@@ -26,7 +26,9 @@ pub fn collect(ctx: *zclig.Context, ws: *Workspace, path: []const u8) !void {
     const before = ws.files.len;
     var dir = Io.Dir.cwd().openDir(ws.io, path, .{ .iterate = true }) catch |e| switch (e) {
         error.NotDir => {
-            try ws.files.add(path);
+            const relative = if (std.mem.startsWith(u8, path, "./") and path.len > 2) path[2..] else path;
+            const configures = language.forPath(std.fs.path.basename(path)) == null and project.isProjectFile(relative);
+            try if (configures) ws.project_files.add(path) else ws.files.add(path);
             return;
         },
         error.FileNotFound => return ctx.fail(.usage, try ws.text.format("{s} does not exist.", .{path}), "Pass a file or directory to check."),
