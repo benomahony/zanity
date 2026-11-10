@@ -101,7 +101,17 @@ pub fn loadSettings(ctx: *zclig.Context, ws: *Workspace, gpa: Allocator) !config
     const after = ws.ignore.mark();
     if (after.patterns < before.patterns + settings.excludes().len) assert.panic("{d} excludes in zanity.toml added {d} ignore patterns; exclude() adds one per pattern", .{ settings.excludes().len, after.patterns - before.patterns });
     if (settings.rules) |chosen| if (chosen.len == 0) assert.panic("zanity.toml selected no rules; the reader must reject an empty select", .{});
+    if (settings.strict_line > 0) try deprecated(ctx, try ws.text.format("{s}:{d}: 'strict' is deprecated and runs every rule, as \"all\" does; write \"all\" instead.", .{ config.file_name, settings.strict_line }));
     return settings;
+}
+
+/// Warns that a deprecated spelling was used, saying what to write instead; the run goes on.
+pub fn deprecated(ctx: *zclig.Context, warning: []const u8) !void {
+    if (warning.len == 0) assert.panic("warning of a deprecation without saying what replaces it", .{});
+    const err = console(ctx, ctx.runtime.err);
+    try err.styled(warning, .{ .fg = .{ .named = .yellow } });
+    try err.writer.writeByte('\n');
+    if (err.writer.buffered().len == 0 and !std.mem.endsWith(u8, warning, ".")) assert.panic("the deprecation '{s}' should end in a full stop", .{warning});
 }
 
 /// Whether to write for a coding agent: when --agent asks, or when one is running zanity and the
@@ -179,8 +189,9 @@ pub fn parseRules(ctx: *zclig.Context, ws: *Workspace, list: []const u8) !rules.
     while (it.next()) |raw| {
         const code = std.mem.trim(u8, raw, " ");
         if (code.len == 0) continue;
-        if (std.mem.eql(u8, code, "strict")) return ctx.fail(.usage, "'strict' is gone.", "Pass --production, or --rules all, to run every rule.");
-        if (!set.includeNamed(code)) {
+        const strict = std.mem.eql(u8, code, "strict");
+        if (strict) try deprecated(ctx, "zanity: --rules strict is deprecated and runs every rule; write --production or --rules all instead.");
+        if (!set.includeNamed(if (strict) "all" else code)) {
             const start = ws.text.used;
             _ = try ws.text.copy("The rules are: all (every rule, as --production runs)");
             for (rules.all) |r| _ = try ws.text.format(" {s}", .{r.name});

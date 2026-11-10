@@ -118,8 +118,12 @@ test "production adds every other rule to the defaults, without what disable rem
     try std.testing.expectEqual(rules.all.len - 1, chosen.len);
 }
 
-test "select 'strict' says to write 'all', which runs every rule as --production does" {
-    try expectProblem("[rules]\nselect = [\"strict\"]\n", "zanity.toml:2: 'strict' is gone; write \"all\" to run every rule, as zanity check --production does.");
+test "the deprecated select 'strict' still runs every rule, and records its line for the warning" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const c = try parsed(arena_state.allocator(), "[rules]\nselect = [\"strict\"]\n");
+    try std.testing.expectEqual(rules.all.len, c.selection(false).len);
+    try std.testing.expectEqual(@as(u32, 2), c.strict_line);
 }
 
 test "mistakes in zanity.toml name the line and what to write" {

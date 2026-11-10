@@ -95,6 +95,9 @@ pub const Config = struct {
     dir: []const u8 = "",
     rules: ?rules.Set = null,
     disable: rules.Set = .{},
+    /// The line naming 'strict', the old name for every rule, which still reads as "all" until it
+    /// is removed; 0 when no line does.
+    strict_line: u32 = 0,
     exclude: [max_excludes][]const u8 = undefined,
     exclude_len: usize = 0,
     /// Whether every check asks the model, as if run with `--infer`.

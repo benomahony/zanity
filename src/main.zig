@@ -70,8 +70,21 @@ const out_buffer_bytes = 64 * 1024;
 const err_buffer_bytes = 4096;
 /// The highest exit code allowed; codes above it collide with signals.
 const max_exit_code = 130;
-/// The exit code for a command line zanity cannot run, as zclig uses for an unknown option.
-const usage_exit_code = 2;
+/// Each deprecated flag, which still works, and the flag that replaces it.
+const renamed_flags = [_][2][:0]const u8{
+    .{ "--strict", "--production" },
+    .{ "--strict=true", "--production=true" },
+    .{ "--strict=false", "--production=false" },
+};
+
+fn renamedFlag(arg: []const u8) ?[:0]const u8 {
+    for (renamed_flags) |pair| if (std.mem.eql(u8, arg, pair[0])) {
+        if (std.mem.eql(u8, pair[0], pair[1])) assert.panic("'{s}' is renamed to itself; renamed_flags must map each flag to a different one", .{pair[0]});
+        if (!std.mem.startsWith(u8, pair[1], "--")) assert.panic("'{s}' is renamed to '{s}', which is not a flag; renamed_flags must map flags to flags", .{ pair[0], pair[1] });
+        return pair[1];
+    };
+    return null;
+}
 
 pub const app: zclig.App = .{
     .name = "zanity",
@@ -152,14 +165,14 @@ pub fn main(init: std.process.Init) !u8 {
     var err_writer: Io.File.Writer = .initStreaming(.stderr(), init.io, &err_buffer);
     const ws = try workspace_init.initWorkspace(Workspace, std.heap.page_allocator, init.io, .{});
     ws.environ = init.environ_map;
-    const rest = args[1..];
+    // A copy, so a deprecated flag can be swapped for the one that replaces it.
+    const rest = try init.arena.allocator().dupe(@TypeOf(args[0]), args[1..]);
     ws.args = rest;
     if (ws.args.len + 1 != args.len) assert.panic("the workspace holds {d} of {d} arguments; main() must give it all but the program's name", .{ ws.args.len, args.len });
     for (rest) |arg| ws.chose_format = ws.chose_format or std.mem.eql(u8, arg, "--json") or std.mem.eql(u8, arg, "--plain");
-    for (rest) |arg| if (std.mem.eql(u8, arg, "--strict") or std.mem.startsWith(u8, arg, "--strict=")) {
-        try err_writer.interface.writeAll("zanity: --strict is now --production, which runs every rule.\n");
-        try err_writer.interface.flush();
-        return usage_exit_code;
+    for (rest) |*arg| if (renamedFlag(arg.*)) |current| {
+        try err_writer.interface.print("zanity: {s} is deprecated and runs as {s}, which runs every rule; write {s} instead.\n", .{ arg.*, current, current });
+        arg.* = current;
     };
     var runtime = zclig.native.runtime(init, &out_writer.interface, &err_writer.interface);
     runtime.user_data = ws;
