@@ -5,6 +5,7 @@
 //! order they finish; everything read afterwards is sorted first, so the report doesn't depend on it.
 
 const std = @import("std");
+const analysis = @import("analysis.zig");
 const assert = @import("assert.zig");
 const Io = std.Io;
 const Allocator = std.mem.Allocator;
@@ -159,7 +160,7 @@ pub const Batch = struct {
         const cached_file: CachedFile = .{ .key = cache_module.key(cache_context, path), .source = @import("store.zig").digest(&.{source}), .path = path, .language = adapter.name };
         if (try self.replayCached(cached_file)) return;
         worker.startFile(path, adapter.name, self.facts.collect_units);
-        const result = try checker.check(.{ .scratch = &worker.scratch, .text = &worker.text, .facts = &worker.facts }, source);
+        const result = try analysis.checkFile(checker, .{ .scratch = &worker.scratch, .text = &worker.text, .facts = &worker.facts }, source);
         self.mutex.lockUncancelable(self.io);
         defer self.mutex.unlock(self.io);
         if (self.cache) |source_cache| {

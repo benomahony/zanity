@@ -4,6 +4,7 @@
 //! on one core, so a slowdown shows whether the checks or the scheduling lost the time.
 
 const std = @import("std");
+const analysis = @import("analysis.zig");
 const assert = @import("assert.zig");
 const Io = std.Io;
 const Allocator = std.mem.Allocator;
@@ -178,7 +179,7 @@ fn checkAll(arena: Allocator, corpus: *const Corpus, work: check.Work) !void {
         inline for (.{ "definitions", "functions", "calls", "units" }) |field| @field(work.facts, field).clear();
         work.facts.path = path;
         work.facts.language = adapter.name;
-        _ = try slot.*.?.check(work, source);
+        _ = try analysis.checkFile(&slot.*.?, work, source);
     }
 }
 

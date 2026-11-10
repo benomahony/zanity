@@ -1,4 +1,5 @@
 const std = @import("std");
+const analysis = @import("analysis.zig");
 const language = @import("language.zig");
 const check = @import("check.zig");
 const memory = @import("memory.zig");
@@ -32,7 +33,7 @@ test "inference units retain attached documentation across languages" {
         facts.language = adapter.name;
         facts.collect_units = true;
         var scratch = try check.FileScratch.initCheckScratch(arena, limits);
-        _ = try checker.check(.{ .scratch = &scratch, .text = &text, .facts = &facts }, case.source);
+        _ = try analysis.checkFile(&checker, .{ .scratch = &scratch, .text = &text, .facts = &facts }, case.source);
         const unit = for (facts.units.items()) |candidate| {
             if (candidate.kind == .function) break candidate;
         } else return error.MissingFunctionUnit;

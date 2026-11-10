@@ -1,4 +1,5 @@
 const std = @import("std");
+const analysis = @import("analysis.zig");
 const assert = @import("assert.zig");
 const adapters = @import("adapters");
 const language = @import("language.zig");
@@ -44,7 +45,7 @@ fn checkAnything(_: void, smith: *std.testing.Smith) anyerror!void {
     facts.path = "fuzz";
     facts.language = adapter.name;
     var scratch = try check.FileScratch.initCheckScratch(arena, limits);
-    const result = checker.check(.{ .scratch = &scratch, .text = &text, .facts = &facts }, source) catch |e| switch (e) {
+    const result = analysis.checkFile(checker, .{ .scratch = &scratch, .text = &text, .facts = &facts }, source) catch |e| switch (e) {
         error.LimitExceeded => return,
         else => return e,
     };
