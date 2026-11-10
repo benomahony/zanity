@@ -100,7 +100,7 @@ fn renderAgentRule(out: *std.Io.Writer, report: AgentReport, tally: RuleTally) !
         shown += 1;
         if (!std.mem.eql(u8, path, f.path)) try out.print("  {s}\n", .{f.path});
         path = f.path;
-        try out.print("    {d}:{d}{s} ", .{ f.line + 1, f.column + 1, if (f.edit != null) " [--fix]" else "" });
+        try out.print("    {d}:{d}{s} ", .{ f.line + 1, f.column + 1, if (f.fixable()) " [--fix]" else "" });
         try out.print("{s}.\n", .{brief(if (f.fix.len > 0) f.fix else f.message)});
     }
     if (shown < tally.total) try out.print("  +{d} more: --rules {s} --limit 0\n", .{ tally.total - shown, rule.name });

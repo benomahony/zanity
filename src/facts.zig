@@ -69,6 +69,19 @@ pub const Finding = struct {
     subject: u64 = 0,
     /// Set once `--fix` has applied `edit`, so the finding is no longer reported.
     fixed: bool = false,
+    /// Nonzero when `--fix` renames a name everywhere it is written: the number shared by the
+    /// finding and the edit of each use, which are made together or not at all.
+    rename: u32 = 0,
+    /// Whether this is the edit of one use in a rename, which `--fix` makes and nothing reports.
+    companion: bool = false,
+
+    /// Whether `--fix` changes the code for it.
+    pub fn fixable(self: Finding) bool {
+        if (self.companion) assert.panic("asked whether one use's edit in rename {d} is fixable; only the finding asking for the rename is reported", .{self.rename});
+        const fixes = self.edit != null or self.rename != 0;
+        if (self.fixed and !fixes) assert.panic("a {s} finding at {s}:{d} is marked fixed with nothing to fix it", .{ self.rule, self.path, self.line + 1 });
+        return fixes;
+    }
 
     pub fn advice(self: Finding) []const u8 {
         const rule = rules.find(self.rule) orelse unreachable;

@@ -8,6 +8,7 @@ const rules = @import("rules.zig");
 const config_module = @import("config.zig");
 const naming = @import("naming.zig");
 const facts_module = @import("facts.zig");
+const rename = @import("rename.zig");
 /// The longest words compared for similarity.
 const max_similar_length = 64;
 const Config = config_module.Config;
@@ -36,11 +37,23 @@ pub fn assignScopes(anchor: Anchor, facts: *Facts) void {
     if (facts.definitions.len > facts.definitions.capacity()) assert.panic("{d} definitions in room for {d}; Bounded.add() refuses more", .{ facts.definitions.len, facts.definitions.capacity() });
 }
 
-/// The project the vocabulary checks read and what they report into.
-pub const Run = struct { anchor: Anchor, text: *memory.Text, enabled: rules.Set, findings: *memory.Bounded(Finding) };
+/// The project the vocabulary checks read and what they report into: findings, and the edit of
+/// each use of a name `--fix` renames, read from the checked files through `reading`.
+pub const Run = struct {
+    anchor: Anchor,
+    text: *memory.Text,
+    enabled: rules.Set,
+    findings: *memory.Bounded(Finding),
+    reading: rename.Reading,
+    renames: *memory.Bounded(Finding),
+    pending: ?*rename.Pending = null,
+};
 
 /// `files` are every source file checked, sorted, for their module and package names.
-pub fn checkVocabulary(run: Run, facts: *Facts, files: []const []const u8) error{LimitExceeded}!void {
+pub fn checkVocabulary(asked: Run, facts: *Facts, files: []const []const u8) error{LimitExceeded}!void {
+    var pending: rename.Pending = .{};
+    var run = asked;
+    run.pending = &pending;
     const settings = run.anchor.config;
     const enabled = run.enabled;
     const findings = run.findings;
@@ -51,6 +64,7 @@ pub fn checkVocabulary(run: Run, facts: *Facts, files: []const []const u8) error
     if (settings.terms_len > 0) {
         for (facts.definitions.items()) |d| try checkName(run, .{ .name = d.name, .path = d.path, .line = d.line, .column = d.column, .scope = d.scope });
         try checkPaths(run, files);
+        if (pending.len > 0) try renameEverywhere(run, &pending, files);
     }
     if (enabled.enabled("misplaced-test") and settings.scopes_len > 0) try misplacedTests(facts, findings);
     if (findings.len < before) assert.panic("vocabulary checks dropped findings from {d} to {d}; they may only add", .{ before, findings.len });
@@ -156,7 +170,31 @@ fn reportTerm(run: Run, d: Named, word: []const u8, term: Term) error{LimitExcee
     };
     const extension = if (d.kind == .module) std.fs.path.extension(d.path) else "";
     if (std.ascii.eqlIgnoreCase(renamed, d.name)) assert.panic("renaming '{s}' gave the same name; the alias '{s}' and '{s}' must differ", .{ d.name, word, term.canonical });
-    try run.findings.add(.{ .path = d.path, .line = d.line, .column = d.column, .rule = "non-canonical-term", .message = try text.format("{s}'{s}' says '{s}', but the project's word for it is '{s}', so a reader searching for '{s}' won't find it.", .{ what, d.name, word, term.canonical, term.canonical }), .fix = try text.format("Rename {s} to '{s}{s}'.", .{ thing, renamed, extension }) });
+    const pending = run.pending orelse assert.panic("reporting '{s}' with no pending renames; checkVocabulary() sets them", .{d.name});
+    const id = if (d.kind == .definition) pending.ask(d.name, renamed) else 0;
+    try run.findings.add(.{ .path = d.path, .line = d.line, .column = d.column, .rule = "non-canonical-term", .message = try text.format("{s}'{s}' says '{s}', but the project's word for it is '{s}', so a reader searching for '{s}' won't find it.", .{ what, d.name, word, term.canonical, term.canonical }), .fix = try text.format("Rename {s} to '{s}{s}'.", .{ thing, renamed, extension }), .rename = id });
+}
+
+/// Finds every use of each name to rename, and says in each finding how many --fix changes, or
+/// why it changes none: the new name is written somewhere already, or a file couldn't be read.
+fn renameEverywhere(run: Run, pending: *rename.Pending, files: []const []const u8) error{LimitExceeded}!void {
+    if (pending.len == 0) assert.panic("renaming with no renames asked for; call renameEverywhere() only when a finding asked", .{});
+    try rename.findUses(run.reading, pending, files, run.renames);
+    const findings = run.findings.items();
+    for (findings) |*f| {
+        if (f.rename == 0) continue;
+        const r = pending.renames[f.rename - 1];
+        if (r.uses == 0) assert.panic("'{s}' has no uses in the checked files, though it is defined in {s}; the definition itself is one", .{ r.old, f.path });
+        if (r.taken) |place| {
+            f.rename = 0;
+            f.fix = if (place.line) |line|
+                try run.text.format("Rename it to '{s}' by hand: '{s}' is already written at {s}:{d}, so --fix leaves it.", .{ r.new, r.new, place.path, line + 1 })
+            else
+                try run.text.format("Rename it to '{s}' by hand: {s} couldn't be read to rename it there, so --fix leaves it.", .{ r.new, place.path });
+            continue;
+        }
+        f.fix = try run.text.format("Rename it to '{s}' in its {d} {s} across {d} {s}.", .{ r.new, r.uses, if (r.uses == 1) "use" else "uses", r.files, if (r.files == 1) "file" else "files" });
+    }
 }
 
 /// `name` with `word`, a slice of it, replaced by `canonical` in the same case: all capitals,

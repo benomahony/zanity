@@ -50,6 +50,8 @@ pub const Workspace = struct {
     liveness: structure.LiveScratch,
     graph: graph.CycleScratch,
     findings: memory.Bounded(Finding),
+    /// The edit of each use of a name `--fix` renames, kept apart from the findings it reports.
+    renames: memory.Bounded(Finding),
     files: memory.Bounded([]const u8),
     /// Build, lint, type-check and CI configuration, checked as text.
     project_files: memory.Bounded([]const u8),
@@ -120,7 +122,7 @@ pub const Workspace = struct {
         ws.text.used = 0;
         ws.facts.reset();
         ws.naming.reset();
-        inline for (.{ "findings", "files", "project_files", "dirs", "rows" }) |field| @field(ws, field).clear();
+        inline for (.{ "findings", "renames", "files", "project_files", "dirs", "rows" }) |field| @field(ws, field).clear();
         ws.ignore.reset();
         ws.settings = null;
         ws.live = null;

@@ -46,7 +46,10 @@ fn findingOrder(_: void, a: Finding, b: Finding) bool {
     if (by_path != .eq) return by_path == .lt;
     if (a.line != b.line) return a.line < b.line;
     if (a.column != b.column) return a.column < b.column;
-    return std.mem.order(u8, a.rule, b.rule) == .lt;
+    const by_rule = std.mem.order(u8, a.rule, b.rule);
+    if (by_rule != .eq) return by_rule == .lt;
+    // Two renames of one name edit the same bytes; the lower number goes first in every file.
+    return a.rename < b.rename;
 }
 
 pub fn count(findings: []const Finding, files: usize, skipped: usize) Counts {
@@ -384,7 +387,7 @@ pub fn renderTotals(out: *std.Io.Writer, findings: []const Finding, counts: Coun
     const skipped = try skippedNote(&skipped_buffer, counts.skipped);
     if (findings.len == 0) return out.print("zanity: checked {d} {s}{s}, no issues found.\n", .{ counts.files, files, skipped });
     var fixable: usize = 0;
-    for (findings) |f| fixable += @intFromBool(f.edit != null);
+    for (findings) |f| fixable += @intFromBool(f.fixable());
     try out.print("zanity: {d} {s}, {d} {s} in {d}/{d} {s}", .{ counts.errors, if (counts.errors == 1) "error" else "errors", counts.warnings, if (counts.warnings == 1) "warning" else "warnings", counts.flagged, counts.files, files });
     try out.writeAll(skipped);
     if (fixable > 0) try out.print("; {d} [--fix]", .{fixable});

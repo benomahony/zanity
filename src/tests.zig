@@ -39,4 +39,5 @@ test {
     _ = @import("release_test.zig");
     _ = @import("release_fix_test.zig");
     _ = @import("release_checks.zig");
+    _ = @import("rename.zig");
 }

@@ -281,7 +281,7 @@ fn checkFiles(ctx: *zclig.Context, ws: *Workspace, selected: rules.Set) !void {
         if (a.config.directional_len > 0) ws.naming.directional = a.config.directional[0..a.config.directional_len];
     }
     try naming.crossCheck(&ws.naming, &ws.facts, selected, &ws.findings);
-    if (anchor) |a| try vocabulary.checkVocabulary(.{ .anchor = a, .text = ws.facts.text, .enabled = selected, .findings = &ws.findings }, &ws.facts, ws.files.items());
+    if (anchor) |a| try vocabulary.checkVocabulary(.{ .anchor = a, .text = ws.facts.text, .enabled = selected, .findings = &ws.findings, .reading = .{ .io = ws.io, .buffer = ws.source }, .renames = &ws.renames }, &ws.facts, ws.files.items());
     if (selected.enabled("recursion")) try graph.recursion(&ws.graph, &ws.facts, &ws.findings);
     if (selected.enabled("dead-parameter")) parameters.dropPassed(&ws.facts, &ws.findings);
     const sources: structure.Sources = .{ .io = ws.io, .mine = ws.source, .theirs = ws.fixed };
@@ -325,27 +325,33 @@ fn connectInference(ctx: *zclig.Context, ws: *Workspace, selected: *rules.Set, a
 
 /// Applies each file's edits, then drops the findings they fixed and moves the rest to their new lines.
 fn fixFiles(ctx: *zclig.Context, ws: *Workspace) !void {
+    try fix_file.mergeRenames(ws);
     const findings = ws.findings.items();
-    var fixed: usize = 0;
+    var edited: usize = 0;
     var files: usize = 0;
     var start: usize = 0;
     while (start < findings.len) {
         var end = start + 1;
         while (end < findings.len and std.mem.eql(u8, findings[end].path, findings[start].path)) end += 1;
         const applied = try fix_file.fixFile(ctx, ws, findings[start..end]);
-        fixed += applied;
+        edited += applied;
         files += @intFromBool(applied > 0);
         start = end;
     }
-    if (files > fixed) assert.panic("expected every fixed file to have a fixed finding, got {d} files and {d} findings; fixFile() must mark a finding fixed for each edit it applies", .{ files, fixed });
+    if (files > edited) assert.panic("expected every fixed file to have an applied edit, got {d} files and {d} edits; fixFile() must mark a finding fixed for each edit it applies", .{ files, edited });
+    fix_file.settleRenames(findings);
     var kept: usize = 0;
+    var fixed: usize = 0;
+    var uses: usize = 0;
     for (findings) |f| {
-        if (f.fixed) continue;
+        uses += @intFromBool(f.companion);
+        fixed += @intFromBool(f.fixed and !f.companion);
+        if (f.fixed or f.companion) continue;
         findings[kept] = f;
         kept += 1;
     }
     ws.findings.len = kept;
-    if (kept + fixed != findings.len) assert.panic("--fix lost track of findings: {d} fixed and {d} kept out of {d}; a finding was marked fixed without its edit being applied, so fixFile() must set fixed only after it writes the edit", .{ fixed, kept, findings.len });
+    if (kept + fixed + uses != findings.len) assert.panic("--fix lost track of findings: {d} fixed, {d} kept and {d} rename edits out of {d}; a finding was marked fixed without its edit being applied, so fixFile() must set fixed only after it writes the edit", .{ fixed, kept, uses, findings.len });
     if (fixed > 0) {
         const line = try ws.text.format("zanity: fixed {d} {s} in {d} {s}", .{ fixed, if (fixed == 1) "finding" else "findings", files, if (files == 1) "file" else "files" });
         const err = console(ctx, ctx.runtime.err);

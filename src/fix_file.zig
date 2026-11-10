@@ -6,6 +6,8 @@ const zclig = @import("zclig");
 const edits = @import("edits.zig");
 const exchange = @import("exchange.zig");
 const Finding = @import("facts.zig").Finding;
+const rename = @import("rename.zig");
+const report = @import("report.zig");
 
 /// Applies the non-overlapping edits of one file's findings, which are in source order.
 /// An edit that overlaps an earlier one waits for the next run.
@@ -24,6 +26,62 @@ pub fn fixFile(ctx: *zclig.Context, ws: anytype, findings: []Finding) !usize {
     const applied = spliced.applied;
     if (applied == 0) assert.panic("expected at least one edit to apply to {s}, got none; fixFiles() must call fixFile() only for a file with an edit", .{path});
     return applied;
+}
+
+/// Adds the edit of each use of each name to rename whose finding is still reported, then makes
+/// every other edit that overlaps one wait for the next run, so a rename is never left half made.
+pub fn mergeRenames(ws: anytype) error{LimitExceeded}!void {
+    if (ws.renames.len == 0) return;
+    var live: [rename.max_renames + 1]bool = @splat(false);
+    for (ws.findings.items()) |f| {
+        if (f.companion) assert.panic("a rename's edit at {s}:{d} is among the findings before --fix merged them", .{ f.path, f.line + 1 });
+        live[f.rename] = true;
+    }
+    for (ws.renames.items()) |use| if (live[use.rename]) try ws.findings.add(use);
+    const findings = ws.findings.items();
+    report.sortFindings(findings);
+    var start: usize = 0;
+    while (start < findings.len) {
+        var end = start + 1;
+        while (end < findings.len and std.mem.eql(u8, findings[end].path, findings[start].path)) end += 1;
+        yieldToRenames(findings[start..end]);
+        start = end;
+    }
+    if (start != findings.len) assert.panic("merged renames into {d} of {d} findings", .{ start, findings.len });
+}
+
+/// Drops the edit of each finding in one file that overlaps the edit of a use being renamed.
+fn yieldToRenames(findings: []Finding) void {
+    if (findings.len == 0) assert.panic("yielding to renames in a file with no findings", .{});
+    for (findings) |*f| {
+        const edit = f.edit orelse continue;
+        if (f.companion) continue;
+        for (findings) |use| {
+            const renamed = use.edit orelse continue;
+            if (use.companion and edit.start < renamed.end and renamed.start < edit.end) f.edit = null;
+        }
+    }
+    for (findings) |f| if (!f.companion and f.edit != null and f.rename != 0) assert.panic("the {s} finding asking for rename {d} carries its own edit; only its uses do", .{ f.rule, f.rename });
+}
+
+/// Marks each finding whose rename --fix made in full as fixed; a rename is made in full or not
+/// at all, since its uses are whole words that only another rename of the same name overlaps.
+pub fn settleRenames(findings: []Finding) void {
+    var uses: [rename.max_renames + 1]usize = @splat(0);
+    var made: [rename.max_renames + 1]usize = @splat(0);
+    for (findings) |f| if (f.companion) {
+        uses[f.rename] += 1;
+        made[f.rename] += @intFromBool(f.fixed);
+    };
+    for (uses, made, 0..) |all, done, id| if (done > 0 and done < all) assert.panic("--fix made {d} of the {d} edits of rename {d}; mergeRenames() must keep other edits off its uses", .{ done, all, id });
+    var settled: usize = 0;
+    for (findings) |*f| if (!f.companion and f.rename != 0) {
+        const all = uses[f.rename];
+        if (all == 0 or made[f.rename] != all) continue;
+        f.fixed = true;
+        settled += 1;
+    };
+    if (settled > findings.len) assert.panic("settled {d} renames among {d} findings", .{ settled, findings.len });
 }
 
 /// A file to fix: its path, the bytes the fixes were made against, and the fixed bytes.

@@ -118,3 +118,29 @@ test "precedence-trap's fix shows how the code runs and the grouping it reads as
     const run = try std.process.run(arena, io, .{ .argv = &.{ zanity, "check", "--rules", "precedence-trap", "--plain", "traps.ts" }, .cwd = .{ .path = work } });
     try expectOutput(run.stdout, &.{ "It runs as `(!y) == true`; if you meant `!(y == true)`", "It runs as `a & (b == c)`; if you meant `(a & b) == c`", "It runs as `(a == b) & c`; if you meant `a == (b & c)`" }, &.{});
 }
+
+test "--fix renames a non-canonical name in every file that writes it, unless the new name is taken or the name is one word" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    const io = std.testing.io;
+    const zanity = try Io.Dir.cwd().realPathFileAlloc(io, paths.zanity, arena);
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const files = [_][3][]const u8{
+        .{ "zanity.toml", "[vocabulary.synonyms]\ninvoice = [\"bill\"]\ncustomer = [\"client\"]\n", "" },
+        .{ "billing.py", "def send_bill(total):\n    return total\n\n\ndef bill():\n    return 1\n", "def send_invoice(total):\n    return total\n\n\ndef bill():\n    return 1\n" },
+        .{ "main.py", "from billing import send_bill\n\n# send_bill posts it\nprint(send_bill(3), resend_bill)\n", "from billing import send_invoice\n\n# send_invoice posts it\nprint(send_invoice(3), resend_bill)\n" },
+        .{ "app.ts", "export function loadClient(id: number): number {\n  return id;\n}\nexport const x = loadClient(1);\n", "export function loadCustomer(id: number): number {\n  return id;\n}\nexport const x = loadCustomer(1);\n" },
+        .{ "main.go", "package main\n\nfunc FetchBill() int { return 1 }\n\nfunc main() { _ = FetchBill(); FetchInvoice() }\n\nfunc FetchInvoice() {}\n", "" },
+    };
+    for (files) |f| try tmp.dir.writeFile(io, .{ .sub_path = f[0], .data = f[1] });
+    const work = try std.fs.path.join(arena, &.{ ".zig-cache", "tmp", &tmp.sub_path });
+    const run = try std.process.run(arena, io, .{ .argv = &.{ zanity, "check", "--fix", "--plain", "--rules", "non-canonical-term", "." }, .cwd = .{ .path = work } });
+    try expectOutput(run.stdout, &.{ "fix=\"Rename it to 'invoice'.\"", "fix=\"Rename it to 'FetchInvoice' by hand: 'FetchInvoice' is already written at main.go:5, so --fix leaves it.\"" }, &.{"send_bill"});
+    try expectOutput(run.stderr, &.{"fixed 2 findings in 3 files"}, &.{});
+    for (files) |f| {
+        const expected = if (f[2].len > 0) f[2] else f[1];
+        try std.testing.expectEqualStrings(expected, try tmp.dir.readFileAlloc(io, f[0], arena, .unlimited));
+    }
+}
