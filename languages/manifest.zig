@@ -208,6 +208,9 @@ pub const Tables = struct {
     suppression_markers: []const []const u8 = &.{},
     /// What starts a comment that runs to the end of the line; fixes leave TODOs with it.
     line_comment: []const u8 = "",
+    /// What starts a comment documenting the whole file, such as Zig's `//!`, which is never about
+    /// the line after it.
+    module_comment: []const u8 = "",
     /// Where a test says which behaviour it checks, as the start of a sentence naming the test.
     test_doc: []const u8 = "Add a comment above",
     /// An affix that marks names the language's protocol defines, such as Python's `__name__`.

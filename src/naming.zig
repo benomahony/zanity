@@ -136,7 +136,7 @@ fn keepLocal(self: *File, ctx: Context, name: []const u8, reach: bool) error{Lim
     if (!self.tables.file_private or reach) return .{ .local = false };
     if (self.checker.enabled.enabled("dead-symbol")) try self.s.names.private(facts_module.nameHash(name));
     if (!strings.contains(&removable_kinds, ctx.kind)) return .{ .local = true };
-    const delete = wholeLines(self.source, ctx.node, self.tables.line_comment);
+    const delete = wholeLines(self.source, ctx.node, self.tables);
     if (delete[1] < delete[0]) assert.panic("{s}: deleting bytes {d}..{d} of '{s}', which run backwards; wholeLines() returns a start before its end", .{ self.work.facts.path, delete[0], delete[1], name });
     return .{ .local = true, .delete = delete };
 }
@@ -148,8 +148,9 @@ const Local = struct { local: bool, delete: [2]u32 = .{ 0, 0 } };
 pub const removable_kinds = [_][]const u8{ "import", "alias" };
 
 /// The bytes of the whole lines `node` fills, with the line break after them, or 0 to 0 when
-/// other code shares those lines or a comment sits on the line above, which may be about it.
-fn wholeLines(source: []const u8, node: ts.Node, line_comment: []const u8) [2]u32 {
+/// other code shares those lines or a comment sits on the line above, which may be about it; a
+/// comment documenting the whole file is not.
+fn wholeLines(source: []const u8, node: ts.Node, tables: *const Tables) [2]u32 {
     const start = ts.ts_node_start_byte(node);
     const end = ts.ts_node_end_byte(node);
     if (end <= start or end > source.len) assert.panic("a definition spans bytes {d}..{d} of a {d}-byte file; pass the source it was parsed from", .{ start, end, source.len });
@@ -157,9 +158,11 @@ fn wholeLines(source: []const u8, node: ts.Node, line_comment: []const u8) [2]u3
     if (std.mem.trim(u8, source[line_start..start], " \t").len > 0) return .{ 0, 0 };
     const rest = std.mem.trimStart(u8, source[end..], " \t;");
     if (rest.len > 0 and rest[0] != '\n') return .{ 0, 0 };
-    if (line_start > 0 and line_comment.len > 0) {
+    if (line_start > 0 and tables.line_comment.len > 0) {
         const above_start = if (std.mem.lastIndexOfScalar(u8, source[0 .. line_start - 1], '\n')) |at| at + 1 else 0;
-        if (std.mem.startsWith(u8, std.mem.trimStart(u8, source[above_start .. line_start - 1], " \t"), line_comment)) return .{ 0, 0 };
+        const above = std.mem.trimStart(u8, source[above_start .. line_start - 1], " \t");
+        const about_file = tables.module_comment.len > 0 and std.mem.startsWith(u8, above, tables.module_comment);
+        if (std.mem.startsWith(u8, above, tables.line_comment) and !about_file) return .{ 0, 0 };
     }
     const line_end = source.len - rest.len + @intFromBool(rest.len > 0);
     if (line_end <= start or line_end > source.len) assert.panic("the lines of bytes {d}..{d} end at {d} of {d}; they end after the definition and inside the file", .{ start, end, line_end, source.len });
