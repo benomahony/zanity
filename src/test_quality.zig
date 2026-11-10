@@ -22,26 +22,6 @@ const Context = check.Context;
 const contains = check.contains;
 const header = check.header;
 
-/// The innermost test: a test construct, or a function named as a test (`test_x`, `TestX`).
-/// Code in a callback or helper inside a test counts toward that test.
-pub fn enclosingTest(self: *File) ?*Context {
-    const items = self.s.contexts.items();
-    if (items.len > self.s.contexts.capacity()) assert.panic("{s}: {d} open constructs in room for {d}; raise memory.Limits.depth, or check that leave() pops what enter() opened", .{ self.work.facts.path, items.len, self.s.contexts.capacity() });
-    var i = items.len;
-    while (i > 0) {
-        i -= 1;
-        const ctx = &items[i];
-        switch (ctx.family) {
-            .class => return null,
-            .@"test" => return ctx,
-            .function => if (ctx.is_test) return ctx,
-            else => {},
-        }
-    }
-    if (i != 0) assert.panic("{s}: the search for an enclosing test stopped at depth {d} without returning; the loop in enclosingTest() must return from inside, so check its exits", .{ self.work.facts.path, i });
-    return null;
-}
-
 /// A test that makes more checks than a failure can point at.
 pub fn checkEager(self: *File, ctx: Context, at: ts.Node, shown: []const u8) !void {
     if (ctx.family != .@"test" and !ctx.is_test) assert.panic("{s}: counting the checks of {f}, which is not a test; call checkEager() only for a test construct or a test-named function", .{ self.work.facts.path, ctx.node.where() });
@@ -422,7 +402,7 @@ fn fillerWord(word: []const u8) bool {
 /// Report only assertions whose expression leaves are constants and operators.
 /// Names, calls, interpolated strings and unfamiliar syntax leave this to inference.
 pub fn checkConstantAssertion(self: *File, node: ts.Node, condition: ts.Node) !void {
-    if (enclosingTest(self) == null) return;
+    if (self.enclosingTest() == null) return;
     if (self.index.marks(node, self.v.test_constant)) return;
     // A constant failure inside a branch can be a guard against reaching that branch.
     if (self.innermost(.control) != null or self.innermost(.loop) != null) return;
@@ -433,7 +413,7 @@ pub fn checkConstantAssertion(self: *File, node: ts.Node, condition: ts.Node) !v
 
 /// Framework checks capture every compared value; all must be constant before reporting.
 pub fn checkConstantCheck(self: *File, node: ts.Node) !void {
-    if (enclosingTest(self) == null) return;
+    if (self.enclosingTest() == null) return;
     if (self.innermost(.control) != null or self.innermost(.loop) != null) return;
     const start = ts.ts_node_start_byte(node);
     const end = ts.ts_node_end_byte(node);

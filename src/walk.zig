@@ -74,7 +74,7 @@ pub fn enterSignal(self: *File, node: ts.Node, id: captures.Id, found: []const c
     } else if (v.test_constant == id) {
         try test_quality.checkConstantCheck(self, node);
     } else if (v.test_check == id) {
-        if (test_quality.enclosingTest(self)) |unit| unit.checks += 1;
+        if (self.enclosingTest()) |unit| unit.checks += 1;
     } else if (v.async_name == id) {
         try self.s.async_names.add(node.text(self.source));
     } else if (v.statement_call == id) {
@@ -253,7 +253,7 @@ pub fn open(self: *File, family: Family, node: ts.Node) !void {
     switch (family) {
         .assertion => {
             if (self.enclosingFunction()) |function| function.asserts += 1;
-            if (test_quality.enclosingTest(self)) |unit| unit.checks += 1;
+            if (self.enclosingTest()) |unit| unit.checks += 1;
         },
         .statement => if (self.parentOf(node)) |parent| {
             ctx.previous = trailFor(self, parent.key());

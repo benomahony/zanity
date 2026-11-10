@@ -150,6 +150,26 @@ pub const File = struct {
         return null;
     }
 
+    /// The innermost test: a test construct, or a function named as a test (`test_x`, `TestX`).
+    /// Code in a callback or helper inside a test counts toward that test.
+    pub fn enclosingTest(self: *File) ?*Context {
+        const items = self.s.contexts.items();
+        if (items.len > self.s.contexts.capacity()) assert.panic("{s}: {d} open constructs in room for {d}; raise memory.Limits.depth, or check that leave() pops what enter() opened", .{ self.work.facts.path, items.len, self.s.contexts.capacity() });
+        var i = items.len;
+        while (i > 0) {
+            i -= 1;
+            const ctx = &items[i];
+            switch (ctx.family) {
+                .class => return null,
+                .@"test" => return ctx,
+                .function => if (ctx.is_test) return ctx,
+                else => {},
+            }
+        }
+        if (i != 0) assert.panic("{s}: the search for an enclosing test stopped at depth {d} without returning; the loop in enclosingTest() must return from inside, so check its exits", .{ self.work.facts.path, i });
+        return null;
+    }
+
     pub fn enclosingFunction(self: *File) ?*Context {
         const items = self.s.contexts.items();
         var i = items.len;

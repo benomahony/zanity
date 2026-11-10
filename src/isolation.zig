@@ -5,7 +5,6 @@ const assert = @import("assert.zig");
 const ts = @import("ts.zig");
 const check = @import("check.zig");
 const scope = @import("scope.zig");
-const test_quality = @import("test_quality.zig");
 /// The longest text inspected for a leading name.
 const max_name_text_bytes = 1 << 20;
 /// Assignments followed to find a temporary directory.
@@ -73,7 +72,7 @@ fn underTemp(self: *File, ctx: Context) bool {
     if (ctx.family != .call) assert.panic("{s}: looking for a temporary directory in {f}, which is a {t}, not a call; call underTemp() only from filesystemCall(), with a call context", .{ self.work.facts.path, ctx.node.where(), ctx.family });
     const roots = self.tables.temp_roots;
     if (roots.len > 16) assert.panic("{s} lists {d} temporary directory names in languages/tables.zon; more than 16 means the table is wrong", .{ self.tables.ecosystem, roots.len });
-    const function = test_quality.enclosingTest(self) orelse self.enclosingFunction();
+    const function = self.enclosingTest() orelse self.enclosingFunction();
     const body = if (function) |f| f.span.text(self.source) else "";
     for ([_]?ts.Node{ ctx.receiver, ctx.arguments[0] }) |part| {
         const node = part orelse continue;
