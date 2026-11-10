@@ -131,11 +131,12 @@ pub fn agentOutput(args: []const []const u8, chose_format: bool, asked: bool) bo
     return asked or !chose_format;
 }
 
-/// Writes rows during a resident watch run in the same two machine formats zclig uses.
+/// Writes rows during a resident watch run in the same two machine formats zclig uses, with every
+/// field of the row, named and in order, as one-shot output has them.
 pub fn renderRows(comptime Row: type, out: *std.Io.Writer, json: bool, rows: []const Row) !void {
-    const fields = .{ "path", "line", "column", "severity", "rule", "message", "fix", "edit_start", "edit_end", "edit_text" };
     if (@typeInfo(Row) != .@"struct") assert.panic("rendering watched rows of {s}; output rows must be structs", .{@typeName(Row)});
-    if (@typeInfo(Row).@"struct".field_names.len != fields.len) assert.panic("rendering {d} fields with names for {d}; keep watch rows in step with the command row", .{ @typeInfo(Row).@"struct".field_names.len, fields.len });
+    const fields = @typeInfo(Row).@"struct".field_names;
+    if (fields.len == 0) assert.panic("rendering watched rows of {s}, which has no fields", .{@typeName(Row)});
     if (json) {
         try std.json.Stringify.value(rows, .{}, out);
         return out.writeByte('\n');
@@ -432,16 +433,16 @@ test "a resident watch defaults to agent output unless the command chooses other
 }
 
 test "resident watch rows use zclig's JSON and plain formats" {
-    const TestRow = struct { path: []const u8, line: u32, column: u32, severity: []const u8, rule: []const u8, message: []const u8, fix: []const u8, edit_start: ?u32, edit_end: ?u32, edit_text: ?[]const u8 };
-    const rows = [_]TestRow{.{ .path = "a.py", .line = 2, .column = 3, .severity = "warning", .rule = "example", .message = "found", .fix = "fix it", .edit_start = null, .edit_end = null, .edit_text = null }};
+    const Row = @import("baseline.zig").Row;
+    const rows = [_]Row{.{ .path = "a.py", .line = 2, .column = 3, .severity = "warning", .rule = "example", .message = "found", .fix = "fix it", .id = "abc" }};
     var buffer: [1024]u8 = undefined;
     var out: std.Io.Writer = .fixed(&buffer);
-    try renderRows(TestRow, &out, true, &rows);
-    try std.testing.expectEqualStrings("[{\"path\":\"a.py\",\"line\":2,\"column\":3,\"severity\":\"warning\",\"rule\":\"example\",\"message\":\"found\",\"fix\":\"fix it\",\"edit_start\":null,\"edit_end\":null,\"edit_text\":null}]\n", out.buffered());
+    try renderRows(Row, &out, true, &rows);
+    try std.testing.expectEqualStrings("[{\"path\":\"a.py\",\"line\":2,\"column\":3,\"severity\":\"warning\",\"rule\":\"example\",\"message\":\"found\",\"fix\":\"fix it\",\"matching_total\":null,\"next_offset\":null,\"edit_start\":null,\"edit_end\":null,\"edit_text\":null,\"id\":\"abc\",\"classification\":\"unclassified\"}]\n", out.buffered());
     out = .fixed(&buffer);
-    try renderRows(TestRow, &out, false, &rows);
+    try renderRows(Row, &out, false, &rows);
     try std.testing.expect(std.mem.startsWith(u8, out.buffered(), "path=\"a.py\"\tline=2\tcolumn=3\tseverity=\"warning\""));
-    try std.testing.expect(std.mem.endsWith(u8, out.buffered(), "\tedit_start=null\tedit_end=null\tedit_text=null\n"));
+    try std.testing.expect(std.mem.endsWith(u8, out.buffered(), "\tedit_text=null\tid=\"abc\"\tclassification=\"unclassified\"\n"));
 }
 
 test "only files check reads, outside skipped and ignored directories, are worth a rerun" {

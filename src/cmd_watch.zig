@@ -161,8 +161,9 @@ fn renderWatched(ctx: *zclig.Context, ws: *Workspace, output: WatchOutput) !void
         try report.summarise(console(ctx, err), counts);
         return;
     }
-    try report.summarise(console(ctx, err), counts);
     try watch.renderRows(Row, out.writer, ctx.format == .json, ws.rows.items());
+    try out.writer.flush();
+    try report.summarise(console(ctx, err), counts);
 }
 
 /// Where startWatching() puts the watcher and the absolute paths it watches.
