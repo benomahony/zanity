@@ -3,34 +3,9 @@
 const triage = @import("triage.zig");
 const std = @import("std");
 const assert = @import("assert.zig");
-/// Hex characters in a finding's SHA-256 identity.
-pub const id_hex_length = 64;
-
-pub const Row = struct {
-    path: []const u8,
-    line: u32,
-    column: u32,
-    severity: []const u8,
-    rule: []const u8,
-    message: []const u8,
-    fix: []const u8,
-    matching_total: ?usize = null,
-    next_offset: ?usize = null,
-    edit_start: ?u32 = null,
-    edit_end: ?u32 = null,
-    edit_text: ?[]const u8 = null,
-    id: []const u8 = "",
-    classification: []const u8 = "unclassified",
-};
-
-pub const Review = struct {
-    new: usize = 0,
-    existing: usize = 0,
-    resolved: usize = 0,
-    matching: usize = 0,
-    next: ?usize = null,
-    new_counts: @import("report.zig").Counts = .{ .files = 0 },
-};
+pub const id_hex_length = @import("rows.zig").id_hex_length;
+pub const Row = @import("rows.zig").Row;
+pub const Review = @import("rows.zig").Review;
 
 const Snapshot = struct { schema_version: u32, identity_version: u32, findings: []const Row };
 const max_baseline_bytes = 128 * 1024 * 1024;

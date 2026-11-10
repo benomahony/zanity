@@ -4,8 +4,6 @@ const Io = std.Io;
 const zclig = @import("zclig");
 
 const assert = @import("assert.zig");
-/// One finding as `--json` and `--plain` publish it. Lines and columns count from 1. When zanity
-/// can fix it, the edit replaces bytes `edit_start` to `edit_end` of the file with `edit_text`.
 const baseline = @import("baseline.zig");
 const Row = baseline.Row;
 const calibrate = @import("calibrate.zig");

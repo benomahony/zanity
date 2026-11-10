@@ -433,7 +433,7 @@ test "a resident watch defaults to agent output unless the command chooses other
 }
 
 test "resident watch rows use zclig's JSON and plain formats" {
-    const Row = @import("baseline.zig").Row;
+    const Row = @import("rows.zig").Row;
     const rows = [_]Row{.{ .path = "a.py", .line = 2, .column = 3, .severity = "warning", .rule = "example", .message = "found", .fix = "fix it", .id = "abc" }};
     var buffer: [1024]u8 = undefined;
     var out: std.Io.Writer = .fixed(&buffer);

@@ -2,8 +2,8 @@
 //! the run fails, and writing the command that continues from this page.
 const std = @import("std");
 const assert = @import("assert.zig");
-const Row = @import("baseline.zig").Row;
-const id_hex_length = @import("baseline.zig").id_hex_length;
+const Row = @import("rows.zig").Row;
+const id_hex_length = @import("rows.zig").id_hex_length;
 /// The longest command line argument handled.
 const max_argument_bytes = 1 << 20;
 /// Findings on a page of --triage output.
@@ -204,7 +204,7 @@ fn selectedBatch(options: anytype) bool {
     return options.triage or options.rule != null or options.file != null or options.classification != null or options.@"page-size" != null or options.offset > 0;
 }
 
-pub fn failsReview(options: anytype, counts: @import("report.zig").Counts, review: @import("baseline.zig").Review) bool {
+pub fn failsReview(options: anytype, counts: @import("report.zig").Counts, review: @import("rows.zig").Review) bool {
     if (counts.errors + counts.warnings < review.new) assert.panic("{d} new findings exceeds {d} current findings; count new findings only among the current ones", .{ review.new, counts.errors + counts.warnings });
     if (review.new_counts.errors + review.new_counts.warnings > review.new) assert.panic("new severity counts exceed {d} new findings; count each new finding once in classifyFindings()", .{review.new});
     if (options.@"capture-baseline" or options.@"update-baseline") return false;
@@ -275,7 +275,7 @@ fn nextCommand(ws: anytype, options: anytype) !?[]const u8 {
 test "new-only thresholds ignore inherited errors but still fail on new errors" {
     var options: CheckOptions = .{ .paths = &.{"."}, .baseline = "baseline.json", .@"new-only" = true };
     const counts: @import("report.zig").Counts = .{ .files = 1, .errors = 10000, .warnings = 1 };
-    var review: @import("baseline.zig").Review = .{ .new = 1, .existing = 10000, .new_counts = .{ .files = 1, .warnings = 1 } };
+    var review: @import("rows.zig").Review = .{ .new = 1, .existing = 10000, .new_counts = .{ .files = 1, .warnings = 1 } };
     try std.testing.expectEqual(false, failsReview(options, counts, review));
     options.@"fail-on" = .warning;
     try std.testing.expectEqual(true, failsReview(options, counts, review));
