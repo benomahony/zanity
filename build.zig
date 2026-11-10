@@ -58,7 +58,7 @@ pub fn build(b: *std.Build) void {
 
     // `zig build test-integration` runs the built zanity: the golden fixtures, the CLI, and
     // zanity checking its own source, which must pass every rule.
-    const integration_module = module(b, "src/golden_test.zig", target, test_optimize);
+    const integration_module = module(b, "src/integration.zig", target, test_optimize);
     const options = b.addOptions();
     options.addOptionPathUntracked("zanity", .{ .relative = .{ .base = .install_bin, .sub_path = b.fmt("zanity{s}", .{target.result.exeFileExt()}) } });
     integration_module.addOptions("paths", options);

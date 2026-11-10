@@ -4,7 +4,6 @@ const strings = @import("strings.zig");
 const paths = @import("paths");
 const rules = @import("rules.zig");
 const schema = @import("schema.zig");
-const infer_test = @import("infer_test.zig");
 
 const Io = std.Io;
 
@@ -337,14 +336,6 @@ test "a mistake in zanity.toml stops the run and says where" {
     const run = try std.process.run(arena, io, .{ .argv = &.{ zanity, "check", "--plain", "." }, .cwd = .{ .path = "tests/config/broken" } });
     try std.testing.expectEqual(std.process.Child.Term{ .exited = 2 }, run.term);
     try expectOutput(run.stderr, &.{"zanity.toml:1: 'recursions' isn't a rule"}, &.{});
-}
-
-test {
-    _ = @import("baseline_test.zig");
-    _ = infer_test;
-    _ = @import("lsp_test.zig");
-    _ = @import("fix_test.zig");
-    _ = @import("agent_test.zig");
 }
 
 test "slow-test uses measured JUnit durations without inference and honors the time budget" {
