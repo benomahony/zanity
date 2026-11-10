@@ -31,13 +31,13 @@ const triage = @import("triage.zig");
 const baseline = @import("baseline.zig");
 const Row = baseline.Row;
 const cmd_watch = @import("cmd_watch.zig");
-const main_root = @import("main.zig");
 const workspace = @import("workspace.zig");
 const Workspace = workspace.Workspace;
 const workspaceOf = workspace.workspaceOf;
 const console = workspace.console;
 const watchCheck = cmd_watch.watchCheck;
-const app = main_root.app;
+/// This build's version, as `zanity --version` prints it.
+const build_version = @import("build_info").version;
 
 /// The check's options with what zanity.toml turns on: `[infer] enabled` runs it as `--infer`.
 fn withSettings(requested: CheckOptions, settings: *const config.Config) CheckOptions {
@@ -170,7 +170,7 @@ pub fn renderHuman(ctx: *zclig.Context, rows: []const Row) !void {
     try report.summarise(console(ctx, ctx.runtime.err), report.count(findings, ws.checked + ws.project_files.len, ws.skipped));
     if (ws.checked > ws.files.len) assert.panic("checked {d} files out of {d} collected; count a file as checked only once, in checkFiles()", .{ ws.checked, ws.files.len });
     const err = ctx.runtime.err;
-    try ws.notice.finish(ws.io, err.writer, app.version);
+    try ws.notice.finish(ws.io, err.writer, build_version);
 }
 
 /// Starts the newer-release notice when a person reads the check at a terminal; agents, --json,
@@ -181,7 +181,7 @@ fn startNotice(ctx: *zclig.Context, ws: *Workspace, options: CheckOptions, agent
     const environ = ws.environ orelse assert.panic("zanity check ran without the environment; main() passes it to the workspace", .{});
     const err = ctx.runtime.err;
     const person = !agent and !ws.chose_format and !triage.special(options) and ctx.format == .human and !ctx.quiet and err.capabilities.interactive;
-    if (person) ws.notice.start(ws.io, environ, app.version);
+    if (person) ws.notice.start(ws.io, environ, build_version);
 }
 
 pub fn parseRules(ctx: *zclig.Context, ws: *Workspace, list: []const u8) !rules.Set {

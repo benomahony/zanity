@@ -32,3 +32,21 @@ pub const Review = struct {
     next: ?usize = null,
     new_counts: @import("report.zig").Counts = .{ .files = 0 },
 };
+
+/// What `zanity init` wrote, as `--json` and `--plain` publish it.
+pub const InitRow = struct {
+    path: []const u8,
+    rules: usize,
+    excluded: usize,
+    /// Whether it wrote only the settings, with --minimal.
+    minimal: bool,
+};
+
+/// What `zanity upgrade` did or, with --dry-run, would do, as `--json` and `--plain` publish it.
+pub const UpgradeRow = struct {
+    path: []const u8,
+    from: []const u8,
+    to: []const u8,
+    /// `upgraded`, `current` when there is nothing newer, or `available` for a --dry-run.
+    status: []const u8,
+};

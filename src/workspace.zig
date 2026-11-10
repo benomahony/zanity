@@ -26,10 +26,8 @@ const Facts = @import("facts.zig").Facts;
 const Finding = @import("facts.zig").Finding;
 const baseline = @import("baseline.zig");
 const Row = baseline.Row;
-const cmd_init = @import("cmd_init.zig");
-const cmd_upgrade = @import("cmd_upgrade.zig");
-const InitRow = cmd_init.InitRow;
-const UpgradeRow = cmd_upgrade.UpgradeRow;
+const InitRow = @import("rows.zig").InitRow;
+const UpgradeRow = @import("rows.zig").UpgradeRow;
 
 /// The widest terminal believed.
 const max_console_width = 4096;

@@ -4,25 +4,18 @@ const std = @import("std");
 const assert = @import("assert.zig");
 const zclig = @import("zclig");
 const upgrade = @import("upgrade.zig");
-const main_root = @import("main.zig");
 const workspace = @import("workspace.zig");
 const Workspace = workspace.Workspace;
 const workspaceOf = workspace.workspaceOf;
 const console = workspace.console;
-const app = main_root.app;
+/// This build's version, as `zanity --version` prints it.
+const build_version = @import("build_info").version;
 
 pub const UpgradeOptions = struct {
     to: ?[]const u8 = null,
 };
 
-/// What `zanity upgrade` did or, with --dry-run, would do, as `--json` and `--plain` publish it.
-pub const UpgradeRow = struct {
-    path: []const u8,
-    from: []const u8,
-    to: []const u8,
-    /// `upgraded`, `current` when there is nothing newer, or `available` for a --dry-run.
-    status: []const u8,
-};
+pub const UpgradeRow = @import("rows.zig").UpgradeRow;
 
 pub fn runUpgrade(ctx: *zclig.Context, options: UpgradeOptions) ![]const UpgradeRow {
     const rows = try upgradeTo(ctx, options, true);
@@ -49,7 +42,7 @@ const Upgrader = struct {
 /// in place of the running executable.
 fn upgradeTo(ctx: *zclig.Context, options: UpgradeOptions, install: bool) ![]const UpgradeRow {
     const ws = workspaceOf(ctx);
-    const current = app.version;
+    const current = build_version;
     if (current.len == 0) assert.panic("this build reports an empty version; build.zig sets it to dev or the release's", .{});
     const path = std.process.executablePathAlloc(ws.io, ctx.allocator) catch |e| {
         return ctx.fail(.io, try ws.text.format("Could not find where this zanity is installed: {t}.", .{e}), "Reinstall it with install.sh, as the README describes.");

@@ -7,10 +7,10 @@ const store = @import("store.zig");
 const lsp = @import("lsp.zig");
 const lsp_serve = @import("lsp_serve.zig");
 const Telemetry = @import("telemetry.zig").Telemetry;
-const main_root = @import("main.zig");
 const workspace = @import("workspace.zig");
 const workspaceOf = workspace.workspaceOf;
-const app = main_root.app;
+/// This build's version, as `zanity --version` prints it.
+const build_version = @import("build_info").version;
 
 pub const LspOptions = struct { infer: bool = false };
 
@@ -32,10 +32,10 @@ pub fn runLsp(ctx: *zclig.Context, options: LspOptions) ![]const LspRow {
     // editor says there is nowhere to keep it, and without telemetry nothing is traced, so a
     // failure to open either must not stop the server.
     ws.source_cache = store.Store.initStore(std.heap.page_allocator, ws.io, environ, ws.limits.store_bytes) catch null;
-    var telemetry = Telemetry.initTelemetry(session_allocator, ws.io, environ, app.version) catch null;
+    var telemetry = Telemetry.initTelemetry(session_allocator, ws.io, environ, build_version) catch null;
     const services: lsp.Services = .{
         .exe = exe,
-        .version = app.version,
+        .version = build_version,
         .infer = options.infer,
         .store = if (ws.source_cache) |*s| s else null,
         .telemetry = if (telemetry) |*t| t else null,

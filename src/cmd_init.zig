@@ -8,11 +8,10 @@ const language = @import("language.zig");
 const rules = @import("rules.zig");
 const config = @import("config.zig");
 const starter = @import("init.zig");
-const cmd_check = @import("cmd_check.zig");
 const workspace = @import("workspace.zig");
 const workspaceOf = workspace.workspaceOf;
 const console = workspace.console;
-const collect = cmd_check.collect;
+const collect = @import("collect.zig").collect;
 
 pub const InitOptions = struct {
     paths: []const []const u8,
@@ -20,14 +19,7 @@ pub const InitOptions = struct {
     minimal: bool = false,
 };
 
-/// What `zanity init` wrote, as `--json` and `--plain` publish it.
-pub const InitRow = struct {
-    path: []const u8,
-    rules: usize,
-    excluded: usize,
-    /// Whether it wrote only the settings, with --minimal.
-    minimal: bool,
-};
+pub const InitRow = @import("rows.zig").InitRow;
 
 pub fn runInit(ctx: *zclig.Context, options: InitOptions) ![]const InitRow {
     const ws = workspaceOf(ctx);
