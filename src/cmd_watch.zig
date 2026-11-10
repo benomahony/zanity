@@ -15,14 +15,14 @@ const workspace_init = @import("workspace_init.zig");
 const CheckOptions = triage.CheckOptions;
 const triage = @import("triage.zig");
 const Row = baseline.Row;
-const cmd_check = @import("cmd_check.zig");
+const check_paths = @import("check_paths.zig");
 const workspace = @import("workspace.zig");
 const Workspace = workspace.Workspace;
 const console = workspace.console;
-const loadSettings = cmd_check.loadSettings;
-const parseRules = cmd_check.parseRules;
-const checkPaths = cmd_check.checkPaths;
-const collect = cmd_check.collect;
+const loadSettings = check_paths.loadSettings;
+const parseRules = check_paths.parseRules;
+const checkPaths = check_paths.checkPaths;
+const collect = @import("collect.zig").collect;
 
 /// Each change starts one check, so this many is far more than any session makes.
 const max_watch_runs = 1 << 40;
