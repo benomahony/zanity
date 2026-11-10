@@ -9,6 +9,7 @@ const strings = @import("strings.zig");
 const batch = @import("batch.zig");
 const rules = @import("rules.zig");
 const report = @import("report.zig");
+const report_agent = @import("report_agent.zig");
 const naming = @import("naming.zig");
 const graph = @import("graph.zig");
 const parameters = @import("parameters.zig");
@@ -129,7 +130,7 @@ fn reportToAgent(ctx: *zclig.Context, ws: *Workspace, options: CheckOptions, cou
     if (paths.len == 0) assert.panic("reporting to an agent with no checked paths to name; zclig supplies '.' when none are given", .{});
     if (ws.findings.len != counts.errors + counts.warnings) assert.panic("{d} findings for {d} errors and {d} warnings; count the findings being reported", .{ ws.findings.len, counts.errors, counts.warnings });
     const out = ctx.runtime.out;
-    try report.renderAgent(out.writer, .{ .findings = ws.findings.items(), .counts = counts, .paths = paths, .limit = options.limit, .watching = watching(ws), .all = options.all });
+    try report_agent.renderAgent(out.writer, .{ .findings = ws.findings.items(), .counts = counts, .paths = paths, .limit = options.limit, .watching = watching(ws), .all = options.all });
     try triage.continuation(out.writer, ws.args, 0, 10000);
     if (ws.cache_hits > 0) {
         const err = ctx.runtime.err;

@@ -7,6 +7,7 @@ const Io = std.Io;
 const zclig = @import("zclig");
 const rules = @import("rules.zig");
 const report = @import("report.zig");
+const report_agent = @import("report_agent.zig");
 const memory = @import("memory.zig");
 const Live = @import("live.zig").Live;
 const watch = @import("watch.zig");
@@ -151,7 +152,7 @@ fn renderWatched(ctx: *zclig.Context, ws: *Workspace, output: WatchOutput) !void
     const out = ctx.runtime.out;
     const err = ctx.runtime.err;
     if (output.agent) {
-        try report.renderAgent(out.writer, .{ .findings = ws.findings.items(), .counts = counts, .paths = options.paths, .limit = options.limit, .watching = true, .all = options.all });
+        try report_agent.renderAgent(out.writer, .{ .findings = ws.findings.items(), .counts = counts, .paths = options.paths, .limit = options.limit, .watching = true, .all = options.all });
         try triage.continuation(out.writer, ws.args, 0, 10000);
         if (ws.cache_hits > 0) try err.writer.print("zanity: reused cached deterministic analysis for {d} of {d} source files; query {s}'s source_analyses table for the cached facts and findings.\n", .{ ws.cache_hits, ws.checked, ws.source_cache.?.path });
         return;

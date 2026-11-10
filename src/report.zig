@@ -1,9 +1,5 @@
 const std = @import("std");
 const assert = @import("assert.zig");
-const report_agent = @import("report_agent.zig");
-/// The report for a coding agent, in report_agent.zig.
-pub const renderAgent = report_agent.renderAgent;
-pub const AgentReport = report_agent.AgentReport;
 const zrich = @import("zclig").zrich;
 const rules = @import("rules.zig");
 const memory = @import("memory.zig");
