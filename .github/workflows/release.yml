@@ -1,7 +1,9 @@
 name: Release
 
 # Every commit that passes CI on main is released, one patch version up from the latest v* tag
-# (0.1.0 if there is none). To raise the minor or major version instead, run this by hand:
+# (0.1.0 if there is none). A commit since that tag with a `Release: minor` or `Release: major`
+# trailer raises that part instead; the highest one wins. Running this by hand can raise it
+# further, never lower it:
 #   gh workflow run release -f bump=minor
 on:
   workflow_run:
@@ -14,7 +16,7 @@ on:
         description: Which part of the version to raise
         type: choice
         options: [patch, minor, major]
-        default: minor
+        default: patch
 
 permissions:
   contents: write
@@ -39,7 +41,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       COMMIT: ${{ github.event.workflow_run.head_sha || github.sha }}
-      BUMP: ${{ inputs.bump || 'patch' }}
+      ASKED: ${{ inputs.bump || 'patch' }}
     outputs:
       commit: ${{ steps.version.outputs.commit }}
       version: ${{ steps.version.outputs.version }}
@@ -54,12 +56,22 @@ jobs:
         id: version
         run: |
           echo "commit=$COMMIT" >> "$GITHUB_OUTPUT"
-          if [ "$GITHUB_EVENT_NAME" = workflow_run ] && git tag --points-at HEAD | grep -q '^v'; then
+          if git tag --points-at HEAD | grep -q '^v'; then
             echo "::notice::$COMMIT is already released as $(git tag --points-at HEAD | head -n1)."
             echo "skip=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           latest=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1)
+          trailers=$(git log --format='%(trailers:key=Release,valueonly)' "${latest:+$latest..}HEAD" | tr 'A-Z' 'a-z')
+          for value in $trailers; do
+            case "$value" in
+              major|minor|patch) ;;
+              *) echo "::error::A commit since ${latest:-the start} has 'Release: $value'; write major, minor or patch."; exit 1 ;;
+            esac
+          done
+          BUMP=$ASKED
+          if [ "$BUMP" != major ] && echo "$trailers" | grep -qx major; then BUMP=major; fi
+          if [ "$BUMP" = patch ] && echo "$trailers" | grep -qx minor; then BUMP=minor; fi
           if [ -z "$latest" ]; then
             next=0.1.0
           else
@@ -70,7 +82,7 @@ jobs:
               *) next=$major.$minor.$((patch + 1)) ;;
             esac
           fi
-          echo "Releasing v$next (after ${latest:-no release})."
+          echo "Releasing v$next, a $BUMP release after ${latest:-no release}."
           echo "version=$next" >> "$GITHUB_OUTPUT"
           {
             echo "notes<<RELEASE_NOTES"
@@ -129,4 +141,4 @@ jobs:
         run: >-
           gh release create "v$VERSION" release/*
           --repo "$GITHUB_REPOSITORY" --target "${{ needs.version.outputs.commit }}"
-          --title "zanity v$VERSION" --notes "$NOTES" --generate-notes
+          --title "zanity v$VERSION" --notes "$NOTES"
