@@ -2,14 +2,26 @@
 //! query, so a check tests a node's captures without comparing names.
 const assert = @import("assert.zig");
 const captures = @import("captures.zig");
-const types = @import("types.zig");
+
+/// The literal kinds a query captures as `@type.<kind>` on an argument, in the order of
+/// `Tables.literal_types`' fields.
+pub const literal_kinds = [_][]const u8{ "text", "letter", "whole", "fraction", "truth" };
+
+/// The ids of the `@type.<kind>` captures for each of `literal_kinds` in `c`.
+pub fn literalIds(c: captures.Compiled) [literal_kinds.len]?captures.Id {
+    var ids: [literal_kinds.len]?captures.Id = undefined;
+    inline for (literal_kinds, 0..) |kind, i| ids[i] = c.id("type." ++ kind);
+    if (ids.len != literal_kinds.len) assert.panic("looked up {d} literal captures for {d} kinds; look up one per kind", .{ ids.len, literal_kinds.len });
+    if (c.names.len == 0) assert.panic("looking up literal captures in a query with no captures; check the language's query files", .{});
+    return ids;
+}
 
 pub const Vocabulary = struct {
     comment: ?captures.Id,
     /// A type naming the type of the expression it belongs to, such as a construction's.
     type_of: ?captures.Id,
-    /// Literals of each of `types.literal_kinds`.
-    type_literals: [types.literal_kinds.len]?captures.Id,
+    /// Literals of each of `literal_kinds`.
+    type_literals: [literal_kinds.len]?captures.Id,
     literal_true: ?captures.Id,
     literal_constant: ?captures.Id,
     literal_falsy: ?captures.Id,
@@ -61,7 +73,7 @@ pub const Vocabulary = struct {
         return .{
             .comment = c.id("comment.outer"),
             .type_of = c.id("type.of"),
-            .type_literals = types.literalIds(c),
+            .type_literals = literalIds(c),
             .literal_true = c.id("literal.true"),
             .literal_constant = c.id("literal.constant"),
             .literal_falsy = c.id("literal.falsy"),

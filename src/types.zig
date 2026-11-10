@@ -5,6 +5,7 @@ const std = @import("std");
 const assert = @import("assert.zig");
 const ts = @import("ts.zig");
 const captures = @import("captures.zig");
+const literal_kinds = @import("capture_ids.zig").literal_kinds;
 const check = @import("check.zig");
 const facts = @import("facts.zig");
 const File = check.File;
@@ -13,19 +14,6 @@ const Context = check.Context;
 /// A parameter or local named `name` in function `owner`, with its declared type when the code
 /// states one: `byte[] data` does, `var data = Load()` doesn't.
 pub const Declared = struct { owner: u32, name: ts.Node, type: ?ts.Node = null };
-
-/// The literal kinds a query captures as `@type.<kind>` on an argument, in the order of
-/// `Tables.literal_types`' fields.
-pub const literal_kinds = [_][]const u8{ "text", "letter", "whole", "fraction", "truth" };
-
-/// The ids of the `@type.<kind>` captures for each of `literal_kinds` in `c`.
-pub fn literalIds(c: captures.Compiled) [literal_kinds.len]?captures.Id {
-    var ids: [literal_kinds.len]?captures.Id = undefined;
-    inline for (literal_kinds, 0..) |kind, i| ids[i] = c.id("type." ++ kind);
-    if (ids.len != literal_kinds.len) assert.panic("looked up {d} literal captures for {d} kinds; look up one per kind", .{ ids.len, literal_kinds.len });
-    if (c.names.len == 0) assert.panic("looking up literal captures in a query with no captures; check the language's query files", .{});
-    return ids;
-}
 
 const separator = facts.type_separator;
 const agree = facts.typesAgree;
