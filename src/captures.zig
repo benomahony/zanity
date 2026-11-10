@@ -101,6 +101,9 @@ pub const Compiled = struct {
     }
 };
 
+/// The kinds of construct a query captures as `@<family>.outer`, which the walk opens and closes.
+pub const Family = enum { statement, function, class, call, loop, assertion, assignment, @"test", definition, control };
+
 pub const Triple = struct { key: ts.Node.Key, node: ts.Node, id: Id };
 
 /// How byte `start` orders against where capture `t` starts, for std.sort.lowerBound to find the

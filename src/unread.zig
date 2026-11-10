@@ -6,7 +6,6 @@ const std = @import("std");
 const assert = @import("assert.zig");
 const ts = @import("ts.zig");
 const captures = @import("captures.zig");
-const check = @import("check.zig");
 
 /// Capture families read whole, besides each `Family`: a capture in one of these, with any part, is read.
 pub const read_families = [_][]const u8{ "finding", "unless", "name", "parameter", "local.definition", "type" };
@@ -79,7 +78,7 @@ pub const looked_up = [_][]const u8{
 pub fn reads(name: captures.Name) bool {
     if (name.full.len == 0) assert.panic("asked whether checks read a capture with no name; every capture in the .scm files is named", .{});
     if (name.full[0] == '_') return false;
-    if (std.meta.stringToEnum(check.Family, name.family) != null) return true;
+    if (std.meta.stringToEnum(captures.Family, name.family) != null) return true;
     for (read_families) |family| if (std.mem.eql(u8, name.family, family)) return true;
     for (looked_up) |full| if (std.mem.eql(u8, name.full, full)) return true;
     if (name.family.len > name.full.len) assert.panic("capture '{s}' has the family '{s}', longer than its name; Compiled splits the family off the name", .{ name.full, name.family });

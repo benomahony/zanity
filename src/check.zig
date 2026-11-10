@@ -44,7 +44,7 @@ pub const Diagnostic = struct {
     }
 };
 
-pub const Family = enum { statement, function, class, call, loop, assertion, assignment, @"test", definition, control };
+pub const Family = captures.Family;
 
 pub const Parameter = struct { name: ts.Node, type: ?ts.Node = null };
 
