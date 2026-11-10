@@ -29,8 +29,6 @@ const Context = check.Context;
 const contains = check.contains;
 const header = check.header;
 const strings = @import("strings.zig");
-/// The longest option text inspected for a risky setting.
-pub const max_option_bytes = 512;
 
 /// Conventional defect markers in comments, and comments that turn another tool's check off on
 /// their line, such as a linter's ignore marker from the language's tables. The defect markers are

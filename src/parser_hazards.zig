@@ -7,8 +7,8 @@ const check = @import("check.zig");
 const File = check.File;
 const Context = check.Context;
 const header = check.header;
-const hazards = @import("hazards.zig");
-const max_option_bytes = hazards.max_option_bytes;
+/// The longest XML parser option text unsafeXmlEntityOption() normalizes, and its buffer's size.
+const max_option_bytes = 512;
 
 pub fn checkNestedRegexQuantifier(self: *File, ctx: Context, name: []const u8, first: ts.Node) !void {
     if (ctx.family != .call) assert.panic("{s}: checking a regex in {f}, which is a {t}; call only from checkRiskyArgument", .{ self.work.facts.path, ctx.node.where(), ctx.family });
