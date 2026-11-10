@@ -6,9 +6,9 @@ const Allocator = std.mem.Allocator;
 const ts = @import("ts.zig");
 const captures = @import("captures.zig");
 const memory = @import("memory.zig");
-const tracing = @import("tracing.zig");
-const notes = @import("notes.zig");
 const constructs = @import("constructs.zig");
+const Spans = @import("spans.zig").Spans;
+const NameCounts = @import("name_counts.zig").NameCounts;
 const Call = constructs.Call;
 const Context = constructs.Context;
 const Diagnostic = constructs.Diagnostic;
@@ -29,7 +29,7 @@ pub const FileScratch = struct {
     signature: memory.Bounded(Parameter),
     weak: memory.Bounded(Weak),
     locals: memory.Bounded(Owned),
-    spans: tracing.Spans,
+    spans: Spans,
     declared: memory.Bounded(constructs.Declared),
     /// A declared type waiting for the name it declares, which comes after it.
     pending_type: ?ts.Node = null,
@@ -38,7 +38,7 @@ pub const FileScratch = struct {
     statement_calls: memory.Bounded(ts.Node),
     repeats: memory.Bounded(constructs.Repeat),
     writes: memory.Bounded(constructs.Write),
-    names: notes.NameCounts,
+    names: NameCounts,
     /// The nodes the walk is inside, outermost first, so their parents need no search.
     path: memory.Bounded(ts.Node),
     /// The chain from the root to a node, from ancestorsOf().
