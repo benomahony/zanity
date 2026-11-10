@@ -7,7 +7,7 @@ const strings = @import("strings.zig");
 const Allocator = std.mem.Allocator;
 const ts = @import("ts.zig");
 const memory = @import("memory.zig");
-const naming = @import("naming.zig");
+const Words = @import("words.zig").Words;
 /// The most arguments a query predicate may have.
 const max_predicate_args = 64;
 
@@ -382,7 +382,7 @@ const Sense = struct { positive: bool, any: bool };
 /// Whether one of the words of `name` is one of `words`, ignoring case.
 fn hasWord(name: []const u8, words: []const []const u8) bool {
     if (words.len == 0) assert.panic("#any-word? lists no words to look for in '{s}'; give it at least one in the language's .scm files", .{name});
-    var split: naming.Words = .{ .text = name };
+    var split: Words = .{ .text = name };
     while (split.next()) |word| {
         for (words) |w| if (std.ascii.eqlIgnoreCase(word, w)) return true;
     }
