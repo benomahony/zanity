@@ -42,7 +42,7 @@ pub fn renderSchema(w: *std.Io.Writer) !void {
         \\          "additionalProperties": false,
         \\          "properties": {{
         \\            "select": {{
-        \\              "description": "Run only these rules instead of the defaults. \"all\" is every rule, including those off by default, and \"strict\" the defaults and the strict rules. --rules on the command line overrides it.",
+        \\              "description": "Run only these rules instead of the defaults. \"all\" is every rule, as zanity check --production runs. --rules on the command line overrides it.",
         \\              "type": "array",
         \\              "minItems": 1,
         \\              "uniqueItems": true,
@@ -238,8 +238,7 @@ fn renderDefinitions(w: *std.Io.Writer) !void {
     try w.writeAll(
         \\    "ruleOrAll": {
         \\      "anyOf": [
-        \\        { "const": "all", "description": "Every rule, including those off by default." },
-        \\        { "const": "strict", "description": "The defaults and the strict rules, as zanity check --strict runs." },
+        \\        { "const": "all", "description": "Every rule, as zanity check --production runs." },
         \\        { "$ref": "#/definitions/rule" }
         \\      ]
         \\    },

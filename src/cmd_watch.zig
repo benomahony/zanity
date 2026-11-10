@@ -119,8 +119,8 @@ pub fn watchCheck(ctx: *zclig.Context, ws: *Workspace, options: CheckOptions, as
         const settings = try loadSettings(ctx, checks, settings_arena.allocator());
         checks.settings = &settings;
         rules.custom = settings.questionRules();
-        var selected = if (options.rules) |list| try parseRules(ctx, checks, list) else settings.selection(options.strict);
-        if (options.rules != null and options.strict) selected.includeTier(.strict);
+        var selected = if (options.rules) |list| try parseRules(ctx, checks, list) else settings.selection(options.production);
+        if (options.rules != null and options.production) selected.includeTier(.production);
         var live = Live.initLive(console(ctx, err), checks.io, !ctx.quiet);
         checks.live = &live;
         const counts = checkPaths(ctx, checks, options, selected) catch |e| switch (e) {

@@ -416,8 +416,8 @@ const DirectoryNotify = struct {
 
 test "a rerun keeps every option but --watch, and asks for agent output" {
     var out: [8][]const u8 = undefined;
-    const argv = rerunArgs(&out, "/bin/zanity", &.{ "check", "src", "--watch", "--strict", "--watch=true" });
-    try std.testing.expectEqualDeep(@as([]const []const u8, &.{ "/bin/zanity", "check", "src", "--strict", "--agent" }), argv);
+    const argv = rerunArgs(&out, "/bin/zanity", &.{ "check", "src", "--watch", "--production", "--watch=true" });
+    try std.testing.expectEqualDeep(@as([]const []const u8, &.{ "/bin/zanity", "check", "src", "--production", "--agent" }), argv);
 }
 
 test "a rerun keeps the output the command line chose" {

@@ -12,15 +12,14 @@ pub const Severity = enum {
 /// as a whole, a cluster of functions or tests of one structure, or each source file whole.
 pub const Asks = enum { errors, function, fixture, @"test", setting, project, cluster, file };
 
-/// When a rule runs: by default; with --strict, for what safety-critical code needs and most code
-/// doesn't, such as two assertions in every function; or only when named.
-pub const Tier = enum { default, strict, off };
+/// When a rule runs: by default, or with --production, which runs every rule, adding what
+/// safety-critical code needs and most code doesn't, such as two assertions in every function.
+pub const Tier = enum { default, production };
 
 /// How `zanity init` and the schema describe when a rule in each tier runs.
 pub const tier_descriptions = std.enums.EnumArray(Tier, []const u8).init(.{
     .default = "on by default",
-    .strict = "on with --strict",
-    .off = "off by default",
+    .production = "on with --production",
 });
 
 pub const Rule = struct {
@@ -63,15 +62,15 @@ pub const catalogue = @import("catalogue_questions.zig");
 pub const core = [_]Rule{
     .{ .name = "parse-error", .advice = "Fix the syntax error, or report the construct if the code is valid.", .severity = .warning, .tier = .default, .catalogue = &.{"EXT-BUILD-001"} },
     .{ .name = "forbidden-call", .alias = "NASA01-A", .advice = "Call the code you need directly.", .severity = .warning, .tier = .default, .needs = &.{ "call.outer", "call.name" }, .catalogue = &.{ "CWE-94", "CWE-95", "CWE-470", "CWE-915" } },
-    .{ .name = "recursion", .alias = "NASA01-B", .advice = "Rewrite it as a loop with a fixed bound.", .severity = .warning, .tier = .strict, .needs = &.{ "call.outer", "call.name", "call.receiver", "function.outer", "function.name" }, .catalogue = &.{"CWE-674"} },
-    .{ .name = "unbounded-loop", .alias = "NASA02", .advice = "Loop over a collection or cap the number of iterations.", .severity = .warning, .tier = .strict, .needs = &.{ "loop.outer", "loop.condition", "loop.iterable", "literal.true" }, .catalogue = &.{"CWE-835"} },
+    .{ .name = "recursion", .alias = "NASA01-B", .advice = "Rewrite it as a loop with a fixed bound.", .severity = .warning, .tier = .production, .needs = &.{ "call.outer", "call.name", "call.receiver", "function.outer", "function.name" }, .catalogue = &.{"CWE-674"} },
+    .{ .name = "unbounded-loop", .alias = "NASA02", .advice = "Loop over a collection or cap the number of iterations.", .severity = .warning, .tier = .production, .needs = &.{ "loop.outer", "loop.condition", "loop.iterable", "literal.true" }, .catalogue = &.{"CWE-835"} },
     .{ .name = "eager-test", .advice = "Split it into tests that each check one behaviour, named for that behaviour.", .severity = .warning, .tier = .default, .needs = &.{ "function.outer", "function.name" }, .tests = true },
     .{ .name = "long-test", .advice = "Split it into tests that each check one behaviour, or move the setup into a helper.", .severity = .warning, .tier = .default, .needs = &.{ "function.outer", "function.name" }, .tests = true },
     .{ .name = "undocumented-test", .advice = "Say which behaviour it checks and why it needs this many steps, in a docstring or a comment above it.", .severity = .warning, .tier = .default, .needs = &.{ "function.outer", "function.name", "assertion.outer", "test.check" }, .tests = true },
     .{ .name = "long-function", .alias = "NASA04", .advice = "Move a self-contained step into its own function.", .severity = .warning, .tier = .default, .needs = &.{ "function.outer", "function.name" } },
-    .{ .name = "assertion-density", .alias = "NASA05", .advice = "Assert conditions a bug could actually break: what it needs from its inputs and what it guarantees about its result.", .severity = .@"error", .tier = .strict, .needs = &.{ "function.outer", "function.name", "assertion.outer" } },
-    .{ .name = "assertion-message", .alias = "NASA05-A", .advice = "Add a message saying what must be true and why, so whoever fixes a failure can tell whether the code or the expectation is wrong.", .severity = .warning, .tier = .strict, .needs = &.{ "assertion.outer", "assertion.message" } },
-    .{ .name = "dynamic-allocation", .advice = "Allocate what it needs up front in an init function and reuse it.", .severity = .@"error", .tier = .strict, .needs = &.{ "call.outer", "call.name", "function.name" } },
+    .{ .name = "assertion-density", .alias = "NASA05", .advice = "Assert conditions a bug could actually break: what it needs from its inputs and what it guarantees about its result.", .severity = .@"error", .tier = .production, .needs = &.{ "function.outer", "function.name", "assertion.outer" } },
+    .{ .name = "assertion-message", .alias = "NASA05-A", .advice = "Add a message saying what must be true and why, so whoever fixes a failure can tell whether the code or the expectation is wrong.", .severity = .warning, .tier = .production, .needs = &.{ "assertion.outer", "assertion.message" } },
+    .{ .name = "dynamic-allocation", .advice = "Allocate what it needs up front in an init function and reuse it.", .severity = .@"error", .tier = .production, .needs = &.{ "call.outer", "call.name", "function.name" } },
     .{ .name = "assertion-side-effect", .advice = "Do the work before the assertion and assert on its result.", .severity = .@"error", .tier = .default, .needs = &.{ "assertion.outer", "assertion.condition", "call.name" } },
     .{ .name = "long-parameter-list", .advice = "Group related parameters into a struct or split the function.", .severity = .warning, .tier = .default, .needs = &.{ "function.outer", "function.name", "function.parameter" }, .catalogue = &.{"CWE-1064"} },
     .{ .name = "dead-parameter", .advice = "Remove it and stop passing it, or name it with a leading underscore where the signature is fixed by an interface or a callback.", .severity = .warning, .tier = .default, .catalogue = &.{"CWE-1164"}, .needs = &.{ "function.outer", "function.name", "local.reference" } },
@@ -107,12 +106,12 @@ pub const core = [_]Rule{
     .{ .name = "vocabulary-conflict", .advice = "Make the vocabulary in zanity.toml agree with itself: one word per meaning, and none both banned and canonical.", .severity = .@"error", .tier = .default },
     .{ .name = "name-drift", .advice = "Pick one spelling and use it everywhere.", .severity = .warning, .tier = .default, .needs = &.{"name"} },
     .{ .name = "duplicate-name", .advice = "Give each a name that says how it differs.", .severity = .warning, .tier = .default, .needs = &.{"name"} },
-    .{ .name = "restated-type", .alias = "NASA05-M1", .advice = "Assert something about its value instead.", .severity = .warning, .tier = .strict, .needs = &.{ "assertion.condition", "call.argument", "parameter.name", "parameter.type" }, .catalogue = &.{"EXT-VERIFY-002"} },
-    .{ .name = "constant-assertion", .alias = "NASA05-M2", .advice = "Assert something that depends on the input.", .severity = .@"error", .tier = .strict, .needs = &.{ "statement.outer", "assignment.lhs", "assignment.rhs", "literal.constant", "expression.path", "compare.not_null", "compare.equal" }, .catalogue = &.{"EXT-VERIFY-002"} },
-    .{ .name = "redundant-null-check", .alias = "NASA05-M3", .advice = "Remove this check.", .severity = .warning, .tier = .strict, .needs = &.{ "statement.outer", "compare.not_null", "compare.subject", "call.argument" }, .catalogue = &.{"EXT-VERIFY-002"} },
-    .{ .name = "conversion-assertion", .alias = "NASA05-M4", .advice = "Assert the property you need it to have.", .severity = .information, .tier = .strict, .needs = &.{ "statement.outer", "assignment.lhs", "assignment.rhs", "string.format", "expression.path" }, .catalogue = &.{"EXT-VERIFY-002"} },
-    .{ .name = "guaranteed-length", .alias = "NASA05-M5", .advice = "Assert the length you actually require.", .severity = .information, .tier = .strict, .needs = &.{ "statement.outer", "assignment.lhs", "assignment.rhs", "compare.non_negative", "compare.subject" }, .catalogue = &.{"EXT-VERIFY-002"} },
-    .{ .name = "variadic-parameter", .pattern = "'$code' takes any number of arguments, so a reader can't tell what it needs and a caller can pass what it doesn't expect.", .advice = "Take explicit parameters, or one collection parameter.", .severity = .information, .tier = .strict, .catalogue = &.{"CWE-1056"}, .needs = &.{"finding.variadic-parameter"} },
+    .{ .name = "restated-type", .alias = "NASA05-M1", .advice = "Assert something about its value instead.", .severity = .warning, .tier = .production, .needs = &.{ "assertion.condition", "call.argument", "parameter.name", "parameter.type" }, .catalogue = &.{"EXT-VERIFY-002"} },
+    .{ .name = "constant-assertion", .alias = "NASA05-M2", .advice = "Assert something that depends on the input.", .severity = .@"error", .tier = .production, .needs = &.{ "statement.outer", "assignment.lhs", "assignment.rhs", "literal.constant", "expression.path", "compare.not_null", "compare.equal" }, .catalogue = &.{"EXT-VERIFY-002"} },
+    .{ .name = "redundant-null-check", .alias = "NASA05-M3", .advice = "Remove this check.", .severity = .warning, .tier = .production, .needs = &.{ "statement.outer", "compare.not_null", "compare.subject", "call.argument" }, .catalogue = &.{"EXT-VERIFY-002"} },
+    .{ .name = "conversion-assertion", .alias = "NASA05-M4", .advice = "Assert the property you need it to have.", .severity = .information, .tier = .production, .needs = &.{ "statement.outer", "assignment.lhs", "assignment.rhs", "string.format", "expression.path" }, .catalogue = &.{"EXT-VERIFY-002"} },
+    .{ .name = "guaranteed-length", .alias = "NASA05-M5", .advice = "Assert the length you actually require.", .severity = .information, .tier = .production, .needs = &.{ "statement.outer", "assignment.lhs", "assignment.rhs", "compare.non_negative", "compare.subject" }, .catalogue = &.{"EXT-VERIFY-002"} },
+    .{ .name = "variadic-parameter", .pattern = "'$code' takes any number of arguments, so a reader can't tell what it needs and a caller can pass what it doesn't expect.", .advice = "Take explicit parameters, or one collection parameter.", .severity = .information, .tier = .production, .catalogue = &.{"CWE-1056"}, .needs = &.{"finding.variadic-parameter"} },
     .{ .name = "goto-statement", .pattern = "'$code' jumps elsewhere in the function, so its control flow is hard to follow.", .advice = "Use a loop, a break or continue, or a function of its own instead.", .severity = .warning, .tier = .default, .catalogue = &.{"CWE-1075"}, .needs = &.{"finding.goto-statement"} },
     .{ .name = "empty-block", .pattern = "'$code' has an empty body, so it does nothing; that is usually unfinished work or a lost statement.", .advice = "Fill in the body, delete the block, or leave a comment saying why nothing happens here.", .severity = .warning, .tier = .default, .catalogue = &.{"CWE-1071"}, .needs = &.{"finding.empty-block"} },
     .{ .name = "constant-condition", .pattern = "'$code' tests a constant, so one branch always runs and the other never does.", .advice = "Delete the branch that can't run, or test the value that actually varies.", .severity = .warning, .tier = .default, .catalogue = &.{ "CWE-570", "CWE-571" }, .needs = &.{"finding.constant-condition"} },
@@ -144,7 +143,7 @@ pub const core = [_]Rule{
     .{ .name = "vague-error", .judgement = "has an error message too vague to find the problem: it doesn't name the input or value that failed, or what was expected", .advice = "Name the input or value that failed, show it, and say what was expected.", .severity = .warning, .tier = .default, .needs = &.{"literal.string"}, .question = "Does the function raise, assert, return or log an error message too vague to identify the problem, for example \"something went wrong\" or \"invalid input\" without saying which input, which value or what was expected?" },
     .{ .name = "cryptic-error", .judgement = "has an error message that isn't in plain language: a code, an internal name or jargon", .advice = "Say in plain words what went wrong and what to do; keep any code alongside if tools need it.", .severity = .warning, .tier = .default, .needs = &.{"literal.string"}, .question = "Does the function raise, assert, return or log an error message that is not in plain language for the reader it is meant for, for example a bare error code, an internal identifier or jargon that the user, developer or agent reading it would not understand? An assertion or internal-error message is meant for developers of this code, so naming the function, field or setting they should look at is plain to them." },
     .{ .name = "unconstructive-error", .judgement = "has an error message that says what failed but not what to do about it", .advice = "Add the next step for whoever reads it: the input, setting, file or code to change.", .severity = .warning, .tier = .default, .needs = &.{ "literal.string", "assertion.condition" }, .question = "Does the function raise, assert, return or log an error message that says what failed without suggesting what the user, developer or agent reading it should do to fix it, such as the input, setting, file or code to change?" },
-    .{ .name = "misleading-error", .judgement = "has an error message that describes a different failure from the one that happened", .advice = "Reword the message to name the failure that actually occurred.", .severity = .warning, .tier = .off, .question = "Does the function raise or log an error message that misdescribes the failure that actually occurred?" },
+    .{ .name = "misleading-error", .judgement = "has an error message that describes a different failure from the one that happened", .advice = "Reword the message to name the failure that actually occurred.", .severity = .warning, .tier = .production, .question = "Does the function raise or log an error message that misdescribes the failure that actually occurred?" },
     .{ .name = "name-behaviour-mismatch", .judgement = "is named for something materially different from what its body does", .advice = "Rename it to say what it does, or change the body to do what the name says.", .severity = .warning, .tier = .default, .asks = .function, .question = "Does the function's name describe something materially different from what its body actually does?" },
     .{ .name = "comment-drift", .judgement = "has a docstring or comment describing behaviour the code does not implement", .advice = "Update the comment to match the code, or fix the code if the comment is right.", .severity = .warning, .tier = .default, .asks = .function, .question = "Does the function's docstring or any comment inside it describe behaviour that the code does not implement?" },
     .{ .name = "query-with-side-effect", .judgement = "is named like a query but also changes state", .advice = "Rename it to say what it changes, or move the change into a separate function.", .severity = .warning, .tier = .default, .asks = .function, .question = "Is the function named like a query or predicate, such as get, is, has or find, while it also modifies state, writes to storage or sends messages?" },
@@ -315,16 +314,10 @@ pub const Set = struct {
     /// Which rules, by position in `all`, the set holds, so `enabled` is one lookup.
     held: std.StaticBitSet(all.len) = .empty,
 
-    /// Adds the rule `name` or `alias` answers to, every rule for `all`, including those off by
-    /// default, or the defaults and the strict rules for `strict`. Returns false when no rule
-    /// answers to it, so the caller can say which names do.
+    /// Adds the rule `name` or `alias` answers to, or every rule for `all`, as --production runs.
+    /// Returns false when no rule answers to it, so the caller can say which names do.
     pub fn includeNamed(self: *Set, name: []const u8) bool {
         if (name.len == 0) assert.panic("including a rule by an empty name; trim and skip empty items before calling includeNamed()", .{});
-        if (std.mem.eql(u8, name, "strict")) {
-            self.includeTier(.default);
-            self.includeTier(.strict);
-            return true;
-        }
         if (std.mem.eql(u8, name, "all")) {
             for (all) |r| self.include(r.name);
             if (self.len != all.len) assert.panic("'all' enabled {d} of the {d} rules; include() must add each rule once", .{ self.len, all.len });
@@ -343,7 +336,7 @@ pub const Set = struct {
         return set;
     }
 
-    /// Adds every rule in `tier`, as --strict does for the strict rules.
+    /// Adds every rule in `tier`, as --production does for the production rules.
     pub fn includeTier(self: *Set, tier: Tier) void {
         var added: usize = 0;
         for (all) |r| if (r.tier == tier) {

@@ -149,8 +149,8 @@ zanity init                                   # write a zanity.toml with every s
 zanity check                                  # check the current directory
 zanity check src tests                        # check some paths
 zanity check . --rules recursion,long-function   # run only these rules
-zanity check . --rules all                    # every rule, including those off by default
-zanity check . --strict                       # also the strict rules, such as assertion density
+zanity check . --rules all                    # every rule, as --production runs
+zanity check . --production                   # every rule, adding those such as assertion density
 zanity check . --fail-on warning              # exit 1 on warnings too
 zanity check . --fix                          # apply the fixes zanity can make, then report the rest
 zanity check . --watch                        # check again on every save, until Ctrl-C
@@ -279,7 +279,7 @@ Only TypeSafe's own API needs a key. For any other server the key is optional, a
 | `vague-error` | has an error message too vague to find the problem: it doesn't name the input or value that failed, or what was expected |
 | `cryptic-error` | has an error message that isn't in plain language: a code, an internal name or jargon |
 | `unconstructive-error` | has an error message that says what failed but not what to do about it |
-| `misleading-error` | has an error message that describes a different failure from the one that happened (*off* by default; `select = ["all"]` includes it) |
+| `misleading-error` | has an error message that describes a different failure from the one that happened (*production*; `--production` includes it) |
 
 Every function is also asked:
 
@@ -421,8 +421,8 @@ forbidden = ["discount"]
 invoice = ["bill", "statement"]
 
 [rules]
-# Run only these rules; "all" is every rule, including those off by default, and "strict" the
-# defaults and the strict rules. Leave it out to run the defaults.
+# Run only these rules; "all" is every rule, as --production runs. Leave it out to run the
+# defaults.
 select = ["recursion", "unbounded-loop", "long-function"]
 # Rules to switch off, from the selection or the defaults.
 disable = ["duplicate-name"]
@@ -458,22 +458,22 @@ Every rule runs on every language where it means something; `dynamic-allocation`
 
 ## Rules
 
-Rules marked *strict* hold code to what safety-critical software needs and most code doesn't, so they run only with `--strict`, `select = ["strict"]` or `select = ["all"]`, or when named. Rules marked *off* run only with `--rules all`, `select = ["all"]`, or when named.
+Rules marked *production* hold code to what safety-critical software needs and most code doesn't, or need `--infer`, so they run only with `--production`, `select = ["all"]` or `--rules all`, or when named.
 
 **NASA's Power of Ten**
 
 | Rule | Severity | Flags |
 |---|---|---|
-| `recursion` | warning, *strict* | a function that calls itself, directly or through a cycle of calls across files |
-| `unbounded-loop` | warning, *strict* | a loop with no bound, such as `while True` or `for {}` |
-| `dynamic-allocation` | error, *strict* | allocation after initialization, in Zig and Rust |
+| `recursion` | warning, *production* | a function that calls itself, directly or through a cycle of calls across files |
+| `unbounded-loop` | warning, *production* | a loop with no bound, such as `while True` or `for {}` |
+| `dynamic-allocation` | error, *production* | allocation after initialization, in Zig and Rust |
 | `long-function` | warning | a function with 60 or more lines of code, not counting blank and comment lines |
 | `wide-scope` | warning | a local declared in a wider block than the only one that uses it |
-| `assertion-density` | error, *strict* | a function with fewer than two assertions that can catch a bug, or a test with no check that can; helpers and fixtures in test files are left to the tests that use them |
-| `assertion-message` | warning, *strict* | an assertion with no message |
+| `assertion-density` | error, *production* | a function with fewer than two assertions that can catch a bug, or a test with no check that can; helpers and fixtures in test files are left to the tests that use them |
+| `assertion-message` | warning, *production* | an assertion with no message |
 | `assertion-side-effect` | error | an assertion that assigns or calls something that changes state |
 | `forbidden-call` | warning | `eval`, `exec` and other calls that run code no one can review |
-| `restated-type`, `constant-assertion`, `redundant-null-check`, `conversion-assertion`, `guaranteed-length` | *strict* | assertions that cannot fail, which do not count towards density |
+| `restated-type`, `constant-assertion`, `redundant-null-check`, `conversion-assertion`, `guaranteed-length` | *production* | assertions that cannot fail, which do not count towards density |
 
 **Structure**
 
@@ -491,7 +491,7 @@ Rules marked *strict* hold code to what safety-critical software needs and most 
 | `swallowed-error` | warning | an error handler that does nothing |
 | `empty-block` | warning | an empty block where code was expected |
 | `goto-statement` | warning | a `goto`, which makes control flow hard to follow |
-| `variadic-parameter` | information, *strict* | a parameter that takes any number of arguments, outside decorator wrappers and methods that may override one |
+| `variadic-parameter` | information, *production* | a parameter that takes any number of arguments, outside decorator wrappers and methods that may override one |
 | `deep-nesting` | warning | code nested too deep to follow |
 | `complex-function` | warning | a function or test with too many paths through it |
 | `long-file` | warning | a file too long to hold in mind |
@@ -550,7 +550,7 @@ Rules marked *strict* hold code to what safety-critical software needs and most 
 | `vague-error` | warning | a message too vague to find the problem |
 | `cryptic-error` | warning | a message that is only a code or an internal name |
 | `unconstructive-error` | warning | a message that does not say how to fix the problem |
-| `misleading-error` | *off* | a message that describes a different failure; needs `--infer` |
+| `misleading-error` | *production* | a message that describes a different failure; needs `--infer` |
 
 **Hazards** (each traces to an entry in the engineering error catalogue in `catalogue/`)
 

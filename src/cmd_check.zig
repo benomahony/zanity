@@ -61,8 +61,8 @@ pub fn runCheck(ctx: *zclig.Context, requested: CheckOptions) ![]const Row {
     defer ws.settings = null;
     rules.custom = settings.questionRules();
     defer rules.custom = &.{};
-    var selected = if (options.rules) |list| try parseRules(ctx, ws, list) else settings.selection(options.strict);
-    if (options.rules != null and options.strict) selected.includeTier(.strict);
+    var selected = if (options.rules) |list| try parseRules(ctx, ws, list) else settings.selection(options.production);
+    if (options.rules != null and options.production) selected.includeTier(.production);
     if (options.infer) try connectInference(ctx, ws, &selected, options.rules == null);
     if (ws.inference) |*inference| {
         inference.concurrency = settings.concurrency orelse infer.default_concurrency;
@@ -179,16 +179,17 @@ pub fn parseRules(ctx: *zclig.Context, ws: *Workspace, list: []const u8) !rules.
     while (it.next()) |raw| {
         const code = std.mem.trim(u8, raw, " ");
         if (code.len == 0) continue;
+        if (std.mem.eql(u8, code, "strict")) return ctx.fail(.usage, "'strict' is gone.", "Pass --production, or --rules all, to run every rule.");
         if (!set.includeNamed(code)) {
             const start = ws.text.used;
-            _ = try ws.text.copy("The rules are: all (every rule, including those off by default), strict (the defaults and the strict rules)");
+            _ = try ws.text.copy("The rules are: all (every rule, as --production runs)");
             for (rules.all) |r| _ = try ws.text.format(" {s}", .{r.name});
             const hint = ws.text.buffer[start..ws.text.used];
             return ctx.fail(.usage, try ws.text.format("Unknown rule '{s}'.", .{code}), hint);
         }
     }
     if (set.len == 0) return ctx.fail(.usage, "--rules needs at least one rule.", "Pass a comma-separated list, such as --rules unbounded-loop,long-function, or --rules all.");
-    if (set.len > std.mem.count(u8, list, ",") + 1 and std.mem.indexOf(u8, list, "all") == null and std.mem.indexOf(u8, list, "strict") == null) assert.panic("--rules '{s}' enabled {d} rules from {d} names; each name other than 'all' and 'strict' enables one rule, so check includeNamed()", .{ list, set.len, std.mem.count(u8, list, ",") + 1 });
+    if (set.len > std.mem.count(u8, list, ",") + 1 and std.mem.indexOf(u8, list, "all") == null) assert.panic("--rules '{s}' enabled {d} rules from {d} names; each name other than 'all' enables one rule, so check includeNamed()", .{ list, set.len, std.mem.count(u8, list, ",") + 1 });
     if (rules.find(set.names()[0]) == null) assert.panic("--rules '{s}' enabled '{s}', which is not a rule; parseRules() must add only rules that includeNamed() found", .{ list, set.names()[0] });
     return set;
 }

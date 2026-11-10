@@ -70,6 +70,8 @@ const out_buffer_bytes = 64 * 1024;
 const err_buffer_bytes = 4096;
 /// The highest exit code allowed; codes above it collide with signals.
 const max_exit_code = 130;
+/// The exit code for a command line zanity cannot run, as zclig uses for an unknown option.
+const usage_exit_code = 2;
 
 pub const app: zclig.App = .{
     .name = "zanity",
@@ -78,7 +80,7 @@ pub const app: zclig.App = .{
     .commands = &.{ zclig.command(CheckOptions, Row, .{
         .name = "check",
         .description = "Check files and directories. Exits 1 when an error-level rule fires, or with --fail-on warning when any rule does.",
-        .examples = &.{ "zanity check .", "zanity check src tests --rules unbounded-loop,long-function", "zanity check . --json", "zanity check . --fix", "zanity check . --fail-on warning", "zanity check . --strict", "zanity check . --watch" },
+        .examples = &.{ "zanity check .", "zanity check src tests --rules unbounded-loop,long-function", "zanity check . --json", "zanity check . --fix", "zanity check . --fail-on warning", "zanity check . --production", "zanity check . --watch" },
         .result_title = "Findings",
         .positional = .{ .name = "paths", .metavar = "PATH", .help = "Files or directories to check.", .default = &.{"."} },
         .options = triage.check_options,
@@ -154,6 +156,11 @@ pub fn main(init: std.process.Init) !u8 {
     ws.args = rest;
     if (ws.args.len + 1 != args.len) assert.panic("the workspace holds {d} of {d} arguments; main() must give it all but the program's name", .{ ws.args.len, args.len });
     for (rest) |arg| ws.chose_format = ws.chose_format or std.mem.eql(u8, arg, "--json") or std.mem.eql(u8, arg, "--plain");
+    for (rest) |arg| if (std.mem.eql(u8, arg, "--strict") or std.mem.startsWith(u8, arg, "--strict=")) {
+        try err_writer.interface.writeAll("zanity: --strict is now --production, which runs every rule.\n");
+        try err_writer.interface.flush();
+        return usage_exit_code;
+    };
     var runtime = zclig.native.runtime(init, &out_writer.interface, &err_writer.interface);
     runtime.user_data = ws;
     const code = app.run(init.gpa, rest, runtime);

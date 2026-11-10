@@ -269,7 +269,7 @@ test "--fail-on warning fails a run with only warnings, which a plain run passes
     try std.testing.expectEqual(std.process.Child.Term{ .exited = 1 }, failing.term);
 }
 
-test "--strict runs the strict rules, which a plain run leaves off" {
+test "--production runs every rule, adding those a plain run leaves off, and --strict says so" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
     const arena = arena_state.allocator();
@@ -282,8 +282,11 @@ test "--strict runs the strict rules, which a plain run leaves off" {
     const work = try std.fs.path.join(arena, &.{ ".zig-cache", "tmp", &tmp.sub_path });
     const plain = try std.process.run(arena, io, .{ .argv = &.{ zanity, "check", "-q", "--plain", "." }, .cwd = .{ .path = work } });
     try std.testing.expectEqual(@as(usize, 0), std.mem.count(u8, plain.stdout, "rule=\"unbounded-loop\""));
-    const strict = try std.process.run(arena, io, .{ .argv = &.{ zanity, "check", "-q", "--plain", "--strict", "." }, .cwd = .{ .path = work } });
-    try std.testing.expectEqual(@as(usize, 1), std.mem.count(u8, strict.stdout, "rule=\"unbounded-loop\""));
+    const production = try std.process.run(arena, io, .{ .argv = &.{ zanity, "check", "-q", "--plain", "--production", "." }, .cwd = .{ .path = work } });
+    try std.testing.expectEqual(@as(usize, 1), std.mem.count(u8, production.stdout, "rule=\"unbounded-loop\""));
+    const strict = try std.process.run(arena, io, .{ .argv = &.{ zanity, "check", "--strict", "." }, .cwd = .{ .path = work } });
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 2 }, strict.term);
+    try expectOutput(strict.stderr, &.{"--strict is now --production, which runs every rule."}, &.{});
 }
 
 /// `run`, when zanity exited and reported something; otherwise zanity's output, printed, and a test

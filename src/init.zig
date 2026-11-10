@@ -48,9 +48,8 @@ pub fn renderConfig(w: *std.Io.Writer, project: Project) !void {
     try w.writeAll(
         \\
         \\[rules]
-        \\# Which rules run. "all" is every rule, including those off by default, and "strict" the defaults
-        \\# and the strict rules; leave `select` out to run only the defaults, and add the strict rules for
-        \\# one run with `zanity check --strict`. `zanity check --rules a,b` overrides it for one run.
+        \\# Which rules run. "all" is every rule, as `zanity check --production` runs; leave `select` out
+        \\# to run only the defaults. `zanity check --rules a,b` overrides it for one run.
         \\select = ["all"]
         \\
         \\# Rules to switch off everywhere. Every rule is listed here, with its severity, when it runs,

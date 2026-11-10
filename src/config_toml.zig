@@ -441,7 +441,10 @@ pub const TomlReader = struct {
             },
             .rules, .select, .disable => {
                 var set: rules.Set = .{};
-                for (items) |name| if (!set.includeNamed(name)) return self.fail("'{s}' isn't a rule; the rules are listed in the README, 'all' names every rule, 'strict' the defaults and the strict rules, and 'zanity check --rules' takes the same names.", .{name});
+                for (items) |name| {
+                    if (std.mem.eql(u8, name, "strict")) return self.fail("'strict' is gone; write \"all\" to run every rule, as zanity check --production does.", .{});
+                    if (!set.includeNamed(name)) return self.fail("'{s}' isn't a rule; the rules are listed in the README, 'all' names every rule, and 'zanity check --rules' takes the same names.", .{name});
+                }
                 if (which != .disable and set.len == 0) return self.fail("'{s}' is empty, so nothing would run; list at least one rule, or remove it to run the defaults.", .{key});
                 if (which == .disable) config.disable = set else config.rules = set;
             },

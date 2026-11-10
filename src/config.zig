@@ -182,11 +182,11 @@ pub const Config = struct {
         return self.exclude[0..self.exclude_len];
     }
 
-    /// The rules to run: `rules` if given, else the defaults, and the strict rules when `strict`,
+    /// The rules to run: `rules` if given, else the defaults, and every rule for `production`,
     /// without anything in `disable`.
-    pub fn selection(self: *const Config, strict: bool) rules.Set {
+    pub fn selection(self: *const Config, production: bool) rules.Set {
         var chosen = self.rules orelse rules.Set.defaults();
-        if (strict) chosen.includeTier(.strict);
+        if (production) chosen.includeTier(.production);
         var kept: rules.Set = .{};
         for (chosen.names()) |name| if (!self.disable.enabled(name)) kept.include(name);
         if (kept.len > chosen.len) assert.panic("disabling rules kept {d} of {d}, more than were chosen; selection() must copy only chosen rules, so check its loop", .{ kept.len, chosen.len });

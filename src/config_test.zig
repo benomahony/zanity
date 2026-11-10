@@ -84,7 +84,7 @@ test "a [rules] table at the end selects and disables rules, as zanity init writ
     try expectProblem("[rules]\nselect = []\n", "zanity.toml:2: 'select' is empty, so nothing would run; list at least one rule, or remove it to run the defaults.");
 }
 
-test "'all' enables every rule, including those off by default" {
+test "'all' enables every rule, as --production does" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
     const c = try parsed(arena_state.allocator(), "rules = [\"all\"]\ndisable = [\"long-file\"]\n");
@@ -105,7 +105,7 @@ test "disable removes rules from the defaults" {
     try std.testing.expect(chosen.enabled("long-function"));
 }
 
-test "strict adds the strict rules to the defaults, without what disable removes" {
+test "production adds every other rule to the defaults, without what disable removes" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
     const c = try parsed(arena_state.allocator(), "disable = [\"recursion\"]\n");
@@ -114,21 +114,16 @@ test "strict adds the strict rules to the defaults, without what disable removes
     try std.testing.expect(chosen.enabled("assertion-density"));
     try std.testing.expect(chosen.enabled("long-function"));
     try std.testing.expect(!chosen.enabled("recursion"));
-    try std.testing.expect(!chosen.enabled("misleading-error"));
+    try std.testing.expect(chosen.enabled("misleading-error"));
+    try std.testing.expectEqual(rules.all.len - 1, chosen.len);
 }
 
-test "select 'strict' runs the defaults and the strict rules" {
-    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena_state.deinit();
-    const c = try parsed(arena_state.allocator(), "[rules]\nselect = [\"strict\"]\n");
-    const chosen = c.selection(false);
-    try std.testing.expect(chosen.enabled("unbounded-loop"));
-    try std.testing.expect(chosen.enabled("long-function"));
-    try std.testing.expect(!chosen.enabled("misleading-error"));
+test "select 'strict' says to write 'all', which runs every rule as --production does" {
+    try expectProblem("[rules]\nselect = [\"strict\"]\n", "zanity.toml:2: 'strict' is gone; write \"all\" to run every rule, as zanity check --production does.");
 }
 
 test "mistakes in zanity.toml name the line and what to write" {
-    try expectProblem("rules = [\"recursions\"]\n", "zanity.toml:1: 'recursions' isn't a rule; the rules are listed in the README, 'all' names every rule, 'strict' the defaults and the strict rules, and 'zanity check --rules' takes the same names.");
+    try expectProblem("rules = [\"recursions\"]\n", "zanity.toml:1: 'recursions' isn't a rule; the rules are listed in the README, 'all' names every rule, and 'zanity check --rules' takes the same names.");
     try expectProblem("\ndisabled = []\n", "zanity.toml:2: 'disabled' isn't a setting; the settings are exclude and, under [rules], select and disable, and under [infer], enabled, url, model, api_key_env, concurrency and threshold.");
     try expectProblem("[inference]\n", "zanity.toml:1: '[inference]' isn't a table zanity knows; the tables are [rules], [infer], [paths.\"<pattern>\"], [questions.\"<name>\"], [vocabulary], [domains.<name>] and [contexts.<name>].");
     try expectProblem("[contexts]\n", "zanity.toml:1: '[contexts]' needs a name, such as [contexts.billing].");
