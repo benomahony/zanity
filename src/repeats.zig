@@ -12,9 +12,7 @@ const scope = @import("scope.zig");
 /// The most reported expressions compared against.
 const max_reported = 64;
 
-pub const Repeat = struct { node: ts.Node, hash: u64, size: u32 };
-/// Something the code writes to, by the name it starts with: `self` for `self.at += 1`.
-pub const Write = struct { at: u32, root: []const u8 };
+const Repeat = @import("constructs.zig").Repeat;
 
 /// Records what a call changes: the receiver of a method that mutates it, such as `items.pop()`,
 /// and anything passed by address, as `&cursor` is.

@@ -99,3 +99,12 @@ pub const Trail = struct { parent: ts.Node.Key, summary: Summary };
 pub const Suppression = struct { line: u32, start: usize, len: usize };
 pub const Assertion = struct { function: *Context, node: ts.Node, condition: ts.Node };
 pub const Note = struct { node: ts.Node, rule: []const u8, message: []const u8 };
+
+pub const Repeat = struct { node: ts.Node, hash: u64, size: u32 };
+
+/// Something the code writes to, by the name it starts with: `self` for `self.at += 1`.
+pub const Write = struct { at: u32, root: []const u8 };
+
+/// A parameter or local named `name` in function `owner`, with its declared type when the code
+/// states one: `byte[] data` does, `var data = Load()` doesn't.
+pub const Declared = struct { owner: u32, name: ts.Node, type: ?ts.Node = null };

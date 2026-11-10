@@ -7,8 +7,6 @@ const ts = @import("ts.zig");
 const captures = @import("captures.zig");
 const memory = @import("memory.zig");
 const tracing = @import("tracing.zig");
-const types = @import("types.zig");
-const repeats = @import("repeats.zig");
 const notes = @import("notes.zig");
 const constructs = @import("constructs.zig");
 const Call = constructs.Call;
@@ -32,14 +30,14 @@ pub const FileScratch = struct {
     weak: memory.Bounded(Weak),
     locals: memory.Bounded(Owned),
     spans: tracing.Spans,
-    declared: memory.Bounded(types.Declared),
+    declared: memory.Bounded(constructs.Declared),
     /// A declared type waiting for the name it declares, which comes after it.
     pending_type: ?ts.Node = null,
     bare_calls: memory.Bounded(Owned),
     async_names: memory.Bounded([]const u8),
     statement_calls: memory.Bounded(ts.Node),
-    repeats: memory.Bounded(repeats.Repeat),
-    writes: memory.Bounded(repeats.Write),
+    repeats: memory.Bounded(constructs.Repeat),
+    writes: memory.Bounded(constructs.Write),
     names: notes.NameCounts,
     /// The nodes the walk is inside, outermost first, so their parents need no search.
     path: memory.Bounded(ts.Node),

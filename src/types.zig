@@ -2,6 +2,7 @@
 //! passes arguments: the declared types of parameters and locals, and the types literals,
 //! constructions and casts passed as arguments plainly have.
 const std = @import("std");
+const constructs = @import("constructs.zig");
 const assert = @import("assert.zig");
 const ts = @import("ts.zig");
 const captures = @import("captures.zig");
@@ -11,9 +12,7 @@ const facts = @import("facts.zig");
 const File = check.File;
 const Context = check.Context;
 
-/// A parameter or local named `name` in function `owner`, with its declared type when the code
-/// states one: `byte[] data` does, `var data = Load()` doesn't.
-pub const Declared = struct { owner: u32, name: ts.Node, type: ?ts.Node = null };
+const Declared = constructs.Declared;
 
 const separator = facts.type_separator;
 const agree = facts.typesAgree;
