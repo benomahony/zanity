@@ -1,11 +1,12 @@
 const std = @import("std");
 const assert = @import("assert.zig");
 const config = @import("config.zig");
+const config_toml = @import("config_toml.zig");
 const rules = @import("rules.zig");
 
 fn parsed(arena: std.mem.Allocator, text: []const u8) !config.Config {
     if (text.len == 0) assert.panic("parsing an empty test config; pass the TOML under test", .{});
-    const result = try config.parseConfig(try arena.dupe(u8, text));
+    const result = try config_toml.parseConfig(try arena.dupe(u8, text));
     if (result.exclude_len > config.max_excludes) assert.panic("parsed {d} exclude patterns in room for {d}; parseConfig() must refuse lists longer than max_excludes", .{ result.exclude_len, config.max_excludes });
     return result;
 }

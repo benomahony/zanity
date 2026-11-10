@@ -22,6 +22,7 @@ const store = @import("store.zig");
 const sqlite = @import("sqlite.zig");
 const Live = @import("live.zig").Live;
 const config = @import("config.zig");
+const config_file = @import("config_file.zig");
 const fix_file = @import("fix_file.zig");
 const watch = @import("watch.zig");
 pub const collect = @import("collect.zig").collect;
@@ -89,7 +90,7 @@ pub fn runCheck(ctx: *zclig.Context, requested: CheckOptions) ![]const Row {
 
 /// Reads zanity.toml, opens the cache, and applies the file's excludes to the walk.
 pub fn loadSettings(ctx: *zclig.Context, ws: *Workspace, gpa: Allocator) !config.Config {
-    const settings = config.initConfig(gpa, ws.io) catch |e| switch (e) {
+    const settings = config_file.initConfig(gpa, ws.io) catch |e| switch (e) {
         error.InvalidConfig => return ctx.fail(.usage, config.problem[0..config.problem_len], "Fix that line of zanity.toml, or remove the setting to use zanity's default."),
         else => return e,
     };
