@@ -416,17 +416,3 @@ fn groupingFix(self: *File, node: ts.Node) ![]const u8 {
     }
     return self.say("It runs as `({s}) {s} ({s})`; write the parentheses it runs with, or the grouping you meant.", .{ left, op, right });
 }
-
-/// The node inside `node` that spans all of it, such as the one value in a one-item list.
-pub fn soleChild(node: ts.Node) ts.Node {
-    if (node.id == null) assert.panic("looked inside a null node; pass the value node an assignment captured", .{});
-    var current = node;
-    for (0..8) |_| {
-        if (ts.ts_node_named_child_count(current) != 1) break;
-        const child = ts.ts_node_named_child(current, 0);
-        if (ts.ts_node_start_byte(child) != ts.ts_node_start_byte(current) or ts.ts_node_end_byte(child) != ts.ts_node_end_byte(current)) break;
-        current = child;
-    }
-    if (ts.ts_node_start_byte(current) != ts.ts_node_start_byte(node)) assert.panic("expected the sole child to start where its parent does, got {d} and {d}; soleChild() must descend only into a child spanning the whole node", .{ ts.ts_node_start_byte(current), ts.ts_node_start_byte(node) });
-    return current;
-}

@@ -10,8 +10,6 @@ const rules = @import("rules.zig");
 const check = @import("check.zig");
 const File = check.File;
 const Context = check.Context;
-const hazards = @import("hazards.zig");
-const soleChild = hazards.soleChild;
 const startsBefore = captures.startsBefore;
 
 /// A string literal assigned to a name that ends in a secret's name, such as `db_password` or `apiKey`.
@@ -154,4 +152,18 @@ pub fn namesSecret(name: []const u8) bool {
         return true;
     }
     return false;
+}
+
+/// The node inside `node` that spans all of it, such as the one value in a one-item list.
+fn soleChild(node: ts.Node) ts.Node {
+    if (node.id == null) assert.panic("looked inside a null node; pass the value node an assignment captured", .{});
+    var current = node;
+    for (0..8) |_| {
+        if (ts.ts_node_named_child_count(current) != 1) break;
+        const child = ts.ts_node_named_child(current, 0);
+        if (ts.ts_node_start_byte(child) != ts.ts_node_start_byte(current) or ts.ts_node_end_byte(child) != ts.ts_node_end_byte(current)) break;
+        current = child;
+    }
+    if (ts.ts_node_start_byte(current) != ts.ts_node_start_byte(node)) assert.panic("expected the sole child to start where its parent does, got {d} and {d}; soleChild() must descend only into a child spanning the whole node", .{ ts.ts_node_start_byte(current), ts.ts_node_start_byte(node) });
+    return current;
 }
