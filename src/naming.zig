@@ -124,7 +124,46 @@ pub fn closeDefinition(self: *File, ctx: Context) !void {
     const prefixes = self.tables.private_prefixes;
     // A module exports names explicitly; elsewhere a name is importable unless marked private.
     const importable = if (prefixes.len > 0 and !self.module) std.mem.indexOfScalar(u8, prefixes, name[0]) == null else public;
-    try self.work.facts.define(name, if (method) "method" else ctx.kind, .{ .at = .{ at.row, at.column }, .public = public, .member = member, .importable = importable, .unmarked = try unmarkedName(self.work.facts.text, self.work.facts.path, self.tables, name) });
+    const kept = try keepLocal(self, ctx, name, importable or member);
+    try self.work.facts.define(name, if (method) "method" else ctx.kind, .{ .at = .{ at.row, at.column }, .public = public, .member = member, .importable = importable, .unmarked = try unmarkedName(self.work.facts.text, self.work.facts.path, self.tables, name), .local = kept.local, .delete = kept.delete });
+}
+
+/// Whether only its file can refer to `name`, which another file or construct can `reach` when
+/// it is importable or a member, recorded as such; and the bytes `--fix` deletes to remove it,
+/// or 0 to 0 when it can't.
+fn keepLocal(self: *File, ctx: Context, name: []const u8, reach: bool) error{LimitExceeded}!Local {
+    if (name.len == 0) assert.panic("{s}: keeping a nameless definition {f} local; closeDefinition() returns before an empty name", .{ self.work.facts.path, ctx.node.where() });
+    if (!self.tables.file_private or reach) return .{ .local = false };
+    if (self.checker.enabled.enabled("dead-symbol")) try self.s.names.private(facts_module.nameHash(name));
+    if (!strings.contains(&removable_kinds, ctx.kind)) return .{ .local = true };
+    const delete = wholeLines(self.source, ctx.node, self.tables.line_comment);
+    if (delete[1] < delete[0]) assert.panic("{s}: deleting bytes {d}..{d} of '{s}', which run backwards; wholeLines() returns a start before its end", .{ self.work.facts.path, delete[0], delete[1], name });
+    return .{ .local = true, .delete = delete };
+}
+
+const Local = struct { local: bool, delete: [2]u32 = .{ 0, 0 } };
+
+/// Definitions `--fix` deletes when nothing refers to them: a name for another file or for
+/// something declared there, which only names what already exists.
+const removable_kinds = [_][]const u8{ "import", "alias" };
+
+/// The bytes of the whole lines `node` fills, with the line break after them, or 0 to 0 when
+/// other code shares those lines or a comment sits on the line above, which may be about it.
+fn wholeLines(source: []const u8, node: ts.Node, line_comment: []const u8) [2]u32 {
+    const start = ts.ts_node_start_byte(node);
+    const end = ts.ts_node_end_byte(node);
+    if (end <= start or end > source.len) assert.panic("a definition spans bytes {d}..{d} of a {d}-byte file; pass the source it was parsed from", .{ start, end, source.len });
+    const line_start = if (std.mem.lastIndexOfScalar(u8, source[0..start], '\n')) |at| at + 1 else 0;
+    if (std.mem.trim(u8, source[line_start..start], " \t").len > 0) return .{ 0, 0 };
+    const rest = std.mem.trimStart(u8, source[end..], " \t;");
+    if (rest.len > 0 and rest[0] != '\n') return .{ 0, 0 };
+    if (line_start > 0 and line_comment.len > 0) {
+        const above_start = if (std.mem.lastIndexOfScalar(u8, source[0 .. line_start - 1], '\n')) |at| at + 1 else 0;
+        if (std.mem.startsWith(u8, std.mem.trimStart(u8, source[above_start .. line_start - 1], " \t"), line_comment)) return .{ 0, 0 };
+    }
+    const line_end = source.len - rest.len + @intFromBool(rest.len > 0);
+    if (line_end <= start or line_end > source.len) assert.panic("the lines of bytes {d}..{d} end at {d} of {d}; they end after the definition and inside the file", .{ start, end, line_end, source.len });
+    return .{ @intCast(line_start), @intCast(line_end) };
 }
 
 /// Whether any statement of the file is an `import` or `export`: whether `id`, the
@@ -205,6 +244,8 @@ fn keyedBy(s: *ConceptScratch, definitions: []const Definition, by: KeyBy) error
     for (definitions, 0..) |d, i| {
         if (exempt(d.name)) continue;
         if (by == .name and std.mem.eql(u8, d.kind, "method")) continue;
+        // An import or alias names a definition made elsewhere, so it is no second one.
+        if (strings.contains(&removable_kinds, d.kind)) continue;
         const key = switch (by) {
             .concept => try conceptKey(s, d.language, d.name),
             .name => try s.words.format("{s} {s} {s}", .{ d.language, d.scope, d.name }),

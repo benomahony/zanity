@@ -25,6 +25,20 @@ pub const Definition = struct {
     importable: bool = false,
     /// Its spelling without language-specific privacy marks.
     unmarked: []const u8 = "",
+    /// Whether only its own file can name it, so references elsewhere to the same name are to
+    /// something else.
+    local: bool = false,
+    /// The bytes `--fix` deletes to remove it, whole lines; none when `delete_end` is 0.
+    delete_start: u32 = 0,
+    delete_end: u32 = 0,
+
+    /// The hash its references are recorded under: its name's, mixed with its file's when it is local.
+    pub fn key(self: Definition) u64 {
+        if (self.name.len == 0) assert.panic("{s}:{d}: keying a definition with no name; the @name capture matched an empty node", .{ self.path, self.line + 1 });
+        const hash = if (self.local) localHash(self.path, nameHash(self.name)) else nameHash(self.name);
+        if (hash == 0) assert.panic("{s}: '{s}' keyed to 0, which NameCounts reserves for empty slots; both hashes map 0 away", .{ self.path, self.name });
+        return hash;
+    }
 
     pub fn sourceOrder(_: void, a: Definition, b: Definition) bool {
         if (a.name.len == 0) assert.panic("a definition at {s}:{d} has no name; the @name capture matched an empty node", .{ a.path, a.line + 1 });
@@ -121,6 +135,15 @@ pub const Reference = struct {
         return a.holder < b.holder;
     }
 };
+
+/// The hash of a name, by its `name_hash`, that only the file at `path` can refer to, so it counts
+/// apart from the same name in every other file.
+pub fn localHash(path: []const u8, name_hash: u64) u64 {
+    if (path.len == 0) assert.panic("hashing local name {d} with no file; a local name belongs to the file defining it", .{name_hash});
+    if (name_hash == 0) assert.panic("hashing a local name in {s} with the 0 hash; nameHash() never returns 0 for a name", .{path});
+    const hash = std.hash.Wyhash.hash(name_hash, path);
+    return if (hash == 0) 1 else hash;
+}
 
 pub fn nameHash(name: []const u8) u64 {
     if (name.len == 0) assert.panic("hashing an empty name; skip empty names before calling nameHash()", .{});
@@ -221,7 +244,7 @@ pub const Facts = struct {
     }
 
     /// Where a definition is and whether code outside its module can use it.
-    pub const Place = struct { at: [2]u32, public: bool, member: bool = false, importable: bool = false, unmarked: []const u8 = "" };
+    pub const Place = struct { at: [2]u32, public: bool, member: bool = false, importable: bool = false, unmarked: []const u8 = "", local: bool = false, delete: [2]u32 = .{ 0, 0 } };
 
     /// Adds `found`, sorted and without repeats, as one file's references.
     pub fn addReferences(self: *Facts, found: []Reference) error{LimitExceeded}!void {
@@ -252,6 +275,9 @@ pub const Facts = struct {
             .member = place.member,
             .importable = place.importable,
             .unmarked = place.unmarked,
+            .local = place.local,
+            .delete_start = place.delete[0],
+            .delete_end = place.delete[1],
         });
     }
 

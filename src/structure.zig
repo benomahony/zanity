@@ -12,7 +12,6 @@ const Facts = facts_module.Facts;
 const Finding = facts_module.Finding;
 const Shape = facts_module.Shape;
 const Definition = facts_module.Definition;
-const nameHash = facts_module.nameHash;
 const Reference = facts_module.Reference;
 const twins_module = @import("twins.zig");
 const Io = std.Io;
@@ -201,19 +200,28 @@ fn deadSymbols(facts: *Facts, findings: *memory.Bounded(Finding), scratch: ?*Liv
     const before = findings.len;
     const references = facts.references.items();
     std.mem.sort(Reference, references, {}, Reference.before);
-    var live = Liveness.initLiveness(facts.definitions.items(), scratch);
+    const definitions = facts.definitions.items();
+    var live = Liveness.initLiveness(definitions, scratch);
     live.propagate(references);
-    for (facts.definitions.items()) |d| {
-        if (d.public or !candidate(d)) continue;
-        const hash = nameHash(d.name);
+    // Liveness is done with `others`, so it holds the definitions --fix deletes.
+    var removing: usize = 0;
+    if (scratch) |room| for (definitions) |d| {
+        if (d.delete_end <= d.delete_start or !isDead(&live, references, d)) continue;
+        room.others[removing] = d.key();
+        removing += 1;
+    };
+    const removed = if (scratch) |room| deletable(references, room.others[0..removing]) else &.{};
+    for (definitions) |d| {
+        if (!isDead(&live, references, d)) continue;
+        const hash = d.key();
         const mentioned = mentions(references, hash);
-        const dead = if (live.index(hash)) |i| !live.alive[i] else !mentioned;
-        if (!dead) continue;
         const message = if (mentioned)
             try facts.text.format("'{s}' is {s} {s} that only unused code, or '{s}' itself, refers to, so it is code to read and maintain that never runs.", .{ d.name, article(d.kind), d.kind, d.name })
         else
             try facts.text.format("'{s}' is {s} {s} that nothing refers to, so it is code to read and maintain that never runs.", .{ d.name, article(d.kind), d.kind });
-        try findings.add(.{ .path = d.path, .line = d.line, .column = d.column, .rule = "dead-symbol", .message = message });
+        const deleted = d.delete_end > d.delete_start and sortedHas(removed, hash);
+        const edit: ?facts_module.Edit = if (deleted) .{ .start = d.delete_start, .end = d.delete_end, .replacement = "" } else null;
+        try findings.add(.{ .path = d.path, .line = d.line, .column = d.column, .rule = "dead-symbol", .message = message, .edit = edit });
     }
     if (references.len > 1 and Reference.before({}, references[references.len - 1], references[0])) assert.panic("the {d} references were not sorted before searching them; deadSymbols() must sort them first", .{references.len});
     if (findings.len - before > facts.definitions.len) assert.panic("dead-symbol reported {d} findings for {d} definitions; each definition can be reported once", .{ findings.len - before, facts.definitions.len });
@@ -236,8 +244,64 @@ fn article(kind: []const u8) []const u8 {
     return if (vowel) "an" else "a";
 }
 
+/// Whether `d` is reported as dead: no code that runs refers to it.
+fn isDead(live: *const Liveness, references: []const Reference, d: Definition) bool {
+    if (live.alive.len != live.names.len) assert.panic("deciding whether '{s}' is dead with {d} names and {d} flags; initLiveness() gives every name a flag", .{ d.name, live.names.len, live.alive.len });
+    if (d.public or !candidate(d)) return false;
+    const hash = d.key();
+    if (references.len > 1 and Reference.before({}, references[references.len - 1], references[0])) assert.panic("deciding whether '{s}' is dead from {d} unsorted references; sort them by name first", .{ d.name, references.len });
+    return if (live.index(hash)) |i| !live.alive[i] else !mentions(references, hash);
+}
+
+/// Of the dead definitions `--fix` could delete, by `keys`, those it can delete together: each
+/// one that only the others refer to. One that dead code it leaves in place refers to stays, so
+/// that code still compiles. Returns them sorted, reusing `keys`.
+fn deletable(references: []const Reference, keys: []u64) []const u64 {
+    for (keys) |k| if (k == 0) assert.panic("asked which of {d} dead definitions to delete, one keyed 0; Definition.key() never returns 0", .{keys.len});
+    if (references.len > 1 and Reference.before({}, references[references.len - 1], references[0])) assert.panic("choosing deletions from {d} unsorted references; sort them by name first", .{references.len});
+    std.mem.sort(u64, keys, {}, std.sort.asc(u64));
+    // Each pass drops at most one key and re-sorts, so the searches always see sorted keys.
+    for (0..keys.len + 1) |_| {
+        const kept = keys[firstAtLeast(keys, 1)..];
+        const drop = for (kept) |*k| {
+            if (heldOutside(references, kept, k.*)) break k;
+        } else return kept;
+        drop.* = 0;
+        std.mem.sort(u64, keys, {}, std.sort.asc(u64));
+    }
+    assert.panic("which of {d} dead definitions to delete was still changing after {d} passes; each pass keeps at least one fewer", .{ keys.len, keys.len + 1 });
+}
+
 /// Whether any reference names `hash`; `sorted` is ordered by name.
 fn mentions(sorted: []const Reference, hash: u64) bool {
+    if (hash == 0) assert.panic("asked whether {d} references mention the 0 hash; nameHash() never returns 0 for a name", .{sorted.len});
+    const low = firstNamed(sorted, hash);
+    if (low > sorted.len) assert.panic("the first reference to a name is at {d} of {d}; firstNamed() stays within the slice", .{ low, sorted.len });
+    return low < sorted.len and sorted[low].name == hash;
+}
+
+/// Whether anything other than `key` itself and the definitions `kept` refers to `key`.
+fn heldOutside(references: []const Reference, kept: []const u64, key: u64) bool {
+    if (key == 0) assert.panic("asked who refers to the 0 key among {d} kept; keys are never 0", .{kept.len});
+    if (kept.len > 0 and kept[0] == 0) assert.panic("{d} kept keys start with 0; deletable() passes only the nonzero ones", .{kept.len});
+    var at = firstNamed(references, key);
+    while (at < references.len and references[at].name == key) : (at += 1) {
+        const holder = references[at].holder;
+        if (holder != key and (holder == 0 or !sortedHas(kept, holder))) return true;
+    }
+    return false;
+}
+
+/// Whether `sorted`, in ascending order, holds `hash`.
+fn sortedHas(sorted: []const u64, hash: u64) bool {
+    if (hash == 0) assert.panic("asked whether {d} keys hold the 0 hash; keys are never 0", .{sorted.len});
+    const at = firstAtLeast(sorted, hash);
+    if (at > sorted.len) assert.panic("the first key at least the one sought is at {d} of {d}; firstAtLeast() stays within the slice", .{ at, sorted.len });
+    return at < sorted.len and sorted[at] == hash;
+}
+
+/// Where the first reference to `hash` or a higher name sits in `sorted`, ordered by name.
+fn firstNamed(sorted: []const Reference, hash: u64) usize {
     var low: usize = 0;
     var high: usize = sorted.len;
     while (low < high) {
@@ -246,7 +310,7 @@ fn mentions(sorted: []const Reference, hash: u64) bool {
     }
     if (low > sorted.len) assert.panic("searched {d} references and landed at {d}, past the end", .{ sorted.len, low });
     if (low > 0 and sorted[low - 1].name >= hash) assert.panic("the reference before position {d} is not below the name sought; sort the references by name first", .{low});
-    return low < sorted.len and sorted[low].name == hash;
+    return low;
 }
 
 /// Which names only traced definitions have are reachable: referred to from module-level
@@ -320,7 +384,7 @@ fn hashesOf(definitions: []const Definition, out: []u64, traced_ones: bool) usiz
     var count: usize = 0;
     for (definitions) |d| {
         if (traced(d) != traced_ones) continue;
-        out[count] = nameHash(d.name);
+        out[count] = d.key();
         count += 1;
     }
     if (count > definitions.len) assert.panic("wrote {d} hashes from {d} definitions", .{ count, definitions.len });
@@ -344,7 +408,7 @@ fn firstAtLeast(sorted: []const u64, hash: u64) usize {
 /// name, or a method a protocol or interface fixes.
 fn candidate(d: Definition) bool {
     if (d.name.len == 0) assert.panic("{s}:{d}: a definition has no name; the @name capture matched an empty node", .{ d.path, d.line + 1 });
-    if (!check.contains(&.{ "function", "method", "class", "interface", "type", "macro" }, d.kind)) return false;
+    if (!check.contains(&.{ "function", "method", "class", "interface", "type", "macro", "import", "alias" }, d.kind)) return false;
     if (std.mem.startsWith(u8, d.name, "__") and std.mem.endsWith(u8, d.name, "__")) return false;
     if (check.contains(&rules.entry_points, d.name)) return false;
     const adapter = language.named(d.language) orelse assert.panic("{s}: a definition was recorded in language '{s}', which zanity doesn't know; facts.language comes from the adapter that checked the file", .{ d.path, d.language });

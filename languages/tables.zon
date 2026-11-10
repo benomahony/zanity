@@ -107,6 +107,8 @@
         .assertion_value = "$name={any}",
         .assertion_braces_doubled = true,
         .line_comment = "//",
+        .file_private = true,
+        .reflective_calls = .{ "refAllDecls", "refAllDeclsRecursive" },
         .allocating_calls = .{ "alloc", "create", "dupe", "dupeZ", "realloc", "alignedAlloc", "allocSentinel", "allocPrint", "allocPrintSentinel", "append", "appendSlice", "appendNTimes", "insert", "insertSlice", "addOne", "addManyAsSlice", "ensureTotalCapacity", "ensureUnusedCapacity", "ensureTotalCapacityPrecise", "initCapacity", "put", "putNoClobber", "getOrPut", "getOrPutValue", "toOwnedSlice", "readFileAlloc", "readToEndAlloc", "join", "concat", "allocLowerString", "allocUpperString" },
         .initializer_prefixes = .{ "init", "main", "build" },
         .test_file_suffixes = .{"_test.zig"},

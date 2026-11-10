@@ -1,5 +1,4 @@
 const std = @import("std");
-const assert = std.debug.assert;
 
 fn f(a: []const u8, b: usize) void {
     // TODO: say why this must hold and what to look at when it fails.

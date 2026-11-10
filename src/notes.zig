@@ -102,6 +102,9 @@ pub const NameCounts = struct {
     pair_keys: []u64,
     pairs: []facts_module.Reference,
     pairs_used: memory.Bounded(u32),
+    /// The names of the file's top-level definitions no other file can name, which drain()
+    /// records under their file's hash.
+    privates: memory.Bounded(u64),
 
     pub fn initNameCounts(gpa: std.mem.Allocator, capacity: u32) std.mem.Allocator.Error!NameCounts {
         if (capacity == 0) assert.panic("NameCounts was given no room; size it from memory.Limits.per_file", .{});
@@ -118,7 +121,25 @@ pub const NameCounts = struct {
             .pair_keys = pair_keys,
             .pairs = try memory.reserveUninitialized(gpa, facts_module.Reference, slots),
             .pairs_used = try .initBounded(gpa, capacity, "distinct places names are referred to from in one file"),
+            .privates = try .initBounded(gpa, capacity, "file-private definitions in one file"),
         };
+    }
+
+    /// Records that the name hashing to `hash` is defined at the top of the file, where only the
+    /// file can name it.
+    pub fn private(self: *NameCounts, hash: u64) error{LimitExceeded}!void {
+        if (hash == 0) assert.panic("recording a file-private name with the 0 hash; nameHash() never returns 0 for a name", .{});
+        const before = self.privates.len;
+        try self.privates.add(hash);
+        if (self.privates.len != before + 1) assert.panic("recorded a file-private name but holds {d}, from {d}; Bounded.add() adds one", .{ self.privates.len, before });
+    }
+
+    /// Whether the file refers to the name hashing to `hash` anywhere other than where it is defined.
+    pub fn mentioned(self: *const NameCounts, hash: u64) bool {
+        if (hash == 0) assert.panic("asking whether the file mentions the 0 hash; nameHash() never returns 0 for a name", .{});
+        const seen = self.count(hash);
+        if (seen < -@as(i32, @intCast(self.used.len + 1))) assert.panic("a name is counted {d}, below minus the {d} names in the table; each definition subtracts one", .{ seen, self.used.len });
+        return seen > 0;
     }
 
     pub fn distinct(self: *const NameCounts) usize {
@@ -196,25 +217,53 @@ pub const NameCounts = struct {
         self.used.clear();
         for (self.pairs_used.items()) |at| self.pair_keys[at] = 0;
         self.pairs_used.clear();
+        self.privates.clear();
         if (self.used.len != 0) assert.panic("reset left {d} names in the table; clear() must empty used", .{self.used.len});
         if (self.hashes.len == 0) assert.panic("reset an unallocated table; call initNameCounts first", .{});
     }
 
     /// Each name counted above zero, with each place it is referred to from, into `out`; then
-    /// empties the table.
-    pub fn drain(self: *NameCounts, out: *memory.Bounded(facts_module.Reference)) error{LimitExceeded}!void {
+    /// empties the table. A file-private name, as a reference or a holder, is recorded under its
+    /// hash in the file at `path`, and is kept alive from module level when the file `reflects`
+    /// on all its declarations.
+    pub fn drain(self: *NameCounts, out: *memory.Bounded(facts_module.Reference), path: []const u8, reflects: bool) error{LimitExceeded}!void {
         const before = out.len;
         if (self.hashes.len == 0) assert.panic("draining an unallocated table; call initNameCounts first", .{});
+        if (path.len == 0 and self.privates.len > 0) assert.panic("draining {d} file-private names with no file to key them by; pass facts.path", .{self.privates.len});
+        const privates = self.privates.items();
+        std.mem.sort(u64, privates, {}, std.sort.asc(u64));
         for (self.pairs_used.items()) |at| {
-            if (self.count(self.pairs[at].name) > 0) try out.add(self.pairs[at]);
+            var pair = self.pairs[at];
+            if (self.count(pair.name) > 0) {
+                pair.name = localKey(privates, path, pair.name);
+                if (pair.holder != 0) pair.holder = localKey(privates, path, pair.holder);
+                try out.add(pair);
+            }
             self.pair_keys[at] = 0;
         }
         if (out.len - before > self.pairs_used.len) assert.panic("drained {d} references from a table of {d}; each slot gives at most one", .{ out.len - before, self.pairs_used.len });
+        if (reflects) for (privates) |hash| try out.add(.{ .name = localKey(privates, path, hash) });
+        self.privates.clear();
         self.pairs_used.clear();
         for (self.used.items()) |at| self.hashes[at] = 0;
         self.used.clear();
     }
 };
+
+/// The hash a reference to `hash` is recorded under: the file's own, when `sorted` file-private
+/// names hold it.
+fn localKey(sorted: []const u64, path: []const u8, hash: u64) u64 {
+    if (hash == 0) assert.panic("{s}: keying the 0 hash; only nonzero name hashes are referred to", .{path});
+    if (sorted.len > 1 and sorted[0] > sorted[sorted.len - 1]) assert.panic("{s}: {d} file-private names are not sorted; drain() sorts them first", .{ path, sorted.len });
+    var low: usize = 0;
+    var high: usize = sorted.len;
+    while (low < high) {
+        const middle = low + (high - low) / 2;
+        if (sorted[middle] < hash) low = middle + 1 else high = middle;
+    }
+    const found = low < sorted.len and sorted[low] == hash;
+    return if (found) facts_module.localHash(path, hash) else hash;
+}
 
 /// Records the calls `ctx` makes by bare name, other than to its own locals, and how many
 /// parameters it declares, for the cross-file call graph.

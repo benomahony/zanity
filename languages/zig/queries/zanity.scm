@@ -264,6 +264,24 @@
       (boolean)
     ]) @definition.constant)
 
+; A file-level name for another file, `const ts = @import("ts.zig")`, or for a declaration reached
+; through one, `const Allocator = std.mem.Allocator`.
+(source_file
+  (variable_declaration
+    (identifier) @name
+    "="
+    .
+    (builtin_function
+      (builtin_identifier) @_import
+      (#eq? @_import "@import"))) @definition.import)
+
+(source_file
+  (variable_declaration
+    (identifier) @name
+    "="
+    .
+    (field_expression)) @definition.alias)
+
 [
   (while_statement)
   (for_statement)

@@ -214,6 +214,12 @@ pub const Tables = struct {
     protocol_affix: []const u8 = "",
     /// Prefix bytes that mark a name private by convention, such as `_` in Python.
     private_prefixes: []const u8 = "",
+    /// Whether a top-level name that is not importable can be named only in its own file, as in
+    /// Zig, and not across a package, as in Go.
+    file_private: bool = false,
+    /// Calls that refer to every declaration of a file by reflection, such as Zig's
+    /// `std.testing.refAllDecls(@This())`, so none of its file-private names is dead.
+    reflective_calls: []const []const u8 = &.{},
 };
 
 /// A comparison operator or method, such as `==` or `contains`, and the specific checks that show

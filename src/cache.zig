@@ -23,7 +23,7 @@ const revision_bytes = 8;
 /// Comptime branches allowed for hashing every source file of the analyzer into its revision.
 const analyzer_hash_quota = 10_000_000;
 
-const cache_format = "source-analysis-2";
+const cache_format = "source-analysis-3";
 
 /// The source code that produces local findings and facts. Its compile-time digest makes a rebuilt
 /// zanity miss old rows automatically when checker logic, name tables or parser revisions change.
@@ -190,6 +190,7 @@ fn validateDefinitions(snapshot: Snapshot, run: Replay) ReplayError!void {
     for (snapshot.definitions) |definition| {
         if (!std.mem.eql(u8, definition.path, run.path) or !std.mem.eql(u8, definition.language, run.language)) return error.InvalidCache;
         if (definition.name.len == 0 or definition.unmarked.len == 0) return error.InvalidCache;
+        if (definition.delete_end < definition.delete_start) return error.InvalidCache;
     }
     for (snapshot.abstractions) |abstraction| {
         if (!std.mem.eql(u8, abstraction.path, run.path) or !std.mem.eql(u8, abstraction.language, run.language)) return error.InvalidCache;
@@ -238,6 +239,9 @@ fn commitFacts(snapshot: Snapshot, run: Replay) error{LimitExceeded}!void {
         .member = definition.member,
         .importable = definition.importable,
         .unmarked = try run.text.copy(definition.unmarked),
+        .local = definition.local,
+        .delete_start = definition.delete_start,
+        .delete_end = definition.delete_end,
     });
     for (snapshot.functions) |function| try facts.functions.add(.{ .path = run.path, .name = try run.text.copy(function.name), .method = function.method, .line = function.line, .column = function.column, .parameters = function.parameters, .types = try run.text.copy(function.types) });
     for (snapshot.calls) |call| try facts.calls.add(.{ .caller = @intCast(first + call.caller), .callee = try run.text.copy(call.callee), .reach = call.reach, .arguments = call.arguments, .types = try run.text.copy(call.types) });

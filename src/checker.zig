@@ -16,6 +16,7 @@ const scope = @import("scope.zig");
 const unread = @import("unread.zig");
 const naming = @import("naming.zig");
 const check = @import("check.zig");
+const nameHash = @import("facts.zig").nameHash;
 const Diagnostic = check.Diagnostic;
 const File = check.File;
 const Work = check.Work;
@@ -85,7 +86,10 @@ pub const Checker = struct {
         try hazards.checkLength(&file, root);
         try scope.checkWideScope(&file);
         const scratch = work.scratch;
-        try scratch.names.drain(&work.facts.references);
+        const reflects = for (file.tables.reflective_calls) |call| {
+            if (scratch.names.mentioned(nameHash(call))) break true;
+        } else false;
+        try scratch.names.drain(&work.facts.references, work.facts.path, reflects);
         const walked = file.s;
         if (walked.contexts.len != 0) assert.panic("{s}: the walk ended with {d} constructs still open; every node entered must be left", .{ work.facts.path, walked.contexts.len });
         if (walked.opened.len != 0) assert.panic("{s}: the walk ended with {d} nodes still open; every node entered must be left", .{ work.facts.path, walked.opened.len });
