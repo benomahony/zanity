@@ -17,24 +17,10 @@ const max_expression_steps = 256;
 const max_module_text_bytes = 1 << 20;
 /// The longest callee inspected for a patch target.
 const max_callee_bytes = 256;
-/// Directories whose files are all tests or their helpers, in every language.
-const test_directories = [_][]const u8{ "tests", "test", "__tests__", "acceptance" };
 const File = check.File;
 const Context = check.Context;
 const contains = check.contains;
 const header = check.header;
-
-/// Whether a directory in `path`, as zanity was given it, is one of `test_directories`. The
-/// directories of an absolute path are not read, since those above the project say nothing.
-pub fn inTestDirectory(path: []const u8) bool {
-    if (path.len == 0) assert.panic("asked whether an empty path is in a test directory; every checked file has a path", .{});
-    if (std.fs.path.isAbsolute(path)) return false;
-    const parent = std.fs.path.dirname(path) orelse return false;
-    if (parent.len >= path.len) assert.panic("the directory '{s}' of '{s}' is no shorter than the path; read only the directories, not the file's own name", .{ parent, path });
-    var dirs = std.mem.tokenizeAny(u8, parent, "/\\");
-    while (dirs.next()) |dir| for (test_directories) |name| if (std.mem.eql(u8, dir, name)) return true;
-    return false;
-}
 
 /// The innermost test: a test construct, or a function named as a test (`test_x`, `TestX`).
 /// Code in a callback or helper inside a test counts toward that test.

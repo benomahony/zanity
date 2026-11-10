@@ -14,7 +14,6 @@ const rules = @import("rules.zig");
 const memory = @import("memory.zig");
 const facts_module = @import("facts.zig");
 const Facts = facts_module.Facts;
-const suppress = @import("suppress.zig");
 const test_quality = @import("test_quality.zig");
 const strings = @import("strings.zig");
 /// The most test file prefixes and suffixes one language's tables hold.
@@ -286,7 +285,7 @@ pub const File = struct {
         for (self.tables.test_file_prefixes) |prefix| if (std.mem.startsWith(u8, base, prefix)) return true;
         for (self.tables.test_file_suffixes) |suffix| if (std.mem.endsWith(u8, base, suffix)) return true;
         if (self.tables.test_file_prefixes.len + self.tables.test_file_suffixes.len > max_test_file_affixes) assert.panic("{s} lists {d} test file prefixes and {d} suffixes in languages/tables.zon; more than 32 means the table is wrong", .{ self.tables.ecosystem, self.tables.test_file_prefixes.len, self.tables.test_file_suffixes.len });
-        return test_quality.inTestDirectory(path);
+        return inTestDirectory(path);
     }
 
     pub fn calleeIn(self: *File, ctx: Context, name: []const u8, table: []const []const u8) ?[]const u8 {
@@ -339,7 +338,7 @@ pub const File = struct {
         if (ts.ts_node_end_byte(node) > self.source.len) assert.panic("{s}: reporting {s} on {f}, which ends past the {d}-byte file; pass a node from the tree parsed from this file", .{ self.work.facts.path, rule, node.where(), self.source.len });
         if (!self.checker.enabled.enabled(rule)) return false;
         const start = ts.ts_node_start_point(node);
-        if (suppress.suppressed(self, start.row, rule)) return false;
+        if (suppressed(self, start.row, rule)) return false;
         try self.s.diagnostics.add(.{
             .line = start.row,
             .column = start.column,
@@ -375,3 +374,31 @@ pub const contains = strings.contains;
 
 pub const sameText = strings.sameText;
 pub const header = strings.header;
+
+/// Directories whose files are all tests or their helpers, in every language.
+const test_directories = [_][]const u8{ "tests", "test", "__tests__", "acceptance" };
+
+/// Whether a directory in `path`, as zanity was given it, is one of `test_directories`. The
+/// directories of an absolute path are not read, since those above the project say nothing.
+fn inTestDirectory(path: []const u8) bool {
+    if (path.len == 0) assert.panic("asked whether an empty path is in a test directory; every checked file has a path", .{});
+    if (std.fs.path.isAbsolute(path)) return false;
+    const parent = std.fs.path.dirname(path) orelse return false;
+    if (parent.len >= path.len) assert.panic("the directory '{s}' of '{s}' is no shorter than the path; read only the directories, not the file's own name", .{ parent, path });
+    var dirs = std.mem.tokenizeAny(u8, parent, "/\\");
+    while (dirs.next()) |dir| for (test_directories) |name| if (std.mem.eql(u8, dir, name)) return true;
+    return false;
+}
+
+/// Whether a `zanity: ignore` comment on `line` suppresses `rule` there.
+fn suppressed(self: *File, line: u32, rule: []const u8) bool {
+    const found = rules.find(rule) orelse unreachable;
+    if (!found.answers(rule)) assert.panic("rules.find('{s}') returned rule {s}, which does not answer to that name; rules.find() must return only a rule whose name or alias matches", .{ rule, found.name });
+    if (line > std.mem.count(u8, self.source, "\n")) assert.panic("{s}: checking suppressions on line {d} of a {d}-line file; pass a line number from the tree parsed from this file", .{ self.work.facts.path, line + 1, std.mem.count(u8, self.source, "\n") + 1 });
+    for (self.s.suppressions.items()) |s| {
+        if (s.line != line) continue;
+        if (s.len == 0) return true;
+        for (self.s.codes.items()[s.start..][0..s.len]) |code| if (found.answers(code)) return true;
+    }
+    return false;
+}

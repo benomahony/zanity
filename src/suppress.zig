@@ -2,7 +2,6 @@
 const std = @import("std");
 const assert = @import("assert.zig");
 const ts = @import("ts.zig");
-const rules = @import("rules.zig");
 const memory = @import("memory.zig");
 const check = @import("check.zig");
 const File = check.File;
@@ -17,18 +16,6 @@ pub fn collectSuppressions(self: *File) !void {
         try self.s.suppressions.add(.{ .line = ts.ts_node_start_point(t.node).row, .start = start, .len = self.s.codes.len - start });
     }
     if (self.s.suppressions.len > self.index.triples.len) assert.panic("{s}: {d} suppressions from {d} captured nodes; each needs its own comment", .{ self.work.facts.path, self.s.suppressions.len, self.index.triples.len });
-}
-
-pub fn suppressed(self: *File, line: u32, rule: []const u8) bool {
-    const found = rules.find(rule) orelse unreachable;
-    if (!found.answers(rule)) assert.panic("rules.find('{s}') returned rule {s}, which does not answer to that name; rules.find() must return only a rule whose name or alias matches", .{ rule, found.name });
-    if (line > std.mem.count(u8, self.source, "\n")) assert.panic("{s}: checking suppressions on line {d} of a {d}-line file; pass a line number from the tree parsed from this file", .{ self.work.facts.path, line + 1, std.mem.count(u8, self.source, "\n") + 1 });
-    for (self.s.suppressions.items()) |s| {
-        if (s.line != line) continue;
-        if (s.len == 0) return true;
-        for (self.s.codes.items()[s.start..][0..s.len]) |code| if (found.answers(code)) return true;
-    }
-    return false;
 }
 
 pub fn parseIgnore(codes: *memory.Bounded([]const u8), comment: []const u8) !bool {
