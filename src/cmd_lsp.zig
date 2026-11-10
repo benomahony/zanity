@@ -5,6 +5,7 @@ const zclig = @import("zclig");
 const infer = @import("infer.zig");
 const store = @import("store.zig");
 const lsp = @import("lsp.zig");
+const lsp_serve = @import("lsp_serve.zig");
 const Telemetry = @import("telemetry.zig").Telemetry;
 const main_root = @import("main.zig");
 const workspace = @import("workspace.zig");
@@ -41,7 +42,7 @@ pub fn runLsp(ctx: *zclig.Context, options: LspOptions) ![]const LspRow {
     };
     const out = ctx.runtime.out;
     var server = try lsp.LanguageServer.initLanguageServer(session_allocator, ws.io, out.writer, services);
-    if (!try server.serveEditorStdio()) ctx.status = .failure;
+    if (!try lsp_serve.serveEditorStdio(&server)) ctx.status = .failure;
     ctx.format = .plain;
     if (exe.len == 0) assert.panic("found this zanity at an empty path; executablePathAlloc() returns a path or fails", .{});
     if (ctx.format != .plain) assert.panic("zanity lsp left the {t} format on, which would print an empty result after the protocol; clear the output format before runLsp() returns", .{ctx.format});
