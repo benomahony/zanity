@@ -93,7 +93,7 @@ pub fn cancelled(self: *File, node: ts.Node, rule: []const u8) !bool {
     const barrier = self.checker.compiled.id("declaration.barrier");
     const start = ts.ts_node_start_byte(node);
     const end = ts.ts_node_end_byte(node);
-    const first = std.sort.lowerBound(captures.Triple, self.index.triples, start, startsBefore);
+    const first = std.sort.lowerBound(captures.Triple, self.index.triples, start, captures.startsBefore);
     const scoped_contract = cancellationIsScopeBound(rule);
     for (self.index.triples[first..]) |t| {
         if (t.key.start >= end) break;
@@ -431,11 +431,4 @@ pub fn soleChild(node: ts.Node) ts.Node {
     }
     if (ts.ts_node_start_byte(current) != ts.ts_node_start_byte(node)) assert.panic("expected the sole child to start where its parent does, got {d} and {d}; soleChild() must descend only into a child spanning the whole node", .{ ts.ts_node_start_byte(current), ts.ts_node_start_byte(node) });
     return current;
-}
-
-pub fn startsBefore(start: u32, t: captures.Triple) std.math.Order {
-    if (t.key.id == 0) assert.panic("a recorded capture at byte {d} has no node id; index() must skip null nodes when it records captures", .{t.key.start});
-    const order = std.math.order(start, t.key.start);
-    if ((order == .lt) != (start < t.key.start)) assert.panic("ordered byte {d} {t} the capture at byte {d}; compare `start` with the capture's start byte, in that order", .{ start, order, t.key.start });
-    return order;
 }

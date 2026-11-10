@@ -7,7 +7,6 @@ const ts = @import("ts.zig");
 const captures = @import("captures.zig");
 const rules = @import("rules.zig");
 const check = @import("check.zig");
-const hazards = @import("hazards.zig");
 const facts_module = @import("facts.zig");
 const File = check.File;
 const Context = check.Context;
@@ -144,7 +143,7 @@ pub fn capturesIn(self: *File, node: ts.Node, id: captures.Id) u32 {
     const start = ts.ts_node_start_byte(node);
     const end = ts.ts_node_end_byte(node);
     if (end > self.source.len) assert.panic("{s}: {f} ends past the {d}-byte file; pass a node from this file", .{ self.work.facts.path, node.where(), self.source.len });
-    const first = std.sort.lowerBound(captures.Triple, self.index.triples, start, hazards.startsBefore);
+    const first = std.sort.lowerBound(captures.Triple, self.index.triples, start, captures.startsBefore);
     var count: u32 = 0;
     for (self.index.triples[first..]) |t| {
         if (t.key.start >= end) break;
@@ -161,7 +160,7 @@ fn readBody(self: *File, ctx: Context, body: *Body) bool {
     if (body.count < 2 * rules.min_extract_statements) return false;
     const start = ts.ts_node_start_byte(body.statements[0]);
     const end = ts.ts_node_end_byte(body.statements[body.count - 1]);
-    const first = std.sort.lowerBound(captures.Triple, self.index.triples, start, hazards.startsBefore);
+    const first = std.sort.lowerBound(captures.Triple, self.index.triples, start, captures.startsBefore);
     body.ids = FlowIds.forQuery(self.checker.compiled);
     const ids = body.ids;
     if (first > self.index.triples.len) assert.panic("{s}: the body's captures start at {d}, past the {d} recorded; lowerBound searches within them", .{ self.work.facts.path, first, self.index.triples.len });
@@ -261,7 +260,7 @@ fn escapes(self: *File, exit: ts.Node, statement: ts.Node, loop: ?captures.Id) b
     const from = ts.ts_node_start_byte(statement);
     const at = ts.ts_node_start_byte(exit);
     if (at < from) assert.panic("{s}: the exit {f} starts before its statement {f}; statementAt() must place it inside", .{ self.work.facts.path, exit.where(), statement.where() });
-    const first = std.sort.lowerBound(captures.Triple, self.index.triples, from, hazards.startsBefore);
+    const first = std.sort.lowerBound(captures.Triple, self.index.triples, from, captures.startsBefore);
     for (self.index.triples[first..]) |t| {
         if (t.key.start > at) break;
         if (t.id == loop and ts.ts_node_end_byte(t.node) >= ts.ts_node_end_byte(exit)) return false;

@@ -103,6 +103,15 @@ pub const Compiled = struct {
 
 pub const Triple = struct { key: ts.Node.Key, node: ts.Node, id: Id };
 
+/// How byte `start` orders against where capture `t` starts, for std.sort.lowerBound to find the
+/// first of an Index's triples at or after a byte.
+pub fn startsBefore(start: u32, t: Triple) std.math.Order {
+    if (t.key.id == 0) assert.panic("a recorded capture at byte {d} has no node id; index() must skip null nodes when it records captures", .{t.key.start});
+    const order = std.math.order(start, t.key.start);
+    if ((order == .lt) != (start < t.key.start)) assert.panic("ordered byte {d} {t} the capture at byte {d}; compare `start` with the capture's start byte, in that order", .{ start, order, t.key.start });
+    return order;
+}
+
 pub const CaptureScratch = struct {
     triples: memory.Bounded(Triple),
     first: memory.Bounded(ts.Node),

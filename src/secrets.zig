@@ -12,7 +12,7 @@ const File = check.File;
 const Context = check.Context;
 const hazards = @import("hazards.zig");
 const soleChild = hazards.soleChild;
-const startsBefore = hazards.startsBefore;
+const startsBefore = captures.startsBefore;
 
 /// A string literal assigned to a name that ends in a secret's name, such as `db_password` or `apiKey`.
 /// Test code and values shaped like an environment variable's name are left alone.

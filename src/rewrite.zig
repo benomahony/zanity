@@ -8,7 +8,6 @@ const memory = @import("memory.zig");
 const check = @import("check.zig");
 const File = check.File;
 const contains = check.contains;
-const hazards = @import("hazards.zig");
 const Edit = @import("facts.zig").Edit;
 /// The most values one assertion's message can show.
 pub const max_condition_values = 4;
@@ -73,7 +72,7 @@ fn boundInside(self: *File, start: u32, end: u32, path: []const u8) bool {
     const root_end = rootLength(path);
     if (root_end == 0) assert.panic("{s}: the value '{s}' does not start with a name; skip values that don't start with a name before calling boundInside()", .{ self.work.facts.path, path });
     const names = self.checker.compiled.names;
-    const first = std.sort.lowerBound(captures.Triple, self.index.triples, start, hazards.startsBefore);
+    const first = std.sort.lowerBound(captures.Triple, self.index.triples, start, captures.startsBefore);
     for (self.index.triples[first..]) |t| {
         if (t.key.start >= end) break;
         if (!std.mem.eql(u8, names[t.id].family, "local.definition")) continue;

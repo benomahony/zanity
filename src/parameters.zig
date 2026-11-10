@@ -4,7 +4,6 @@ const assert = @import("assert.zig");
 const ts = @import("ts.zig");
 const captures = @import("captures.zig");
 const check = @import("check.zig");
-const hazards = @import("hazards.zig");
 const File = check.File;
 const Context = check.Context;
 const contains = check.contains;
@@ -266,7 +265,7 @@ fn referenced(self: *File, ctx: Context, parameter: ts.Node, reference: captures
     const end = ts.ts_node_end_byte(ctx.span);
     if (ts.ts_node_start_byte(parameter) < start or ts.ts_node_end_byte(parameter) > end) assert.panic("{s}: the parameter '{s}' at {f} lies outside its function {f}; capture parameters inside @function.outer", .{ self.work.facts.path, text, parameter.where(), ctx.node.where() });
     if (text.len == 0) assert.panic("{s}: the parameter at {f} has no name; @parameter.name must capture the identifier", .{ self.work.facts.path, parameter.where() });
-    const first = std.sort.lowerBound(captures.Triple, self.index.triples, start, hazards.startsBefore);
+    const first = std.sort.lowerBound(captures.Triple, self.index.triples, start, captures.startsBefore);
     for (self.index.triples[first..]) |t| {
         if (t.key.start >= end) break;
         if (t.id != reference or t.node.eql(parameter)) continue;

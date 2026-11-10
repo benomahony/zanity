@@ -4,7 +4,6 @@ const assert = @import("assert.zig");
 const ts = @import("ts.zig");
 const captures = @import("captures.zig");
 const check = @import("check.zig");
-const hazards = @import("hazards.zig");
 const File = check.File;
 const Edit = @import("facts.zig").Edit;
 
@@ -86,7 +85,7 @@ pub fn checkWideScope(self: *File) !void {
 fn gather(self: *File, ids: Ids, statement: ts.Node) !?Group {
     const end = ts.ts_node_end_byte(statement);
     if (end <= ts.ts_node_start_byte(statement)) assert.panic("{s}: @declaration.outer matched the empty {f}; capture the declaration statement", .{ self.work.facts.path, statement.where() });
-    const first = std.sort.lowerBound(captures.Triple, self.index.triples, ts.ts_node_start_byte(statement), hazards.startsBefore);
+    const first = std.sort.lowerBound(captures.Triple, self.index.triples, ts.ts_node_start_byte(statement), captures.startsBefore);
     var group: Group = .{ .statement = statement };
     for (self.index.triples[first..]) |t| {
         if (t.key.start >= end) break;
@@ -178,7 +177,7 @@ fn pureInitializer(self: *File, ids: Ids, group: *const Group, target: ts.Node) 
     const end = ts.ts_node_end_byte(statement);
     const between = self.source[group.after()..ts.ts_node_start_byte(target)];
     if (between.len > self.source.len) assert.panic("{s}: {d} bytes lie between {f} and {f}, more than the file holds; the target block must start after the declaration ends, as checkGroup() asserts", .{ self.work.facts.path, between.len, statement.where(), target.where() });
-    const first = std.sort.lowerBound(captures.Triple, self.index.triples, ts.ts_node_start_byte(statement), hazards.startsBefore);
+    const first = std.sort.lowerBound(captures.Triple, self.index.triples, ts.ts_node_start_byte(statement), captures.startsBefore);
     for (self.index.triples[first..]) |t| {
         if (t.key.start >= end) break;
         if (t.id == ids.effect) return false;
@@ -209,7 +208,7 @@ fn wideScopeMessage(self: *File, group: *const Group, line: u32) ![]const u8 {
 fn findUses(self: *File, ids: Ids, group: *const Group, home: ts.Node) !Uses {
     const end = ts.ts_node_end_byte(home);
     if (group.after() > end) assert.panic("{s}: the declaration {f} ends after its block {f}; pass the block that encloses the declaration, from enclosing()", .{ self.work.facts.path, group.statement.where(), home.where() });
-    const first = std.sort.lowerBound(captures.Triple, self.index.triples, group.after(), hazards.startsBefore);
+    const first = std.sort.lowerBound(captures.Triple, self.index.triples, group.after(), captures.startsBefore);
     var uses: Uses = .{};
     for (self.index.triples[first..]) |t| {
         if (t.key.start >= end) break;
@@ -267,7 +266,7 @@ fn shadowed(self: *File, ids: Ids, after: u32, reference: ts.Node) !bool {
     const text = reference.text(self.source);
     const at = ts.ts_node_start_byte(reference);
     if (at < after) assert.panic("{s}: the reference {f} comes before the declaration it might use ends at byte {d}; findUses() must start after the declaration", .{ self.work.facts.path, reference.where(), after });
-    const first = std.sort.lowerBound(captures.Triple, self.index.triples, after, hazards.startsBefore);
+    const first = std.sort.lowerBound(captures.Triple, self.index.triples, after, captures.startsBefore);
     const names = self.checker.compiled.names;
     for (self.index.triples[first..]) |t| {
         if (t.key.start >= at) break;

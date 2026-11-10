@@ -454,7 +454,7 @@ pub fn checkConstantCheck(self: *File, node: ts.Node) !void {
     if (end > self.source.len) assert.panic("framework check ends at {d}, beyond {d} source bytes; pass a node from the tree parsed from this file", .{ end, self.source.len });
     if (start >= end) assert.panic("framework check has empty span {d}..{d}; capture the whole check in the language's zanity.scm", .{ start, end });
     const value = self.checker.compiled.id("test.value") orelse return;
-    const first = std.sort.lowerBound(captures.Triple, self.index.triples, start, @import("hazards.zig").startsBefore);
+    const first = std.sort.lowerBound(captures.Triple, self.index.triples, start, captures.startsBefore);
     var count: usize = 0;
     for (self.index.triples[first..]) |entry| {
         if (entry.key.start >= end) break;

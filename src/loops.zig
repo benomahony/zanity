@@ -5,7 +5,6 @@ const assert = @import("assert.zig");
 const ts = @import("ts.zig");
 const captures = @import("captures.zig");
 const check = @import("check.zig");
-const hazards = @import("hazards.zig");
 const File = check.File;
 
 /// Exits named in a fix; the rest are counted.
@@ -23,7 +22,7 @@ pub fn unboundedFix(self: *File, loop: ts.Node) ![]const u8 {
     const text = self.work.text;
     const from = text.used;
     var found: usize = 0;
-    const first = std.sort.lowerBound(captures.Triple, self.index.triples, start + 1, hazards.startsBefore);
+    const first = std.sort.lowerBound(captures.Triple, self.index.triples, start + 1, captures.startsBefore);
     for (self.index.triples[first..]) |t| {
         if (t.key.start >= end) break;
         if (t.id != exit or !leaves(self, t.node, loop, loop_id)) continue;
@@ -48,7 +47,7 @@ fn leaves(self: *File, exit: ts.Node, loop: ts.Node, loop_id: ?captures.Id) bool
     if (std.mem.startsWith(u8, words, "return")) return true;
     if (!std.mem.startsWith(u8, words, "break")) return false;
     const at = ts.ts_node_start_byte(exit);
-    const first = std.sort.lowerBound(captures.Triple, self.index.triples, ts.ts_node_start_byte(loop) + 1, hazards.startsBefore);
+    const first = std.sort.lowerBound(captures.Triple, self.index.triples, ts.ts_node_start_byte(loop) + 1, captures.startsBefore);
     for (self.index.triples[first..]) |t| {
         if (t.key.start > at) break;
         if (t.id == loop_id and ts.ts_node_end_byte(t.node) >= ts.ts_node_end_byte(exit)) return false;

@@ -6,7 +6,6 @@ const assert = @import("assert.zig");
 const ts = @import("ts.zig");
 const captures = @import("captures.zig");
 const check = @import("check.zig");
-const hazards = @import("hazards.zig");
 const facts = @import("facts.zig");
 const File = check.File;
 const Context = check.Context;
@@ -122,7 +121,7 @@ fn argumentType(self: *File, argument: ts.Node) []const u8 {
     if (self.v.type_of) |of| {
         const start = ts.ts_node_start_byte(argument);
         const end = ts.ts_node_end_byte(argument);
-        const first = std.sort.lowerBound(captures.Triple, self.index.triples, start, hazards.startsBefore);
+        const first = std.sort.lowerBound(captures.Triple, self.index.triples, start, captures.startsBefore);
         for (self.index.triples[first..]) |t| {
             if (t.key.start >= end) break;
             if (t.id != of) continue;
