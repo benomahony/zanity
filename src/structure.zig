@@ -409,6 +409,8 @@ fn firstAtLeast(sorted: []const u64, hash: u64) usize {
 fn candidate(d: Definition) bool {
     if (d.name.len == 0) assert.panic("{s}:{d}: a definition has no name; the @name capture matched an empty node", .{ d.path, d.line + 1 });
     if (!check.contains(&.{ "function", "method", "class", "interface", "type", "macro", "import", "alias" }, d.kind)) return false;
+    // A test runner, framework or language calls functions and types by name, never an import.
+    if (check.contains(&naming.removable_kinds, d.kind)) return true;
     if (std.mem.startsWith(u8, d.name, "__") and std.mem.endsWith(u8, d.name, "__")) return false;
     if (check.contains(&rules.entry_points, d.name)) return false;
     const adapter = language.named(d.language) orelse assert.panic("{s}: a definition was recorded in language '{s}', which zanity doesn't know; facts.language comes from the adapter that checked the file", .{ d.path, d.language });

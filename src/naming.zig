@@ -145,7 +145,7 @@ const Local = struct { local: bool, delete: [2]u32 = .{ 0, 0 } };
 
 /// Definitions `--fix` deletes when nothing refers to them: a name for another file or for
 /// something declared there, which only names what already exists.
-const removable_kinds = [_][]const u8{ "import", "alias" };
+pub const removable_kinds = [_][]const u8{ "import", "alias" };
 
 /// The bytes of the whole lines `node` fills, with the line break after them, or 0 to 0 when
 /// other code shares those lines or a comment sits on the line above, which may be about it.

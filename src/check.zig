@@ -14,7 +14,6 @@ const rules = @import("rules.zig");
 const memory = @import("memory.zig");
 const facts_module = @import("facts.zig");
 const Facts = facts_module.Facts;
-const test_quality = @import("test_quality.zig");
 const strings = @import("strings.zig");
 /// The most test file prefixes and suffixes one language's tables hold.
 const max_test_file_affixes = 32;
