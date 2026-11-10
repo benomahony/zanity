@@ -2,13 +2,13 @@
 //! is mechanical: a condition that lets the job past a failed need, or a missing need on the one
 //! job that runs the checks.
 const std = @import("std");
+const Job = @import("workflow.zig").Job;
+const Workflow = @import("workflow.zig").Workflow;
+const holds = @import("workflow.zig").holds;
 const assert = @import("assert.zig");
 const memory = @import("memory.zig");
 const strings = @import("strings.zig");
-const release = @import("release.zig");
 const Edit = @import("facts.zig").Edit;
-const Job = release.Job;
-const Workflow = release.Workflow;
 
 /// The deepest indent an edit writes; a deeper workflow gets the message without an edit.
 const max_indent = 64;
@@ -24,7 +24,7 @@ pub fn fix(text: *memory.Text, workflow: *const Workflow, job: *const Job) !Fixe
     // The lines were read without their carriage returns, so an edit could split one from its newline.
     const editable = std.mem.indexOfScalar(u8, workflow.source, '\r') == null;
     for (job.needed()) |need| {
-        if (workflow.find(need) == null or release.holds(job.condition, need)) continue;
+        if (workflow.find(need) == null or holds(job.condition, need)) continue;
         return .{
             .text = try text.format("Its 'if: {s}' runs it after '{s}' fails; add '&& needs.{s}.result == 'success'' to it.", .{ strings.header(job.condition), need, need }),
             .edit = if (editable) try conditionEdit(text, workflow, job, need) else null,
@@ -48,7 +48,7 @@ pub fn fix(text: *memory.Text, workflow: *const Workflow, job: *const Job) !Fixe
 /// inside a `${{ }}` or double quotes that close it, or as a new last line of a block scalar.
 fn conditionEdit(text: *memory.Text, workflow: *const Workflow, job: *const Job, need: []const u8) !?Edit {
     if (need.len == 0) assert.panic("adding an empty need to the condition of job '{s}'; addNeed() drops empty names", .{job.id});
-    if (release.holds(job.condition, need)) assert.panic("asked to require '{s}' in the condition of job '{s}', which already holds it: '{s}'", .{ need, job.id, job.condition });
+    if (holds(job.condition, need)) assert.panic("asked to require '{s}' in the condition of job '{s}', which already holds it: '{s}'", .{ need, job.id, job.condition });
     const condition = job.condition;
     if (condition.len == 0) return null;
     const start = at(workflow, condition);
