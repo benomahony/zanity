@@ -23,14 +23,11 @@ const assert = @import("assert.zig");
 const ts = @import("ts.zig");
 const captures = @import("captures.zig");
 const rules = @import("rules.zig");
-const memory = @import("memory.zig");
 const check = @import("check.zig");
 const File = check.File;
 const Context = check.Context;
 const contains = check.contains;
 const header = check.header;
-const messages = @import("messages.zig");
-const rewrite = @import("rewrite.zig");
 const strings = @import("strings.zig");
 /// The longest option text inspected for a risky setting.
 pub const max_option_bytes = 512;

@@ -2,15 +2,10 @@
 const std = @import("std");
 const assert = @import("assert.zig");
 const ts = @import("ts.zig");
-const captures = @import("captures.zig");
 const rules = @import("rules.zig");
 const memory = @import("memory.zig");
 const check = @import("check.zig");
 const File = check.File;
-const Context = check.Context;
-const contains = check.contains;
-const sameText = check.sameText;
-const weak = @import("weak.zig");
 
 pub fn collectSuppressions(self: *File) !void {
     if (self.s.suppressions.len != 0) assert.panic("{s}: {d} suppression comments left from the previous file; clearFile must run first", .{ self.work.facts.path, self.s.suppressions.len });

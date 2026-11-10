@@ -4,14 +4,10 @@ const std = @import("std");
 const assert = @import("assert.zig");
 const ts = @import("ts.zig");
 const captures = @import("captures.zig");
-const rules = @import("rules.zig");
 const memory = @import("memory.zig");
 const check = @import("check.zig");
 const File = check.File;
-const Context = check.Context;
 const contains = check.contains;
-const header = check.header;
-const messages = @import("messages.zig");
 const hazards = @import("hazards.zig");
 const Edit = @import("facts.zig").Edit;
 /// The most values one assertion's message can show.

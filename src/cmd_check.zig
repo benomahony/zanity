@@ -5,7 +5,6 @@ const assert = @import("assert.zig");
 const Io = std.Io;
 const Allocator = std.mem.Allocator;
 const zclig = @import("zclig");
-const language = @import("language.zig");
 const strings = @import("strings.zig");
 const batch = @import("batch.zig");
 const rules = @import("rules.zig");

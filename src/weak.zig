@@ -7,7 +7,6 @@ const ts = @import("ts.zig");
 const scope = @import("scope.zig");
 const captures = @import("captures.zig");
 const rules = @import("rules.zig");
-const memory = @import("memory.zig");
 const check = @import("check.zig");
 const File = check.File;
 const Context = check.Context;
@@ -16,7 +15,6 @@ const sameText = check.sameText;
 const Call = check.Call;
 const Assertion = check.Assertion;
 const Note = check.Note;
-const suppress = @import("suppress.zig");
 
 pub fn restatedType(self: *File, function: *Context, node: ts.Node, condition: ts.Node) !void {
     if (function.family != .function) assert.panic("{s}: checking restated types against the {t} {f}, which is not a function; call restatedType() only with the enclosing function's context", .{ self.work.facts.path, function.family, function.node.where() });

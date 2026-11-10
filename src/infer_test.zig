@@ -3,7 +3,6 @@
 const std = @import("std");
 const assert = @import("assert.zig");
 const golden = @import("golden_test.zig");
-const behaviour = golden.behaviour;
 const expectOutput = golden.expectOutput;
 const exited = golden.exited;
 const paths = @import("paths");

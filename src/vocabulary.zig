@@ -16,7 +16,6 @@ const Anchor = config_module.Anchor;
 const Term = config_module.Term;
 const Facts = facts_module.Facts;
 const Finding = facts_module.Finding;
-const Definition = facts_module.Definition;
 
 /// Words in a name the vocabulary checks look at; longer names are checked by their first ones.
 const max_words = 16;

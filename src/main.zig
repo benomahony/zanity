@@ -1,19 +1,14 @@
 const std = @import("std");
 const Io = std.Io;
-const Allocator = std.mem.Allocator;
 
-const adapters = @import("adapters");
 const zclig = @import("zclig");
-const zrich = zclig.zrich;
 
 const assert = @import("assert.zig");
 /// One finding as `--json` and `--plain` publish it. Lines and columns count from 1. When zanity
 /// can fix it, the edit replaces bytes `edit_start` to `edit_end` of the file with `edit_text`.
 const baseline = @import("baseline.zig");
 const Row = baseline.Row;
-const batch = @import("batch.zig");
 const calibrate = @import("calibrate.zig");
-const check = @import("check.zig");
 const cmd_check = @import("cmd_check.zig");
 const runCheck = cmd_check.runCheck;
 const renderHuman = cmd_check.renderHuman;
@@ -32,34 +27,8 @@ const UpgradeRow = cmd_upgrade.UpgradeRow;
 const runUpgrade = cmd_upgrade.runUpgrade;
 const previewUpgrade = cmd_upgrade.previewUpgrade;
 const renderUpgrade = cmd_upgrade.renderUpgrade;
-const config = @import("config.zig");
-const Facts = @import("facts.zig").Facts;
-const Finding = @import("facts.zig").Finding;
-const fix_file = @import("fix_file.zig");
-const graph = @import("graph.zig");
-const Ignore = @import("ignore.zig").Ignore;
-const infer = @import("infer.zig");
-const language = @import("language.zig");
-const Live = @import("live.zig").Live;
-const lsp = @import("lsp.zig");
-const memory = @import("memory.zig");
-const naming = @import("naming.zig");
-const Notice = @import("notice.zig").Notice;
-const parameters = @import("parameters.zig");
-const project = @import("project.zig");
-const report = @import("report.zig");
-const rules = @import("rules.zig");
-const sqlite = @import("sqlite.zig");
-const starter = @import("init.zig");
-const store = @import("store.zig");
-const strings = @import("strings.zig");
-const structure = @import("structure.zig");
-const Telemetry = @import("telemetry.zig").Telemetry;
 const triage = @import("triage.zig");
 const CheckOptions = triage.CheckOptions;
-const upgrade = @import("upgrade.zig");
-const vocabulary = @import("vocabulary.zig");
-const watch = @import("watch.zig");
 const workspace = @import("workspace.zig");
 const Workspace = workspace.Workspace;
 const workspace_init = @import("workspace_init.zig");
