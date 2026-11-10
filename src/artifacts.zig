@@ -5,7 +5,7 @@ const std = @import("std");
 const assert = @import("assert.zig");
 const rules = @import("rules.zig");
 const strings = @import("strings.zig");
-const ProjectRun = @import("project.zig").ProjectRun;
+const ProjectRun = @import("project_run.zig").ProjectRun;
 
 /// How much of a project file's line is inspected.
 pub const line_window_bytes = 512;

@@ -89,15 +89,7 @@ pub fn isProjectFile(relative: []const u8) bool {
     return false;
 }
 
-/// What checking the project files needs: where to read them and where to report.
-pub const ProjectRun = struct {
-    io: Io,
-    /// One extra byte beyond the largest accepted file, to detect truncated reads.
-    buffer: []u8,
-    facts: *Facts,
-    enabled: rules.Set,
-    findings: *memory.Bounded(Finding),
-};
+pub const ProjectRun = @import("project_run.zig").ProjectRun;
 
 /// Reports each relaxing setting in `paths`; with units collected, records each setting line and
 /// the files as a whole for --infer.
