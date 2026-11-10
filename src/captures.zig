@@ -317,7 +317,7 @@ fn listPredicate(name: []const u8, capture: u32, values: []const []const u8) Pre
     return .{ .ancestor = .{ .capture = capture, .kinds = values, .positive = positive } };
 }
 
-fn hasAnyAncestorKind(node: ts.Node, expected_kinds: []const []const u8) bool {
+pub fn hasAnyAncestorKind(node: ts.Node, expected_kinds: []const []const u8) bool {
     // Match any listed kind among strict ancestors; the captured node itself is excluded.
     if (expected_kinds.len == 0) assert.panic("#has-ancestor? names no node kinds; list at least one after the capture", .{});
     // The captured node belongs to the live syntax tree, and kinds come from the compiled
@@ -443,31 +443,6 @@ fn equalToString(nodes: []const ts.Node, value: []const u8, sense: Sense, text: 
     }
     if (nodes.len == 0 and !result) assert.panic("#eq? with '{s}' failed with no captures to compare; the predicate's capture must be in the same pattern, so fix it in the language's .scm files", .{value});
     return result;
-}
-
-test "ancestor predicates reach the root of deeply nested single-line source" {
-    const language = @import("language.zig");
-    const nesting = 4100;
-    const source = try std.testing.allocator.alloc(u8, nesting * 2 + 1);
-    defer std.testing.allocator.free(source);
-    @memset(source[0..nesting], '(');
-    source[nesting] = 'x';
-    @memset(source[nesting + 1 ..], ')');
-    const parser = ts.ts_parser_new() orelse return error.OutOfMemory;
-    defer ts.ts_parser_delete(parser);
-    _ = ts.ts_parser_set_language(parser, @ptrCast(language.forPath("a.py").?.grammar()));
-    const tree = ts.ts_parser_parse_string(parser, null, source.ptr, @intCast(source.len)) orelse return error.ParseFailed;
-    defer ts.ts_tree_delete(tree);
-    const root = ts.ts_tree_root_node(tree);
-    var leaf = root;
-    for (0..ts.ts_node_descendant_count(root)) |_| {
-        if (ts.ts_node_named_child_count(leaf) == 0) break;
-        leaf = ts.ts_node_named_child(leaf, 0);
-    }
-    try std.testing.expectEqualStrings("x", source[ts.ts_node_start_byte(leaf)..ts.ts_node_end_byte(leaf)]);
-    const root_kind = std.mem.span(ts.ts_node_type(root));
-    try std.testing.expect(hasAnyAncestorKind(leaf, &.{root_kind}));
-    try std.testing.expect(!hasAnyAncestorKind(leaf, &.{"absent_kind"}));
 }
 
 test "#any-eq? needs a matching pair, so no pairs never match" {
