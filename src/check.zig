@@ -15,7 +15,6 @@ const memory = @import("memory.zig");
 const facts_module = @import("facts.zig");
 const Facts = facts_module.Facts;
 const suppress = @import("suppress.zig");
-const types = @import("types.zig");
 const test_quality = @import("test_quality.zig");
 const strings = @import("strings.zig");
 /// The most test file prefixes and suffixes one language's tables hold.

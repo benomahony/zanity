@@ -27,7 +27,7 @@ pub fn note(self: *File, node: ts.Node, id: captures.Id) !bool {
     } else if (v.write_target == id) {
         try repeats.noteWrite(self, node, text);
     } else if (v.reference_name == id) {
-        if (enabled.enabled("dead-symbol")) {
+        if (enabled.enabled("dead-symbol") and !self.index.marks(node, self.checker.compiled.id("reference.field"))) {
             const hash = facts_module.nameHash(text);
             try self.s.names.tally(hash, 1);
             try self.s.names.hold(hash, holderOf(self, node));

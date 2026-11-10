@@ -1,5 +1,6 @@
 rules: dead-symbol
 exit: 0
+fields.zig:2:7: warning [dead-symbol]
 ledger.zig:2:7: warning [dead-symbol]
 ledger.zig:3:7: warning [dead-symbol]
 ledger.zig:4:7: warning [dead-symbol]

@@ -7,7 +7,6 @@ const ts = @import("ts.zig");
 const captures = @import("captures.zig");
 const memory = @import("memory.zig");
 const tracing = @import("tracing.zig");
-const weak = @import("weak.zig");
 const types = @import("types.zig");
 const repeats = @import("repeats.zig");
 const notes = @import("notes.zig");

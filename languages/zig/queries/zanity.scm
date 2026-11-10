@@ -541,6 +541,16 @@
 ; Names the code refers to, for dead-symbol: every name other than where it is defined.
 (identifier) @reference.name
 
+; A field's own name, where it is declared or initialized, which names a member and never a
+; file-level declaration, so a field named like an import doesn't keep the import alive.
+(container_field
+  name: (identifier) @reference.field)
+
+(initializer_list
+  (assignment_expression
+    left: (field_expression
+      member: (identifier) @reference.field)))
+
 ; Statements that leave the block they are in, so code holding one can't move into a function.
 [
   (return_expression)
