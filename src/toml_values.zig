@@ -4,11 +4,68 @@ const std = @import("std");
 const assert = @import("assert.zig");
 const config_module = @import("config.zig");
 const Error = config_module.Error;
-const config_toml = @import("config_toml.zig");
-pub const max_items = config_toml.max_items;
-pub const TomlReader = config_toml.TomlReader;
+const file_name = config_module.file_name;
+/// The most items one list setting holds.
+pub const max_items = config_module.max_excludes;
 
-pub fn readKey(self: *TomlReader) ?[]const u8 {
+/// Where a reader is in zanity.toml's text, and the items of the list it is reading.
+pub const Cursor = struct {
+    bytes: []u8,
+    at: usize = 0,
+    items: [max_items][]const u8 = undefined,
+
+    pub fn line(self: *const Cursor) u32 {
+        if (self.at > self.bytes.len) assert.panic("counting the line of byte {d} in a {d}-byte file; nothing may move self.at past the end, so check the last place that advanced it", .{ self.at, self.bytes.len });
+        const counted = std.mem.count(u8, self.bytes[0..self.at], "\n") + 1;
+        if (counted > self.bytes.len + 1) assert.panic("counted {d} lines in {d} bytes, more lines than bytes plus one; count only the newlines before self.at", .{ counted, self.bytes.len });
+        return @intCast(counted);
+    }
+
+    pub fn fail(self: *const Cursor, comptime fmt: []const u8, args: anytype) Error {
+        if (self.at > self.bytes.len) assert.panic("reporting a problem at byte {d} of a {d}-byte file; fail() must be called with the reader inside the file", .{ self.at, self.bytes.len });
+        const written = std.fmt.bufPrint(&config_module.problem, "{s}:{d}: " ++ fmt, .{ file_name, self.line() } ++ args) catch config_module.problem[0..];
+        config_module.problem_len = written.len;
+        if (config_module.problem_len <= file_name.len) assert.panic("described a config problem as '{s}', with no detail; give the fail() call a description of what is wrong", .{config_module.problem[0..config_module.problem_len]});
+        return error.InvalidConfig;
+    }
+
+    /// The byte at the reading position, or null at the end of the file.
+    pub fn peek(self: *const Cursor) ?u8 {
+        if (self.at > self.bytes.len) assert.panic("reading at byte {d} of a {d}-byte file; nothing may move self.at past the end", .{ self.at, self.bytes.len });
+        if (self.at == self.bytes.len) return null;
+        const c = self.bytes[self.at];
+        if (self.at >= self.bytes.len) assert.panic("read byte {d} of a {d}-byte file; peek() must check the end before reading", .{ self.at, self.bytes.len });
+        return c;
+    }
+
+    /// Skips spaces and tabs, staying on the line.
+    pub fn skipSpaces(self: *Cursor) void {
+        const start = self.at;
+        while (self.peek()) |c| {
+            if (c != ' ' and c != '\t') break;
+            self.at += 1;
+        }
+        if (self.at < start) assert.panic("skipping spaces moved back from byte {d} to {d}; skipSpaces() must only move self.at forward", .{ start, self.at });
+        if (self.at > self.bytes.len) assert.panic("skipping spaces ran to byte {d} of {d}; skipSpaces() must stop at the end of the file", .{ self.at, self.bytes.len });
+    }
+
+    /// Skips spaces, newlines and comments between entries and list items.
+    pub fn skipBlank(self: *Cursor) void {
+        const start = self.at;
+        for (0..self.bytes.len + 1) |_| {
+            if (self.at == self.bytes.len) break;
+            switch (self.bytes[self.at]) {
+                ' ', '\t', '\r', '\n' => self.at += 1,
+                '#' => self.at = std.mem.indexOfScalarPos(u8, self.bytes, self.at, '\n') orelse self.bytes.len,
+                else => break,
+            }
+        }
+        if (self.at < start) assert.panic("skipping blanks moved back from byte {d} to {d}; skipBlank() must only move self.at forward", .{ start, self.at });
+        if (self.at > self.bytes.len) assert.panic("skipping blanks ran to byte {d} of {d}; skipBlank() must stop at the end of the file", .{ self.at, self.bytes.len });
+    }
+};
+
+pub fn readKey(self: *Cursor) ?[]const u8 {
     const start = self.at;
     while (self.at < self.bytes.len) : (self.at += 1) {
         const c = self.bytes[self.at];
@@ -19,7 +76,7 @@ pub fn readKey(self: *TomlReader) ?[]const u8 {
     return if (self.at == start) null else self.bytes[start..self.at];
 }
 
-pub fn readInteger(self: *TomlReader, key: []const u8) Error!i64 {
+pub fn readInteger(self: *Cursor, key: []const u8) Error!i64 {
     const start = self.at;
     while (self.peek()) |c| {
         if (!std.ascii.isDigit(c) and c != '_' and c != '-' and c != '+') break;
@@ -41,7 +98,7 @@ pub fn readInteger(self: *TomlReader, key: []const u8) Error!i64 {
 const toml_true = "true";
 const toml_false = "false";
 
-pub fn readBoolean(self: *TomlReader, key: []const u8) Error!bool {
+pub fn readBoolean(self: *Cursor, key: []const u8) Error!bool {
     const rest = self.bytes[self.at..];
     const value = if (std.mem.startsWith(u8, rest, toml_true)) true else if (std.mem.startsWith(u8, rest, toml_false)) false else return self.fail("'{s}' needs true or false, such as {s} = true.", .{ key, key });
     const length: usize = if (value) toml_true.len else toml_false.len;
@@ -52,7 +109,7 @@ pub fn readBoolean(self: *TomlReader, key: []const u8) Error!bool {
     return value;
 }
 
-pub fn readDecimal(self: *TomlReader, key: []const u8) Error!f64 {
+pub fn readDecimal(self: *Cursor, key: []const u8) Error!f64 {
     const start = self.at;
     while (self.peek()) |c| {
         if (!std.ascii.isDigit(c) and c != '.' and c != '_') break;
@@ -72,7 +129,7 @@ pub fn readDecimal(self: *TomlReader, key: []const u8) Error!f64 {
 }
 
 /// Reads a list of strings, which may span lines and end with a comma.
-pub fn readStrings(self: *TomlReader, key: []const u8) Error![]const []const u8 {
+pub fn readStrings(self: *Cursor, key: []const u8) Error![]const []const u8 {
     if (self.peek() != '[') return self.fail("'{s}' needs a list of strings, such as {s} = [\"a\", \"b\"].", .{ key, key });
     const start = self.at;
     self.at += 1;
@@ -99,7 +156,7 @@ pub fn readStrings(self: *TomlReader, key: []const u8) Error![]const []const u8 
     return self.fail("'{s}' opens a list that is never closed with ']'; add ']' after its last item.", .{key});
 }
 
-pub fn readString(self: *TomlReader, key: []const u8) Error![]const u8 {
+pub fn readString(self: *Cursor, key: []const u8) Error![]const u8 {
     if (self.at >= self.bytes.len) assert.panic("reading a string for '{s}' at byte {d} of {d}; call readString() only inside the file", .{ key, self.at, self.bytes.len });
     const quote = self.bytes[self.at];
     if (quote != '"' and quote != '\'') return self.fail("items in '{s}' must be quoted strings, such as \"recursion\".", .{key});
