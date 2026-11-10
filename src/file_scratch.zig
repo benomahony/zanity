@@ -10,15 +10,15 @@ const tracing = @import("tracing.zig");
 const types = @import("types.zig");
 const repeats = @import("repeats.zig");
 const notes = @import("notes.zig");
-const check = @import("check.zig");
-const Call = check.Call;
-const Context = check.Context;
-const Diagnostic = check.Diagnostic;
-const Owned = check.Owned;
-const Parameter = check.Parameter;
-const Suppression = check.Suppression;
-const Trail = check.Trail;
-const Weak = check.Weak;
+const constructs = @import("constructs.zig");
+const Call = constructs.Call;
+const Context = constructs.Context;
+const Diagnostic = constructs.Diagnostic;
+const Owned = constructs.Owned;
+const Parameter = constructs.Parameter;
+const Suppression = constructs.Suppression;
+const Trail = constructs.Trail;
+const Weak = constructs.Weak;
 
 pub const FileScratch = struct {
     contexts: memory.Bounded(Context),
