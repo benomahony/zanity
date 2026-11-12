@@ -12,6 +12,7 @@ const facts_module = @import("facts.zig");
 const Facts = facts_module.Facts;
 const Finding = facts_module.Finding;
 const Shape = facts_module.Shape;
+const Function = facts_module.Function;
 const Definition = facts_module.Definition;
 const Reference = facts_module.Reference;
 const twins_module = @import("twins.zig");
@@ -53,11 +54,16 @@ pub fn checkStructure(facts: *Facts, enabled: rules.Set, findings: *memory.Bound
     if (findings.len < before) assert.panic("cross-file structure checks dropped findings from {d} to {d}; they may only add", .{ before, findings.len });
 }
 
-fn byShape(_: void, a: Shape, b: Shape) bool {
+/// Orders shapes by testness and hash, then by file and place, so each group lists its functions
+/// in the same order however the run's files finished: function numbers follow that order.
+fn byShape(functions: []const Function, a: Shape, b: Shape) bool {
     if (a.size == 0 or b.size == 0) assert.panic("sorting a function shape of no nodes; recordShape() keeps only shapes of min_twin_nodes or more", .{});
     if (a.function == b.function and a.hash != b.hash) assert.panic("function {d} has two shapes; recordShape() records one per function", .{a.function});
     if (a.is_test != b.is_test) return !a.is_test;
     if (a.hash != b.hash) return a.hash < b.hash;
+    const order = std.mem.order(u8, functions[a.function].path, functions[b.function].path);
+    if (order != .eq) return order == .lt;
+    if (a.start != b.start) return a.start < b.start;
     return a.function < b.function;
 }
 
@@ -87,7 +93,7 @@ const max_cluster_bodies = 3;
 pub fn clusterUnits(facts: *Facts, sources: Sources) error{LimitExceeded}!void {
     if (!facts.collect_units) assert.panic("building --infer clusters when units aren't collected; call clusterUnits() only under --infer", .{});
     const shapes = facts.shapes.items();
-    std.mem.sort(Shape, shapes, {}, byShape);
+    std.mem.sort(Shape, shapes, facts.functions.items(), byShape);
     const before = facts.units.len;
     var start: usize = 0;
     while (start < shapes.len) {
@@ -149,7 +155,7 @@ fn clusterUnit(facts: *Facts, sources: Sources, group: []const Shape) error{Limi
 fn twins(facts: *Facts, findings: *memory.Bounded(Finding), sources: ?Sources) error{LimitExceeded}!void {
     const shapes = facts.shapes.items();
     const functions = facts.functions.items();
-    std.mem.sort(Shape, shapes, {}, byShape);
+    std.mem.sort(Shape, shapes, facts.functions.items(), byShape);
     var start: usize = 0;
     while (start < shapes.len) {
         const end = groupEnd(shapes, start);
@@ -447,4 +453,20 @@ fn singleImplementations(facts: *Facts, findings: *memory.Bounded(Finding)) erro
         if (first + count > implemented.len) assert.panic("counted {d} implementations of '{s}' from {d}, past the {d} recorded; the counting loop must stop at the end", .{ count, a.name, first, implemented.len });
     }
     if (findings.len - before > abstractions.len) assert.panic("single-impl-abstraction reported {d} findings for {d} abstractions; each can be reported once", .{ findings.len - before, abstractions.len });
+}
+
+test "shapes of one structure sort by file and place, whatever order their files finished in" {
+    const functions = [_]Function{
+        .{ .path = "b.py", .name = "late", .method = false, .line = 0, .column = 0 },
+        .{ .path = "a.py", .name = "second", .method = false, .line = 9, .column = 0 },
+        .{ .path = "a.py", .name = "first", .method = false, .line = 0, .column = 0 },
+    };
+    const size = rules.min_twin_nodes;
+    var shapes = [_]Shape{
+        .{ .function = 0, .hash = 7, .size = size, .start = 0, .end = 10 },
+        .{ .function = 1, .hash = 7, .size = size, .start = 90, .end = 100 },
+        .{ .function = 2, .hash = 7, .size = size, .start = 0, .end = 10 },
+    };
+    std.mem.sort(Shape, &shapes, @as([]const Function, &functions), byShape);
+    for ([_]u32{ 2, 1, 0 }, shapes) |expected, shape| try std.testing.expectEqual(expected, shape.function);
 }
