@@ -244,6 +244,8 @@
     },
     .{
         .ecosystem = "rust",
+        .import_style = .crate_path,
+        .import_suffixes = .{ ".rs", "/mod.rs" },
         .suppression_markers = .{ "NOSONAR", "lgtm[", "codeql[" },
         .fixed_signatures = .{ "fmt", "from", "try_from", "eq", "ne", "partial_cmp", "cmp", "hash", "deref", "deref_mut", "as_ref", "drop", "index", "index_mut", "add", "sub", "mul", "div", "poll", "visit_str", "serialize", "deserialize" },
         .stdin_reads = .{ "std::io::stdin", "io::stdin", "stdin", "rpassword::read_password" },

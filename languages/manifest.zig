@@ -19,6 +19,9 @@ pub const ImportStyle = enum {
     /// Dotted names from a source root, as `billing.ledger`; leading dots climb from the
     /// importing file's directory.
     dotted,
+    /// Module paths, as Rust's `crate::billing::Ledger`: from the crate root for `crate`, from the
+    /// parent module for each `super`, and from the importing file's own module otherwise.
+    crate_path,
 };
 
 pub const Tables = struct {

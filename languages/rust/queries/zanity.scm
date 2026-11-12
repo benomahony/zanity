@@ -419,3 +419,31 @@
 
 ; Attributes are siblings of their declaration and belong in its inference source.
 (attribute_item) @unit.prefix
+
+; A file's top-level `use` declarations, for cyclic-import, each marked @import.statement: the
+; module path each names and what it takes from it, written as it is, such as `Order`, `*` or
+; `ledger::Line` in a list. `mod billing;` only declares a child module, so it makes no edge;
+; `use` inside a function or an inline `mod tests` is not at the top level.
+(source_file
+  (use_declaration
+    argument: (scoped_identifier
+      name: (identifier) @import.name) @import.module) @import.statement)
+
+(source_file
+  (use_declaration
+    argument: (use_as_clause
+      path: (scoped_identifier
+        name: (identifier) @import.name) @import.module)) @import.statement)
+
+(source_file
+  (use_declaration
+    argument: (scoped_use_list
+      path: (_) @import.module
+      list: (use_list
+        (_) @import.name))) @import.statement)
+
+(source_file
+  (use_declaration
+    argument: (use_wildcard
+      (_) @import.module
+      "*" @import.name)) @import.statement)

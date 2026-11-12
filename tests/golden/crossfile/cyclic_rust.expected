@@ -1,0 +1,5 @@
+rules: cyclic-import
+exit: 0
+src/billing.rs:1:1: warning [cyclic-import]
+src/journal.rs:1:1: warning [cyclic-import]
+src/shipping/parcel.rs:1:1: warning [cyclic-import]

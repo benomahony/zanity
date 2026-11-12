@@ -204,6 +204,7 @@ fn resolve(files: []const []const u8, imp: Import) ?u32 {
         .none => null,
         .relative => resolveRelative(files, dir, imp.spec, adapter.tables),
         .dotted => resolveDotted(files, dir, imp.spec, adapter.tables),
+        .crate_path => resolveCratePath(files, imp.path, imp.spec, adapter.tables.import_suffixes),
     };
     if (found) |f| if (f >= files.len) assert.panic("{s}: '{s}' resolved to file {d} of {d}", .{ imp.path, imp.spec, f, files.len });
     return found;
@@ -241,6 +242,83 @@ fn resolveDotted(files: []const []const u8, dir: []const u8, spec: []const u8, t
     }
     if (dots > max_roots) assert.panic("'{s}' climbs {d} directories, past the {d} looked through", .{ spec, dots, max_roots });
     return null;
+}
+
+/// The checked file the Rust path `spec`, imported by the file at `path`, names, as
+/// `crate::billing::Ledger` names `src/billing.rs`: read from the crate root for `crate`, from the
+/// parent module for each `super`, and otherwise from the importing file's own module, where a
+/// path that names no file is another crate's. The longest leading part of the path that is a
+/// module's file is the one it names. A module is part of the modules it sits in, so a path that
+/// names one of them, as `use super::Order` or `use crate::io::AsyncRead` inside `io` does, makes
+/// no edge.
+fn resolveCratePath(files: []const []const u8, path: []const u8, spec: []const u8, suffixes: []const []const u8) ?u32 {
+    if (suffixes.len == 0) assert.panic("resolving '{s}' with no suffixes; list the module file endings under import_suffixes", .{spec});
+    if (!std.mem.endsWith(u8, path, ".rs")) assert.panic("resolving the Rust path '{s}' from '{s}', which is not a .rs file", .{ spec, path });
+    var base = moduleDir(path);
+    var rest = spec;
+    if (std.mem.startsWith(u8, rest, "crate::")) {
+        base = crateRoot(path) orelse return null;
+        rest = rest["crate::".len..];
+    } else if (std.mem.startsWith(u8, rest, "self::")) {
+        rest = rest["self::".len..];
+    } else for (0..max_roots) |_| {
+        if (!std.mem.startsWith(u8, rest, "super::")) break;
+        base = std.fs.path.dirname(base) orelse return null;
+        rest = rest["super::".len..];
+    }
+    if (rest.len == 0 or rest.len > max_path) return null;
+    var name_buffer: [max_path]u8 = undefined;
+    var len: usize = 0;
+    var segments = std.mem.splitSequence(u8, rest, "::");
+    while (segments.next()) |segment| {
+        if (len > 0) {
+            name_buffer[len] = '/';
+            len += 1;
+        }
+        @memcpy(name_buffer[len..][0..segment.len], segment);
+        len += segment.len;
+    }
+    var prefix: []const u8 = name_buffer[0..len];
+    for (0..max_inner + max_roots) |_| {
+        if (under(files, base, prefix, suffixes)) |found| return if (within(path, moduleDir(files[found]))) null else found;
+        prefix = prefix[0 .. std.mem.lastIndexOfScalar(u8, prefix, '/') orelse return null];
+    }
+    return null;
+}
+
+/// Whether the file at `path` sits inside the directory `dir`, at any depth.
+fn within(path: []const u8, dir: []const u8) bool {
+    if (path.len == 0) assert.panic("asking whether an empty path is inside '{s}'", .{dir});
+    if (dir.len == 0) return true;
+    const inside = path.len > dir.len and std.mem.startsWith(u8, path, dir) and path[dir.len] == '/';
+    if (inside and path.len <= dir.len) assert.panic("'{s}' is inside '{s}' but no longer than it", .{ path, dir });
+    return inside;
+}
+
+/// The directory a Rust file's child modules live in: its own for `mod.rs`, `lib.rs` and
+/// `main.rs`, and beside it under its own name for any other, as `src/billing.rs`'s are in
+/// `src/billing/`.
+fn moduleDir(path: []const u8) []const u8 {
+    if (!std.mem.endsWith(u8, path, ".rs")) assert.panic("finding the child modules of '{s}', which is not a .rs file", .{path});
+    const stem = std.fs.path.stem(path);
+    const dir = for ([_][]const u8{ "mod", "lib", "main" }) |root| {
+        if (std.mem.eql(u8, stem, root)) break std.fs.path.dirname(path) orelse "";
+    } else path[0 .. path.len - ".rs".len];
+    if (dir.len >= path.len) assert.panic("the child modules of '{s}' are in '{s}', no shorter than the file's path", .{ path, dir });
+    return dir;
+}
+
+/// The root of the crate the file at `path` belongs to: the nearest directory above it named
+/// `src`, as Cargo lays a crate out, or null outside one.
+fn crateRoot(path: []const u8) ?[]const u8 {
+    if (path.len == 0) assert.panic("finding the crate of a file with an empty path", .{});
+    var dir = std.fs.path.dirname(path) orelse return null;
+    for (0..max_roots) |_| {
+        if (std.mem.eql(u8, std.fs.path.basename(dir), "src")) break;
+        dir = std.fs.path.dirname(dir) orelse return null;
+    } else return null;
+    if (!std.mem.startsWith(u8, path, dir)) assert.panic("'{s}' was placed in the crate at '{s}', which does not contain it", .{ path, dir });
+    return dir;
 }
 
 /// The first checked file at `name` under `root`, or, where the language's imports may name
