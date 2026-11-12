@@ -169,7 +169,7 @@ fn resolve(files: []const []const u8, imp: Import) ?u32 {
     const dir = std.fs.path.dirname(imp.path) orelse "";
     const found = switch (adapter.tables.import_style) {
         .none => null,
-        .relative => resolveRelative(files, dir, imp.spec, adapter.tables.import_suffixes),
+        .relative => resolveRelative(files, dir, imp.spec, adapter.tables),
         .dotted => resolveDotted(files, dir, imp.spec, adapter.tables.import_suffixes),
     };
     if (found) |f| if (f >= files.len) assert.panic("{s}: '{s}' resolved to file {d} of {d}", .{ imp.path, imp.spec, f, files.len });
@@ -177,11 +177,17 @@ fn resolve(files: []const []const u8, imp: Import) ?u32 {
 }
 
 /// The checked file `spec` names as a path from `dir`, the importing file's directory, trying
-/// each of `suffixes` after it.
-fn resolveRelative(files: []const []const u8, dir: []const u8, spec: []const u8, suffixes: []const []const u8) ?u32 {
+/// each of the language's suffixes after it, then after it without an ending it may be written
+/// with in place of the file's own.
+fn resolveRelative(files: []const []const u8, dir: []const u8, spec: []const u8, tables: *const language.Tables) ?u32 {
+    const suffixes = tables.import_suffixes;
     if (suffixes.len == 0) assert.panic("resolving '{s}' with no suffixes; list at least \"\" under import_suffixes", .{spec});
     if (spec.len == 0) assert.panic("resolving an empty module from '{s}'; resolve() rejects those", .{dir});
-    return under(files, dir, spec, suffixes);
+    if (under(files, dir, spec, suffixes)) |found| return found;
+    for (tables.import_stripped_endings) |ending| {
+        if (spec.len > ending.len and std.mem.endsWith(u8, spec, ending)) return under(files, dir, spec[0 .. spec.len - ending.len], suffixes);
+    }
+    return null;
 }
 
 /// The checked file the dotted `spec` names: from `dir` up for each leading dot past the first,

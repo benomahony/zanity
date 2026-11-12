@@ -232,6 +232,9 @@ pub const Tables = struct {
     import_style: ImportStyle = .none,
     /// What turns an import's path into a file's, tried in order, such as `.py` and `/__init__.py`.
     import_suffixes: []const []const u8 = &.{},
+    /// Endings a relative import may be written with in place of the file's own, tried without
+    /// them when the import as written names no file, as TypeScript's `./rules.js` names `rules.ts`.
+    import_stripped_endings: []const []const u8 = &.{},
     /// Whether a top-level name that is not importable can be named only in its own file, as in
     /// Zig, and not across a package, as in Go.
     file_private: bool = false,

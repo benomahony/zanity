@@ -902,3 +902,124 @@
 
 ; Export modifiers belong to the declaration sent for inference.
 (export_statement) @unit.prefix
+
+; A module's imports, for cyclic-import, each marked @import.statement: the file it names by a
+; relative path, the names `import { ... }`, a default import or `export { ... } from` take from it,
+; written as they are, such as `default as total`, `*` for `export * from` and `* as ns` for
+; `export * as ns from`, and the name `import * as`, `import x = require()` or a top-level
+; `require` binds the whole module to. `import type` and `export type` are erased before the code
+; runs, so they make no cycle; a `type` inside the braces still counts, since the import itself can
+; stay. A bare name such as "react" is a package, not a checked file; `import()` inside a function
+; runs after every module has loaded; and `import "./setup"` runs a file for its side effects
+; without taking a name a finding could tell you to move.
+((import_statement
+    (import_clause
+      (named_imports
+        (import_specifier) @import.name))
+    source: (string
+      (string_fragment) @import.module)
+    (#any-prefix? @import.module "./" "../")) @import.statement
+  (#not-any-prefix? @import.statement "import type " "import type{"))
+
+((import_statement
+    (import_clause
+      (identifier) @import.name)
+    source: (string
+      (string_fragment) @import.module)
+    (#any-prefix? @import.module "./" "../")) @import.statement
+  (#not-any-prefix? @import.statement "import type " "import type{"))
+
+((import_statement
+    (import_clause
+      (namespace_import
+        (identifier) @import.binding))
+    source: (string
+      (string_fragment) @import.module)
+    (#any-prefix? @import.module "./" "../")) @import.statement
+  (#not-any-prefix? @import.statement "import type " "import type{"))
+
+(import_statement
+  (import_require_clause
+    (identifier) @import.binding
+    source: (string
+      (string_fragment) @import.module))
+  (#any-prefix? @import.module "./" "../")) @import.statement
+
+((export_statement
+    (export_clause
+      (export_specifier) @import.name)
+    source: (string
+      (string_fragment) @import.module)
+    (#any-prefix? @import.module "./" "../")) @import.statement
+  (#not-any-prefix? @import.statement "export type " "export type{"))
+
+(export_statement
+  "*" @import.name
+  source: (string
+    (string_fragment) @import.module)
+  (#any-prefix? @import.module "./" "../")) @import.statement
+
+(export_statement
+  (namespace_export) @import.name
+  source: (string
+    (string_fragment) @import.module)
+  (#any-prefix? @import.module "./" "../")) @import.statement
+
+(program
+  ([
+    (lexical_declaration
+      (variable_declarator
+        name: (identifier) @import.binding
+        value: (call_expression
+          function: (identifier) @_require
+          arguments: (arguments
+            .
+            (string
+              (string_fragment) @import.module)
+            .))))
+    (variable_declaration
+      (variable_declarator
+        name: (identifier) @import.binding
+        value: (call_expression
+          function: (identifier) @_require
+          arguments: (arguments
+            .
+            (string
+              (string_fragment) @import.module)
+            .))))
+  ] @import.statement
+    (#eq? @_require "require")
+    (#any-prefix? @import.module "./" "../")))
+
+(program
+  ([
+    (lexical_declaration
+      (variable_declarator
+        name: (object_pattern
+          (shorthand_property_identifier_pattern) @import.name)
+        value: (call_expression
+          function: (identifier) @_require
+          arguments: (arguments
+            .
+            (string
+              (string_fragment) @import.module)
+            .))))
+    (variable_declaration
+      (variable_declarator
+        name: (object_pattern
+          (shorthand_property_identifier_pattern) @import.name)
+        value: (call_expression
+          function: (identifier) @_require
+          arguments: (arguments
+            .
+            (string
+              (string_fragment) @import.module)
+            .))))
+  ] @import.statement
+    (#eq? @_require "require")
+    (#any-prefix? @import.module "./" "../")))
+
+; A member read through a name, `orders.place`, so each import counts the names it supplies.
+(member_expression
+  object: (identifier) @import.via
+  property: (property_identifier) @import.used)

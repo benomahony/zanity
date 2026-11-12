@@ -1,0 +1,5 @@
+rules: cyclic-import
+exit: 0
+billing.ts:1:1: warning [cyclic-import]
+legacy.ts:1:1: warning [cyclic-import]
+plan.ts:1:1: warning [cyclic-import]
