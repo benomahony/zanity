@@ -123,12 +123,12 @@ def zig_rules() -> list[dict[str, str]]:
 
 
 def tiers() -> dict[str, str]:
-    """When a rule in each tier runs, as rules.zig's tier_descriptions says it."""
-    text = (REPO / "src" / "rules.zig").read_text()
+    """When a rule in each tier runs, as rule.zig's tier_descriptions says it."""
+    text = (REPO / "src" / "rule.zig").read_text()
     block = text[text.index("pub const tier_descriptions") :].partition("});")[0]
     found = dict(re.findall(r'\.(\w+) = "([^"]+)"', block))
-    assert found, "found no tier_descriptions in src/rules.zig; check the pattern in tiers()"
-    assert "default" in found, f"tier_descriptions in src/rules.zig has {list(found)} but no default; check the pattern in tiers()"
+    assert found, "found no tier_descriptions in src/rule.zig; check the pattern in tiers()"
+    assert "default" in found, f"tier_descriptions in src/rule.zig has {list(found)} but no default; check the pattern in tiers()"
     return found
 
 
