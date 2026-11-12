@@ -10,6 +10,17 @@ pub const Entry = struct {
     symbol: []const u8 = "",
 };
 
+/// How a language's imports name the files they read.
+pub const ImportStyle = enum {
+    /// Imports name packages or modules, not files, so imports form no file graph.
+    none,
+    /// A path relative to the importing file, as `@import("rules.zig")` or `"./rules"`.
+    relative,
+    /// Dotted names from a source root, as `billing.ledger`; leading dots climb from the
+    /// importing file's directory.
+    dotted,
+};
+
 pub const Tables = struct {
     ecosystem: []const u8,
     /// Calls, made bare, that run code no one can review, such as Python's `compile(source, ...)`.
@@ -217,6 +228,10 @@ pub const Tables = struct {
     protocol_affix: []const u8 = "",
     /// Prefix bytes that mark a name private by convention, such as `_` in Python.
     private_prefixes: []const u8 = "",
+    /// How an import names the file it reads, for cyclic-import.
+    import_style: ImportStyle = .none,
+    /// What turns an import's path into a file's, tried in order, such as `.py` and `/__init__.py`.
+    import_suffixes: []const []const u8 = &.{},
     /// Whether a top-level name that is not importable can be named only in its own file, as in
     /// Zig, and not across a package, as in Go.
     file_private: bool = false,

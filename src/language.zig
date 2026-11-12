@@ -153,3 +153,22 @@ test "every adapter supplies the captures of every rule that applies to its lang
     }
     try std.testing.expectEqual(@as(usize, 0), incomplete);
 }
+
+test "every adapter that binds a whole module to a name counts the members read through it" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    var uncounted: usize = 0;
+    for (adapters.all) |*adapter| {
+        if (!applies(adapter, "cyclic-import")) continue;
+        const loaded = try loadedOnce(adapter);
+        const compiled = try captures.Compiled.initCompiled(arena, loaded.query);
+        if (!compiled.has("import.binding")) continue;
+        for ([_][]const u8{ "import.via", "import.used" }) |capture| {
+            if (compiled.has(capture)) continue;
+            std.debug.print("\n{s} binds modules with @import.binding but has no @{s}, so cyclic-import would call every such import unused", .{ adapter.name, capture });
+            uncounted += 1;
+        }
+    }
+    try std.testing.expectEqual(@as(usize, 0), uncounted);
+}

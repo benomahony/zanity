@@ -34960,8 +34960,10 @@
       "upstream_detection_methods": [],
       "detection_methods": [],
       "detection_review": "unreviewed",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "cyclic-import"
+      ],
       "tags": []
     },
     {
@@ -46241,8 +46243,10 @@
       "evidence_required": "Strongly connected components",
       "positive_example": "Two layers depend on one another despite acyclic policy",
       "negative_example": "Allowed intra-layer relationship without a forbidden cycle",
-      "implementation_status": "unsupported",
-      "rule_ids": [],
+      "implementation_status": "partial",
+      "rule_ids": [
+        "cyclic-import"
+      ],
       "cwe_mapping_status": "not_reviewed",
       "assessment_kind": "policy_violation",
       "classification_review": "proposed",

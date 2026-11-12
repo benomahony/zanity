@@ -9,6 +9,7 @@ const memory = @import("memory.zig");
 const constructs = @import("constructs.zig");
 const Spans = @import("spans.zig").Spans;
 const NameCounts = @import("name_counts.zig").NameCounts;
+const ImportNotes = @import("import_notes.zig").ImportNotes;
 const Call = constructs.Call;
 const Context = constructs.Context;
 const Diagnostic = constructs.Diagnostic;
@@ -39,6 +40,7 @@ pub const FileScratch = struct {
     repeats: memory.Bounded(constructs.Repeat),
     writes: memory.Bounded(constructs.Write),
     names: NameCounts,
+    imports: ImportNotes,
     /// The nodes the walk is inside, outermost first, so their parents need no search.
     path: memory.Bounded(ts.Node),
     /// The chain from the root to a node, from ancestorsOf().
@@ -69,6 +71,7 @@ pub const FileScratch = struct {
             .repeats = try .initBounded(gpa, limits.per_file, "repeatable expressions in one function"),
             .writes = try .initBounded(gpa, limits.per_file, "assignments in one file"),
             .names = try .initNameCounts(gpa, limits.per_file),
+            .imports = try .initImportNotes(gpa, limits),
             .path = try .initBounded(gpa, limits.depth, "syntax nodes on the walk's path in one file"),
             .ancestors = try .initBounded(gpa, limits.depth, "ancestors of one syntax node"),
             .in_comment = try memory.reserveUninitialized(gpa, bool, limits.file_bytes),
@@ -82,6 +85,7 @@ pub const FileScratch = struct {
             @field(self, field).clear();
         }
         self.names.reset();
+        self.imports.clear();
         self.pending_type = null;
         if (self.contexts.len != 0) assert.panic("clearing the per-file scratch left {d} open constructs; clearFile() must clear contexts, so add it to the field list there", .{self.contexts.len});
         if (self.diagnostics.len != 0) assert.panic("clearing the per-file scratch left {d} findings; clearFile() must clear diagnostics, so add it to the field list there", .{self.diagnostics.len});

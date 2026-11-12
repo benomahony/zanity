@@ -1,0 +1,4 @@
+rules: cyclic-import
+exit: 0
+helpers.zig:2:1: warning [cyclic-import]
+report.zig:4:5: warning [cyclic-import]

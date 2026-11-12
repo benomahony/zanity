@@ -589,3 +589,37 @@
   arguments: (arguments . (_) @test.value . (_) @test.value . (_) @test.value .)) @test.constant
   (#any-of? @_testing "std.testing" "testing")
   (#any-of? @_check "expectApproxEqAbs" "expectApproxEqRel"))
+
+; A file's imports, for cyclic-import, each marked @import.statement: the module each names, the
+; name a top-level `const rules = @import("rules.zig")` binds the whole module to, and the name
+; `@import("words.zig").Words` takes from it, wherever it is written, since every @import is a
+; dependency of the file whether it runs at the top level or inside a function.
+(source_file
+  (variable_declaration
+    (identifier) @import.binding
+    "="
+    .
+    (builtin_function
+      (builtin_identifier) @_import
+      (#eq? @_import "@import")
+      (arguments
+        (string) @import.module))) @import.statement)
+
+(field_expression
+  object: (builtin_function
+    (builtin_identifier) @_import
+    (#eq? @_import "@import")
+    (arguments
+      (string) @import.module))
+  member: (identifier) @import.name) @import.statement
+
+(builtin_function
+  (builtin_identifier) @_import
+  (#eq? @_import "@import")
+  (arguments
+    (string) @import.module)) @import.statement
+
+; A member read through a name, `rules.first()`, so each import counts the names it supplies.
+(field_expression
+  object: (identifier) @import.via
+  member: (identifier) @import.used)

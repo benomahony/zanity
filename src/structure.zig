@@ -7,6 +7,7 @@ const rules = @import("rules.zig");
 const language = @import("language.zig");
 const check = @import("check.zig");
 const naming = @import("naming.zig");
+const cycles = @import("cycles.zig");
 const facts_module = @import("facts.zig");
 const Facts = facts_module.Facts;
 const Finding = facts_module.Finding;
@@ -22,7 +23,7 @@ pub const Sources = struct { io: Io, mine: []u8, theirs: []u8 };
 
 /// What the structure checks work in beyond the facts: files to re-read for twins, and memory
 /// reserved for tracing which names are reachable.
-pub const Scratch = struct { sources: ?Sources = null, live: ?*LiveScratch = null };
+pub const Scratch = struct { sources: ?Sources = null, live: ?*LiveScratch = null, cycles: ?*cycles.ImportScratch = null };
 
 /// Memory dead-symbol traces reachability in, reserved up front for the most definitions a run holds.
 pub const LiveScratch = struct {
@@ -48,6 +49,7 @@ pub fn checkStructure(facts: *Facts, enabled: rules.Set, findings: *memory.Bound
     if (enabled.enabled("structural-twins")) try twins(facts, findings, scratch.sources);
     if (enabled.enabled("dead-symbol")) try deadSymbols(facts, findings, scratch.live);
     if (enabled.enabled("single-impl-abstraction")) try singleImplementations(facts, findings);
+    if (enabled.enabled("cyclic-import")) try cycles.checkCycles(facts, findings, scratch.cycles orelse assert.panic("checking import cycles with no cycle scratch; pass the workspace's to checkStructure()", .{}));
     if (findings.len < before) assert.panic("cross-file structure checks dropped findings from {d} to {d}; they may only add", .{ before, findings.len });
 }
 

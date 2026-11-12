@@ -5,9 +5,9 @@ unreviewed: a bucket is a starting point for review, not a claim about the weakn
 
 | Bucket | Families | Meaning |
 |---|---:|---|
-| mapped | 180 | Has a zanity rule |
-| static | 163 | Static analysis can find it (upstream says so); a candidate for a deterministic rule |
-| inference | 386 | Visible in source but needs judgement; a candidate for a --infer question |
+| mapped | 182 | Has a zanity rule |
+| static | 162 | Static analysis can find it (upstream says so); a candidate for a deterministic rule |
+| inference | 385 | Visible in source but needs judgement; a candidate for a --infer question |
 | other-languages | 65 | Specific to languages zanity has no grammar for yet (C, C++, PHP, Perl...) |
 | hardware | 58 | Hardware design weaknesses; not in software source |
 | abstract | 115 | A class or pillar; covered through its more specific children |
@@ -180,7 +180,6 @@ Total: 1035 families.
 | CWE-1108 | risk_indicator | Excessive Reliance on Global Variables |
 | CWE-563 | risk_indicator | Assignment to Variable without Use |
 | EXT-ARCH-001 | policy_violation | Dependency boundary violation |
-| EXT-ARCH-002 | policy_violation | Dependency cycle forbidden by policy |
 | EXT-ARCH-003 | policy_violation | Unsupported platform assumption |
 | EXT-ARCH-004 | policy_violation | Undeclared breaking interface change |
 
@@ -191,7 +190,6 @@ Total: 1035 families.
 | CWE-1007 | defect | Insufficient Visual Distinction of Homoglyphs Presented to User |
 | CWE-1045 | defect | Parent Class with a Virtual Destructor and a Child Class without a Virtual Destructor |
 | CWE-1046 | defect | Creation of Immutable Text Using String Concatenation |
-| CWE-1047 | defect | Modules with Circular Dependencies |
 | CWE-1049 | defect | Excessive Data Query Operations in a Large Data Table |
 | CWE-1050 | defect | Excessive Platform Resource Consumption within a Loop |
 | CWE-1051 | defect | Initialization with Hard-Coded Network Resource Configuration Data |

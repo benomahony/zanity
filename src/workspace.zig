@@ -46,6 +46,7 @@ pub const Workspace = struct {
     facts: Facts,
     naming: naming.ConceptScratch,
     liveness: structure.LiveScratch,
+    cycles: @import("cycles.zig").ImportScratch,
     graph: graph.CycleScratch,
     findings: memory.Bounded(Finding),
     /// The edit of each use of a name `--fix` renames, kept apart from the findings it reports.

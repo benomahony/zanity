@@ -10,6 +10,7 @@ const repeats = @import("repeats.zig");
 const facts_module = @import("facts.zig");
 const types = @import("types.zig");
 const File = check.File;
+const Part = @import("import_notes.zig").Part;
 
 /// Handles `id` when it is one of the noting captures; returns whether it was.
 pub fn note(self: *File, node: ts.Node, id: captures.Id) !bool {
@@ -30,6 +31,8 @@ pub fn note(self: *File, node: ts.Node, id: captures.Id) !bool {
             try self.s.names.tally(hash, 1);
             try self.s.names.hold(hash, holderOf(self, node));
         }
+    } else if (try noteImport(self, node, id)) {
+        // cyclic-import's captures, noted by noteImport().
     } else if (v.abstraction_name == id) {
         const at = ts.ts_node_start_point(node);
         if (enabled.enabled("single-impl-abstraction")) try facts.abstraction(text, .{ at.row, at.column });
@@ -41,6 +44,42 @@ pub fn note(self: *File, node: ts.Node, id: captures.Id) !bool {
     const names = &self.s.names;
     if (names.distinct() > names.room()) assert.panic("{s}: {d} names in room for {d}; Bounded.add() must refuse to grow past its buffer", .{ facts.path, names.distinct(), names.room() });
     return true;
+}
+
+/// Handles `id` when it is one of cyclic-import's captures; returns whether it was. An import
+/// statement itself carries nothing: its parts are noted against it.
+fn noteImport(self: *File, node: ts.Node, id: captures.Id) !bool {
+    const v = self.v;
+    const ours = v.import_statement == id or v.import_module == id or v.import_binding == id or v.import_name == id or v.import_via == id or v.import_used == id;
+    if (!ours or !self.checker.enabled.enabled("cyclic-import")) return ours;
+    if (node.id == null) assert.panic("{s}: an import capture matched a null node; captures always name a node", .{self.work.facts.path});
+    const imports = &self.s.imports;
+    if (v.import_via == id) {
+        imports.noteVia(node);
+    } else if (v.import_used == id) {
+        imports.noteUsed(node, self.source);
+    } else if (v.import_statement != id) {
+        const part: Part = if (v.import_module == id) .module else if (v.import_binding == id) .binding else .name;
+        try imports.noteImport(.{ .part = part, .statement = importStatement(self, node), .node = node }, self.source);
+    }
+    if (imports.uses.len > imports.uses.capacity()) assert.panic("{s}: {d} member reads noted in room for {d}", .{ self.work.facts.path, imports.uses.len, imports.uses.capacity() });
+    return true;
+}
+
+/// The outermost construct around `node` that a query marks as an import statement, so each part
+/// of one import is noted against the same statement wherever the import is written.
+fn importStatement(self: *File, node: ts.Node) ts.Node {
+    const id = self.v.import_statement orelse return node;
+    var outermost = node;
+    var at = node;
+    var depth: usize = 0;
+    while (at.parent()) |up| : (depth += 1) {
+        if (depth > 1 << 12) assert.panic("{s}: climbed {d} parents from {f} without reaching the file; the tree has a cycle", .{ self.work.facts.path, depth, node.where() });
+        at = up;
+        if (self.index.marks(at, id)) outermost = at;
+    }
+    if (ts.ts_node_start_byte(outermost) > ts.ts_node_start_byte(node)) assert.panic("{s}: the import statement around {f} starts after it", .{ self.work.facts.path, node.where() });
+    return outermost;
 }
 
 /// The hash of what holds a reference at `node`: the name itself where it names the construct it

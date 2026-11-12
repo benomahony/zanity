@@ -37,6 +37,7 @@ pub fn initWorkspace(comptime Workspace: type, gpa: std.mem.Allocator, process_i
         .io = process_io,
         .naming = try .initNamingScratch(gpa, limits),
         .liveness = try .initLiveScratch(gpa, limits),
+        .cycles = try .initImportScratch(gpa, limits),
         .graph = try .initGraphScratch(gpa, limits),
         .findings = try .initBounded(gpa, limits.findings, "findings across all files"),
         .renames = try .initBounded(gpa, limits.findings, "uses of names to rename"),

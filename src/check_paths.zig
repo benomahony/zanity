@@ -164,7 +164,7 @@ fn checkFiles(ctx: *zclig.Context, ws: *Workspace, selected: rules.Set) !void {
     if (selected.enabled("recursion")) try graph.recursion(&ws.graph, &ws.facts, &ws.findings);
     if (selected.enabled("dead-parameter")) parameters.dropPassed(&ws.facts, &ws.findings);
     const sources: structure.Sources = .{ .io = ws.io, .mine = ws.source, .theirs = ws.fixed };
-    try structure.checkStructure(&ws.facts, selected, &ws.findings, .{ .sources = sources, .live = &ws.liveness });
+    try structure.checkStructure(&ws.facts, selected, &ws.findings, .{ .sources = sources, .live = &ws.liveness, .cycles = &ws.cycles });
     if (ws.facts.collect_units and selected.enabled("repeated-mechanics")) try structure.clusterUnits(&ws.facts, sources);
     if (ws.checked > ws.files.len) assert.panic("checked {d} files out of {d} collected; count a file as checked only once per file collected", .{ ws.checked, ws.files.len });
 }

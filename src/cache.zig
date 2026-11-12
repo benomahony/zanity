@@ -23,7 +23,7 @@ const revision_bytes = 8;
 /// Comptime branches allowed for hashing every source file of the analyzer into its revision.
 const analyzer_hash_quota = 10_000_000;
 
-const cache_format = "source-analysis-3";
+const cache_format = "source-analysis-4";
 
 /// The source code that produces local findings and facts. Its compile-time digest makes a rebuilt
 /// zanity miss old rows automatically when checker logic, name tables or parser revisions change.
@@ -90,6 +90,7 @@ pub const Snapshot = struct {
     references: []facts_module.Reference,
     shapes: []const Shape,
     abstractions: []const Definition,
+    imports: []const facts_module.Import,
     implemented: []const u64,
     passed: []const u64,
 };
@@ -134,6 +135,7 @@ pub fn encode(buffer: []u8, context: AnalysisContext, facts: *const Facts, findi
         .references = facts.references.items(),
         .shapes = facts.shapes.items(),
         .abstractions = facts.abstractions.items(),
+        .imports = facts.imports.items(),
         .implemented = facts.implemented.items(),
         .passed = facts.passed.items(),
     };
@@ -191,6 +193,9 @@ fn validateDefinitions(snapshot: Snapshot, run: Replay) ReplayError!void {
         if (!std.mem.eql(u8, definition.path, run.path) or !std.mem.eql(u8, definition.language, run.language)) return error.InvalidCache;
         if (definition.name.len == 0 or definition.unmarked.len == 0) return error.InvalidCache;
         if (definition.delete_end < definition.delete_start) return error.InvalidCache;
+    }
+    for (snapshot.imports) |i| {
+        if (!std.mem.eql(u8, i.path, run.path) or i.spec.len == 0) return error.InvalidCache;
     }
     for (snapshot.abstractions) |abstraction| {
         if (!std.mem.eql(u8, abstraction.path, run.path) or !std.mem.eql(u8, abstraction.language, run.language)) return error.InvalidCache;
@@ -263,6 +268,7 @@ fn commitFacts(snapshot: Snapshot, run: Replay) error{LimitExceeded}!void {
         .importable = abstraction.importable,
         .unmarked = try run.text.copy(abstraction.unmarked),
     });
+    for (snapshot.imports) |i| try facts.imports.add(.{ .path = run.path, .language = run.language, .spec = try run.text.copy(i.spec), .line = i.line, .column = i.column, .names = i.names, .shown = try run.text.copy(i.shown) });
     for (snapshot.implemented) |hash| try facts.implemented.add(hash);
     for (snapshot.passed) |hash| try facts.passed.add(hash);
     try facts.addReferences(snapshot.references);

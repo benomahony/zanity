@@ -772,3 +772,37 @@
   arguments: (argument_list . (_) @test.value (_) @test.value)) @test.constant
   (#eq? @_self "self")
   (#any-of? @_check "assertEqual" "assertNotEqual" "assertGreater" "assertGreaterEqual" "assertLess" "assertLessEqual"))
+
+; A module's top-level imports, for cyclic-import: the module each names, the names a
+; `from ... import` takes from it, and the name `import` binds the whole module to. Imports under
+; `if TYPE_CHECKING:` or inside a function are not top-level, so they make no cycle at run time.
+(module
+  (import_from_statement
+    module_name: (_) @import.module
+    name: (dotted_name) @import.name) @import.statement)
+
+(module
+  (import_from_statement
+    module_name: (_) @import.module
+    name: (aliased_import
+      name: (dotted_name) @import.name)) @import.statement)
+
+(module
+  (import_from_statement
+    module_name: (_) @import.module
+    (wildcard_import) @import.name) @import.statement)
+
+(module
+  (import_statement
+    name: (dotted_name) @import.module @import.binding) @import.statement)
+
+(module
+  (import_statement
+    name: (aliased_import
+      name: (dotted_name) @import.module
+      alias: (identifier) @import.binding)) @import.statement)
+
+; An attribute read through a name, `billing.charge`, so each import counts the names it supplies.
+(attribute
+  object: (identifier) @import.via
+  attribute: (identifier) @import.used)

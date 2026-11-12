@@ -233,6 +233,12 @@ pub const Batch = struct {
             kept.name = try worker.retain(self.text, a.name);
             try facts.abstractions.add(kept);
         }
+        for (recorded.imports.items()) |i| {
+            var kept = i;
+            kept.spec = try worker.retain(self.text, i.spec);
+            kept.shown = try worker.retain(self.text, i.shown);
+            try facts.imports.add(kept);
+        }
         for (recorded.implemented.items()) |hash| try facts.implemented.add(hash);
         for (recorded.passed.items()) |hash| try facts.passed.add(hash);
         try facts.addReferences(recorded.references.items());

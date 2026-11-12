@@ -35,6 +35,7 @@ Rules marked *production* hold code to what safety-critical software needs and m
 | `structural-twins` | warning | functions whose bodies have the same structure, differing only in names and values, across files; tests and functions under six lines are left out |
 | `dead-symbol` | warning | a function, method, class or type nothing anywhere refers to; not exported or `pub` API, decorated or annotated code a framework reaches, tests, or entry points such as `main` |
 | `single-impl-abstraction` | information | an interface, trait, protocol or abstract class with exactly one implementation (not Go, whose interfaces are implicit) |
+| `cyclic-import` | warning | files that import each other, directly or through other files, reported once per cycle at the import that uses the fewest names, the cheapest to remove; not Python imports inside a function or under `if TYPE_CHECKING:`, which make no cycle at run time. Python and Zig |
 | `extractable-block` | information | in a long function, the longest run of statements that reads at most four names from before it, sets at most one read after it, and doesn't return or break out, so it can become a function of its own; with long-function on, it becomes that finding's fix |
 | `swallowed-error` | warning | an error handler that does nothing |
 | `empty-block` | warning | an empty block where code was expected |
@@ -218,7 +219,7 @@ What the schema says of the rules described above only by name, or not yet.
 
 # [Catalogue questions]($heading.id('catalogue-questions'))
 
-With `--infer`, zanity also asks the model one question for each of 327 families of the engineering error catalogue that no deterministic rule detects. Each is a rule named for its family: select or disable it, or its whole family of findings, by that name.
+With `--infer`, zanity also asks the model one question for each of 325 families of the engineering error catalogue that no deterministic rule detects. Each is a rule named for its family: select or disable it, or its whole family of findings, by that name.
 
 | Rule | Asked about | Finding | Severity |
 |---|---|---|---|
@@ -419,7 +420,6 @@ With `--infer`, zanity also asks the model one question for each of 327 families
 | `cwe-1043` | each file | A data structure here has too many non-primitive fields | info |
 | `cwe-1044` | each function | This function spans an unusual number of architectural layers | info |
 | `cwe-1046` | each function | Concatenating strings in a loop copies them each time | info |
-| `cwe-1047` | each file | This file is part of a circular dependency | info |
 | `cwe-1048` | each function | This function depends on too many outside functions | info |
 | `cwe-1049` | each function | This query has many joins or subqueries on large tables | info |
 | `cwe-1050` | each function | Platform resources are acquired in a loop | warning |
@@ -537,7 +537,6 @@ With `--infer`, zanity also asks the model one question for each of 327 families
 | `ext-delivery-003` | the build and CI files | Configuration settings contradict each other or their schema | warning |
 | `ext-delivery-004` | each function | The backup or artifact cannot be restored as it is | warning |
 | `ext-arch-001` | each file | This file depends across a forbidden architectural boundary | warning |
-| `ext-arch-002` | each file | A lower layer imports a higher one, creating a cycle between layers | warning |
 | `ext-arch-003` | each function | The code assumes behaviour not available on every target platform | warning |
 | `ext-arch-004` | each function | A public interface changes in a breaking way | warning |
 | `ext-verify-001` | each function | The expected value comes from the implementation, so the test repeats its mistakes | error |

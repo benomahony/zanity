@@ -50,6 +50,19 @@ pub const Definition = struct {
     }
 };
 
+/// An import a file makes at its top level, before it is resolved to a file: the module as
+/// written, where the import starts, and how many distinct names the file uses through it.
+pub const Import = struct {
+    path: []const u8,
+    language: []const u8,
+    spec: []const u8,
+    line: u32,
+    column: u32,
+    names: u32,
+    /// Up to three of those names, separated by ", ", for a finding to quote.
+    shown: []const u8 = "",
+};
+
 pub const Function = struct {
     path: []const u8,
     name: []const u8,
@@ -213,6 +226,8 @@ pub const Facts = struct {
     implemented: memory.Bounded(u64),
     /// Hashes of the functions passed as values, such as Java's `Calculator::cost`.
     passed: memory.Bounded(u64),
+    /// Each file's top-level imports, for cyclic-import.
+    imports: memory.Bounded(Import),
     /// Whether to keep `units`; only `check --infer` needs them.
     collect_units: bool = false,
 
@@ -230,12 +245,13 @@ pub const Facts = struct {
             .abstractions = try .initBounded(gpa, limits.definitions, "interfaces and abstract types across all files"),
             .implemented = try .initBounded(gpa, limits.definitions, "implemented interfaces across all files"),
             .passed = try .initBounded(gpa, limits.references, "functions passed as values across all files"),
+            .imports = try .initBounded(gpa, limits.imports, "top-level imports across all files"),
         };
     }
 
     /// Empties one run's facts while retaining their allocations.
     pub fn reset(self: *Facts) void {
-        inline for (.{ "definitions", "functions", "calls", "units", "references", "shapes", "abstractions", "implemented", "passed" }) |field| @field(self, field).clear();
+        inline for (.{ "definitions", "functions", "calls", "units", "references", "shapes", "abstractions", "implemented", "passed", "imports" }) |field| @field(self, field).clear();
         self.path = "";
         self.language = "";
         self.collect_units = false;

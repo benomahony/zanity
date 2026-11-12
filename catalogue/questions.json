@@ -1386,13 +1386,6 @@
   "scope": "function"
  },
  {
-  "id": "CWE-1047",
-  "question": "Does this file import a module that evidently imports this file's own module back, directly or through deferred imports placed to avoid a cycle?",
-  "message": "This file is part of a circular dependency. Move the shared code into a module both can depend on",
-  "severity": "info",
-  "scope": "file"
- },
- {
   "id": "CWE-1048",
   "question": "Does the function call an excessively large number of distinct functions or objects outside its own module, for example more than five? Ignore entry points and top level commands, whose job is to connect the program's parts.",
   "message": "This function depends on too many outside functions. Split it, or hide the calls behind fewer collaborators",
@@ -2216,13 +2209,6 @@
   "id": "EXT-ARCH-001",
   "question": "Does this file import across an architectural boundary its own layout evidently forbids, such as domain code importing a web framework, database driver or other infrastructure directly?",
   "message": "This file depends across a forbidden architectural boundary. Depend on an interface in the allowed layer instead",
-  "severity": "warning",
-  "scope": "file"
- },
- {
-  "id": "EXT-ARCH-002",
-  "question": "Does this file, belonging to a lower layer such as storage or domain code, import a higher layer such as a controller, command line or user interface module?",
-  "message": "A lower layer imports a higher one, creating a cycle between layers. Invert the dependency with an interface or event",
   "severity": "warning",
   "scope": "file"
  },

@@ -1,0 +1,3 @@
+rules: cyclic-import
+exit: 0
+billing.py:1:1: warning [cyclic-import]
