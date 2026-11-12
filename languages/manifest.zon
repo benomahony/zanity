@@ -33,7 +33,7 @@
     },
     .{
         .name = "javascript",
-        .not_applicable = .{ "single-impl-abstraction", "dynamic-allocation", "restated-type", "redundant-null-check", "conversion-assertion", "guaranteed-length", "float-equality", "generic-catch", "identity-comparison", "generic-throw", "weak-hash", "constant-random-seed", "null-catch", "empty-synchronized", "public-finalizer", "direct-thread", "unsafe-jni", "public-static-field", "public-static-array", "missing-super-finalizer", "missing-super-clone", "public-clone-method", "thread-run", "class-name-comparison", "equals-without-hashcode", "hashcode-without-equals", "struts-public-field", "cwe-487", "cwe-609", "cwe-1235", "cwe-567", "goto-statement", "discarded-span-context", "cyclic-import" },
+        .not_applicable = .{ "single-impl-abstraction", "dynamic-allocation", "restated-type", "redundant-null-check", "conversion-assertion", "guaranteed-length", "float-equality", "generic-catch", "identity-comparison", "generic-throw", "weak-hash", "constant-random-seed", "null-catch", "empty-synchronized", "public-finalizer", "direct-thread", "unsafe-jni", "public-static-field", "public-static-array", "missing-super-finalizer", "missing-super-clone", "public-clone-method", "thread-run", "class-name-comparison", "equals-without-hashcode", "hashcode-without-equals", "struts-public-field", "cwe-487", "cwe-609", "cwe-1235", "cwe-567", "goto-statement", "discarded-span-context" },
         .extensions = .{ "js", "mjs", "cjs", "jsx" },
         .ecosystem = "node",
         .scanner = true,

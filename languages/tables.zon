@@ -203,6 +203,8 @@
         .fixed_signatures = .{ "toJSON", "then" },
         .stdin_reads = .{ "prompt", "readline.createInterface", "readlineSync.question", "process.stdin.read", "process.stdin.on", "inquirer.prompt" },
         .private_prefixes = "_",
+        .import_style = .relative,
+        .import_suffixes = .{ "", ".js", ".mjs", ".cjs", ".jsx", "/index.js" },
         .unsafe_deserializers = .{ "serialize.unserialize", "unserialize", "yaml.load" },
         .shell_calls = .{ "child_process.exec", "child_process.execSync", "exec", "execSync" },
         .sql_methods = .{ "query", "raw", "execute" },

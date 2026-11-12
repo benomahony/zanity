@@ -1,0 +1,8 @@
+rules: cyclic-import
+exit: 0
+billing.js:1:1: warning [cyclic-import]
+circle.js:1:1: warning [cyclic-import]
+counter.cjs:1:1: warning [cyclic-import]
+index.js:1:1: warning [cyclic-import]
+journal.js:1:1: warning [cyclic-import]
+sums.js:1:1: warning [cyclic-import]
