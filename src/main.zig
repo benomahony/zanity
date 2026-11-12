@@ -43,6 +43,21 @@ const renamed_flags = [_][2][:0]const u8{
     .{ "--strict=true", "--production=true" },
     .{ "--strict=false", "--production=false" },
 };
+/// Each shorter spelling of a flag, which runs as that flag without a warning.
+const flag_aliases = [_][2][:0]const u8{
+    .{ "--prod", "--production" },
+    .{ "--prod=true", "--production=true" },
+    .{ "--prod=false", "--production=false" },
+};
+
+fn aliasedFlag(arg: []const u8) ?[:0]const u8 {
+    for (flag_aliases) |pair| if (std.mem.eql(u8, arg, pair[0])) {
+        if (!std.mem.startsWith(u8, pair[1], "--")) assert.panic("'{s}' is an alias of '{s}', which is not a flag; flag_aliases must map flags to flags", .{ pair[0], pair[1] });
+        if (!std.mem.startsWith(u8, pair[1], pair[0][0 .. std.mem.indexOfScalar(u8, pair[0], '=') orelse pair[0].len])) assert.panic("'{s}' is an alias of '{s}', which it does not abbreviate; flag_aliases maps each flag's shorter spelling to it", .{ pair[0], pair[1] });
+        return pair[1];
+    };
+    return null;
+}
 
 fn renamedFlag(arg: []const u8) ?[:0]const u8 {
     for (renamed_flags) |pair| if (std.mem.eql(u8, arg, pair[0])) {
@@ -90,7 +105,7 @@ pub const app: zclig.App = .{
         .result_title = "Language server",
         .options = &.{
             .{ .name = "infer", .help = "Also ask the model on every check, as zanity check --infer does; answers are cached, so only edited code is asked again." },
-            .{ .name = "production", .help = "Run every rule on every check, as zanity check --production does." },
+            .{ .name = "production", .help = "Run every rule on every check, as zanity check --production does; --prod for short." },
         },
     }, .{ .run = runLsp }), zclig.command(calibrate.LabelOptions, calibrate.LabelRow, .{
         .name = "mark",
@@ -133,7 +148,7 @@ pub fn main(init: std.process.Init) !u8 {
     var err_writer: Io.File.Writer = .initStreaming(.stderr(), init.io, &err_buffer);
     const ws = try workspace_init.initWorkspace(Workspace, std.heap.page_allocator, init.io, .{});
     ws.environ = init.environ_map;
-    // A copy, so a deprecated flag can be swapped for the one that replaces it.
+    // A copy, so a deprecated flag or an alias can be swapped for the flag it stands for.
     const rest = try init.arena.allocator().dupe(@TypeOf(args[0]), args[1..]);
     ws.args = rest;
     if (ws.args.len + 1 != args.len) assert.panic("the workspace holds {d} of {d} arguments; main() must give it all but the program's name", .{ ws.args.len, args.len });
@@ -141,6 +156,9 @@ pub fn main(init: std.process.Init) !u8 {
     for (rest) |*arg| if (renamedFlag(arg.*)) |current| {
         try err_writer.interface.print("zanity: {s} is deprecated and runs as {s}, which runs every rule; write {s} instead.\n", .{ arg.*, current, current });
         arg.* = current;
+    };
+    for (rest) |*arg| if (aliasedFlag(arg.*)) |full| {
+        arg.* = full;
     };
     var runtime = zclig.native.runtime(init, &out_writer.interface, &err_writer.interface);
     runtime.user_data = ws;

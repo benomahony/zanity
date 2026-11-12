@@ -268,7 +268,7 @@ test "--fail-on warning fails a run with only warnings, which a plain run passes
     try std.testing.expectEqual(std.process.Child.Term{ .exited = 1 }, failing.term);
 }
 
-test "--production runs every rule, adding those a plain run leaves off, and the deprecated --strict still does" {
+test "--production runs every rule, adding those a plain run leaves off, as does its alias --prod, and the deprecated --strict still does" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
     const arena = arena_state.allocator();
@@ -283,6 +283,9 @@ test "--production runs every rule, adding those a plain run leaves off, and the
     try std.testing.expectEqual(@as(usize, 0), std.mem.count(u8, plain.stdout, "rule=\"unbounded-loop\""));
     const production = try std.process.run(arena, io, .{ .argv = &.{ zanity, "check", "-q", "--plain", "--production", "." }, .cwd = .{ .path = work } });
     try std.testing.expectEqual(@as(usize, 1), std.mem.count(u8, production.stdout, "rule=\"unbounded-loop\""));
+    const prod = try std.process.run(arena, io, .{ .argv = &.{ zanity, "check", "-q", "--plain", "--prod", "." }, .cwd = .{ .path = work } });
+    try std.testing.expectEqual(@as(usize, 1), std.mem.count(u8, prod.stdout, "rule=\"unbounded-loop\""));
+    try expectOutput(prod.stderr, &.{}, &.{"deprecated"});
     const strict = try std.process.run(arena, io, .{ .argv = &.{ zanity, "check", "-q", "--plain", "--strict", "." }, .cwd = .{ .path = work } });
     try std.testing.expectEqual(@as(usize, 1), std.mem.count(u8, strict.stdout, "rule=\"unbounded-loop\""));
     try expectOutput(strict.stderr, &.{"--strict is deprecated and runs as --production, which runs every rule; write --production instead."}, &.{});

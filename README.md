@@ -460,7 +460,7 @@ Every rule runs on every language where it means something; `dynamic-allocation`
 
 ## Rules
 
-Rules marked *production* hold code to what safety-critical software needs and most code doesn't, or need `--infer`, so they run only with `--production`, `select = ["all"]` or `--rules all`, or when named. The old `--strict` and `select = ["strict"]` are deprecated: they still run every rule, with a warning naming what to write instead, until a later minor release removes them.
+Rules marked *production* hold code to what safety-critical software needs and most code doesn't, or need `--infer`, so they run only with `--production` (or `--prod`), `select = ["all"]` or `--rules all`, or when named. The old `--strict` and `select = ["strict"]` are deprecated: they still run every rule, with a warning naming what to write instead, until a later minor release removes them.
 
 **NASA's Power of Ten**
 

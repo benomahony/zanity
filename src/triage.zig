@@ -228,7 +228,7 @@ pub const check_options: []const @import("zclig").OptionInfo = &.{
     .{ .name = "page-size", .metavar = "N", .help = "Return at most N matching findings (1 to 10000)." },
     .{ .name = "rules", .metavar = "RULES", .help = "Comma-separated rules to run instead of the defaults.", .example = "unbounded-loop,long-function" },
     .{ .name = "fix", .help = "Apply the fixes zanity can make, then report what is left." },
-    .{ .name = "production", .help = "Run every rule, adding what safety-critical code needs and most code doesn't, such as two assertions in every function." },
+    .{ .name = "production", .help = "Run every rule, adding what safety-critical code needs and most code doesn't, such as two assertions in every function; --prod for short." },
     .{ .name = "watch", .help = "Check again each time a file it checks, or zanity.toml, changes, until Ctrl-C." },
     .{ .name = "fail-on", .metavar = "SEVERITY", .help = "Exit 1 on findings this severe or worse: error, or warning as a pre-commit hook or CI should.", .example = "warning" },
     .{ .name = "agent", .help = "Print findings for a coding agent: totals and the next command first, then each finding with its fix. On by default when CLAUDECODE is set and neither --json nor --plain is given.", .env = "ZANITY_AGENT" },
