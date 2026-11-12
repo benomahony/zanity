@@ -26,12 +26,42 @@ const Edge = struct {
     to: u32,
     import: u32,
 
-    /// Whether `a` sorts before `b`: by importing file, then by import.
+    /// Whether `a` sorts before `b`: by importing file, then imported file, then import, so every
+    /// import of one file by another sits together.
     fn before(_: void, a: Edge, b: Edge) bool {
         if (a.from == a.to) assert.panic("ordering import {d}, of file {d} by itself; edgesOf() leaves those out", .{ a.import, a.from });
         if (b.from == b.to) assert.panic("ordering import {d}, of file {d} by itself; edgesOf() leaves those out", .{ b.import, b.from });
         if (a.from != b.from) return a.from < b.from;
+        if (a.to != b.to) return a.to < b.to;
         return a.import < b.import;
+    }
+
+    /// Whether `a` and `b` are imports of the same file by the same file.
+    fn sameFiles(a: Edge, b: Edge) bool {
+        if (a.from == a.to) assert.panic("comparing import {d}, of file {d} by itself; edgesOf() leaves those out", .{ a.import, a.from });
+        if (b.from == b.to) assert.panic("comparing import {d}, of file {d} by itself; edgesOf() leaves those out", .{ b.import, b.from });
+        return a.from == b.from and a.to == b.to;
+    }
+};
+
+/// Every import one file makes of another, as a run of the sorted edges, and how many names they
+/// use from it between them: removing all of them is what breaks the dependency.
+const Dependency = struct {
+    edges: []const Edge,
+    names: u32,
+
+    /// The run of edges from `edges[first]` that import the same file by the same file.
+    fn at(edges: []const Edge, imports: []const Import, first: usize) Dependency {
+        if (first >= edges.len) assert.panic("asked for the dependency at edge {d} of {d}", .{ first, edges.len });
+        var end = first + 1;
+        var names: u32 = imports[edges[first].import].names;
+        for (edges[first + 1 ..]) |e| {
+            if (!Edge.sameFiles(e, edges[first])) break;
+            names += imports[e.import].names;
+            end += 1;
+        }
+        if (end - first > imports.len) assert.panic("a dependency of {d} imports among {d}", .{ end - first, imports.len });
+        return .{ .edges = edges[first..end], .names = names };
     }
 };
 
@@ -62,8 +92,8 @@ pub const ImportScratch = struct {
     }
 };
 
-/// A cycle's cheapest import to remove: its edge, and which cycle it is and how many files it holds.
-const Cheapest = struct { edge: Edge, cycle: u32, size: u32 };
+/// A cycle's cheapest dependency to remove, and which cycle it is and how many files it holds.
+const Cheapest = struct { dependency: Dependency, cycle: u32, size: u32 };
 
 /// The importing files, sorted, and the cycle each is in, or `unseen` for none, side by side.
 const Membership = struct { files: []const []const u8, cycle_of: []const u32 };
@@ -87,14 +117,15 @@ pub fn checkCycles(facts: *Facts, findings: *memory.Bounded(Finding), scratch: *
     const cheapest = scratch.cheapest[0..cycles.len];
     @memset(cheapest, unseen);
     for (edges, 0..) |e, i| {
+        if (i > 0 and Edge.sameFiles(edges[i - 1], e)) continue;
         const c = cycle_of[e.from];
         if (c == unseen or cycle_of[e.to] != c) continue;
         const best = &cheapest[c];
-        if (best.* == unseen or cheaper(imports, e, edges[best.*])) best.* = @intCast(i);
+        if (best.* == unseen or cheaper(imports, Dependency.at(edges, imports, i), Dependency.at(edges, imports, best.*))) best.* = @intCast(i);
     }
-    for (cycles, cheapest, 0..) |c, edge, i| {
-        if (edge == unseen) assert.panic("cycle {d} of {d} files has no import inside it; edgesOf() leaves out only imports of a file by itself", .{ i, c.members.len });
-        try report(facts, findings, .{ .files = files, .cycle_of = cycle_of }, .{ .edge = edges[edge], .cycle = @intCast(i), .size = @intCast(c.members.len) });
+    for (cycles, cheapest, 0..) |c, first, i| {
+        if (first == unseen) assert.panic("cycle {d} of {d} files has no import inside it; edgesOf() leaves out only imports of a file by itself", .{ i, c.members.len });
+        try report(facts, findings, .{ .files = files, .cycle_of = cycle_of }, .{ .dependency = Dependency.at(edges, imports, first), .cycle = @intCast(i), .size = @intCast(c.members.len) });
     }
     if (findings.len - before > cycles.len) assert.panic("cyclic-import reported {d} findings for {d} cycles; it reports each cycle once", .{ findings.len - before, cycles.len });
 }
@@ -148,14 +179,14 @@ fn edgesOf(imports: []const Import, files: []const []const u8, scratch: *ImportS
     return edges;
 }
 
-/// Whether removing import `a` costs less than removing `b`: it uses fewer names, or as many
-/// and comes first by file and line, so the choice is the same on every run.
-fn cheaper(imports: []const Import, a: Edge, b: Edge) bool {
-    if (a.import == b.import) assert.panic("comparing import {d} with itself; each import makes at most one edge", .{a.import});
-    const x = imports[a.import];
-    const y = imports[b.import];
+/// Whether removing dependency `a` costs less than removing `b`: its imports use fewer names, or
+/// as many and its first comes first by file and line, so the choice is the same on every run.
+fn cheaper(imports: []const Import, a: Dependency, b: Dependency) bool {
+    if (a.edges.ptr == b.edges.ptr) assert.panic("comparing the dependency at import {d} with itself; checkCycles() compares each with the best so far", .{a.edges[0].import});
+    const x = imports[a.edges[0].import];
+    const y = imports[b.edges[0].import];
     if (x.path.len == 0 or y.path.len == 0) assert.panic("comparing imports with no file; every import records the file making it", .{});
-    if (x.names != y.names) return x.names < y.names;
+    if (a.names != b.names) return a.names < b.names;
     const by_path = std.mem.order(u8, x.path, y.path);
     if (by_path != .eq) return by_path == .lt;
     return x.line < y.line;
@@ -278,7 +309,8 @@ fn report(facts: *Facts, findings: *memory.Bounded(Finding), membership: Members
     if (membership.files.len != membership.cycle_of.len) assert.panic("{d} files with cycles noted for {d}; checkCycles() notes one per file", .{ membership.files.len, membership.cycle_of.len });
     const files = membership.files;
     const cycle_of = membership.cycle_of;
-    const edge = cycle.edge;
+    const dependency = cycle.dependency;
+    const edge = dependency.edges[0];
     if (cycle_of[edge.from] != cycle.cycle or cycle_of[edge.to] != cycle.cycle) assert.panic("reporting cycle {d} at an import from cycle {d} to {d}; checkCycles() picks an import inside the cycle", .{ cycle.cycle, cycle_of[edge.from], cycle_of[edge.to] });
     var listed: [max_listed][]const u8 = undefined;
     var count: usize = 0;
@@ -287,21 +319,46 @@ fn report(facts: *Facts, findings: *memory.Bounded(Finding), membership: Members
         listed[count] = files[f];
         count += 1;
     }
-    const imp = facts.imports.items()[edge.import];
+    const imports = facts.imports.items();
+    const imp = imports[edge.import];
     const text = facts.text;
     const members = Members{ .names = listed[0..count], .more = cycle.size - @as(u32, @intCast(count)) };
     const from = files[edge.from];
     const target = files[edge.to];
-    const message = if (imp.names == 0)
-        try text.format("{d} files import each other in a cycle ({f}), so none can be read, tested or changed without the others. This import of '{s}' uses no name from it, the fewest of any import in the cycle, so it is the cheapest to remove.", .{ cycle.size, members, target })
+    const shown = Shown{ .imports = imports, .edges = dependency.edges };
+    const many = dependency.edges.len > 1;
+    const subject = if (many) try text.format("These {d} imports of '{s}' use", .{ dependency.edges.len, target }) else try text.format("This import of '{s}' uses", .{target});
+    const conclusion = if (many) "they are" else "it is";
+    const names = dependency.names;
+    const message = if (names == 0)
+        try text.format("{d} files import each other in a cycle ({f}), so none can be read, tested or changed without the others. {s} no name from it, the fewest of any file's imports in the cycle, so {s} the cheapest to remove.", .{ cycle.size, members, subject, conclusion })
     else
-        try text.format("{d} files import each other in a cycle ({f}), so none can be read, tested or changed without the others. This import of '{s}' uses only {d} name{s} from it ({s}), the fewest of any import in the cycle, so it is the cheapest to remove.", .{ cycle.size, members, target, imp.names, if (imp.names == 1) "" else "s", imp.shown });
-    const fix = if (imp.names == 0)
-        try text.format("Remove this import of '{s}'; nothing in '{s}' uses it.", .{ target, from })
+        try text.format("{d} files import each other in a cycle ({f}), so none can be read, tested or changed without the others. {s} only {d} name{s} from it ({f}), the fewest of any file's imports in the cycle, so {s} the cheapest to remove.", .{ cycle.size, members, subject, names, if (names == 1) "" else "s", shown, conclusion });
+    const fix = if (names == 0)
+        try text.format("Remove {s} of '{s}'; nothing in '{s}' uses {s}.", .{ if (many) "these imports" else "this import", target, from, if (many) "them" else "it" })
     else
-        try text.format("Move {s} out of '{s}' into a file neither imports, or into '{s}', and import it from there, so '{s}' no longer imports '{s}'.", .{ imp.shown, target, from, from, target });
+        try text.format("Move {f} out of '{s}' into a file neither imports, or into '{s}', and import {s} from there, so '{s}' no longer imports '{s}'.", .{ shown, target, from, if (names == 1) "it" else "them", from, target });
     try findings.add(.{ .path = imp.path, .line = imp.line, .column = imp.column, .rule = "cyclic-import", .message = message, .fix = fix });
 }
+
+/// The names a dependency's imports use, each import's as it quotes them, separated by ", ".
+const Shown = struct {
+    imports: []const Import,
+    edges: []const Edge,
+
+    pub fn format(self: Shown, writer: *std.Io.Writer) std.Io.Writer.Error!void {
+        if (self.edges.len == 0) assert.panic("quoting the names of a dependency with no imports; Dependency.at() returns at least one", .{});
+        if (self.edges.len > self.imports.len) assert.panic("quoting {d} imports among {d}", .{ self.edges.len, self.imports.len });
+        var written: usize = 0;
+        for (self.edges) |e| {
+            const quoted = self.imports[e.import].shown;
+            if (quoted.len == 0) continue;
+            if (written > 0) try writer.writeAll(", ");
+            try writer.writeAll(quoted);
+            written += 1;
+        }
+    }
+};
 
 /// The files of a cycle a finding lists, and how many more it holds.
 const Members = struct {
