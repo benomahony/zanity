@@ -52,9 +52,15 @@ pub fn runZanityCheck(self: *LanguageServer, into: *Results) !?[]const Record {
     const buffer = into.outputBuffer();
     var output: std.heap.FixedBufferAllocator = .init(buffer);
     const services = self.services;
-    const argv = [_][]const u8{ services.exe, "check", ".", "--json", "--quiet", "--no-color", "--infer" };
+    var argv: [8][]const u8 = .{ services.exe, "check", ".", "--json", "--quiet", "--no-color", "", "" };
+    var argc: usize = 6;
+    for ([_]struct { bool, []const u8 }{ .{ services.infer, "--infer" }, .{ services.production, "--production" } }) |flag| if (flag[0]) {
+        argv[argc] = flag[1];
+        argc += 1;
+    };
+    if (argc > argv.len) assert.panic("built {d} arguments for zanity check in room for {d}", .{ argc, argv.len });
     const result = std.process.run(output.allocator(), self.io, .{
-        .argv = argv[0..if (services.infer) argv.len else argv.len - 1],
+        .argv = argv[0..argc],
         .cwd = .{ .path = self.root },
         .stdout_limit = .limited(buffer.len / 2),
         .stderr_limit = .limited(check_stderr_bytes),

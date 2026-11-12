@@ -12,7 +12,7 @@ const workspaceOf = workspace.workspaceOf;
 /// This build's version, as `zanity --version` prints it.
 const build_version = @import("build_info").version;
 
-pub const LspOptions = struct { infer: bool = false };
+pub const LspOptions = struct { infer: bool = false, production: bool = false };
 
 /// `zanity lsp` writes the protocol to stdout itself, so it has no rows.
 pub const LspRow = struct { messages: usize };
@@ -37,6 +37,7 @@ pub fn runLsp(ctx: *zclig.Context, options: LspOptions) ![]const LspRow {
         .exe = exe,
         .version = build_version,
         .infer = options.infer,
+        .production = options.production,
         .store = if (ws.source_cache) |*s| s else null,
         .telemetry = if (telemetry) |*t| t else null,
     };

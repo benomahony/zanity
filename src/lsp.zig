@@ -95,6 +95,8 @@ pub const Services = struct {
     version: []const u8,
     /// Whether each check also asks the model, as `zanity lsp --infer` says.
     infer: bool = false,
+    /// Whether each check runs every rule, as `zanity lsp --production` says.
+    production: bool = false,
     store: ?*const store.Store = null,
     telemetry: ?*Telemetry = null,
 };

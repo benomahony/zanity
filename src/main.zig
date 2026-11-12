@@ -86,10 +86,11 @@ pub const app: zclig.App = .{
     }, .{ .run = runUpgrade, .dry_run = previewUpgrade, .human = renderUpgrade }), zclig.command(LspOptions, LspRow, .{
         .name = "lsp",
         .description = "Serve the language server protocol on stdin and stdout: findings as diagnostics, refreshed on save, and zanity's fixes as code actions.",
-        .examples = &.{ "zanity lsp", "zanity lsp --infer" },
+        .examples = &.{ "zanity lsp", "zanity lsp --infer", "zanity lsp --production" },
         .result_title = "Language server",
         .options = &.{
             .{ .name = "infer", .help = "Also ask the model on every check, as zanity check --infer does; answers are cached, so only edited code is asked again." },
+            .{ .name = "production", .help = "Run every rule on every check, as zanity check --production does." },
         },
     }, .{ .run = runLsp }), zclig.command(calibrate.LabelOptions, calibrate.LabelRow, .{
         .name = "mark",
