@@ -1,5 +1,6 @@
 //! The project-wide call graph built from every file's facts, and the checks that need it, such as
-//! finding recursion through cycles. Lookups are by name, so it runs after all files are read.
+//! finding recursion through cycles. Lookups are by name, so it runs after all files are read. The
+//! cycle search works on any graph in the same form, such as the files that import each other.
 const std = @import("std");
 const assert = @import("assert.zig");
 const Allocator = std.mem.Allocator;
@@ -16,10 +17,8 @@ const unvisited = std.math.maxInt(u32);
 
 const Frame = struct { node: u32, next_edge: u32 };
 
-pub const CycleScratch = struct {
-    by_name: memory.Bounded(u32),
-    offsets: memory.Bounded(u32),
-    targets: memory.Bounded(u32),
+/// What the cycle search knows of each node of a graph, and the cycles it has found.
+pub const CycleSearch = struct {
     index: []u32,
     low: []u32,
     on_stack: []bool,
@@ -28,6 +27,29 @@ pub const CycleScratch = struct {
     members: memory.Bounded(u32),
     cycles: memory.Bounded(Cycle),
 
+    /// Room to search a graph of up to `nodes` nodes, which a limit names as `noun`.
+    pub fn initCycleSearch(gpa: Allocator, nodes: u32, comptime noun: []const u8) Allocator.Error!CycleSearch {
+        if (nodes == 0) assert.panic("searching for cycles among no " ++ noun ++ "; memory.Limits must allow at least one", .{});
+        const search: CycleSearch = .{
+            .index = try memory.reserveUninitialized(gpa, u32, nodes),
+            .low = try memory.reserveUninitialized(gpa, u32, nodes),
+            .on_stack = try memory.reserveUninitialized(gpa, bool, nodes),
+            .stack = try .initBounded(gpa, nodes, noun ++ " on the cycle search stack"),
+            .frames = try .initBounded(gpa, nodes, noun ++ " open in the cycle search"),
+            .members = try .initBounded(gpa, nodes, noun ++ " in cycles"),
+            .cycles = try .initBounded(gpa, nodes, "cycles among " ++ noun),
+        };
+        if (search.low.len != search.index.len) assert.panic("reserved {d} low links for {d} nodes", .{ search.low.len, search.index.len });
+        return search;
+    }
+};
+
+pub const CycleScratch = struct {
+    by_name: memory.Bounded(u32),
+    offsets: memory.Bounded(u32),
+    targets: memory.Bounded(u32),
+    search: CycleSearch,
+
     pub fn initGraphScratch(gpa: Allocator, limits: memory.Limits) Allocator.Error!CycleScratch {
         if (limits.functions == 0) assert.panic("memory.Limits.functions is 0, so the call graph has no room for any function", .{});
         if (limits.edges == 0) assert.panic("memory.Limits.edges is 0, so the call graph has no room for any call", .{});
@@ -35,18 +57,12 @@ pub const CycleScratch = struct {
             .by_name = try .initBounded(gpa, limits.functions, "functions across all files"),
             .offsets = try .initBounded(gpa, std.math.add(usize, limits.functions, 1) catch return error.OutOfMemory, "functions across all files"),
             .targets = try .initBounded(gpa, limits.edges, "call edges across all files"),
-            .index = try memory.reserveUninitialized(gpa, u32, limits.functions),
-            .low = try memory.reserveUninitialized(gpa, u32, limits.functions),
-            .on_stack = try memory.reserveUninitialized(gpa, bool, limits.functions),
-            .stack = try .initBounded(gpa, limits.functions, "functions on the cycle search stack"),
-            .frames = try .initBounded(gpa, limits.functions, "nested calls in the cycle search"),
-            .members = try .initBounded(gpa, limits.functions, "functions in call cycles"),
-            .cycles = try .initBounded(gpa, limits.functions, "call cycles"),
+            .search = try .initCycleSearch(gpa, limits.functions, "functions"),
         };
     }
 };
 
-/// Call graph in compressed sparse row form: the callees of `v` are
+/// A graph in compressed sparse row form, such as the call graph: the nodes `v` leads to are
 /// `targets[offsets[v]..offsets[v + 1]]`.
 pub const Graph = struct {
     offsets: []const u32,
@@ -72,7 +88,7 @@ pub const Graph = struct {
             }
         }
         for (1..offsets.len) |i| offsets[i] += offsets[i - 1];
-        const cursor = s.low[0..functions.len];
+        const cursor = s.search.low[0..functions.len];
         @memcpy(cursor, offsets[0..functions.len]);
         for (facts.calls.items()) |call| {
             const lookup: Lookup = .{ .functions = functions, .sorted = sorted, .call = call };
@@ -88,15 +104,15 @@ pub const Graph = struct {
     }
 
     fn out(self: Graph, v: u32) []const u32 {
-        if (v >= self.offsets.len -| 1) assert.panic("asked for the calls of function {d}, but the graph has {d} functions; pass an index below the function count from the facts", .{ v, self.offsets.len -| 1 });
-        if (self.offsets[v] > self.offsets[v + 1]) assert.panic("function {d}'s calls run backwards ({d}..{d}); the offsets were not built in order, so build() must fill the offsets in function order", .{ v, self.offsets[v], self.offsets[v + 1] });
+        if (v >= self.offsets.len -| 1) assert.panic("asked for the edges of node {d}, but the graph has {d} nodes; pass an index below the node count", .{ v, self.offsets.len -| 1 });
+        if (self.offsets[v] > self.offsets[v + 1]) assert.panic("node {d}'s edges run backwards ({d}..{d}); the offsets were not built in order, so fill them in node order", .{ v, self.offsets[v], self.offsets[v + 1] });
         return self.targets[self.offsets[v]..self.offsets[v + 1]];
     }
 
-    pub fn cycles(self: Graph, s: *CycleScratch) error{LimitExceeded}![]const Cycle {
+    pub fn cycles(self: Graph, s: *CycleSearch) error{LimitExceeded}![]const Cycle {
         const n = self.offsets.len - 1;
-        if (n >= unvisited) assert.panic("{d} functions reach the 'unvisited' marker {d}; lower memory.Limits.functions", .{ n, unvisited });
-        if (n > s.index.len) assert.panic("the graph has {d} functions but the cycle search has room for {d}; memory.Limits.functions is too low", .{ n, s.index.len });
+        if (n >= unvisited) assert.panic("{d} nodes reach the 'unvisited' marker {d}; lower the memory.Limits the graph is built under", .{ n, unvisited });
+        if (n > s.index.len) assert.panic("the graph has {d} nodes but the cycle search has room for {d}; reserve the search from the same memory.Limits as the graph", .{ n, s.index.len });
         const index = s.index[0..n];
         const low = s.low[0..n];
         @memset(index, unvisited);
@@ -134,13 +150,13 @@ pub const Graph = struct {
                 if (s.frames.last()) |parent| low[parent.node] = @min(low[parent.node], low[v]);
                 if (low[v] == index[v]) try self.component(s, v);
             }
-            if (s.frames.len != 0) assert.panic("the cycle search from function {d} ended with {d} frames still open; the cycle search must pop every frame it pushes, so check its exits", .{ root, s.frames.len });
+            if (s.frames.len != 0) assert.panic("the cycle search from node {d} ended with {d} frames still open; the cycle search must pop every frame it pushes, so check its exits", .{ root, s.frames.len });
         }
-        if (s.stack.len != 0) assert.panic("the cycle search ended with {d} functions still on its stack; a component was not popped", .{s.stack.len});
+        if (s.stack.len != 0) assert.panic("the cycle search ended with {d} nodes still on its stack; a component was not popped", .{s.stack.len});
         return s.cycles.items();
     }
 
-    fn component(self: Graph, s: *CycleScratch, root: u32) error{LimitExceeded}!void {
+    fn component(self: Graph, s: *CycleSearch, root: u32) error{LimitExceeded}!void {
         const start = s.members.len;
         for (0..s.stack.len) |_| {
             const w = s.stack.drop().?;
@@ -149,8 +165,8 @@ pub const Graph = struct {
             if (w == root) break;
         }
         const members = s.members.items()[start..];
-        if (members.len == 0) assert.panic("function {d} closed a component with no members; it was not on the stack, so check that cycles() pushes a function before component() closes it", .{root});
-        if (members[members.len - 1] != root) assert.panic("function {d}'s component ends with function {d}; the stack was not popped down to its root, so check the popping loop in component()", .{ root, members[members.len - 1] });
+        if (members.len == 0) assert.panic("node {d} closed a component with no members; it was not on the stack, so check that cycles() pushes a node before component() closes it", .{root});
+        if (members[members.len - 1] != root) assert.panic("node {d}'s component ends with node {d}; the stack was not popped down to its root, so check the popping loop in component()", .{ root, members[members.len - 1] });
         const cyclic = members.len > 1 or std.mem.indexOfScalar(u32, self.out(root), root) != null;
         if (cyclic) try s.cycles.add(.{ .members = members }) else s.members.len = start;
     }
@@ -241,7 +257,7 @@ fn reaches(reach: facts_module.Reach, method: bool) bool {
 pub fn recursion(s: *CycleScratch, facts: *const Facts, findings: *memory.Bounded(Finding)) error{LimitExceeded}!void {
     const graph = try Graph.fromFacts(s, facts);
     const before = findings.len;
-    for (try graph.cycles(s)) |cycle| {
+    for (try graph.cycles(&s.search)) |cycle| {
         for (cycle.members) |member| {
             const f = facts.functions.items()[member];
             const message = if (cycle.members.len == 1)
@@ -261,7 +277,7 @@ test "cycles are found without recursion" {
     var s = try CycleScratch.initGraphScratch(arena_state.allocator(), .{ .functions = 8, .edges = 8 });
     const graph: Graph = .{ .offsets = &.{ 0, 1, 2, 3, 4 }, .targets = &.{ 1, 0, 2, 0 } };
     var members: usize = 0;
-    const found = try graph.cycles(&s);
+    const found = try graph.cycles(&s.search);
     for (found) |c| members += c.members.len;
     try std.testing.expectEqual(@as(usize, 2), found.len);
     try std.testing.expectEqual(@as(usize, 3), members);
