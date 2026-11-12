@@ -49,7 +49,7 @@
     },
     .{
         .name = "java",
-        .not_applicable = .{ "branching-double", "dynamic-allocation", "restated-type", "redundant-null-check", "conversion-assertion", "guaranteed-length", "discarded-comparison", "unreachable-code", "debug-leftover", "no-effect-statement", "tls-verification-disabled", "weak-hash", "constant-random-seed", "constant-cbc-iv", "constant-aead-nonce", "unsafe-deserialization", "shell-command", "unawaited-call", "prototype-mutation", "goto-statement", "unended-span", "discarded-span-context", "cyclic-import" },
+        .not_applicable = .{ "branching-double", "dynamic-allocation", "restated-type", "redundant-null-check", "conversion-assertion", "guaranteed-length", "discarded-comparison", "unreachable-code", "debug-leftover", "no-effect-statement", "tls-verification-disabled", "weak-hash", "constant-random-seed", "constant-cbc-iv", "constant-aead-nonce", "unsafe-deserialization", "shell-command", "unawaited-call", "prototype-mutation", "goto-statement", "unended-span", "discarded-span-context" },
         .extensions = .{"java"},
         .ecosystem = "jvm",
         .scanner = false,

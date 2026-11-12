@@ -235,6 +235,10 @@ pub const Tables = struct {
     /// Endings a relative import may be written with in place of the file's own, tried without
     /// them when the import as written names no file, as TypeScript's `./rules.js` names `rules.ts`.
     import_stripped_endings: []const []const u8 = &.{},
+    /// Whether a dotted import may name something inside a file, as Java's
+    /// `com.acme.Outer.Inner` names `com/acme/Outer.java`, so the longest leading part of it that
+    /// is a file is tried too.
+    import_inner_names: bool = false,
     /// Whether a top-level name that is not importable can be named only in its own file, as in
     /// Zig, and not across a package, as in Go.
     file_private: bool = false,

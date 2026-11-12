@@ -731,3 +731,25 @@
   name: (identifier) @_check
   arguments: (argument_list . (_) @test.value . (_) @test.value . (_) @test.value .)) @test.constant
   (#any-of? @_check "assertEquals" "assertNotEquals" "assertSame" "assertNotSame"))
+
+; A file's imports, for cyclic-import, each marked @import.statement: the class an import names,
+; found under a source root as `com/acme/billing/Ledger.java`, and what it takes from it, which is
+; the class itself, or the member or `*` a static import takes. `import com.acme.billing.*` names a
+; package, not a file, so it makes no edge.
+((import_declaration
+    (scoped_identifier
+      name: (identifier) @import.name) @import.module
+    .) @import.statement
+  (#not-any-prefix? @import.statement "import static"))
+
+((import_declaration
+    (scoped_identifier
+      scope: (_) @import.module
+      name: (identifier) @import.name)
+    .) @import.statement
+  (#any-prefix? @import.statement "import static"))
+
+((import_declaration
+    (scoped_identifier) @import.module
+    (asterisk) @import.name) @import.statement
+  (#any-prefix? @import.statement "import static"))

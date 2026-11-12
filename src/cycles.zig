@@ -15,6 +15,8 @@ const graph = @import("graph.zig");
 const max_listed = 6;
 /// Directories a dotted import is looked up from, climbing from the importing file's.
 const max_roots = 16;
+/// How deep inside a file a dotted import may name something, as `Outer.Inner` is one deep.
+const max_inner = 8;
 /// The longest file path an import resolves to.
 const max_path = std.fs.max_path_bytes;
 /// Marks a file in no cycle, or a cycle with no cheapest import chosen yet.
@@ -201,7 +203,7 @@ fn resolve(files: []const []const u8, imp: Import) ?u32 {
     const found = switch (adapter.tables.import_style) {
         .none => null,
         .relative => resolveRelative(files, dir, imp.spec, adapter.tables),
-        .dotted => resolveDotted(files, dir, imp.spec, adapter.tables.import_suffixes),
+        .dotted => resolveDotted(files, dir, imp.spec, adapter.tables),
     };
     if (found) |f| if (f >= files.len) assert.panic("{s}: '{s}' resolved to file {d} of {d}", .{ imp.path, imp.spec, f, files.len });
     return found;
@@ -223,8 +225,8 @@ fn resolveRelative(files: []const []const u8, dir: []const u8, spec: []const u8,
 
 /// The checked file the dotted `spec` names: from `dir` up for each leading dot past the first,
 /// or, with none, from the first of `dir` and its parents that holds it.
-fn resolveDotted(files: []const []const u8, dir: []const u8, spec: []const u8, suffixes: []const []const u8) ?u32 {
-    if (suffixes.len == 0) assert.panic("resolving '{s}' with no suffixes; list the file endings under import_suffixes", .{spec});
+fn resolveDotted(files: []const []const u8, dir: []const u8, spec: []const u8, tables: *const language.Tables) ?u32 {
+    if (tables.import_suffixes.len == 0) assert.panic("resolving '{s}' with no suffixes; list the file endings under import_suffixes", .{spec});
     const dots = std.mem.indexOfNone(u8, spec, ".") orelse spec.len;
     if (spec.len - dots > max_path) return null;
     var name_buffer: [max_path]u8 = undefined;
@@ -232,12 +234,27 @@ fn resolveDotted(files: []const []const u8, dir: []const u8, spec: []const u8, s
     for (spec[dots..], 0..) |c, i| name[i] = if (c == '.') '/' else c;
     var root: []const u8 = dir;
     for (0..max_roots) |depth| {
-        if (dots == 0 or depth + 1 >= dots) if (under(files, root, name, suffixes)) |found| return found;
+        if (dots == 0 or depth + 1 >= dots) if (underOrOuter(files, root, name, tables)) |found| return found;
         if (dots > 0 and depth + 1 >= dots) return null;
         if (root.len == 0) return null;
         root = std.fs.path.dirname(root) orelse "";
     }
     if (dots > max_roots) assert.panic("'{s}' climbs {d} directories, past the {d} looked through", .{ spec, dots, max_roots });
+    return null;
+}
+
+/// The first checked file at `name` under `root`, or, where the language's imports may name
+/// something inside a file, at the longest leading part of `name` that is one.
+fn underOrOuter(files: []const []const u8, root: []const u8, name: []const u8, tables: *const language.Tables) ?u32 {
+    if (tables.import_style != .dotted) assert.panic("looking inside files for '{s}' in a language whose imports are not dotted", .{name});
+    if (tables.import_suffixes.len == 0) assert.panic("looking for '{s}' under '{s}' with no suffixes to try", .{ name, root });
+    if (under(files, root, name, tables.import_suffixes)) |found| return found;
+    if (!tables.import_inner_names) return null;
+    var outer = name;
+    for (0..max_inner) |_| {
+        outer = outer[0 .. std.mem.lastIndexOfScalar(u8, outer, '/') orelse return null];
+        if (under(files, root, outer, tables.import_suffixes)) |found| return found;
+    }
     return null;
 }
 

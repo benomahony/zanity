@@ -1,0 +1,5 @@
+rules: cyclic-import
+exit: 0
+src/com/acme/billing/Ledger.java:3:1: warning [cyclic-import]
+src/com/acme/cache/Store.java:3:1: warning [cyclic-import]
+src/com/acme/tax/Rates.java:3:1: warning [cyclic-import]
