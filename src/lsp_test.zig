@@ -77,3 +77,19 @@ test "zanity lsp --production publishes the findings of every rule, as zanity ch
     try expectOutput(try serve(arena, io, &.{ zanity, "lsp" }, &messages), &.{"\"method\":\"textDocument/publishDiagnostics\""}, &.{"\"code\":\"assertion-message\""});
     try expectOutput(try serve(arena, io, &.{ zanity, "lsp", "--production" }, &messages), &.{"\"code\":\"assertion-message\""}, &.{});
 }
+
+test "zanity lsp initializes with no workspace root, as editors send for files outside any project" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    const io = std.testing.io;
+    const zanity = try Io.Dir.cwd().realPathFileAlloc(io, paths.zanity, arena);
+    const messages = [_][]const u8{
+        "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"processId\":null,\"rootUri\":null,\"workspaceFolders\":null,\"capabilities\":{}}}",
+        "{\"jsonrpc\":\"2.0\",\"method\":\"initialized\",\"params\":{}}",
+        "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"shutdown\"}",
+        "{\"jsonrpc\":\"2.0\",\"method\":\"exit\"}",
+    };
+    // Without a root, the working directory is the workspace.
+    try expectOutput(try serve(arena, io, &.{ zanity, "lsp" }, &messages), &.{ "\"id\":1,\"result\":{\"capabilities\"", "\"id\":2,\"result\":null" }, &.{"could not handle initialize"});
+}
