@@ -343,8 +343,9 @@ fn under(files: []const []const u8, root: []const u8, name: []const u8, suffixes
     var clean: [max_path]u8 = undefined;
     for (suffixes) |suffix| {
         const path = std.fmt.bufPrint(&joined, "{s}/{s}{s}", .{ root, name, suffix }) catch return null;
-        const found = find(files, normalise(path, &clean) orelse continue) orelse continue;
-        if (!std.mem.endsWith(u8, files[found], suffix)) assert.panic("'{s}' under '{s}' was found as '{s}', which doesn't end in '{s}'", .{ name, root, files[found], suffix });
+        const wanted = normalise(path, &clean) orelse continue;
+        const found = find(files, wanted) orelse continue;
+        if (!std.mem.eql(u8, files[found], wanted)) assert.panic("'{s}' under '{s}' was looked up as '{s}' but found as '{s}'; find() matches whole paths", .{ name, root, wanted, files[found] });
         return found;
     }
     return null;
