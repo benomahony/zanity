@@ -6,6 +6,7 @@ const assert = @import("assert.zig");
 const Io = std.Io;
 const zclig = @import("zclig");
 const rules = @import("rules.zig");
+const config = @import("config.zig");
 const report = @import("report.zig");
 const report_agent = @import("report_agent.zig");
 const memory = @import("memory.zig");
@@ -105,29 +106,15 @@ pub fn watchCheck(ctx: *zclig.Context, ws: *Workspace, options: CheckOptions, as
     checks.args = ws.args;
     checks.chose_format = ws.chose_format;
     if (checks.environ == null) assert.panic("zanity check --watch ran without the environment; main() passes it to the workspace", .{});
-    var settings_arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    defer settings_arena.deinit();
+    var resident: Resident = .{ .checks = checks };
+    defer resident.settings_arena.deinit();
     const terminal = Io.File.stdout().isTty(ws.io) catch false;
     const out = ctx.runtime.out;
     const err = ctx.runtime.err;
     const agent = watch.agentOutput(ws.args, ws.chose_format, asked_for_agent);
     for (0..max_watch_runs) |_| {
-        _ = settings_arena.reset(.retain_capacity);
-        checks.resetCheck();
-        ctx.status = .success;
-        ctx.failure = null;
         if (terminal) try out.writer.writeAll(watch.clear_screen);
-        const settings = try loadSettings(ctx, checks, settings_arena.allocator());
-        checks.settings = &settings;
-        rules.custom = settings.questionRules();
-        var selected = if (options.rules) |list| try parseRules(ctx, checks, list) else settings.selection(options.production);
-        if (options.rules != null and options.production) selected.includeTier(.production);
-        var live = Live.initLive(console(ctx, err), checks.io, !ctx.quiet);
-        checks.live = &live;
-        const counts = checkPaths(ctx, checks, options, selected) catch |e| switch (e) {
-            error.LimitExceeded => return ctx.fail(.usage, try checks.text.format("This run has more {s} than zanity is built to hold.", .{memory.exceeded}), "Check fewer files at once, or report it if the input is ordinary."),
-            else => return e,
-        };
+        const counts = try checkAgain(ctx, &resident, options);
         if (triage.failsReview(options, counts, checks.review)) ctx.status = .failure;
         try renderWatched(ctx, checks, .{ .options = options, .counts = counts, .agent = agent });
         try out.writer.flush();
@@ -136,6 +123,39 @@ pub fn watchCheck(ctx: *zclig.Context, ws: *Workspace, options: CheckOptions, as
         watcher.wait() catch |e| return ctx.fail(.io, try checks.text.format("Lost track of changes to the files: {t}.", .{e}), "Run zanity check --watch again.");
     }
     assert.panic("ran {d} checks without being stopped; no session saves that often", .{max_watch_runs});
+}
+
+/// A workspace kept between checks, with the settings and progress each check points it at,
+/// which must outlive the check until its findings are read.
+pub const Resident = struct {
+    checks: *Workspace,
+    settings_arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator),
+    settings: config.Config = undefined,
+    live: Live = undefined,
+};
+
+/// Checks `options.paths` again on the resident workspace: its checkers, workers and cache stay,
+/// so only files that changed are analysed again.
+pub fn checkAgain(ctx: *zclig.Context, resident: *Resident, options: CheckOptions) !report.Counts {
+    if (options.paths.len == 0) assert.panic("checking again with no paths; zclig supplies '.' when none are given", .{});
+    const checks = resident.checks;
+    _ = resident.settings_arena.reset(.retain_capacity);
+    checks.resetCheck();
+    ctx.status = .success;
+    ctx.failure = null;
+    resident.settings = try loadSettings(ctx, checks, resident.settings_arena.allocator());
+    checks.settings = &resident.settings;
+    rules.custom = resident.settings.questionRules();
+    var selected = if (options.rules) |list| try parseRules(ctx, checks, list) else resident.settings.selection(options.production);
+    if (options.rules != null and options.production) selected.includeTier(.production);
+    resident.live = Live.initLive(console(ctx, ctx.runtime.err), checks.io, !ctx.quiet);
+    checks.live = &resident.live;
+    const counts = checkPaths(ctx, checks, options, selected) catch |e| switch (e) {
+        error.LimitExceeded => return ctx.fail(.usage, try checks.text.format("This run has more {s} than zanity is built to hold.", .{memory.exceeded}), "Check fewer files at once, or report it if the input is ordinary."),
+        else => return e,
+    };
+    if (!triage.special(options) and checks.rows.len != counts.errors + counts.warnings) assert.panic("checked again into {d} rows for {d} errors and {d} warnings; checkPaths makes one row per finding", .{ checks.rows.len, counts.errors, counts.warnings });
+    return counts;
 }
 
 const WatchOutput = struct { options: CheckOptions, counts: report.Counts, agent: bool };
