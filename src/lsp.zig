@@ -190,6 +190,7 @@ pub const LanguageServer = struct {
     }
 
     /// The workspace root the editor names, as a path; the working directory when it names none.
+    /// The working directory is resolved as the path ".", not as the cwd handle, which some builds can't name.
     fn rootOf(self: *LanguageServer, params: json.Value) ![]const u8 {
         if (self.current.files.len != 0) assert.panic("choosing the workspace root after a check of {d} files; call rootOf() only during initialize", .{self.current.files.len});
         const folders = member(params, "workspaceFolders") orelse no_value;
@@ -197,7 +198,7 @@ pub const LanguageServer = struct {
         const first = if (listed.len > 0) listed[0] else no_value;
         const uri = stringOf(member(params, "rootUri")) orelse stringOf(member(first, "uri"));
         const named: ?[]const u8 = if (uri) |value| try pathOf(&self.scratch.text, value) orelse return error.InvalidWorkspaceRoot else stringOf(member(params, "rootPath"));
-        const root = if (named) |path| path else self.root_buffer[0..try Io.Dir.cwd().realPath(self.io, &self.root_buffer)];
+        const root = if (named) |path| path else self.root_buffer[0..try Io.Dir.cwd().realPathFile(self.io, ".", &self.root_buffer)];
         if (root.len > self.root_buffer.len) return error.NameTooLong;
         if (root.len == 0 or !std.fs.path.isAbsolute(root) or std.mem.indexOfScalar(u8, root, 0) != null) return error.InvalidWorkspaceRoot;
         @memmove(self.root_buffer[0..root.len], root);
