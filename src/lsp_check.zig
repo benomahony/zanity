@@ -53,7 +53,15 @@ pub fn checkWorkspace(self: *LanguageServer, trigger: []const u8) !void {
 /// `into`; null, after telling the editor why, when the check fails.
 pub fn runZanityCheck(self: *LanguageServer, into: *Results) !?[]const Record {
     if (!std.fs.path.isAbsolute(self.root)) assert.panic("checking the relative workspace {s}; initialize() must select an absolute workspace first", .{self.root});
+    if (into.entries.len != 0 or into.files.len != 0) assert.panic("checking {s} into results that hold {d} findings in {d} files; checkWorkspace() clears them first", .{ self.root, into.entries.len, into.files.len });
     if (!self.services.infer) if (self.services.resident) |resident| return residentCheck(self, into, resident);
+    return spawnedCheck(self, into);
+}
+
+/// Runs this executable as `zanity check --json` in the root, which reads zanity.toml as the
+/// command line does, and reads its findings back into `into`.
+fn spawnedCheck(self: *LanguageServer, into: *Results) !?[]const Record {
+    if (!std.fs.path.isAbsolute(self.root)) assert.panic("checking the relative workspace {s}; initialize() must select an absolute workspace first", .{self.root});
     const buffer = into.outputBuffer();
     var output: std.heap.FixedBufferAllocator = .init(buffer);
     const services = self.services;
@@ -107,6 +115,8 @@ fn residentCheck(self: *LanguageServer, into: *Results, resident: *Resident) !?[
             try self.show(1, try self.scratch.text.format("zanity check failed in {s}: {s} {s}", .{ self.root, failure.message, failure.hint }));
             return null;
         },
+        // zanity.toml asks the model, which only the command line's check does.
+        error.InferenceEnabled => return spawnedCheck(self, into),
         else => return e,
     };
     const rows = resident.rows();

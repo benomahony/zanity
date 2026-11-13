@@ -114,7 +114,10 @@ pub fn watchCheck(ctx: *zclig.Context, ws: *Workspace, options: CheckOptions, as
     const agent = watch.agentOutput(ws.args, ws.chose_format, asked_for_agent);
     for (0..max_watch_runs) |_| {
         if (terminal) try out.writer.writeAll(watch.clear_screen);
-        const counts = try checkAgain(ctx, &resident, options);
+        const counts = checkAgain(ctx, &resident, options) catch |e| switch (e) {
+            error.InferenceEnabled => return ctx.fail(.usage, try checks.text.format("{s} turned on [infer] while zanity check --watch was running without it.", .{resident.settings.dir}), "Restart zanity check --watch, so each check asks the model."),
+            else => return e,
+        };
         if (triage.failsReview(options, counts, checks.review)) ctx.status = .failure;
         try renderWatched(ctx, checks, .{ .options = options, .counts = counts, .agent = agent });
         try out.writer.flush();
@@ -152,6 +155,8 @@ pub fn checkAgain(ctx: *zclig.Context, resident: *Resident, options: CheckOption
     ctx.status = .success;
     ctx.failure = null;
     resident.settings = try loadSettings(ctx, checks, resident.settings_arena.allocator());
+    // A resident check never asks the model, so it must not stand in for one zanity.toml asks for.
+    if (resident.settings.infer and !options.infer) return error.InferenceEnabled;
     checks.settings = &resident.settings;
     rules.custom = resident.settings.questionRules();
     var selected = if (options.rules) |list| try parseRules(ctx, checks, list) else resident.settings.selection(options.production);
