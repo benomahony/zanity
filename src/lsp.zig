@@ -9,6 +9,8 @@ const memory = @import("memory.zig");
 const nameHash = @import("facts.zig").nameHash;
 const store = @import("store.zig");
 const Telemetry = @import("telemetry.zig").Telemetry;
+const Resident = @import("cmd_watch.zig").Resident;
+const zclig = @import("zclig");
 const Attribute = @import("telemetry.zig").Attribute;
 const protocol = @import("lsp_protocol.zig");
 const Range = protocol.Range;
@@ -99,6 +101,10 @@ pub const Services = struct {
     production: bool = false,
     store: ?*const store.Store = null,
     telemetry: ?*Telemetry = null,
+    /// The workspace each check without --infer runs in, in this process, and the command it
+    /// reports failures through; without them each check runs this executable.
+    resident: ?*Resident = null,
+    ctx: ?*zclig.Context = null,
 };
 
 pub const LanguageServer = struct {

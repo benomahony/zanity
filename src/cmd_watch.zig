@@ -132,6 +132,14 @@ pub const Resident = struct {
     settings_arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator),
     settings: config.Config = undefined,
     live: Live = undefined,
+
+    /// The findings of the last check, as rows, until the next check reuses their memory.
+    pub fn rows(self: *const Resident) []const Row {
+        const kept = &self.checks.rows;
+        if (self.checks.settings == null) assert.panic("reading {d} rows before any check; call checkAgain() first", .{kept.len});
+        if (kept.len > kept.capacity()) assert.panic("the workspace holds {d} rows in room for {d}", .{ kept.len, kept.capacity() });
+        return kept.items();
+    }
 };
 
 /// Checks `options.paths` again on the resident workspace: its checkers, workers and cache stay,

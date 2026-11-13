@@ -6,6 +6,7 @@ const infer = @import("infer.zig");
 const store = @import("store.zig");
 const lsp = @import("lsp.zig");
 const lsp_serve = @import("lsp_serve.zig");
+const cmd_watch = @import("cmd_watch.zig");
 const Telemetry = @import("telemetry.zig").Telemetry;
 const workspace = @import("workspace.zig");
 const workspaceOf = workspace.workspaceOf;
@@ -33,7 +34,13 @@ pub fn runLsp(ctx: *zclig.Context, options: LspOptions) ![]const LspRow {
     // failure to open either must not stop the server.
     ws.source_cache = store.Store.initStore(std.heap.page_allocator, ws.io, environ, ws.limits.store_bytes) catch null;
     var telemetry = Telemetry.initTelemetry(session_allocator, ws.io, environ, build_version) catch null;
+    // Each save checks this workspace again in-process, keeping compiled queries and cached analyses.
+    var resident: cmd_watch.Resident = .{ .checks = ws };
+    defer resident.settings_arena.deinit();
+    ctx.quiet = true;
     const services: lsp.Services = .{
+        .resident = &resident,
+        .ctx = ctx,
         .exe = exe,
         .version = build_version,
         .infer = options.infer,

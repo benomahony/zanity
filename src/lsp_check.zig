@@ -14,6 +14,10 @@ const json = std.json;
 const lsp = @import("lsp.zig");
 pub const check_stderr_bytes = lsp.check_stderr_bytes;
 const LanguageServer = lsp.LanguageServer;
+const cmd_watch = @import("cmd_watch.zig");
+const Resident = cmd_watch.Resident;
+const Row = @import("baseline.zig").Row;
+const memory = @import("memory.zig");
 
 /// Runs `zanity check` over the workspace and publishes what changed since the last check.
 /// When the check fails, the last one's findings stay.
@@ -49,6 +53,7 @@ pub fn checkWorkspace(self: *LanguageServer, trigger: []const u8) !void {
 /// `into`; null, after telling the editor why, when the check fails.
 pub fn runZanityCheck(self: *LanguageServer, into: *Results) !?[]const Record {
     if (!std.fs.path.isAbsolute(self.root)) assert.panic("checking the relative workspace {s}; initialize() must select an absolute workspace first", .{self.root});
+    if (!self.services.infer) if (self.services.resident) |resident| return residentCheck(self, into, resident);
     const buffer = into.outputBuffer();
     var output: std.heap.FixedBufferAllocator = .init(buffer);
     const services = self.services;
@@ -82,6 +87,56 @@ pub fn runZanityCheck(self: *LanguageServer, into: *Results) !?[]const Record {
     };
     for (records) |r| if (r.line == 0 or r.column == 0) assert.panic("{s}: zanity check reported line {d} column {d}; --json counts both from 1", .{ r.path, r.line, r.column });
     return records;
+}
+
+/// Checks the workspace in this process, on the workspace kept between checks, so a save analyses
+/// only the files that changed; null, after telling the editor why, when the check fails.
+fn residentCheck(self: *LanguageServer, into: *Results, resident: *Resident) !?[]const Record {
+    if (into.records.len != 0) assert.panic("checking {s} into results that still hold {d} findings; checkWorkspace() clears them first", .{ self.root, into.records.len });
+    if (!self.initialized) assert.panic("checking {s} before the editor initialized the session; accepts() admits only initialize first", .{self.root});
+    const ctx = self.services.ctx orelse assert.panic("checking {s} in this process without the command's context; runLsp() passes both", .{self.root});
+    var root = Io.Dir.cwd().openDir(self.io, self.root, .{}) catch |e| {
+        try self.show(1, try self.scratch.text.format("zanity could not open the workspace {s}: {t}. Check that it exists and is readable, then save a file to retry.", .{ self.root, e }));
+        return null;
+    };
+    defer root.close(self.io);
+    try std.process.setCurrentDir(self.io, root);
+    _ = cmd_watch.checkAgain(ctx, resident, .{ .paths = &.{"."}, .production = self.services.production }) catch |e| switch (e) {
+        error.UserFailure => {
+            const failure = ctx.failure orelse assert.panic("zanity check failed in {s} without saying why; ctx.fail() records the failure", .{self.root});
+            try self.show(1, try self.scratch.text.format("zanity check failed in {s}: {s} {s}", .{ self.root, failure.message, failure.hint }));
+            return null;
+        },
+        else => return e,
+    };
+    const rows = resident.rows();
+    copyRecords(into, rows) catch {
+        try self.show(1, try self.scratch.text.format("zanity found {d} findings in {s}, more than the language server holds. Open a smaller workspace.", .{ rows.len, self.root }));
+        return null;
+    };
+    return into.records.items();
+}
+
+/// Copies each row into the results' own reserved memory, since the next check reuses the workspace's.
+fn copyRecords(into: *Results, rows: []const Row) error{LimitExceeded}!void {
+    if (into.records.len != 0) assert.panic("copying {d} findings into results that hold {d}; checkWorkspace() clears them first", .{ rows.len, into.records.len });
+    var text: memory.Text = .{ .buffer = into.outputBuffer() };
+    for (rows) |row| {
+        if (row.line == 0 or row.column == 0) assert.panic("{s}: the check reported line {d} column {d}; rows count both from 1", .{ row.path, row.line, row.column });
+        try into.records.add(.{
+            .path = try text.copy(row.path),
+            .line = row.line,
+            .column = row.column,
+            .severity = try text.copy(row.severity),
+            .rule = try text.copy(row.rule),
+            .message = try text.copy(row.message),
+            .fix = try text.copy(row.fix),
+            .edit_start = row.edit_start,
+            .edit_end = row.edit_end,
+            .edit_text = if (row.edit_text) |edit| try text.copy(edit) else null,
+        });
+    }
+    if (into.records.len != rows.len) assert.panic("copied {d} of {d} findings; copyRecords() copies every row", .{ into.records.len, rows.len });
 }
 
 /// Files one finding under its path, reading the file the first time to place it.

@@ -92,6 +92,8 @@ pub const Results = struct {
     text: memory.Text,
     entries: memory.Bounded(DiagnosticEntry),
     files: memory.Bounded(CheckedFile),
+    /// The findings of a check run in this process, whose text is copied into `output`.
+    records: memory.Bounded(Record),
 
     pub fn initResults(gpa: Allocator, limits: ServerLimits) !Results {
         const results: Results = .{
@@ -99,6 +101,7 @@ pub const Results = struct {
             .text = try .initText(gpa, limits.check_text_bytes),
             .entries = try .initBounded(gpa, limits.findings, "findings in one check"),
             .files = try .initBounded(gpa, limits.files, "files with findings in one check"),
+            .records = try .initBounded(gpa, limits.findings, "findings in one check"),
         };
         if (results.entries.len != 0 or results.files.len != 0) assert.panic("new results hold {d} findings in {d} files; initResults() must start empty", .{ results.entries.len, results.files.len });
         if (results.output.len != limits.check_bytes) assert.panic("reserved {d} bytes for check output instead of {d}", .{ results.output.len, limits.check_bytes });
@@ -109,6 +112,7 @@ pub const Results = struct {
         self.text.used = 0;
         self.entries.clear();
         self.files.clear();
+        self.records.clear();
         self.generation = 0;
         if (self.files.len != 0) assert.panic("cleared results still hold {d} files; fix Results.clear() to empty files", .{self.files.len});
         if (self.text.used != 0) assert.panic("cleared results still hold {d} bytes of text; fix Results.clear() to reset text", .{self.text.used});
