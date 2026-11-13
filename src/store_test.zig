@@ -54,6 +54,29 @@ test "a source analysis is queryable JSON and records cache hits" {
     try std.testing.expectEqual(@as(f64, 1), try scalar(store.db, "SELECT hits FROM source_analyses"));
 }
 
+test "trimming the analysis cache keeps the most recently used analyses and drops the rest" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const dir = try tmp.dir.realPathFileAlloc(std.testing.io, ".", arena);
+    var environ: std.process.Environ.Map = .init(arena);
+    try environ.put("ZANITY_STORE", try std.fs.path.join(arena, &.{ dir, "store.db" }));
+    const store = try Store.initStore(std.heap.page_allocator, std.testing.io, &environ, 8 << 20);
+    const source = digest(&.{"source"});
+    for ([_][]const u8{ "src/old.py", "src/used.py", "src/new.py" }) |path| {
+        try store.keepAnalysis(.{ .key = digest(&.{path}), .source = source, .path = path, .language = "lang-a", .result = "{\"findings\":[]}" });
+    }
+    const stamps = "UPDATE source_analyses SET used_at = CASE path WHEN 'src/old.py' THEN '2026-01-01T00:00:00+00:00' WHEN 'src/used.py' THEN '2026-01-03T00:00:00+00:00' ELSE '2026-01-02T00:00:00+00:00' END";
+    if (sqlite.sqlite3_exec(store.db, stamps, null, null, null) != sqlite.ok) return sqlite.captureDatabaseFailure(store.db);
+    try store.trimAnalyses(2);
+    try std.testing.expectEqual(@as(f64, 2), try scalar(store.db, "SELECT count(*) FROM source_analyses"));
+    try std.testing.expectEqual(@as(f64, 0), try scalar(store.db, "SELECT count(*) FROM source_analyses WHERE path = 'src/old.py'"));
+    try store.trimAnalyses(2);
+    try std.testing.expectEqual(@as(f64, 2), try scalar(store.db, "SELECT count(*) FROM source_analyses"));
+}
+
 /// The first column of the first row `sql` returns, for reading back what a test kept.
 fn scalar(db: *sqlite.sqlite3, comptime sql: []const u8) !f64 {
     if (!std.mem.startsWith(u8, sql, "SELECT ")) assert.panic("'{s}' is not a query; scalar() only reads back what a test kept", .{sql});

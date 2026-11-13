@@ -25,6 +25,8 @@ pub const Limits = struct {
     store_bytes: usize = 1 << 25,
     /// One cached JSON result plus the fixed-buffer arena used to parse it.
     analysis_bytes: u32 = 1 << 25,
+    /// Analyses the store keeps, most recently used first; at about 10 KB each, about 320 MB.
+    cached_analyses: u32 = 1 << 15,
     judgement_bytes: u32 = 1 << 26,
     /// Questions --infer asks in one run, across every function.
     questions: u32 = 1 << 22,

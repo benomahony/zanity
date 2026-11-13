@@ -119,6 +119,8 @@ pub const Store = struct {
     find_analysis: *sqlite.sqlite3_stmt,
     touch_analysis: *sqlite.sqlite3_stmt,
     save_analysis: *sqlite.sqlite3_stmt,
+    trim_analyses: *sqlite.sqlite3_stmt,
+    count_analyses: *sqlite.sqlite3_stmt,
     false_positive: *sqlite.sqlite3_stmt,
     save_label: *sqlite.sqlite3_stmt,
     find_label: *sqlite.sqlite3_stmt,
@@ -321,6 +323,19 @@ pub const Store = struct {
         try sqlite.bind(self.save_analysis, 4, analysis.language);
         try sqlite.bind(self.save_analysis, 5, analysis.result);
         if (sqlite.sqlite3_step(self.save_analysis) != sqlite.done) return sqlite.captureDatabaseFailure(self.db);
+    }
+
+    /// Deletes all but the `keep` most recently used analyses, so the cache stops growing with
+    /// every build and every workspace checked. An evicted file is analysed again on its next check.
+    pub fn trimAnalyses(self: *const Store, keep: u32) !void {
+        if (keep == 0) assert.panic("trimming the analysis cache to 0 rows would make every check a miss; memory.Limits.cached_analyses must be above 0", .{});
+        defer _ = sqlite.sqlite3_reset(self.trim_analyses);
+        try sqlite.bindInt(self.trim_analyses, 1, keep);
+        if (sqlite.sqlite3_step(self.trim_analyses) != sqlite.done) return sqlite.captureDatabaseFailure(self.db);
+        defer _ = sqlite.sqlite3_reset(self.count_analyses);
+        if (sqlite.sqlite3_step(self.count_analyses) != sqlite.row) return sqlite.captureDatabaseFailure(self.db);
+        const left = sqlite.sqlite3_column_int64(self.count_analyses, 0);
+        if (left > keep) assert.panic("the analysis cache holds {d} rows after trimming to {d}; trim_analyses must delete every row past the most recent {d}", .{ left, keep, keep });
     }
 };
 

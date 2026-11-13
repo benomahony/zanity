@@ -4,6 +4,7 @@
 /// The tables the store keeps, created on first use; WAL lets several runs share them.
 pub const schema =
     \\PRAGMA journal_mode = WAL;
+    \\PRAGMA journal_size_limit = 67108864;
     \\CREATE TABLE IF NOT EXISTS units (
     \\    unit_hash TEXT PRIMARY KEY,
     \\    language TEXT NOT NULL,
@@ -69,6 +70,7 @@ pub const schema =
     \\    used_at TEXT NOT NULL,
     \\    hits INTEGER NOT NULL DEFAULT 0
     \\);
+    \\CREATE INDEX IF NOT EXISTS source_analyses_used_at ON source_analyses (used_at);
 ;
 
 const find_answer = "SELECT probability FROM answers WHERE model = ?1 AND question_hash = ?2 AND unit_hash = ?3";
@@ -87,6 +89,10 @@ const list_observed = "SELECT o.rule, o.path, o.line, o.unit_hash, o.unit_name, 
 const touch_analysis = "UPDATE source_analyses SET used_at = strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now'), hits = hits + 1 WHERE analysis_hash = ?1";
 const save_analysis = "INSERT OR REPLACE INTO source_analyses (analysis_hash, source_hash, path, language, result, created_at, used_at, hits) VALUES (?1, ?2, ?3, ?4, ?5, strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now'), strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now'), 0)";
 
+/// Keeps the ?1 most recently used analyses and deletes the rest, walking the used_at index.
+const trim_analyses = "DELETE FROM source_analyses WHERE analysis_hash IN (SELECT analysis_hash FROM source_analyses ORDER BY used_at DESC LIMIT -1 OFFSET ?1)";
+const count_analyses = "SELECT count(*) FROM source_analyses";
+
 /// Built-in SQL for each prepared statement owned by Store, with matching field names.
 pub const statements = .{
     .find = find_answer,
@@ -97,6 +103,8 @@ pub const statements = .{
     .find_analysis = find_analysis,
     .touch_analysis = touch_analysis,
     .save_analysis = save_analysis,
+    .trim_analyses = trim_analyses,
+    .count_analyses = count_analyses,
     .false_positive = save_false_positive,
     .save_label = save_label,
     .find_label = find_label,
