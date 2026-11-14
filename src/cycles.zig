@@ -203,7 +203,7 @@ fn resolve(files: []const []const u8, imp: Import) ?u32 {
     const found = switch (adapter.tables.import_style) {
         .none => null,
         .relative => resolveRelative(files, dir, imp.spec, adapter.tables),
-        .dotted => resolveDotted(files, dir, imp.spec, adapter.tables),
+        .dotted => resolveDotted(files, dir, imp, adapter.tables),
         .crate_path => resolveCratePath(files, imp.path, imp.spec, adapter.tables.import_suffixes),
     };
     if (found) |f| if (f >= files.len) assert.panic("{s}: '{s}' resolved to file {d} of {d}", .{ imp.path, imp.spec, f, files.len });
@@ -224,9 +224,12 @@ fn resolveRelative(files: []const []const u8, dir: []const u8, spec: []const u8,
     return null;
 }
 
-/// The checked file the dotted `spec` names: from `dir` up for each leading dot past the first,
-/// or, with none, from the first of `dir` and its parents that holds it.
-fn resolveDotted(files: []const []const u8, dir: []const u8, spec: []const u8, tables: *const language.Tables) ?u32 {
+/// The checked file the dotted spec of `imp` names: from `dir` up for each leading dot past the
+/// first, or, with none, from the first of `dir` and its parents that holds it. A submodule names
+/// only a module's own file, never the file around a name inside it, which its statement imports.
+fn resolveDotted(files: []const []const u8, dir: []const u8, imp: Import, tables: *const language.Tables) ?u32 {
+    const spec = imp.spec;
+    const submodule = imp.submodule;
     if (tables.import_suffixes.len == 0) assert.panic("resolving '{s}' with no suffixes; list the file endings under import_suffixes", .{spec});
     const dots = std.mem.indexOfNone(u8, spec, ".") orelse spec.len;
     if (spec.len - dots > max_path) return null;
@@ -235,7 +238,10 @@ fn resolveDotted(files: []const []const u8, dir: []const u8, spec: []const u8, t
     for (spec[dots..], 0..) |c, i| name[i] = if (c == '.') '/' else c;
     var root: []const u8 = dir;
     for (0..max_roots) |depth| {
-        if (dots == 0 or depth + 1 >= dots) if (underOrOuter(files, root, name, tables)) |found| return found;
+        if (dots == 0 or depth + 1 >= dots) {
+            const found = if (submodule) under(files, root, name, tables.import_suffixes) else underOrOuter(files, root, name, tables);
+            if (found) |f| return f;
+        }
         if (dots > 0 and depth + 1 >= dots) return null;
         if (root.len == 0) return null;
         root = std.fs.path.dirname(root) orelse "";

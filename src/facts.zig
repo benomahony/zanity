@@ -61,6 +61,9 @@ pub const Import = struct {
     names: u32,
     /// Up to three of those names, separated by ", ", for a finding to quote.
     shown: []const u8 = "",
+    /// Whether `spec` joins a module to a name taken from it, which is an import only where that
+    /// name is a module's own file, as `from . import billing` imports billing.py.
+    submodule: bool = false,
 };
 
 pub const Function = struct {

@@ -20,6 +20,9 @@ const Entry = struct {
     binding: u64 = 0,
     named: u32 = 0,
     shown: [max_shown]?ts.Node = @splat(null),
+    /// For a name a `from ... import` takes that may be a submodule: where its statement starts,
+    /// whose module it is joined to. The name is then `spec`.
+    within: ?u32 = null,
 };
 
 /// A member read through a name, as `engine.Limit` reads `Limit` through `engine`.
@@ -74,6 +77,14 @@ pub const ImportNotes = struct {
         const node = piece.node;
         const text = node.text(source);
         if (text.len == 0) assert.panic("an import's {t} matched the empty {f}; capture a node with text", .{ piece.part, node.where() });
+        if (piece.part == .submodule) {
+            const candidate = try self.entryOf(node);
+            candidate.spec = node;
+            candidate.within = ts.ts_node_start_byte(piece.statement);
+            candidate.named = 1;
+            candidate.shown[0] = node;
+            return;
+        }
         const entry = try self.entryOf(piece.statement);
         switch (piece.part) {
             .module => entry.spec = node,
@@ -82,6 +93,7 @@ pub const ImportNotes = struct {
                 if (entry.named < max_shown) entry.shown[entry.named] = node;
                 entry.named += 1;
             },
+            .submodule => unreachable,
         }
         if (entry.statement > ts.ts_node_start_byte(node)) assert.panic("{f} is noted against a statement starting after it, at byte {d}", .{ node.where(), entry.statement });
     }
@@ -121,10 +133,12 @@ pub const ImportNotes = struct {
             const used = if (entry.binding != 0) distinctUses(uses, entry.binding) else 0;
             const spec = std.mem.trim(u8, spec_node.text(source), "\"'`");
             if (spec.len == 0) continue;
+            const within = if (entry.within) |start| self.moduleOf(start, source) orelse continue else "";
             try facts.imports.add(.{
                 .path = facts.path,
                 .language = facts.language,
-                .spec = try facts.text.copy(spec),
+                .submodule = entry.within != null,
+                .spec = if (entry.within == null) try facts.text.copy(spec) else try facts.text.format("{s}{s}{s}", .{ within, if (std.mem.endsWith(u8, within, ".")) "" else ".", spec }),
                 .line = entry.line,
                 .column = entry.column,
                 .names = entry.named + used,
@@ -133,6 +147,18 @@ pub const ImportNotes = struct {
         }
         if (facts.imports.len - before > self.entries.len) assert.panic("flushed {d} imports from {d} noted", .{ facts.imports.len - before, self.entries.len });
         self.clear();
+    }
+
+    /// The module the import statement starting at byte `start` names, as written.
+    fn moduleOf(self: *const ImportNotes, start: u32, source: []const u8) ?[]const u8 {
+        for (self.entries.items()) |e| if (e.statement == start and e.within == null) {
+            const module = e.spec orelse return null;
+            const text = module.text(source);
+            if (text.len == 0) assert.panic("the import at byte {d} names the empty module {f}; noteImport() refuses empty captures", .{ start, module.where() });
+            return text;
+        };
+        if (start >= source.len) assert.panic("an import statement starts at byte {d} of a {d}-byte file", .{ start, source.len });
+        return null;
     }
 
     fn entryOf(self: *ImportNotes, statement: ts.Node) error{LimitExceeded}!*Entry {
@@ -150,7 +176,7 @@ pub const ImportNotes = struct {
 };
 
 /// Which part of an import a capture names.
-pub const Part = enum { module, binding, name };
+pub const Part = enum { module, binding, name, submodule };
 
 /// One captured part of an import, and the import statement around it.
 pub const Piece = struct { part: Part, statement: ts.Node, node: ts.Node };

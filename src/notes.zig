@@ -50,7 +50,7 @@ pub fn note(self: *File, node: ts.Node, id: captures.Id) !bool {
 /// statement itself carries nothing: its parts are noted against it.
 fn noteImport(self: *File, node: ts.Node, id: captures.Id) !bool {
     const v = self.v;
-    const ours = v.import_statement == id or v.import_module == id or v.import_binding == id or v.import_name == id or v.import_via == id or v.import_used == id;
+    const ours = v.import_statement == id or v.import_module == id or v.import_binding == id or v.import_name == id or v.import_submodule == id or v.import_via == id or v.import_used == id;
     if (!ours or !self.checker.enabled.enabled("cyclic-import")) return ours;
     if (node.id == null) assert.panic("{s}: an import capture matched a null node; captures always name a node", .{self.work.facts.path});
     const imports = &self.s.imports;
@@ -59,7 +59,7 @@ fn noteImport(self: *File, node: ts.Node, id: captures.Id) !bool {
     } else if (v.import_used == id) {
         imports.noteUsed(node, self.source);
     } else if (v.import_statement != id) {
-        const part: Part = if (v.import_module == id) .module else if (v.import_binding == id) .binding else .name;
+        const part: Part = if (v.import_module == id) .module else if (v.import_binding == id) .binding else if (v.import_submodule == id) .submodule else .name;
         try imports.noteImport(.{ .part = part, .statement = importStatement(self, node), .node = node }, self.source);
     }
     if (imports.uses.len > imports.uses.capacity()) assert.panic("{s}: {d} member reads noted in room for {d}", .{ self.work.facts.path, imports.uses.len, imports.uses.capacity() });

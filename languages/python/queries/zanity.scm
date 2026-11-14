@@ -776,16 +776,17 @@
 ; A module's top-level imports, for cyclic-import: the module each names, the names a
 ; `from ... import` takes from it, and the name `import` binds the whole module to. Imports under
 ; `if TYPE_CHECKING:` or inside a function are not top-level, so they make no cycle at run time.
+; A name a `from ... import` takes may be a submodule, as `from . import billing` imports billing.py.
 (module
   (import_from_statement
     module_name: (_) @import.module
-    name: (dotted_name) @import.name) @import.statement)
+    name: (dotted_name) @import.name @import.submodule) @import.statement)
 
 (module
   (import_from_statement
     module_name: (_) @import.module
     name: (aliased_import
-      name: (dotted_name) @import.name)) @import.statement)
+      name: (dotted_name) @import.name @import.submodule)) @import.statement)
 
 (module
   (import_from_statement

@@ -2,6 +2,18 @@
 //! query, so a check tests a node's captures without comparing names.
 const assert = @import("assert.zig");
 const captures = @import("captures.zig");
+const std = @import("std");
+
+/// The capture a Vocabulary field holds the id of: its name with the first `_` written as `.`,
+/// as `import_name` holds `import.name`; `comment` holds `comment.outer`.
+fn captureOf(comptime field: []const u8) []const u8 {
+    if (field.len < 3 or field[0] == '_' or field[field.len - 1] == '_') assert.panic("Vocabulary.{s} can't name a capture; name it <group>_<capture>, as import_name holds import.name", .{field});
+    if (std.mem.eql(u8, field, "comment")) return "comment.outer";
+    const at = std.mem.indexOfScalar(u8, field, '_') orelse @compileError("Vocabulary." ++ field ++ " names no capture; name it <group>_<capture>, as import_name holds import.name");
+    const capture = field[0..at] ++ "." ++ field[at + 1 ..];
+    if (capture.len != field.len) assert.panic("Vocabulary.{s} became the capture {s}, of another length; only its first _ becomes a .", .{ field, capture });
+    return capture;
+}
 
 /// The literal kinds a query captures as `@type.<kind>` on an argument, in the order of
 /// `Tables.literal_types`' fields.
@@ -58,6 +70,7 @@ pub const Vocabulary = struct {
     import_module: ?captures.Id,
     import_binding: ?captures.Id,
     import_name: ?captures.Id,
+    import_submodule: ?captures.Id,
     import_via: ?captures.Id,
     import_used: ?captures.Id,
     abstraction_name: ?captures.Id,
@@ -76,60 +89,10 @@ pub const Vocabulary = struct {
     pub fn lookup(c: captures.Compiled) Vocabulary {
         if (c.names.len == 0) assert.panic("the query has no captures, so no rule could run; check the language's query files", .{});
         if (c.predicates.len == 0) assert.panic("the query has {d} captures but no patterns; check the language's query files listed in languages/manifest.zon", .{c.names.len});
-        return .{
-            .comment = c.id("comment.outer"),
-            .type_of = c.id("type.of"),
-            .type_literals = literalIds(c),
-            .literal_true = c.id("literal.true"),
-            .literal_constant = c.id("literal.constant"),
-            .literal_falsy = c.id("literal.falsy"),
-            .literal_none = c.id("literal.none"),
-            .literal_collection = c.id("literal.collection"),
-            .literal_string = c.id("literal.string"),
-            .error_message = c.id("error.message"),
-            .string_format = c.id("string.format"),
-            .expression_path = c.id("expression.path"),
-            .expression_conditional = c.id("expression.conditional"),
-            .compare_not_null = c.id("compare.not_null"),
-            .compare_non_negative = c.id("compare.non_negative"),
-            .compare_equal = c.id("compare.equal"),
-            .compare_subject = c.id("compare.subject"),
-            .compare_value = c.id("compare.value"),
-            .assignment_compound = c.id("assignment.compound"),
-            .function_passthrough = c.id("function.passthrough"),
-            .catch_swallowed = c.id("catch.swallowed"),
-            .arith_difference = c.id("arith.difference"),
-            .string_built = c.id("string.built"),
-            .async_name = c.id("async.name"),
-            .statement_call = c.id("statement.call"),
-            .control_chain = c.id("control.chain"),
-            .decision_point = c.id("decision.point"),
-            .test_outer = c.id("test.outer"),
-            .test_check = c.id("test.check"),
-            .test_constant = c.id("test.constant"),
-            .test_shared_state = c.id("test.shared_state"),
-            .chain_link = c.id("chain.link"),
-            .expression_repeatable = c.id("expression.repeatable"),
-            .write_target = c.id("write.target"),
-            .reference_name = c.id("reference.name"),
-            .import_statement = c.id("import.statement"),
-            .import_module = c.id("import.module"),
-            .import_binding = c.id("import.binding"),
-            .import_name = c.id("import.name"),
-            .import_via = c.id("import.via"),
-            .import_used = c.id("import.used"),
-            .abstraction_name = c.id("abstraction.name"),
-            .implementation_base = c.id("implementation.base"),
-            .reference_passed = c.id("reference.passed"),
-            .visibility_public = c.id("visibility.public"),
-            .opaque_negated = c.id("opaque.negated"),
-            .opaque_left = c.id("opaque.left"),
-            .opaque_key = c.id("opaque.key"),
-            .opaque_right = c.id("opaque.right"),
-            .double_behaviour = c.id("double.behaviour"),
-            .double_branch = c.id("double.branch"),
-            .call_verification = c.id("call.verification"),
-            .storage_read = c.id("storage.read"),
-        };
+        var v: Vocabulary = undefined;
+        inline for (@typeInfo(Vocabulary).@"struct".field_names) |name| {
+            @field(v, name) = if (comptime std.mem.eql(u8, name, "type_literals")) literalIds(c) else c.id(comptime captureOf(name));
+        }
+        return v;
     }
 };

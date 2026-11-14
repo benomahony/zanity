@@ -1,1 +1,1 @@
-from .orders import place
+VERSION = "1"

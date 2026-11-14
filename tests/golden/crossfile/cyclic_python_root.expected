@@ -1,3 +1,3 @@
 rules: cyclic-import
 exit: 0
-__init__.py:1:1: warning [cyclic-import]
+billing.py:1:1: warning [cyclic-import]
