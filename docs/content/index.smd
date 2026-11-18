@@ -385,12 +385,12 @@ Each text uses EmbeddingGemma's prompts: a name is embedded as its words, `fetch
 
 | Rule | Severity | Reports | `[semantic]` setting (default) |
 |---|---|---|---|
-| `near-synonym` | warning | names whose vectors cluster together across the codebase but share no word, such as `fetch_order` and `retrieve_purchase`; words count as the same when they are equal or share their first five letters, so `Definition` and `definitions` don't | the cluster's mean cosine (0.85) |
+| `near-synonym` | warning | names whose vectors cluster together across the codebase but share no word, such as `fetch_order` and `retrieve_purchase`; words count as the same when they are equal, share their first five letters, or one is the other with an ending such as `s`, `ed` or `ing` dropped, so `Definition` and `definitions`, `id` and `ids`, and `Reading` and `reads` don't | the cluster's mean cosine (0.95) |
 | `context-outlier` | information | a name nearer the centroid of another `[contexts.*]` or `[domains.*]` than its own; names in none count as one context, `global` | how much nearer (0.05) |
 | `semantic-coupling` | information | a function whose body is closest to one in another file or context; not tests, functions under six lines, or functions `structural-twins` already reported | the cosine (0.92) |
 | `intent-mismatch` | warning | a function whose name, docstring and body disagree: the one furthest from the other two, said by name, when it is further from them than they are from each other | the margin (0.15) |
 
-The first two port [dddlint](https://github.com/benomahony/dddlint)'s embedding insights. `intent-mismatch` and `semantic-coupling` are cheap, deterministic first passes at what `name-behaviour-mismatch`, `comment-drift` and `structural-twins` look for. The default thresholds are a starting point, not a measurement: every score is kept in `observations`, below the threshold as well, so `zanity mark`, `zanity review` and `zanity stats --thresholds` calibrate these rules as they do the `--infer` questions.
+The first two port [dddlint](https://github.com/benomahony/dddlint)'s embedding insights. `intent-mismatch` and `semantic-coupling` are cheap, deterministic first passes at what `name-behaviour-mismatch`, `comment-drift` and `structural-twins` look for. EmbeddingGemma 2 puts short names close together: on zanity's own source, half of all pairs of unrelated names score above 0.81, and clustering at 0.85 joined all 1830 names into one cluster, so `near-synonym` starts at 0.95, far above dddlint's 0.6 for MiniLM. The default thresholds are a starting point, not a measurement: every score is kept in `observations`, below the threshold as well, so `zanity mark`, `zanity review` and `zanity stats --thresholds` calibrate these rules as they do the `--infer` questions.
 
 **Search:** `zanity search "<query>"` embeds the query with `task: code retrieval | query: ` and lists the closest functions as `path:line:col: text`, which grep, Vim's quickfix list (`vim -q <(zanity search parse config)`) and VS Code's terminal all read. `--names` and `--docs` match names (of functions, classes and variables) or docstrings instead of bodies, with the similarity prompt; `--limit` sets how many (default 20); `--json` gives each match's path, line, column, last line, text and score. It reuses the vectors `check --semantic` kept, embedding only code that changed since.
 
@@ -435,7 +435,7 @@ model = "google/embeddinggemma-2"
 batch = 32
 concurrency = 4
 # The score at which each embedding rule reports, above 0 up to 1.
-near-synonym = 0.85
+near-synonym = 0.95
 context-outlier = 0.05
 semantic-coupling = 0.92
 intent-mismatch = 0.15

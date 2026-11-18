@@ -58,8 +58,8 @@ fn twinned(findings: []const Finding, unit: *const Unit) bool {
 
 pub fn judge(e: *embed.Embedding, run: Embedded) !void {
     if (run.enabled.len == 0) assert.panic("judging embeddings with no rules enabled; a check enables at least one", .{});
-    if (e.entries.len != 0) assert.panic("judging {d} texts gathered before; judge() gathers them", .{e.entries.len});
-    try e.gather(run.units, run.definitions);
+    if (e.entries.len != 0) assert.panic("judging {d} texts collected before; judge() collects them", .{e.entries.len});
+    try e.collect(run.units, run.definitions);
     try e.fetch();
     if (!e.judging or e.dimensions == 0 or e.entries.len == 0) return;
     var j = try Judging.initJudging(e.gpa, e.entries.len, e.dimensions);

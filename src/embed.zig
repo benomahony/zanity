@@ -125,7 +125,7 @@ pub const Embedding = struct {
     }
 
     fn want(self: *Embedding, kind: TextKind, text: []const u8) !u32 {
-        if (text.len == 0) assert.panic("embedding an empty {t} text; gather() must skip what has none", .{kind});
+        if (text.len == 0) assert.panic("embedding an empty {t} text; collect() must skip what has none", .{kind});
         const hash = store.digest(&.{ @tagName(kind), text });
         if (self.lookup.get(hash)) |found| return found;
         if (self.lookup.count() >= self.entries.capacity()) {
@@ -139,8 +139,8 @@ pub const Embedding = struct {
         return index;
     }
 
-    pub fn gather(self: *Embedding, units: []const Unit, definitions: []const Definition) !void {
-        if (self.entries.len != 0) assert.panic("gathering texts with {d} already gathered; one Embedding embeds one run, so gather() runs once", .{self.entries.len});
+    pub fn collect(self: *Embedding, units: []const Unit, definitions: []const Definition) !void {
+        if (self.entries.len != 0) assert.panic("collecting texts with {d} already collected; one Embedding embeds one run, so collect() runs once", .{self.entries.len});
         if (units.len > self.units.capacity()) return error.LimitExceeded;
         for (definitions) |*d| try self.names.add(.{ .definition = d, .name = try self.want(.name, try nameText(&self.text, d.name)) });
         for (units) |*unit| {
@@ -250,6 +250,7 @@ pub const Embedding = struct {
             .payload = payload.written(),
             .response_writer = &response.writer,
             .redirect_behavior = .unhandled,
+            .keep_alive = false,
             .headers = .{ .content_type = .{ .override = "application/json" }, .authorization = if (self.authorization) |a| .{ .override = a } else .omit },
         }) catch return error.ConnectionFailed;
         const body = response.written();

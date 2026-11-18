@@ -132,7 +132,7 @@
           "maximum": 64,
           "default": 4
         },
-        "near-synonym": { "description": "The mean cosine of a cluster of names that share no word at which near-synonym reports.", "type": "number", "exclusiveMinimum": 0, "maximum": 1, "default": 0.85 },
+        "near-synonym": { "description": "The mean cosine of a cluster of names that share no word at which near-synonym reports.", "type": "number", "exclusiveMinimum": 0, "maximum": 1, "default": 0.95 },
         "context-outlier": { "description": "How much nearer another context's centroid than its own a name must be for context-outlier to report.", "type": "number", "exclusiveMinimum": 0, "maximum": 1, "default": 0.05 },
         "semantic-coupling": { "description": "The cosine of two bodies in different files at which semantic-coupling reports.", "type": "number", "exclusiveMinimum": 0, "maximum": 1, "default": 0.92 },
         "intent-mismatch": { "description": "How much further one of a function's name, docstring and body must be from the other two than they are from each other for intent-mismatch to report.", "type": "number", "exclusiveMinimum": 0, "maximum": 1, "default": 0.15 }

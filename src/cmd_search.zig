@@ -99,13 +99,16 @@ fn preview(source: []const u8, name: []const u8) []const u8 {
     if (source.len == 0 or name.len == 0) assert.panic("previewing '{s}' with no source; facts.unit() keeps both", .{name});
     if (std.mem.indexOfScalar(u8, name, '\n') != null) assert.panic("previewing the name '{s}', which spans lines", .{name});
     var lines = std.mem.splitScalar(u8, source, '\n');
-    const first = std.mem.trim(u8, lines.first(), " \t\r");
     for (0..source.len) |_| {
         const line = lines.next() orelse break;
         if (std.mem.indexOf(u8, line, name) != null) return std.mem.trim(u8, line, " \t\r");
     }
-    if (std.mem.indexOf(u8, first, name) == null and first.len == 0) return name;
-    return if (std.mem.indexOf(u8, first, name) != null) first else name;
+    return name;
+}
+
+test "a match previews the first line naming the function, not a later line that mentions it" {
+    try std.testing.expectEqualStrings("pub fn post(self: *E) !void {", preview("/// Posts.\npub fn post(self: *E) !void {\n    if (x) panic(\"posting nothing\");\n}", "post"));
+    try std.testing.expectEqualStrings("total", preview("x = 1\n", "total"));
 }
 
 pub fn renderSearch(ctx: *zclig.Context, found: []const SearchRow) !void {

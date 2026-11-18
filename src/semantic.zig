@@ -7,7 +7,7 @@ const store = @import("store.zig");
 
 pub const default_thresholds: Thresholds = .{};
 pub const Thresholds = struct {
-    @"near-synonym": f64 = 0.85,
+    @"near-synonym": f64 = 0.95,
     @"context-outlier": f64 = 0.05,
     @"semantic-coupling": f64 = 0.92,
     @"intent-mismatch": f64 = 0.15,
@@ -68,8 +68,20 @@ pub const Insight = struct {
 
 pub const Room = struct { parent: []u32, cluster: []u32, centroids: []f32, scores: []f32, refs: [][]const f32, text: *memory.Text };
 
-fn sameToken(first: []const u8, second: []const u8) bool {
-    if (first.len == 0 or second.len == 0) assert.panic("comparing an empty word; Words never yields one", .{});
+const suffixes = [_][]const u8{ "ing", "ed", "es", "er", "y", "e" };
+
+fn stem(word: []const u8) []const u8 {
+    if (word.len == 0) assert.panic("stemming an empty word; Words never yields one", .{});
+    for (suffixes) |s| if (word.len >= s.len + 3 and std.ascii.endsWithIgnoreCase(word, s)) return word[0 .. word.len - s.len];
+    const plural = word.len >= 3 and std.ascii.toLower(word[word.len - 1]) == 's';
+    if (plural and word.len < 3) assert.panic("'{s}' is too short to drop its s", .{word});
+    return if (plural) word[0 .. word.len - 1] else word;
+}
+
+fn sameToken(whole_first: []const u8, whole_second: []const u8) bool {
+    if (whole_first.len == 0 or whole_second.len == 0) assert.panic("comparing an empty word; Words never yields one", .{});
+    const first = stem(whole_first);
+    const second = stem(whole_second);
     if (std.ascii.eqlIgnoreCase(first, second)) return true;
     var shared: usize = 0;
     const common = @min(first.len, second.len);
@@ -78,7 +90,7 @@ fn sameToken(first: []const u8, second: []const u8) bool {
         shared += 1;
     }
     if (shared > first.len) assert.panic("'{s}' and '{s}' share {d} letters, more than either has", .{ first, second, shared });
-    return shared >= min_shared_prefix;
+    return shared >= min_shared_prefix or (shared == common and shared >= 3);
 }
 
 fn sharesAToken(first: []const u8, second: []const u8) bool {
@@ -305,6 +317,15 @@ test "near-synonym takes a plural or a longer form of a word as the same word" {
     try nearSynonyms(f.scratch(), &.{ named("Definition", &east), named("definitions", &east_ish) }, 0.9, &f.insights);
     try nearSynonyms(f.scratch(), &.{ named("Embeddings", &east), named("_embedder", &east_ish), named("embed_names", &.{ 0.97, 0.24 }) }, 0.9, &f.insights);
     try nearSynonyms(f.scratch(), &.{ named("_alias_map", &east), named("map_points", &east_ish) }, 0.9, &f.insights);
+    try std.testing.expectEqual(@as(usize, 0), f.insights.len);
+}
+
+test "near-synonym takes an inflection of a short word as the same word" {
+    var f: Fixture = .{};
+    try nearSynonyms(f.scratch(), &.{ named("fit", &east), named("fits", &east_ish) }, 0.9, &f.insights);
+    try nearSynonyms(f.scratch(), &.{ named("calling", &east), named("calls", &east_ish) }, 0.9, &f.insights);
+    try nearSynonyms(f.scratch(), &.{ named("id", &east), named("ids", &east_ish) }, 0.9, &f.insights);
+    try nearSynonyms(f.scratch(), &.{ named("Reading", &east), named("reads", &east_ish) }, 0.9, &f.insights);
     try std.testing.expectEqual(@as(usize, 0), f.insights.len);
 }
 
