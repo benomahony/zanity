@@ -35,7 +35,7 @@ const build_version = @import("build_info").version;
 fn withSettings(requested: CheckOptions, settings: *const config.Config) CheckOptions {
     var options = requested;
     options.infer = requested.infer or settings.infer;
-    options.embed = requested.embed or settings.embed.enabled;
+    options.semantic = requested.semantic or settings.semantic.enabled;
     if (settings.infer and !options.infer) assert.panic("{s} sets [infer] enabled, but the check runs without --infer; withSettings() must honour the setting", .{settings.dir});
     if (requested.infer and !options.infer) assert.panic("the check was asked for --infer but runs without it; withSettings() must only add to what was asked", .{});
     return options;
@@ -58,7 +58,7 @@ pub fn runCheck(ctx: *zclig.Context, requested: CheckOptions) ![]const Row {
     var selected = if (options.rules) |list| try parseRules(ctx, ws, list) else settings.selection(options.production);
     if (options.rules != null and options.production) selected.includeTier(.production);
     if (options.infer) try connectInference(ctx, ws, &selected, options.rules == null);
-    if (options.embed) try connectEmbedding(ctx, ws, &selected, options.rules == null);
+    if (options.semantic) try connectEmbedding(ctx, ws, &selected, options.rules == null);
     var live = Live.initLive(console(ctx, ctx.runtime.err), ws.io, !ctx.quiet);
     ws.live = &live;
     defer ws.live = null;
@@ -151,18 +151,18 @@ pub const embedding_rules = [_][]const u8{ "near-synonym", "context-outlier", "s
 
 pub fn connectEmbedding(ctx: *zclig.Context, ws: *Workspace, selected: *rules.Set, add_embedded: bool) !void {
     if (ws.embedding != null) assert.panic("connecting to the embeddings server a second time; a run connects once", .{});
-    const environ = ws.environ orelse assert.panic("--embed needs the process environment; main() stores it in the workspace", .{});
-    const settings = ws.settings orelse assert.panic("connecting --embed before zanity.toml was read; read it first", .{});
-    const server: embed.Endpoint = .{ .environ = environ, .url = settings.embed.url, .model = settings.embed.model, .api_key_env = settings.embed.api_key_env };
+    const environ = ws.environ orelse assert.panic("--semantic needs the process environment; main() stores it in the workspace", .{});
+    const settings = ws.settings orelse assert.panic("connecting --semantic before zanity.toml was read; read it first", .{});
+    const server: embed.Endpoint = .{ .environ = environ, .url = settings.semantic.url, .model = settings.semantic.model, .api_key_env = settings.semantic.api_key_env };
     ws.embedding = embed.Embedding.initEmbedding(std.heap.page_allocator, ws.io, ws.limits, server) catch |e| switch (e) {
         error.StoreUnavailable => return ctx.fail(.io, try storeProblem(ws), "Check that the cache directory is writable, or set ZANITY_STORE to a file zanity can create."),
         else => return e,
     };
-    ws.embedding.?.batch = settings.embed.batch orelse embed.default_batch;
-    ws.embedding.?.concurrency = settings.embed.concurrency orelse embed.default_concurrency;
+    ws.embedding.?.batch = settings.semantic.batch orelse embed.default_batch;
+    ws.embedding.?.concurrency = settings.semantic.concurrency orelse embed.default_concurrency;
     ws.facts.collect_units = true;
     if (add_embedded) for (embedding_rules) |name| selected.include(name);
-    if (ws.embedding.?.batch == 0) assert.panic("[embed] batch is 0; config refuses it, and the default is {d}", .{embed.default_batch});
+    if (ws.embedding.?.batch == 0) assert.panic("[semantic] batch is 0; config refuses it, and the default is {d}", .{embed.default_batch});
 }
 
 /// Connects to the decision model for `--infer`, collecting the functions it will ask about and, unless

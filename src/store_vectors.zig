@@ -9,7 +9,7 @@ pub const max_vector = 4096;
 pub const Key = struct { model: []const u8, kind: []const u8, text: store.Digest };
 
 fn bindKey(stmt: *sqlite.sqlite3_stmt, key: Key) !void {
-    if (key.model.len == 0 or key.kind.len == 0) assert.panic("a vector keyed by model '{s}' and kind '{s}'; pass [embed] model and name, doc or body", .{ key.model, key.kind });
+    if (key.model.len == 0 or key.kind.len == 0) assert.panic("a vector keyed by model '{s}' and kind '{s}'; pass [semantic] model and name, doc or body", .{ key.model, key.kind });
     if (std.mem.indexOfNone(u8, &key.text, "0123456789abcdef") != null) assert.panic("a {s} vector keyed by '{s}', which is not a digest", .{ key.kind, &key.text });
     try sqlite.bind(stmt, 1, key.model);
     try sqlite.bind(stmt, 2, key.kind);

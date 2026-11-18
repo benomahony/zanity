@@ -138,7 +138,7 @@ pub const app: zclig.App = .{
         },
     }, .{ .run = calibrate.runStats }), zclig.command(cmd_search.SearchOptions, cmd_search.SearchRow, .{
         .name = "search",
-        .description = "Find code by what it does: embed the query with the [embed] server and list the closest functions as path:line:col: text, reusing the vectors check --embed kept.",
+        .description = "Find code by what it does: embed the query with the [semantic] server and list the closest functions as path:line:col: text, reusing the vectors check --semantic kept.",
         .examples = &.{ "zanity search \"retry a failed payment\"", "zanity search invoice total --names", "vim -q <(zanity search parse config)" },
         .result_title = "Matches",
         .positional = .{ .name = "query", .metavar = "QUERY", .help = "What the code does, in words." },

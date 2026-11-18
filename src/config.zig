@@ -86,7 +86,7 @@ pub const PathRules = struct {
     disable: rules.Set = .{},
 };
 
-pub const Embed = struct {
+pub const Semantic = struct {
     enabled: bool = false,
     url: ?[]const u8 = null,
     model: ?[]const u8 = null,
@@ -120,7 +120,7 @@ pub const Config = struct {
     concurrency: ?u32 = null,
     /// How sure the model must be for a judgement to become a finding, above 0 and at most 1.
     threshold: ?f64 = null,
-    embed: Embed = .{},
+    semantic: Semantic = .{},
     paths: [max_path_sections]PathRules = undefined,
     paths_len: usize = 0,
     terms: [max_terms]Term = undefined,

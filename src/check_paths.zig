@@ -175,7 +175,7 @@ fn checkFiles(ctx: *zclig.Context, ws: *Workspace, selected: rules.Set) !void {
 
 fn judgeEmbeddings(ctx: *zclig.Context, ws: *Workspace, embedding: *embed.Embedding, selected: rules.Set) !void {
     if (selected.len == 0) assert.panic("embedding with no rules selected; a check selects at least one", .{});
-    if (!ws.facts.collect_units) assert.panic("--embed ran without the functions kept; connectEmbedding() sets collect_units", .{});
+    if (!ws.facts.collect_units) assert.panic("--semantic ran without the functions kept; connectEmbedding() sets collect_units", .{});
     const definitions = ws.facts.definitions;
     const units = ws.facts.units;
     semantic_judge.judge(embedding, .{ .units = units.items(), .definitions = definitions.items(), .findings = &ws.findings, .enabled = selected, .thresholds = thresholds(ws.settings) }) catch |e| switch (e) {
@@ -187,7 +187,7 @@ fn judgeEmbeddings(ctx: *zclig.Context, ws: *Workspace, embedding: *embed.Embedd
 }
 
 fn thresholds(settings: ?*const config.Config) semantic.Thresholds {
-    const given = (settings orelse return semantic.default_thresholds).embed;
+    const given = (settings orelse return semantic.default_thresholds).semantic;
     var out = semantic.default_thresholds;
     inline for (@typeInfo(semantic.Thresholds).@"struct".field_names) |name| if (@field(given, name)) |value| {
         @field(out, name) = value;

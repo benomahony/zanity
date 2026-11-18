@@ -75,7 +75,7 @@ const EmbedRun = struct {
         const port = try reader.interface.takeDelimiterExclusive('\n');
         if (port.len == 0 or port.len > 5) assert.panic("the mock embeddings server printed '{s}' instead of a port; check tests/embed/mock_embeddings.py prints its port first", .{port});
         const url = if (reachable) try std.fmt.allocPrint(arena, "http://127.0.0.1:{s}", .{port}) else "http://127.0.0.1:9";
-        try tmp.dir.writeFile(io, .{ .sub_path = "zanity.toml", .data = try std.fmt.allocPrint(arena, "[embed]\nurl = \"{s}\"\n\n[contexts.billing]\ninclude = [\"src/billing/**\"]\n\n[contexts.core]\ninclude = [\"src/core/**\"]\n", .{url}) });
+        try tmp.dir.writeFile(io, .{ .sub_path = "zanity.toml", .data = try std.fmt.allocPrint(arena, "[semantic]\nurl = \"{s}\"\n\n[contexts.billing]\ninclude = [\"src/billing/**\"]\n\n[contexts.core]\ninclude = [\"src/core/**\"]\n", .{url}) });
         try tmp.dir.createDirPath(io, "src/core");
         try tmp.dir.createDirPath(io, "src/billing");
         try tmp.dir.writeFile(io, .{ .sub_path = "src/core/orders.py", .data = orders });
@@ -93,7 +93,7 @@ const EmbedRun = struct {
     }
 };
 
-test "--embed reports names that mean the same, names in the wrong context and bodies doing one job, then reuses every vector" {
+test "--semantic reports names that mean the same, names in the wrong context and bodies doing one job, then reuses every vector" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
     const arena = arena_state.allocator();
@@ -101,10 +101,10 @@ test "--embed reports names that mean the same, names in the wrong context and b
     var project = try EmbedRun.initEmbedRun(arena, io, true);
     defer project.tmp.cleanup();
     defer project.child.kill(io);
-    const first = try project.run(arena, io, &.{ "check", ".", "--embed", "--plain" });
+    const first = try project.run(arena, io, &.{ "check", ".", "--semantic", "--plain" });
     try expectOutput(first.stdout, &.{ "'retrieve_purchase' and 'fetch_order' name the same idea in unrelated words", "'retrieve_purchase' reads like core vocabulary but lives in billing", "'charge_card' reads like billing vocabulary but lives in core", "'charge_invoice' does what 'send_invoice' in src/core/orders.py:20 does", "'order_lines_fetch': its docstring disagrees with its body and name" }, &.{});
     try expectOutput(first.stderr, &.{"0 from the store, 18 embedded by google/embeddinggemma-2"}, &.{});
-    const second = try project.run(arena, io, &.{ "check", ".", "--embed", "--plain" });
+    const second = try project.run(arena, io, &.{ "check", ".", "--semantic", "--plain" });
     try std.testing.expectEqualStrings(first.stdout, second.stdout);
     try expectOutput(second.stderr, &.{"18 from the store, 0 embedded"}, &.{});
 }
@@ -123,7 +123,7 @@ test "zanity search lists the function closest to the query as path:line:col: te
     try expectOutput(names.stdout, &.{"\"text\":\"function retrieve_purchase\""}, &.{});
 }
 
-test "--embed with no server listening says how to start one" {
+test "--semantic with no server listening says how to start one" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
     const arena = arena_state.allocator();
@@ -131,7 +131,7 @@ test "--embed with no server listening says how to start one" {
     var project = try EmbedRun.initEmbedRun(arena, io, false);
     defer project.tmp.cleanup();
     defer project.child.kill(io);
-    const failed = try project.run(arena, io, &.{ "check", ".", "--embed", "--plain" });
+    const failed = try project.run(arena, io, &.{ "check", ".", "--semantic", "--plain" });
     try std.testing.expectEqual(std.process.Child.Term{ .exited = 74 }, failed.term);
     try expectOutput(failed.stderr, &.{ "ConnectionFailed", "Start an OpenAI-compatible embeddings server" }, &.{});
 }

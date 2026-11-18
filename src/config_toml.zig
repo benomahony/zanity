@@ -61,7 +61,7 @@ pub fn parseConfig(bytes: []u8) Error!Config {
     return config;
 }
 
-const Table = enum { root, rules, infer, embed, paths, vocabulary, synonyms, scope, questions };
+const Table = enum { root, rules, infer, semantic, paths, vocabulary, synonyms, scope, questions };
 
 pub const TomlReader = struct {
     /// Where the reader is in the file's text.
@@ -129,7 +129,7 @@ pub const TomlReader = struct {
         if (self.cursor.peek() != ']') return self.cursor.fail("expected ']' after '[{s}'; close the table name with ']'.", .{name});
         self.cursor.at += 1;
         self.table = std.meta.stringToEnum(Table, name) orelse .root;
-        if (self.table == .root or self.table == .vocabulary or self.table == .questions) return self.cursor.fail("'[{s}]' isn't a table zanity knows; the tables are [rules], [infer], [embed], [paths.\"<pattern>\"], [questions.\"<name>\"], [vocabulary], [domains.<name>] and [contexts.<name>].", .{name});
+        if (self.table == .root or self.table == .vocabulary or self.table == .questions) return self.cursor.fail("'[{s}]' isn't a table zanity knows; the tables are [rules], [infer], [semantic], [paths.\"<pattern>\"], [questions.\"<name>\"], [vocabulary], [domains.<name>] and [contexts.<name>].", .{name});
         if (self.table == .paths) try self.readPathSection(config);
         if (self.cursor.at <= start) assert.panic("reading a table header at byte {d} consumed nothing; readHeader() must consume at least the '[' it starts at", .{start});
     }
@@ -248,26 +248,26 @@ pub const TomlReader = struct {
         if (setting == .threshold and config.threshold == null) assert.panic("read [infer] threshold but stored nothing; its branch of readInferSetting() must store it", .{});
     }
 
-    fn readEmbedSetting(self: *TomlReader, config: *Config, key: []const u8) Error!void {
-        if (self.table != .embed) assert.panic("reading '{s}' as an [embed] setting outside [embed]; readSetting() must hand over only [embed] settings", .{key});
-        const EmbedSetting = enum { enabled, url, model, api_key_env, batch, concurrency, @"near-synonym", @"context-outlier", @"semantic-coupling", @"intent-mismatch" };
-        const setting = std.meta.stringToEnum(EmbedSetting, key) orelse return self.cursor.fail("'{s}' isn't an [embed] setting; the settings are enabled, url, model, api_key_env, batch, concurrency, near-synonym, context-outlier, semantic-coupling and intent-mismatch.", .{key});
+    fn readSemanticSetting(self: *TomlReader, config: *Config, key: []const u8) Error!void {
+        if (self.table != .semantic) assert.panic("reading '{s}' as an [semantic] setting outside [semantic]; readSetting() must hand over only [semantic] settings", .{key});
+        const SemanticSetting = enum { enabled, url, model, api_key_env, batch, concurrency, @"near-synonym", @"context-outlier", @"semantic-coupling", @"intent-mismatch" };
+        const setting = std.meta.stringToEnum(SemanticSetting, key) orelse return self.cursor.fail("'{s}' isn't an [semantic] setting; the settings are enabled, url, model, api_key_env, batch, concurrency, near-synonym, context-outlier, semantic-coupling and intent-mismatch.", .{key});
         switch (setting) {
-            .enabled => config.embed.enabled = try toml_values.readBoolean(&self.cursor, key),
+            .enabled => config.semantic.enabled = try toml_values.readBoolean(&self.cursor, key),
             .url, .model, .api_key_env => try self.readServerSetting(config, key),
             .batch, .concurrency => {
                 const value = try toml_values.readInteger(&self.cursor, key);
                 const most: i64 = if (setting == .batch) max_embed_batch else max_concurrency;
                 if (value < 1 or value > most) return self.cursor.fail("{s} is {d}; it must be between 1 and {d}.", .{ key, value, most });
-                if (setting == .batch) config.embed.batch = @intCast(value) else config.embed.concurrency = @intCast(value);
+                if (setting == .batch) config.semantic.batch = @intCast(value) else config.semantic.concurrency = @intCast(value);
             },
             inline .@"near-synonym", .@"context-outlier", .@"semantic-coupling", .@"intent-mismatch" => |rule| {
                 const value = try toml_values.readDecimal(&self.cursor, key);
                 if (!(value > 0 and value <= 1)) return self.cursor.fail("{s} is {d}; it must be above 0 and at most 1, such as 0.85 to report only scores of 0.85 and up.", .{ key, value });
-                @field(config.embed, @tagName(rule)) = value;
+                @field(config.semantic, @tagName(rule)) = value;
             },
         }
-        if (setting == .batch and config.embed.batch == null) assert.panic("read [embed] batch but stored nothing; its branch of readEmbedSetting() must store it", .{});
+        if (setting == .batch and config.semantic.batch == null) assert.panic("read [semantic] batch but stored nothing; its branch of readSemanticSetting() must store it", .{});
     }
 
     /// The [infer] settings naming the server: `url`, `model` and `api_key_env`, each held to the
@@ -281,11 +281,11 @@ pub const TomlReader = struct {
         if (firstOutside(text, form.allowed)) |i| return self.cursor.fail("{s} is '{s}', which has '{c}' at byte {d}; use only letters, digits and '{s}', such as \"{s}\".", .{ key, text, text[i], i, form.allowed, form.example });
         if (form.target == .api_key_env and std.ascii.isDigit(text[0])) return self.cursor.fail("api_key_env is '{s}', which starts with a digit; name an environment variable, such as \"KEV_API_KEY\".", .{text});
         if (form.target == .url) try self.checkServerUrl(text);
-        const embedding = self.table == .embed;
+        const embedding = self.table == .semantic;
         const slot = switch (form.target) {
-            .url => if (embedding) &config.embed.url else &config.url,
-            .model => if (embedding) &config.embed.model else &config.model,
-            .api_key_env => if (embedding) &config.embed.api_key_env else &config.api_key_env,
+            .url => if (embedding) &config.semantic.url else &config.url,
+            .model => if (embedding) &config.semantic.model else &config.model,
+            .api_key_env => if (embedding) &config.semantic.api_key_env else &config.api_key_env,
         };
         slot.* = text;
         const stored = slot.*;
@@ -393,7 +393,7 @@ pub const TomlReader = struct {
         if (self.table == .paths) return self.readPathSetting(config, key);
         if (self.table == .questions) return self.readQuestionSetting(config, key);
         if (self.table == .infer) return self.readInferSetting(config, key);
-        if (self.table == .embed) return self.readEmbedSetting(config, key);
+        if (self.table == .semantic) return self.readSemanticSetting(config, key);
         if (self.table == .vocabulary or self.table == .synonyms or self.table == .scope) return self.readVocabularySetting(config, key);
         try self.storeSetting(config, try self.settingNamed(key), key);
         if (config.exclude_len > max_excludes) assert.panic("{d} exclude patterns in room for {d}; readStrings() must refuse lists longer than max_excludes", .{ config.exclude_len, max_excludes });

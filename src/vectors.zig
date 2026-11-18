@@ -12,7 +12,7 @@ pub fn normalise(vector: []f32) void {
 }
 
 pub fn cosine(a: []const f32, b: []const f32) f32 {
-    if (a.len != b.len) assert.panic("comparing a {d}-value vector with a {d}-value one; every vector of a run comes from one model, so check [embed] model", .{ a.len, b.len });
+    if (a.len != b.len) assert.panic("comparing a {d}-value vector with a {d}-value one; every vector of a run comes from one model, so check [semantic] model", .{ a.len, b.len });
     if (a.len == 0) assert.panic("comparing vectors with no values; the server must return at least one per text", .{});
     var dot: f64 = 0;
     var aa: f64 = 0;

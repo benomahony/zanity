@@ -91,13 +91,13 @@
         }
       }
     },
-    "embed": {
-      "description": "The OpenAI-compatible embeddings server check --embed and zanity search call, and the score at which each embedding rule reports.",
+    "semantic": {
+      "description": "The OpenAI-compatible embeddings server check --semantic and zanity search call, and the score at which each embedding rule reports.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
         "enabled": {
-          "description": "Whether every check embeds, as if run with --embed.",
+          "description": "Whether every check embeds, as if run with --semantic.",
           "type": "boolean",
           "default": false
         },

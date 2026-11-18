@@ -99,7 +99,7 @@ pub const Embedding = struct {
             .cluster = try memory.reserveUninitialized(gpa, u32, limits.embeddings),
             .text = try .initText(gpa, limits.embedding_text_bytes),
         };
-        if (embedding.model.len == 0) assert.panic("vectors are kept under no model; [embed] model cannot be empty", .{});
+        if (embedding.model.len == 0) assert.panic("vectors are kept under no model; [semantic] model cannot be empty", .{});
         if (!std.mem.endsWith(u8, embedding.url, "/v1/embeddings")) assert.panic("asking '{s}' for embeddings; the url must end in /v1/embeddings", .{embedding.url});
         return embedding;
     }
@@ -158,8 +158,8 @@ pub const Embedding = struct {
     }
 
     pub fn fetch(self: *Embedding) !void {
-        if (self.batch == 0 or self.batch > max_embed_batch) assert.panic("[embed] batch is {d}; config refuses anything outside 1 to {d}", .{ self.batch, max_embed_batch });
-        if (self.concurrency == 0) assert.panic("embedding with no requests allowed at once; set [embed] concurrency to at least 1", .{});
+        if (self.batch == 0 or self.batch > max_embed_batch) assert.panic("[semantic] batch is {d}; config refuses anything outside 1 to {d}", .{ self.batch, max_embed_batch });
+        if (self.concurrency == 0) assert.panic("embedding with no requests allowed at once; set [semantic] concurrency to at least 1", .{});
         self.missing.clear();
         var scratch: [store_vectors.max_vector]f32 = undefined;
         for (self.entries.items(), 0..) |*entry, i| {
@@ -272,9 +272,9 @@ pub const Embedding = struct {
         const detail = self.detail[0..self.detail_len];
         failure = try self.text.format("{s} could not embed {d} texts with {s}: {t}{s}{s}", .{ self.url, self.missing.len, self.model, err, if (detail.len > 0) ": " else "", detail });
         advice = switch (err) {
-            error.ConnectionFailed => "Start an OpenAI-compatible embeddings server at [embed] url, such as llama-server --embedding --port 8080 with EmbeddingGemma 2, then run again; vectors already received are kept.",
-            error.ServerRefused => "Check [embed] model names a model the server has loaded, and api_key_env if it needs a key, then run again; vectors already received are kept.",
-            else => "The server's answer was not an OpenAI embeddings response with one vector per text, all of one length; check [embed] url points at /v1/embeddings of an embeddings server.",
+            error.ConnectionFailed => "Start an OpenAI-compatible embeddings server at [semantic] url, such as llama-server --embedding --port 8080 with EmbeddingGemma 2, then run again; vectors already received are kept.",
+            error.ServerRefused => "Check [semantic] model names a model the server has loaded, and api_key_env if it needs a key, then run again; vectors already received are kept.",
+            else => "The server's answer was not an OpenAI embeddings response with one vector per text, all of one length; check [semantic] url points at /v1/embeddings of an embeddings server.",
         };
         if (failure.len == 0 or advice.len == 0) assert.panic("describing a failed embedding with no words", .{});
         return error.EmbedFailed;
@@ -282,9 +282,9 @@ pub const Embedding = struct {
 
     pub fn summarise(self: *Embedding, ctx: anytype) !void {
         if (self.stats.embedded > self.stats.texts) assert.panic("embedded {d} of {d} texts; fetch() counts only gathered texts as missing, so check it sets stats.embedded from missing", .{ self.stats.embedded, self.stats.texts });
-        if (self.served.len == 0) assert.panic("summarising --embed with no model", .{});
+        if (self.served.len == 0) assert.panic("summarising --semantic with no model", .{});
         if (ctx.quiet or self.stats.texts == 0) return;
-        try ctx.diagnostic(try self.text.format("zanity: --embed had {d} {s} to embed: {d} from the store, {d} embedded by {s}.", .{ self.stats.texts, if (self.stats.texts == 1) "text" else "texts", self.stats.texts - self.stats.embedded, self.stats.embedded, self.served }));
+        try ctx.diagnostic(try self.text.format("zanity: --semantic had {d} {s} to embed: {d} from the store, {d} embedded by {s}.", .{ self.stats.texts, if (self.stats.texts == 1) "text" else "texts", self.stats.texts - self.stats.embedded, self.stats.embedded, self.served }));
     }
 
     pub fn embedQuery(self: *Embedding, query: []const u8, out: []f32) !void {

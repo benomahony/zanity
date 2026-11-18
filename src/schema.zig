@@ -88,7 +88,7 @@ pub fn renderSchema(w: *std.Io.Writer) !void {
 fn renderInferAndPaths(w: *std.Io.Writer) !void {
     if (config.max_path_sections == 0) assert.panic("config.max_path_sections is 0, so no [paths] table could be written; raise it in src/config.zig", .{});
     try renderInfer(w);
-    try renderEmbed(w);
+    try renderSemantic(w);
     try renderQuestions(w);
     try w.print(
         \\    "paths": {{
@@ -166,19 +166,19 @@ fn renderInfer(w: *std.Io.Writer) !void {
     , .{ config.max_concurrency, infer.default_concurrency, infer.default_threshold });
 }
 
-fn renderEmbed(w: *std.Io.Writer) !void {
-    if (config.max_concurrency < embed.default_concurrency) assert.panic("the default [embed] concurrency {d} is above the most config allows, {d}", .{ embed.default_concurrency, config.max_concurrency });
-    if (config.max_embed_batch < embed.default_batch) assert.panic("the default [embed] batch {d} is above the most config allows, {d}", .{ embed.default_batch, config.max_embed_batch });
+fn renderSemantic(w: *std.Io.Writer) !void {
+    if (config.max_concurrency < embed.default_concurrency) assert.panic("the default [semantic] concurrency {d} is above the most config allows, {d}", .{ embed.default_concurrency, config.max_concurrency });
+    if (config.max_embed_batch < embed.default_batch) assert.panic("the default [semantic] batch {d} is above the most config allows, {d}", .{ embed.default_batch, config.max_embed_batch });
     const t = semantic.default_thresholds;
     try w.print(
         \\
-        \\    "embed": {{
-        \\      "description": "The OpenAI-compatible embeddings server check --embed and zanity search call, and the score at which each embedding rule reports.",
+        \\    "semantic": {{
+        \\      "description": "The OpenAI-compatible embeddings server check --semantic and zanity search call, and the score at which each embedding rule reports.",
         \\      "type": "object",
         \\      "additionalProperties": false,
         \\      "properties": {{
         \\        "enabled": {{
-        \\          "description": "Whether every check embeds, as if run with --embed.",
+        \\          "description": "Whether every check embeds, as if run with --semantic.",
         \\          "type": "boolean",
         \\          "default": false
         \\        }},

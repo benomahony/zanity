@@ -173,8 +173,8 @@ TOOLS = [
             "context-outlier": "it comes from an embedding model in `dddlint map`, not from lint",
         },
         notes={
-            "near-synonym": "zanity's own needs `check --embed` and an embeddings server, which the parity run doesn't start; its tests port dddlint's",
-            "context-outlier": "zanity's own needs `check --embed` and an embeddings server, which the parity run doesn't start; its tests port dddlint's",
+            "near-synonym": "zanity's own needs `check --semantic` and an embeddings server, which the parity run doesn't start; its tests port dddlint's",
+            "context-outlier": "zanity's own needs `check --semantic` and an embeddings server, which the parity run doesn't start; its tests port dddlint's",
             "duplicate": "zanity reports only names another file can use, and not methods of different classes",
         },
         projects=True,
