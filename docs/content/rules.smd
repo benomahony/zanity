@@ -82,7 +82,7 @@ Rules marked *production* hold code to what safety-critical software needs and m
 | `misplaced-test` | warning | a test in one domain or context whose subject lives in exactly one other |
 | `vocabulary-conflict` | error | a vocabulary that contradicts itself: a word both banned and canonical, an alias mapped two ways, or two domains or contexts with nearly the same name |
 
-**Semantic** (with `--semantic`; see [Comparing meanings with `--semantic`](#comparing-meanings-with---semantic))
+**Semantic** (with `--semantic`; see [Comparing meanings with `--semantic`](https://benomahony.github.io/zanity/guide/#comparing-meanings-with---semantic))
 
 | Rule | Severity | Flags |
 |---|---|---|
