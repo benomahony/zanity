@@ -1,7 +1,7 @@
-"""Write the site's introduction and rules pages from README.md, which stays the one source,
-and its test checks page from src/rules.zig.
+"""Write the site's getting started and rules pages from README.md, which stays the one source,
+and its test checks page from src/rules.zig. The home page, index.smd, is written by hand.
 
-The introduction is the README from its first paragraph to its rules; the rules page is its
+The getting started page is the README from its first paragraph to its rules; the rules page is its
 rules section. Every rule in zanity.schema.json must appear on the rules page. The test checks
 page lists every rule marked `.tests` or asked of tests and fixtures, as rules.zig defines it.
 
@@ -16,7 +16,7 @@ DOCS = Path(__file__).parent.resolve()
 REPO = DOCS.parent
 CONTENT = DOCS / "content"
 PAGES = {
-    "index.smd": ("zanity", "Fast, deterministic sanity checks for code written by people and agents.", "index.shtml", "## Install", "## Rules"),
+    "guide.smd": ("Getting started", "Install zanity, check a repository, and keep it clean in pre-commit, CI and your editor.", "page.shtml", "## Install", "## Rules"),
     "rules.smd": ("Rules", "Every rule zanity runs, what it flags, and how severe it is.", "page.shtml", "## Rules", "## Contributing"),
 }
 
@@ -178,7 +178,7 @@ def main() -> None:
     written = {}
     for order, (name, (title, description, layout, start, end)) in enumerate(PAGES.items()):
         body = section(readme, start, end)
-        if name == "index.smd":
+        if name == "guide.smd":
             body = intro(readme) + body
         if name == "rules.smd":
             body += undescribed("\n".join(body)) + catalogue_questions()
