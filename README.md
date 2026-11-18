@@ -4,7 +4,9 @@
 
 Fast, deterministic sanity checks for code written by people and agents.
 
-zanity checks Python, Zig, Go, TypeScript, Rust, Java, C# and Swift for the mistakes that make code unsafe, untestable or hard to follow: unbounded loops, functions with no assertions, tests that sleep or touch the network, error messages that don't say what to do, and dozens more. It parses each file once with [tree-sitter](https://tree-sitter.github.io) and runs every rule in a single pass, so checking a whole repository takes moments. It is one static binary with no runtime to install, and checking never touches the network, unless you add `--infer` to have a language model judge what code structure can't, such as whether an error message misleads.
+Coding agents write code that compiles, passes its tests and looks fine in a diff. zanity finds the mistakes that survive all three: tests that mock the code they claim to check, error handlers that make failures vanish, `|| true` and `continue-on-error` keeping CI green, error messages that don't say what failed, and the same helper written again under a new name in every session. It checks Python, TypeScript, JavaScript, Go, Rust, Java, C#, Swift and Zig, and tells the agent, or you, how to fix each finding. [Why zanity](https://benomahony.github.io/zanity/) walks through each class of error it removes.
+
+It parses each file once with [tree-sitter](https://tree-sitter.github.io) and runs every rule in a single pass, so checking a whole repository takes moments. It is one static binary with no runtime to install, and checking never touches the network, unless you add `--infer` to have a language model judge what code structure can't, such as whether an error message misleads.
 
 ```console
 $ zanity check src

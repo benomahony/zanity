@@ -7,9 +7,9 @@
 		<p class="lede" :text="$page.description"></p>
 		<div class="content" :html="$page.content()"></div>
 		<footer class="pager">
-			<a class="next" href="$site.page('rules').link()">
+			<a class="next" href="$site.page('guide').link()">
 				<small>Next</small>
-				<span>Rules</span>
+				<span>Getting started</span>
 			</a>
 		</footer>
 	</article>

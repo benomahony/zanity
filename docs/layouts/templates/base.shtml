@@ -4,7 +4,7 @@
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1">
 		<title :text="$page.title.suffix(' · zanity')"></title>
-		<meta name="description" content="zanity: fast, deterministic sanity checks for code written by people and agents">
+		<meta name="description" content="zanity: catch the mistakes coding agents leave behind, from tests that prove nothing to quality gates quietly switched off">
 		<link rel="stylesheet" href="$site.asset('style.css').link()">
 		<super>
 	</head>
@@ -16,7 +16,8 @@
 					<span class="tagline">sanity checks for code</span>
 				</a>
 				<ul>
-					<li><a href="$site.page('').link()">Introduction</a></li>
+					<li><a href="$site.page('').link()">Why zanity</a></li>
+					<li><a href="$site.page('guide').link()">Getting started</a></li>
 					<li><a href="$site.page('rules').link()">Rules</a></li>
 					<li><a href="$site.page('test-checks').link()">Test checks</a></li>
 					<li>
