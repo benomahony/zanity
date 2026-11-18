@@ -76,8 +76,8 @@ jobs:
           key: zanity-semantic-store-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: zanity-semantic-store-${{ runner.os }}-
       - run: scripts/semantic-server
-      - name: zanity check . --semantic
-        run: zig build && ./zig-out/bin/zanity check . --semantic --rules near-synonym,context-outlier,semantic-coupling,intent-mismatch
+      - name: zanity check . --semantic --fail-on warning
+        run: zig build && ./zig-out/bin/zanity check . --semantic --fail-on warning
       - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         if: always()
         with:

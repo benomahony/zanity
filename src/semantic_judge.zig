@@ -74,7 +74,7 @@ pub fn judge(e: *embed.Embedding, run: Embedded) !void {
     for (e.units.items()) |row| {
         const u = row.unit;
         const subject = e.entryHash(row.body);
-        if (u.kind != .@"test" and u.end_line - u.line + 1 >= rules.min_twin_lines and !twinned(settled, u)) try j.bodies.add(.{ .name = u.name, .path = u.path, .line = u.line, .column = u.column, .vector = e.vector(row.body), .subject = subject });
+        if (u.kind != .@"test" and u.end_line - u.line + 1 >= rules.min_twin_lines and !twinned(settled, u)) try j.bodies.add(.{ .name = u.name, .path = u.path, .line = u.line, .column = u.column, .vector = e.vector(row.body), .subject = subject, .source = u.source });
         if (row.doc) |doc| try j.described.add(.{ .name = u.name, .path = u.path, .line = u.line, .column = u.column, .vectors = .{ e.vector(row.name), e.vector(doc), e.vector(row.body) }, .subject = subject });
     }
     const scratch: semantic.Room = .{ .parent = e.parent, .cluster = e.cluster, .centroids = j.centroids, .scores = j.scores, .refs = j.refs, .text = &e.text };

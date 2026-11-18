@@ -35,6 +35,10 @@ concurrency = 4
 # reports only what it is at least 90% sure of, and a lower value reports more.
 threshold = 0.8
 
+[semantic]
+# The default 0.15 reports readQuestionSetting, whose name and docstring agree; its error messages pull its body 0.18 away.
+intent-mismatch = 0.2
+
 # Rules that don't report in some files, one table per pattern (.gitignore syntax, relative
 # to this file). For example, end-to-end tests are meant to start processes and read files:
 # [paths."tests/e2e/"]

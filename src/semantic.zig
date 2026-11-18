@@ -36,7 +36,22 @@ pub const Coded = struct {
     lines: u32 = 0,
     vector: []const f32,
     subject: store.Digest = @splat('0'),
+    source: []const u8 = "",
 };
+
+fn calls(source: []const u8, name: []const u8) bool {
+    if (name.len == 0) assert.panic("looking for a call to a function with no name; facts.unit() records every name", .{});
+    var from: usize = 0;
+    for (0..source.len) |_| {
+        const at = std.mem.indexOfPos(u8, source, from, name) orelse return false;
+        const end = at + name.len;
+        const starts = at == 0 or !(std.ascii.isAlphanumeric(source[at - 1]) or source[at - 1] == '_');
+        if (starts and end < source.len and source[end] == '(' and !std.mem.endsWith(u8, std.mem.trimEnd(u8, source[0..at], " "), "fn") and !std.mem.endsWith(u8, std.mem.trimEnd(u8, source[0..at], " "), "def")) return true;
+        from = end;
+    }
+    if (from > source.len) assert.panic("searched past the end of a {d}-byte body for '{s}'", .{ source.len, name });
+    return false;
+}
 
 pub const Described = struct {
     name: []const u8,
@@ -203,6 +218,19 @@ fn before(a: Coded, b: Coded) bool {
     return order == .lt or (order == .eq and a.line < b.line);
 }
 
+fn shareHelper(items: []const Coded, a: usize, b: usize) bool {
+    if (a == b or a >= items.len or b >= items.len) assert.panic("asking whether bodies {d} and {d} of {d} share a helper; pass two different bodies", .{ a, b, items.len });
+    for (items, 0..) |helper, h| {
+        if (h == a or h == b or !calls(items[a].source, helper.name) or !calls(items[b].source, helper.name)) continue;
+        const others = for (items, 0..) |other, o| {
+            if (o != a and o != b and o != h and calls(other.source, helper.name)) break true;
+        } else false;
+        if (!others) return true;
+    }
+    if (items.len < 2) assert.panic("{d} bodies cannot hold a pair", .{items.len});
+    return false;
+}
+
 pub fn semanticCoupling(scratch: Room, items: []const Coded, threshold: f64, out: *memory.Bounded(Insight)) !void {
     if (!(threshold > 0 and threshold <= 1)) assert.panic("semantic-coupling at a threshold of {d}", .{threshold});
     if (items.len > scratch.parent.len) assert.panic("{d} bodies in room for {d}", .{ items.len, scratch.parent.len });
@@ -213,6 +241,7 @@ pub fn semanticCoupling(scratch: Room, items: []const Coded, threshold: f64, out
         scores[i] = -1;
         for (items, 0..) |b, j| {
             if (i == j or (std.mem.eql(u8, a.path, b.path) and std.mem.eql(u8, a.scope, b.scope))) continue;
+            if (calls(a.source, b.name) or calls(b.source, a.name)) continue;
             const s = vectors.cosine(a.vector, b.vector);
             if (s <= scores[i]) continue;
             scores[i] = s;
@@ -224,6 +253,7 @@ pub fn semanticCoupling(scratch: Room, items: []const Coded, threshold: f64, out
         if (j == i) continue;
         const b = items[j];
         if (best[j] == i and before(b, a)) continue;
+        if (shareHelper(items, i, j)) continue;
         try out.add(.{ .rule = "semantic-coupling", .path = a.path, .line = a.line, .column = a.column, .name = a.name, .score = scores[i], .threshold = threshold, .subject = a.subject, .message = try scratch.text.format("'{s}' does what '{s}' in {s}:{d} does (cosine {d:.2}), though their code differs.", .{ a.name, b.name, b.path, b.line + 1, scores[i] }) });
     }
 }
@@ -368,6 +398,32 @@ test "semantic-coupling pairs bodies in different files once, at the first" {
     try semanticCoupling(f.scratch(), &bodies, 0.9, &f.insights);
     try std.testing.expectEqual(@as(usize, 1), f.fired());
     try std.testing.expectEqualStrings("charge", f.found[0].name);
+}
+
+test "semantic-coupling leaves a function and the one it calls alone, since a wrapper reads like what it wraps" {
+    var f: Fixture = .{};
+    const bodies = [_]Coded{ .{ .name = "replayCached", .path = "a.zig", .vector = &east, .source = "fn replayCached() void {\n    cache.replay(x);\n}" }, .{ .name = "replay", .path = "b.zig", .vector = &east_ish, .source = "pub fn replay(x: X) void {}" } };
+    try semanticCoupling(f.scratch(), &bodies, 0.9, &f.insights);
+    try std.testing.expectEqual(@as(usize, 0), f.insights.len);
+}
+
+test "semantic-coupling leaves two bodies alone once they share a helper no other body calls" {
+    var f: Fixture = .{};
+    const bodies = [_]Coded{
+        .{ .name = "escapes", .path = "a.zig", .vector = &east, .source = "fn escapes() bool {\n    return !enclosedFrom(a);\n}" },
+        .{ .name = "leaves", .path = "b.zig", .vector = &east_ish, .source = "fn leaves() bool {\n    return !enclosedFrom(b);\n}" },
+        .{ .name = "enclosedFrom", .path = "c.zig", .vector = &north, .source = "pub fn enclosedFrom(x: u32) bool {}" },
+    };
+    try semanticCoupling(f.scratch(), &bodies, 0.9, &f.insights);
+    try std.testing.expectEqual(@as(usize, 0), f.fired());
+}
+
+test "a body calls a name only where it is called, not where a longer name or a definition contains it" {
+    try std.testing.expect(calls("x = cache.replay(y)", "replay"));
+    try std.testing.expect(!calls("x = replayAll(y)", "replay"));
+    try std.testing.expect(!calls("x = myreplay(y)", "replay"));
+    try std.testing.expect(!calls("pub fn replay(y: u8) void {}", "replay"));
+    try std.testing.expect(!calls("def replay(y):", "replay"));
 }
 
 test "semantic-coupling leaves bodies in the same file to structural rules" {

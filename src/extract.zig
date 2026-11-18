@@ -46,7 +46,7 @@ const Body = struct {
     /// Which top-level statement holds byte `at`, if any.
     fn statementAt(self: *const Body, at: u32) ?usize {
         if (self.count == 0) assert.panic("finding the statement at byte {d} of a body with none; readBody() returns before searching an empty body", .{at});
-        if (self.count > max_statements) assert.panic("{d} statements in room for {d}; gather() must stop at max_statements", .{ self.count, max_statements });
+        if (self.count > max_statements) assert.panic("{d} statements in room for {d}; listStatements() must stop at max_statements", .{ self.count, max_statements });
         for (self.statements[0..self.count], 0..) |s, i| {
             if (at >= ts.ts_node_start_byte(s) and at < ts.ts_node_end_byte(s)) return i;
             if (at < ts.ts_node_start_byte(s)) return null;
@@ -258,14 +258,8 @@ fn escapes(self: *File, exit: ts.Node, statement: ts.Node, loop: ?captures.Id) b
     if (ts.ts_node_end_byte(exit) > ts.ts_node_end_byte(statement)) assert.panic("{s}: the exit {f} ends after its statement {f}; statementAt() must place it inside", .{ self.work.facts.path, exit.where(), statement.where() });
     if (std.mem.startsWith(u8, exit.text(self.source), "return")) return true;
     const from = ts.ts_node_start_byte(statement);
-    const at = ts.ts_node_start_byte(exit);
-    if (at < from) assert.panic("{s}: the exit {f} starts before its statement {f}; statementAt() must place it inside", .{ self.work.facts.path, exit.where(), statement.where() });
-    const first = std.sort.lowerBound(captures.Triple, self.index.triples, from, captures.startsBefore);
-    for (self.index.triples[first..]) |t| {
-        if (t.key.start > at) break;
-        if (t.id == loop and ts.ts_node_end_byte(t.node) >= ts.ts_node_end_byte(exit)) return false;
-    }
-    return true;
+    if (ts.ts_node_start_byte(exit) < from) assert.panic("{s}: the exit {f} starts before its statement {f}; statementAt() must place it inside", .{ self.work.facts.path, exit.where(), statement.where() });
+    return !self.index.enclosedFrom(from, exit, loop);
 }
 
 /// The longest run of statements leaving at least `rules.min_extract_statements` behind, with no exit, at most one name read after

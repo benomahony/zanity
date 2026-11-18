@@ -103,7 +103,7 @@ def matches(tool: Tool, rule: str, old: dict, new: dict) -> bool:
     return near(old, new) or (rule in tool.same_file and old["path"] == new["path"])
 
 
-def inside(unit: Path, found: list[dict]) -> list[dict]:
+def within(unit: Path, found: list[dict]) -> list[dict]:
     """The findings in a fixture file, or anywhere in a fixture project."""
     assert unit.is_absolute(), f"{unit} must be absolute to compare with absolute finding paths"
     paths = [Path(f["path"]) for f in found]
@@ -133,10 +133,10 @@ def fixture_row(tool: Tool, unit: Path, runs: Runs) -> dict:
     """One rule's fixture: whether the old tool fired it, and whether zanity did, on which lines."""
     rule = expected_rule(tool, unit)
     targets = tool.rules[rule]
-    fired, answered = having(inside(unit, runs.old), [rule]), having(inside(unit, runs.new), targets)
+    fired, answered = having(within(unit, runs.old), [rule]), having(within(unit, runs.new), targets)
     # A vocabulary problem sits in each tool's own config file, so no line can match.
     same_line = None if rule.startswith("config:") else any(matches(tool, rule, o, n) for o in fired for n in answered)
-    others = {f["rule"] for f in inside(unit, runs.everything)}
+    others = {f["rule"] for f in within(unit, runs.everything)}
     assert targets, f"{tool.name} {rule} has a fixture but maps to no zanity rule; map it in tools.py"
     assert unit.is_relative_to(HERE), f"{unit} must sit under {HERE}"
     return {
