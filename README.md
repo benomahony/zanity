@@ -144,6 +144,16 @@ The action downloads the release binary for the runner and fails the job on any 
           TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
 ```
 
+For [`--semantic`](https://benomahony.github.io/zanity/guide/#comparing-meanings-with---semantic), set `semantic: true`. The action then runs EmbeddingGemma 2 on `llama-server` on the runner, so no code leaves it, and adds `--semantic` to a `check`:
+
+```yaml
+      - uses: benomahony/zanity@v0.1.0
+        with:
+          semantic: true
+```
+
+The first run builds `llama-server` and downloads the model (Q8_0, 310 MB), about four minutes, then caches both with `actions/cache`, so later runs start the server in seconds. The vectors are cached too, so only the first run embeds every function; after that a run embeds only what changed. It needs a Linux or macOS runner. `scripts/semantic-server` is the same setup, and runs on your own machine too.
+
 ## Usage
 
 ```sh
