@@ -7,6 +7,7 @@ const store_module = @import("store.zig");
 const Observation = store_module.Observation;
 const Store = store_module.Store;
 const digest = store_module.digest;
+const store_vectors = @import("store_vectors.zig");
 
 test "digests stay the same, so answers already in a store keep matching" {
     const unit = digest(&.{ "lang-a", "def f():\n    return 1\n" });
@@ -31,6 +32,25 @@ test "an answer kept in the store is found again" {
     try store.keepAnswer(.{ .model = "jev-1", .question = question, .unit = unit, .language = "lang-a", .source = "fn f() void {}", .probability = 0.25 });
     try std.testing.expectEqual(@as(?f64, 0.25), try store.cached("jev-1", question, unit));
     try std.testing.expectEqual(@as(?f64, null), try store.cached("jev-2", question, unit));
+}
+
+test "a vector kept in the store comes back as float16 kept it, under its model and kind only" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const dir = try tmp.dir.realPathFileAlloc(std.testing.io, ".", arena);
+    var environ: std.process.Environ.Map = .init(arena);
+    try environ.put("ZANITY_STORE", try std.fs.path.join(arena, &.{ dir, "store.db" }));
+    const store = try Store.initStore(std.heap.page_allocator, std.testing.io, &environ, 8 << 20);
+    const key: store_vectors.Key = .{ .model = "google/embeddinggemma-2", .kind = "body", .text = digest(&.{"def f(): pass"}) };
+    var out: [4]f32 = undefined;
+    try std.testing.expectEqual(@as(?usize, null), try store_vectors.cachedVector(&store, key, &out));
+    try store_vectors.keepVector(&store, key, &.{ 0.5, -0.25, 1 });
+    try std.testing.expectEqual(@as(?usize, 3), try store_vectors.cachedVector(&store, key, &out));
+    try std.testing.expectEqualSlices(f32, &.{ 0.5, -0.25, 1 }, out[0..3]);
+    try std.testing.expectEqual(@as(?usize, null), try store_vectors.cachedVector(&store, .{ .model = key.model, .kind = "name", .text = key.text }, &out));
 }
 
 test "a source analysis is queryable JSON and records cache hits" {

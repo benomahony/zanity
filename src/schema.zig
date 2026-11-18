@@ -6,6 +6,8 @@ const assert = @import("assert.zig");
 const rules = @import("rules.zig");
 const config = @import("config.zig");
 const infer = @import("infer.zig");
+const embed = @import("embed.zig");
+const semantic = @import("semantic.zig");
 /// The longest text quoted into the schema.
 const max_quoted_bytes = 4096;
 
@@ -86,6 +88,7 @@ pub fn renderSchema(w: *std.Io.Writer) !void {
 fn renderInferAndPaths(w: *std.Io.Writer) !void {
     if (config.max_path_sections == 0) assert.panic("config.max_path_sections is 0, so no [paths] table could be written; raise it in src/config.zig", .{});
     try renderInfer(w);
+    try renderEmbed(w);
     try renderQuestions(w);
     try w.print(
         \\    "paths": {{
@@ -161,6 +164,62 @@ fn renderInfer(w: *std.Io.Writer) !void {
         \\      }}
         \\    }},
     , .{ config.max_concurrency, infer.default_concurrency, infer.default_threshold });
+}
+
+fn renderEmbed(w: *std.Io.Writer) !void {
+    if (config.max_concurrency < embed.default_concurrency) assert.panic("the default [embed] concurrency {d} is above the most config allows, {d}", .{ embed.default_concurrency, config.max_concurrency });
+    if (config.max_embed_batch < embed.default_batch) assert.panic("the default [embed] batch {d} is above the most config allows, {d}", .{ embed.default_batch, config.max_embed_batch });
+    const t = semantic.default_thresholds;
+    try w.print(
+        \\
+        \\    "embed": {{
+        \\      "description": "The OpenAI-compatible embeddings server check --embed and zanity search call, and the score at which each embedding rule reports.",
+        \\      "type": "object",
+        \\      "additionalProperties": false,
+        \\      "properties": {{
+        \\        "enabled": {{
+        \\          "description": "Whether every check embeds, as if run with --embed.",
+        \\          "type": "boolean",
+        \\          "default": false
+        \\        }},
+        \\        "url": {{
+        \\          "description": "The server whose POST /v1/embeddings is called, such as llama-server --embedding, LM Studio or TEI.",
+        \\          "type": "string",
+        \\          "pattern": "^https?://",
+        \\          "default": "{s}"
+        \\        }},
+        \\        "model": {{
+        \\          "description": "The model to ask for vectors.",
+        \\          "type": "string",
+        \\          "minLength": 1,
+        \\          "default": "{s}"
+        \\        }},
+        \\        "api_key_env": {{
+        \\          "description": "The environment variable holding a key, sent as a bearer token; none is sent when unset.",
+        \\          "type": "string",
+        \\          "minLength": 1
+        \\        }},
+        \\        "batch": {{
+        \\          "description": "Texts sent in one request.",
+        \\          "type": "integer",
+        \\          "minimum": 1,
+        \\          "maximum": {d},
+        \\          "default": {d}
+        \\        }},
+        \\        "concurrency": {{
+        \\          "description": "Requests sent at once.",
+        \\          "type": "integer",
+        \\          "minimum": 1,
+        \\          "maximum": {d},
+        \\          "default": {d}
+        \\        }},
+        \\        "near-synonym": {{ "description": "The mean cosine of a cluster of names that share no word at which near-synonym reports.", "type": "number", "exclusiveMinimum": 0, "maximum": 1, "default": {d} }},
+        \\        "context-outlier": {{ "description": "How much nearer another context's centroid than its own a name must be for context-outlier to report.", "type": "number", "exclusiveMinimum": 0, "maximum": 1, "default": {d} }},
+        \\        "semantic-coupling": {{ "description": "The cosine of two bodies in different files at which semantic-coupling reports.", "type": "number", "exclusiveMinimum": 0, "maximum": 1, "default": {d} }},
+        \\        "intent-mismatch": {{ "description": "How much further one of a function's name, docstring and body must be from the other two than they are from each other for intent-mismatch to report.", "type": "number", "exclusiveMinimum": 0, "maximum": 1, "default": {d} }}
+        \\      }}
+        \\    }},
+    , .{ embed.default_url, embed.default_model, config.max_embed_batch, embed.default_batch, config.max_concurrency, embed.default_concurrency, t.@"near-synonym", t.@"context-outlier", t.@"semantic-coupling", t.@"intent-mismatch" });
 }
 
 /// The [questions."<name>"] tables: questions --infer asks besides zanity's own, or retunes.

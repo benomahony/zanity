@@ -90,6 +90,53 @@
           "default": 0.8
         }
       }
+    },
+    "embed": {
+      "description": "The OpenAI-compatible embeddings server check --embed and zanity search call, and the score at which each embedding rule reports.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "description": "Whether every check embeds, as if run with --embed.",
+          "type": "boolean",
+          "default": false
+        },
+        "url": {
+          "description": "The server whose POST /v1/embeddings is called, such as llama-server --embedding, LM Studio or TEI.",
+          "type": "string",
+          "pattern": "^https?://",
+          "default": "http://127.0.0.1:8080"
+        },
+        "model": {
+          "description": "The model to ask for vectors.",
+          "type": "string",
+          "minLength": 1,
+          "default": "google/embeddinggemma-2"
+        },
+        "api_key_env": {
+          "description": "The environment variable holding a key, sent as a bearer token; none is sent when unset.",
+          "type": "string",
+          "minLength": 1
+        },
+        "batch": {
+          "description": "Texts sent in one request.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 256,
+          "default": 32
+        },
+        "concurrency": {
+          "description": "Requests sent at once.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64,
+          "default": 4
+        },
+        "near-synonym": { "description": "The mean cosine of a cluster of names that share no word at which near-synonym reports.", "type": "number", "exclusiveMinimum": 0, "maximum": 1, "default": 0.85 },
+        "context-outlier": { "description": "How much nearer another context's centroid than its own a name must be for context-outlier to report.", "type": "number", "exclusiveMinimum": 0, "maximum": 1, "default": 0.05 },
+        "semantic-coupling": { "description": "The cosine of two bodies in different files at which semantic-coupling reports.", "type": "number", "exclusiveMinimum": 0, "maximum": 1, "default": 0.92 },
+        "intent-mismatch": { "description": "How much further one of a function's name, docstring and body must be from the other two than they are from each other for intent-mismatch to report.", "type": "number", "exclusiveMinimum": 0, "maximum": 1, "default": 0.15 }
+      }
     },    "questions": {
       "description": "Questions check --infer asks besides zanity's own, each a table named for its rule. Naming one of zanity's questions, such as cwe-15, retunes it instead: give only what changes.",
       "type": "object",
@@ -218,6 +265,10 @@
         { "const": "vocabulary-conflict", "description": "error, on by default. Make the vocabulary in zanity.toml agree with itself: one word per meaning, and none both banned and canonical." },
         { "const": "name-drift", "description": "warning, on by default. Pick one spelling and use it everywhere." },
         { "const": "duplicate-name", "description": "warning, on by default. Give each a name that says how it differs." },
+        { "const": "near-synonym", "description": "warning, on by default. Pick one word for the idea and rename the others to it, or name the canonical word in [vocabulary.synonyms] of zanity.toml." },
+        { "const": "context-outlier", "description": "information, on by default. Move it to the context whose words it uses, or rename it in the words of the context it lives in." },
+        { "const": "semantic-coupling", "description": "information, on by default. Keep one and call it from both places, or name each for how it differs." },
+        { "const": "intent-mismatch", "description": "warning, on by default. Make the name, docstring and body say the same thing: change whichever of them is wrong." },
         { "const": "restated-type", "description": "warning, on with --production. Assert something about its value instead." },
         { "const": "NASA05-M1", "description": "The NASA code for restated-type: warning, on with --production. Assert something about its value instead." },
         { "const": "constant-assertion", "description": "error, on with --production. Assert something that depends on the input." },

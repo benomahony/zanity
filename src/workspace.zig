@@ -18,6 +18,7 @@ const structure = @import("structure.zig");
 const memory = @import("memory.zig");
 const Ignore = @import("ignore.zig").Ignore;
 const infer = @import("infer.zig");
+const embed = @import("embed.zig");
 const store = @import("store.zig");
 const Live = @import("live.zig").Live;
 const config = @import("config.zig");
@@ -70,6 +71,7 @@ pub const Workspace = struct {
     /// Whether the command line chose --json or --plain, which turns off agent output.
     chose_format: bool = false,
     inference: ?infer.Inference = null,
+    embedding: ?embed.Embedding = null,
     source_cache: ?store.Store = null,
     /// The notice after a check a person reads, when a newer release is out.
     notice: Notice = .{},

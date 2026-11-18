@@ -48,6 +48,9 @@ disable = ["filesystem-in-test", "process-in-test"]
 [paths."src/infer_test.zig"]
 disable = ["filesystem-in-test", "process-in-test"]
 
+[paths."src/embed_test.zig"]
+disable = ["filesystem-in-test", "process-in-test"]
+
 [paths."src/lsp_test.zig"]
 disable = ["filesystem-in-test", "process-in-test"]
 

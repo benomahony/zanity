@@ -448,7 +448,7 @@ fn adviceFor(err: anyerror) []const u8 {
 
 /// The variable's value, or null when it is unset or blank, as tai treats the environment, or
 /// holds a line break, which no key or address does and which would split a request header.
-fn present(environ: *const std.process.Environ.Map, name: []const u8) ?[]const u8 {
+pub fn present(environ: *const std.process.Environ.Map, name: []const u8) ?[]const u8 {
     if (name.len == 0) assert.panic("reading an unnamed environment variable; pass a name such as TYPESAFE_API_KEY", .{});
     const value = std.mem.trim(u8, environ.get(name) orelse return null, " \t\r\n");
     if (value.len == 0 or std.mem.indexOfAny(u8, value, "\r\n") != null) return null;

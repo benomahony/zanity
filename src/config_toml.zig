@@ -14,6 +14,7 @@ const Scope = config_module.Scope;
 const file_name = config_module.file_name;
 const max_excludes = config_module.max_excludes;
 const max_concurrency = config_module.max_concurrency;
+const max_embed_batch = config_module.max_embed_batch;
 const max_questions = config_module.max_questions;
 const max_path_sections = config_module.max_path_sections;
 const max_file_bytes = config_module.max_file_bytes;
@@ -60,7 +61,7 @@ pub fn parseConfig(bytes: []u8) Error!Config {
     return config;
 }
 
-const Table = enum { root, rules, infer, paths, vocabulary, synonyms, scope, questions };
+const Table = enum { root, rules, infer, embed, paths, vocabulary, synonyms, scope, questions };
 
 pub const TomlReader = struct {
     /// Where the reader is in the file's text.
@@ -128,7 +129,7 @@ pub const TomlReader = struct {
         if (self.cursor.peek() != ']') return self.cursor.fail("expected ']' after '[{s}'; close the table name with ']'.", .{name});
         self.cursor.at += 1;
         self.table = std.meta.stringToEnum(Table, name) orelse .root;
-        if (self.table == .root or self.table == .vocabulary or self.table == .questions) return self.cursor.fail("'[{s}]' isn't a table zanity knows; the tables are [rules], [infer], [paths.\"<pattern>\"], [questions.\"<name>\"], [vocabulary], [domains.<name>] and [contexts.<name>].", .{name});
+        if (self.table == .root or self.table == .vocabulary or self.table == .questions) return self.cursor.fail("'[{s}]' isn't a table zanity knows; the tables are [rules], [infer], [embed], [paths.\"<pattern>\"], [questions.\"<name>\"], [vocabulary], [domains.<name>] and [contexts.<name>].", .{name});
         if (self.table == .paths) try self.readPathSection(config);
         if (self.cursor.at <= start) assert.panic("reading a table header at byte {d} consumed nothing; readHeader() must consume at least the '[' it starts at", .{start});
     }
@@ -247,6 +248,28 @@ pub const TomlReader = struct {
         if (setting == .threshold and config.threshold == null) assert.panic("read [infer] threshold but stored nothing; its branch of readInferSetting() must store it", .{});
     }
 
+    fn readEmbedSetting(self: *TomlReader, config: *Config, key: []const u8) Error!void {
+        if (self.table != .embed) assert.panic("reading '{s}' as an [embed] setting outside [embed]; readSetting() must hand over only [embed] settings", .{key});
+        const EmbedSetting = enum { enabled, url, model, api_key_env, batch, concurrency, @"near-synonym", @"context-outlier", @"semantic-coupling", @"intent-mismatch" };
+        const setting = std.meta.stringToEnum(EmbedSetting, key) orelse return self.cursor.fail("'{s}' isn't an [embed] setting; the settings are enabled, url, model, api_key_env, batch, concurrency, near-synonym, context-outlier, semantic-coupling and intent-mismatch.", .{key});
+        switch (setting) {
+            .enabled => config.embed.enabled = try toml_values.readBoolean(&self.cursor, key),
+            .url, .model, .api_key_env => try self.readServerSetting(config, key),
+            .batch, .concurrency => {
+                const value = try toml_values.readInteger(&self.cursor, key);
+                const most: i64 = if (setting == .batch) max_embed_batch else max_concurrency;
+                if (value < 1 or value > most) return self.cursor.fail("{s} is {d}; it must be between 1 and {d}.", .{ key, value, most });
+                if (setting == .batch) config.embed.batch = @intCast(value) else config.embed.concurrency = @intCast(value);
+            },
+            inline .@"near-synonym", .@"context-outlier", .@"semantic-coupling", .@"intent-mismatch" => |rule| {
+                const value = try toml_values.readDecimal(&self.cursor, key);
+                if (!(value > 0 and value <= 1)) return self.cursor.fail("{s} is {d}; it must be above 0 and at most 1, such as 0.85 to report only scores of 0.85 and up.", .{ key, value });
+                @field(config.embed, @tagName(rule)) = value;
+            },
+        }
+        if (setting == .batch and config.embed.batch == null) assert.panic("read [embed] batch but stored nothing; its branch of readEmbedSetting() must store it", .{});
+    }
+
     /// The [infer] settings naming the server: `url`, `model` and `api_key_env`, each held to the
     /// characters its kind of name uses.
     fn readServerSetting(self: *TomlReader, config: *Config, key: []const u8) Error!void {
@@ -258,16 +281,14 @@ pub const TomlReader = struct {
         if (firstOutside(text, form.allowed)) |i| return self.cursor.fail("{s} is '{s}', which has '{c}' at byte {d}; use only letters, digits and '{s}', such as \"{s}\".", .{ key, text, text[i], i, form.allowed, form.example });
         if (form.target == .api_key_env and std.ascii.isDigit(text[0])) return self.cursor.fail("api_key_env is '{s}', which starts with a digit; name an environment variable, such as \"KEV_API_KEY\".", .{text});
         if (form.target == .url) try self.checkServerUrl(text);
-        switch (form.target) {
-            .url => config.url = text,
-            .model => config.model = text,
-            .api_key_env => config.api_key_env = text,
-        }
-        const stored = switch (form.target) {
-            .url => config.url,
-            .model => config.model,
-            .api_key_env => config.api_key_env,
+        const embedding = self.table == .embed;
+        const slot = switch (form.target) {
+            .url => if (embedding) &config.embed.url else &config.url,
+            .model => if (embedding) &config.embed.model else &config.model,
+            .api_key_env => if (embedding) &config.embed.api_key_env else &config.api_key_env,
         };
+        slot.* = text;
+        const stored = slot.*;
         if (stored == null or stored.?.ptr != text.ptr) assert.panic("read [infer] {s} = '{s}' but stored something else; readServerSetting() must store the value it read", .{ key, text });
         if (text.len > self.cursor.bytes.len) assert.panic("read [infer] {s} as {d} bytes from a {d}-byte file; readString() must return part of the file", .{ key, text.len, self.cursor.bytes.len });
     }
@@ -372,6 +393,7 @@ pub const TomlReader = struct {
         if (self.table == .paths) return self.readPathSetting(config, key);
         if (self.table == .questions) return self.readQuestionSetting(config, key);
         if (self.table == .infer) return self.readInferSetting(config, key);
+        if (self.table == .embed) return self.readEmbedSetting(config, key);
         if (self.table == .vocabulary or self.table == .synonyms or self.table == .scope) return self.readVocabularySetting(config, key);
         try self.storeSetting(config, try self.settingNamed(key), key);
         if (config.exclude_len > max_excludes) assert.panic("{d} exclude patterns in room for {d}; readStrings() must refuse lists longer than max_excludes", .{ config.exclude_len, max_excludes });

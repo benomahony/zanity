@@ -23,6 +23,8 @@ pub extern fn sqlite3_reset(stmt: *sqlite3_stmt) c_int;
 pub extern fn sqlite3_step(stmt: *sqlite3_stmt) c_int;
 pub extern fn sqlite3_bind_text(stmt: *sqlite3_stmt, i: c_int, text: [*]const u8, n: c_int, destructor: isize) c_int;
 pub extern fn sqlite3_bind_int64(stmt: *sqlite3_stmt, i: c_int, value: i64) c_int;
+pub extern fn sqlite3_bind_blob(stmt: *sqlite3_stmt, i: c_int, blob: [*]const u8, n: c_int, destructor: isize) c_int;
+pub extern fn sqlite3_column_blob(stmt: *sqlite3_stmt, i: c_int) ?[*]const u8;
 pub extern fn sqlite3_bind_double(stmt: *sqlite3_stmt, i: c_int, value: f64) c_int;
 pub extern fn sqlite3_column_double(stmt: *sqlite3_stmt, i: c_int) f64;
 pub extern fn sqlite3_column_text(stmt: *sqlite3_stmt, i: c_int) ?[*]const u8;
@@ -37,7 +39,7 @@ pub const done = 101;
 pub const open_readwrite = 0x2;
 pub const open_create = 0x4;
 pub const config_heap = 8;
-const transient: isize = -1;
+pub const transient: isize = -1;
 pub const column_null = 5;
 
 /// Why the calling thread's last store operation failed, as SQLite put it.

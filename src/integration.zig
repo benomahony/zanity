@@ -4,6 +4,7 @@ test {
     _ = @import("golden_test.zig");
     _ = @import("baseline_test.zig");
     _ = @import("infer_test.zig");
+    _ = @import("embed_test.zig");
     _ = @import("lsp_test.zig");
     _ = @import("fix_test.zig");
     _ = @import("agent_test.zig");

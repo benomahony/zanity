@@ -16,6 +16,7 @@ pub const CheckOptions = struct {
     rules: ?[]const u8 = null,
     fix: bool = false,
     infer: bool = false,
+    embed: bool = false,
     junit: ?[]const u8 = null,
     @"slow-test-ms": u32 = 1000,
     production: bool = false,
@@ -234,6 +235,7 @@ pub const check_options: []const @import("zclig").OptionInfo = &.{
     .{ .name = "agent", .help = "Print findings for a coding agent: totals and the next command first, then each finding with its fix. On by default when CLAUDECODE is set and neither --json nor --plain is given.", .env = "ZANITY_AGENT" },
     .{ .name = "limit", .metavar = "N", .help = "With --agent, show at most N findings in all, rules first to last, and list the other rules by name; 0 shows them all.", .example = "0" },
     .{ .name = "infer", .help = "Also ask a decision model what no deterministic check can decide, such as whether an error message misleads: TypeSafe's Jev, which needs TYPESAFE_API_KEY, or the System One server [infer] in zanity.toml names, such as a local Kev." },
+    .{ .name = "embed", .help = "Also embed every name, docstring and body with the OpenAI-compatible /v1/embeddings server [embed] in zanity.toml names, by default llama-server at http://127.0.0.1:8080 with EmbeddingGemma 2, for near-synonym, context-outlier, semantic-coupling and intent-mismatch, and for zanity search." },
 };
 
 pub fn renderOutput(ctx: anytype, ws: anytype, options: anytype, agent: bool) !void {
