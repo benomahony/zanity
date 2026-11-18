@@ -10,6 +10,12 @@ it("reaches out", function()
   io.popen("ls")
 end)
 
+it("works in neovim's temporary directory", function()
+  local dir = vim.fn.tempname()
+  vim.fn.mkdir(dir .. "/bin", "p")
+  io.open(dir .. "/bin/python", "w")
+end)
+
 local function helper()
   _G.MODE = "prod"
   io.popen("ls")

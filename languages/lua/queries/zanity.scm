@@ -701,8 +701,13 @@
   (expression_list
     (identifier) @binding.handed_off))
 
-; Names the code refers to, for dead-symbol: every name other than where it is defined.
+; Names the code refers to, for dead-symbol: every name other than where it is defined, and every
+; name in a string that runs Lua, as a keymap's `"<cmd>lua require('uv').pick()<CR>"` does.
 (identifier) @reference.name
+
+((string
+  content: (string_content) @reference.text)
+  (#any-word? @reference.text "lua"))
 
 ; A function written as a field of a table, `{ setup = function() end }`, or stored in a table held
 ; by another, `function M.actions.focus()`: whatever the table is handed to reaches it by its key.

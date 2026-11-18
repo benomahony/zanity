@@ -22,6 +22,16 @@ local mt = {
   end,
 }
 
+function M.pick()
+  return run()
+end
+
+vim.keymap.set("n", "<leader>p", "<cmd>lua require('app').pick()<CR>")
+
+local function from_comment_only()
+  return "lua is mentioned in no string that calls this"
+end
+
 function M.setup(opts)
   return setmetatable(opts or {}, mt), run()
 end
