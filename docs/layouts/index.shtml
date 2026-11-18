@@ -2,8 +2,8 @@
 <head id="head">
 </head>
 <main id="main">
-	<article>
-		<img class="hero-logo" src="$site.asset('zanity_logo.png').link()" alt="zanity">
+	<article class="home">
+		<h1 class="hero"><span class="logo"><b>[z]</b>anity</span><span class="prompt">zanity check</span></h1>
 		<p class="lede" :text="$page.description"></p>
 		<div class="content" :html="$page.content()"></div>
 		<footer class="pager">

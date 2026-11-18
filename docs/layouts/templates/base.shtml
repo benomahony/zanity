@@ -5,6 +5,15 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1">
 		<title :text="$page.title.suffix(' · zanity')"></title>
 		<meta name="description" content="zanity: catch the mistakes coding agents leave behind, from tests that prove nothing to quality gates quietly switched off">
+		<meta name="theme-color" content="#151515">
+		<meta property="og:title" content="$page.title.suffix(' · zanity')">
+		<meta property="og:description" content="$page.description">
+		<meta property="og:image" content="https://benomahony.github.io/zanity/zanity_logo.png">
+		<meta name="twitter:card" content="summary_large_image">
+		<link rel="icon" type="image/svg+xml" href="$site.asset('favicon.svg').link()">
+		<link rel="preconnect" href="https://fonts.googleapis.com">
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&display=swap">
 		<link rel="stylesheet" href="$site.asset('style.css').link()">
 		<super>
 	</head>
@@ -12,8 +21,8 @@
 		<div class="layout">
 			<nav class="sidebar">
 				<a class="brand" href="$site.page('').link()">
-					<span class="logo">zanity</span>
-					<span class="tagline">sanity checks for code</span>
+					<span class="logo"><b>[z]</b>anity</span>
+					<span class="tagline">zanity check</span>
 				</a>
 				<ul>
 					<li><a href="$site.page('').link()">Why zanity</a></li>
