@@ -1,0 +1,3 @@
+rules: assertion-density
+exit: 1
+matcher_checks_lua_spec.lua:13:20: error [assertion-density]

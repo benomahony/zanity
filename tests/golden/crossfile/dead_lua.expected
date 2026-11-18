@@ -1,0 +1,5 @@
+rules: dead-symbol
+exit: 0
+app.lua:5:16: warning [dead-symbol]
+helpers.lua:11:12: warning [dead-symbol]
+helpers.lua:7:12: warning [dead-symbol]

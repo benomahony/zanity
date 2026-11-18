@@ -1,0 +1,3 @@
+rules: extractable-block
+exit: 0
+extract_lua.lua:4:3: information [extractable-block]

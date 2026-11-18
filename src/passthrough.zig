@@ -81,11 +81,12 @@ fn keywordValue(argument: []const u8) []const u8 {
 const Call = struct { callee: []const u8, arguments: []const u8 };
 
 /// The callee and argument text of a body that is a single call, after `return`, `await` or
-/// `try` and before a closing `;` or `}`.
+/// `try` and before a closing `;`, `}` or Lua's `end`.
 fn soleCall(body: []const u8) ?Call {
     if (body.len == 0) assert.panic("reading the call of an empty body; forwardedTo() passes a body with its first statement", .{});
     var text = std.mem.trim(u8, body, " \t\r\n");
     if (std.mem.endsWith(u8, text, "}")) text = std.mem.trimEnd(u8, text[0 .. text.len - 1], " \t\r\n");
+    if (text.len > 3 and std.mem.endsWith(u8, text, "end") and std.ascii.isWhitespace(text[text.len - 4])) text = std.mem.trimEnd(u8, text[0 .. text.len - 3], " \t\r\n");
     text = std.mem.trimEnd(u8, text, "; \t\r\n");
     for ([_][]const u8{ "return ", "await ", "try " }) |word| {
         if (std.mem.startsWith(u8, text, word)) text = std.mem.trimStart(u8, text[word.len..], " \t");

@@ -1,0 +1,4 @@
+rules: opaque-check
+exit: 0
+opaque_checks_lua_spec.lua:2:3: warning [opaque-check]
+opaque_checks_lua_spec.lua:6:3: warning [opaque-check]

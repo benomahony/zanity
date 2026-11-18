@@ -1,0 +1,4 @@
+rules: parameter-allocation-size
+exit: 0
+allocation_size_lua.lua:4:26: warning [parameter-allocation-size]
+allocation_size_lua.lua:8:20: warning [parameter-allocation-size]

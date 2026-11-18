@@ -1,0 +1,11 @@
+rules: precedence-trap,tls-verification-disabled,weak-hash,shell-command,sql-built-from-strings,secret-in-log,wall-clock-duration,deep-nesting,complex-function
+exit: 1
+hazards_lua.lua:10:12: error [sql-built-from-strings]
+hazards_lua.lua:11:19: warning [wall-clock-duration]
+hazards_lua.lua:12:18: error [secret-in-log]
+hazards_lua.lua:17:11: warning [deep-nesting]
+hazards_lua.lua:40:12: warning [complex-function]
+hazards_lua.lua:4:6: error [precedence-trap]
+hazards_lua.lua:7:31: error [tls-verification-disabled]
+hazards_lua.lua:8:3: warning [weak-hash]
+hazards_lua.lua:9:3: warning [shell-command]

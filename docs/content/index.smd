@@ -137,7 +137,7 @@ call-verification [warning] 1 in 1 file: Assert on the result, or the state the 
 
 Keep your formatter, your linter and your type checker. They check that code is written well in its language. zanity checks whether the code and its tests can be trusted: that a test would fail if the behaviour broke, that a failure would be seen and explained, that the checks guarding the code are still switched on, and that the codebase isn't quietly growing two of everything.
 
-It checks Python, TypeScript, JavaScript, Go, Rust, Java, C#, Swift and Zig, with every rule running on every language where it means something. It is a single binary with no runtime to install, and without `--infer` it never touches the network.
+It checks Python, TypeScript, JavaScript, Go, Rust, Java, C#, Swift, Lua and Zig, with every rule running on every language where it means something. It is a single binary with no runtime to install, and without `--infer` it never touches the network.
 
 # [Try it]($heading.id('try-it'))
 

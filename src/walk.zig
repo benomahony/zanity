@@ -190,7 +190,8 @@ pub fn assign(self: *File, ctx: *Context, part: []const u8, node: ts.Node) !void
             if (ctx.family == .function and std.mem.eql(u8, slot, "name")) {
                 ctx.is_test = self.isTestName(node.text(self.source));
                 const at = ts.ts_node_start_point(node);
-                ctx.fact = try self.work.facts.function(node.text(self.source), .{ at.row, at.column }, self.definedInClass());
+                const method = self.definedInClass() or self.index.marks(ctx.node, self.checker.compiled.id("function.method"));
+                ctx.fact = try self.work.facts.function(node.text(self.source), .{ at.row, at.column }, method);
             }
             return;
         }
@@ -223,9 +224,10 @@ pub fn refines(self: *File, family: Family, node: ts.Node, found: []const captur
     while (i > 0) {
         i -= 1;
         const ctx = &items[i];
-        if (!ctx.span.eql(parent) and !ctx.node.eql(parent)) return null;
         if (ctx.family != family) continue;
+        if (!ctx.span.eql(parent) and !ctx.node.eql(parent)) return null;
         if (ctx.body) return null;
+        for (items[i + 1 ..]) |above| if (!above.span.eql(parent) and !above.node.eql(parent) and !above.node.eql(ctx.node)) return null;
         if (ts.ts_node_end_byte(node) > ts.ts_node_end_byte(ctx.node)) assert.panic("{s}: {f} refines the {t} {f} but ends after it; capture the refining node inside the construct's @outer in the language's zanity.scm", .{ self.work.facts.path, node.where(), family, ctx.node.where() });
         return ctx;
     }

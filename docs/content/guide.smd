@@ -7,7 +7,7 @@
 
 
 
-Coding agents write code that compiles, passes its tests and looks fine in a diff. zanity finds the mistakes that survive all three: tests that mock the code they claim to check, error handlers that make failures vanish, `|| true` and `continue-on-error` keeping CI green, error messages that don't say what failed, and the same helper written again under a new name in every session. It checks Python, TypeScript, JavaScript, Go, Rust, Java, C#, Swift and Zig, and tells the agent, or you, how to fix each finding. [Why zanity](https://benomahony.github.io/zanity/) walks through each class of error it removes.
+Coding agents write code that compiles, passes its tests and looks fine in a diff. zanity finds the mistakes that survive all three: tests that mock the code they claim to check, error handlers that make failures vanish, `|| true` and `continue-on-error` keeping CI green, error messages that don't say what failed, and the same helper written again under a new name in every session. It checks Python, TypeScript, JavaScript, Go, Rust, Java, C#, Swift, Lua and Zig, and tells the agent, or you, how to fix each finding. [Why zanity](https://benomahony.github.io/zanity/) walks through each class of error it removes.
 
 It parses each file once with [tree-sitter](https://tree-sitter.github.io) and runs every rule in a single pass, so checking a whole repository takes moments. It is one static binary with no runtime to install, and checking never touches the network, unless you add `--infer` to have a language model judge what code structure can't, such as whether an error message misleads.
 
@@ -255,7 +255,7 @@ sqlite3 ~/.cache/zanity/zanity.db "SELECT rule, path, line, code, message FROM f
 A file edited since the last check offers no actions until it is saved, since its findings may have moved. In Neovim:
 
 ```lua
-vim.lsp.config("zanity", { cmd = { "zanity", "lsp" }, root_markers = { "zanity.toml", ".git" }, filetypes = { "python", "zig", "go", "rust", "java", "cs", "swift", "javascript", "typescript" } })
+vim.lsp.config("zanity", { cmd = { "zanity", "lsp" }, root_markers = { "zanity.toml", ".git" }, filetypes = { "python", "zig", "go", "rust", "java", "cs", "swift", "lua", "javascript", "typescript" } })
 vim.lsp.enable("zanity")
 ```
 
@@ -460,5 +460,6 @@ value = eval(text)  # zanity: ignore[forbidden-call]
 | Java | `.java` |
 | C# | `.cs` `.csx` |
 | Swift | `.swift` |
+| Lua | `.lua` |
 
 Every rule runs on every language where it means something; `dynamic-allocation`, for example, only applies where memory is managed by hand.

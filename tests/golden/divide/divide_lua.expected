@@ -1,0 +1,4 @@
+rules: divide-by-zero
+exit: 1
+divide_lua.lua:2:15: error [divide-by-zero]
+divide_lua.lua:3:19: error [divide-by-zero]

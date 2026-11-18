@@ -1,0 +1,4 @@
+rules: structural-twins
+exit: 0
+invoices.lua:3:12: warning [structural-twins]
+orders.lua:3:12: warning [structural-twins]

@@ -1,0 +1,7 @@
+rules: constant-test-assertion
+exit: 0
+constant_lua_spec.lua:16:5: warning [constant-test-assertion]
+constant_lua_spec.lua:17:5: warning [constant-test-assertion]
+constant_lua_spec.lua:2:5: warning [constant-test-assertion]
+constant_lua_spec.lua:3:5: warning [constant-test-assertion]
+constant_lua_spec.lua:4:5: warning [constant-test-assertion]

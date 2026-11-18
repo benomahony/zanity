@@ -1,0 +1,4 @@
+rules: obsolete-call
+exit: 0
+obsolete_call_lua.lua:2:15: warning [obsolete-call]
+obsolete_call_lua.lua:3:15: warning [obsolete-call]

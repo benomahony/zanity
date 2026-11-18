@@ -1,0 +1,5 @@
+rules: recursion
+exit: 0
+ping.lua:5:12: warning [recursion]
+pong.lua:11:15: warning [recursion]
+pong.lua:5:12: warning [recursion]

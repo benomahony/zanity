@@ -1,0 +1,5 @@
+rules: cyclic-import
+exit: 0
+billing.lua:1:1: warning [cyclic-import]
+lua/shop/cart.lua:1:1: warning [cyclic-import]
+tariff.lua:1:1: warning [cyclic-import]

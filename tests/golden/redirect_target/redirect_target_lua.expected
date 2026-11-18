@@ -1,0 +1,3 @@
+rules: parameter-redirect-target
+exit: 0
+redirect_target_lua.lua:4:23: warning [parameter-redirect-target]

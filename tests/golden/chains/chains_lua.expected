@@ -1,0 +1,4 @@
+rules: message-chain
+exit: 0
+chains_lua.lua:10:3: warning [message-chain]
+chains_lua.lua:4:16: warning [message-chain]
