@@ -86,7 +86,7 @@ pub fn main(init: std.process.Init) !void {
     const read = timer.lap();
     const parse = try fastest(io, parseAll, .{&corpus});
     const checked = try fastest(io, checkAll, .{ arena, &corpus, check.Work{ .scratch = &scratch, .text = &text, .facts = &facts } });
-    const cold = try coldest(io, zanity, corpus.dir, init.environ_map, store);
+    const cold = try coldest(io, zanity, corpus.dir, init.environ_map);
     const warm = try fastest(io, runZanity, .{ io, zanity, corpus.dir, init.environ_map });
     try forget(io, store);
     if (corpus.paths.len == 0) assert.panic("timed a corpus of no files; Corpus.read() rejects an empty corpus", .{});
@@ -150,8 +150,9 @@ fn fastest(io: Io, comptime measure: anytype, args: anytype) !u64 {
 }
 
 /// The fastest of `runs` full checks, each from an empty store.
-fn coldest(io: Io, zanity: []const u8, dir: []const u8, environ: *const std.process.Environ.Map, store: []const u8) !u64 {
+fn coldest(io: Io, zanity: []const u8, dir: []const u8, environ: *const std.process.Environ.Map) !u64 {
     comptime if (runs == 0) @compileError("runs is 0, so nothing would be measured; set it to at least 1");
+    const store = environ.get("ZANITY_STORE") orelse assert.panic("timing cold runs without ZANITY_STORE; main() sets it so bench never deletes the user's own store", .{});
     var best: u64 = std.math.maxInt(u64);
     for (0..runs) |_| {
         try forget(io, store);
@@ -166,6 +167,7 @@ fn coldest(io: Io, zanity: []const u8, dir: []const u8, environ: *const std.proc
 /// Deletes the store and the files SQLite's WAL mode keeps beside it.
 fn forget(io: Io, store: []const u8) !void {
     if (!std.fs.path.isAbsolute(store)) assert.panic("deleting the store at '{s}', a relative path; main() builds it from zanity's absolute path", .{store});
+    if (!std.mem.endsWith(u8, store, ".bench.db")) assert.panic("deleting '{s}', which is not bench's own store; only main()'s <zanity>.bench.db may be deleted", .{store});
     var buffer: [std.fs.max_path_bytes]u8 = undefined;
     for ([_][]const u8{ "", "-wal", "-shm" }) |suffix| {
         const path = try std.fmt.bufPrint(&buffer, "{s}{s}", .{ store, suffix });
