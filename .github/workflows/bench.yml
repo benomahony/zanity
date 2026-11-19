@@ -1,0 +1,42 @@
+name: Bench
+
+on:
+  workflow_dispatch:
+    inputs:
+      repository:
+        description: The GitHub repository to check, as owner/name
+        default: kubernetes/kubernetes
+      ref:
+        description: The tag or branch of it to check
+        default: v1.31.4
+      runner:
+        description: The machine to time it on
+        type: choice
+        options: [ubuntu-latest, macos-latest]
+        default: ubuntu-latest
+
+permissions:
+  contents: read
+
+jobs:
+  bench:
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 60
+    env:
+      REPOSITORY: ${{ inputs.repository }}
+      REF: ${{ inputs.ref }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: xyzzylabs/setup-zig@7e5af686da64007a0797898801de180e5f4d3762 # v1.0.5
+      - name: Clone ${{ inputs.repository }} at ${{ inputs.ref }}
+        run: git clone --quiet --depth 1 --branch "$REF" "https://github.com/$REPOSITORY" "$RUNNER_TEMP/corpus"
+      - name: zig build bench
+        shell: bash
+        run: |
+          zig build bench -Dcorpus="$RUNNER_TEMP/corpus" | tee "$RUNNER_TEMP/bench.txt"
+          {
+            echo "### $REPOSITORY at $REF on $RUNNER_OS"
+            echo '```'
+            cat "$RUNNER_TEMP/bench.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
