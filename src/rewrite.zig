@@ -85,8 +85,10 @@ fn boundInside(self: *File, start: u32, end: u32, path: []const u8) bool {
 fn widestPaths(self: *File, start: u32, end: u32, widest: *[8]ts.Node) usize {
     if (start > end) assert.panic("{s}: looking for values in bytes {d}..{d}, which run backwards; pass the condition's start before its end", .{ self.work.facts.path, start, end });
     var found: usize = 0;
-    for (self.index.triples) |t| {
-        if (t.id != self.v.expression_path or t.key.start < start or ts.ts_node_end_byte(t.node) > end) continue;
+    const first = std.sort.lowerBound(captures.Triple, self.index.triples, start, captures.startsBefore);
+    for (self.index.triples[first..]) |t| {
+        if (t.key.start > end) break;
+        if (t.id != self.v.expression_path or ts.ts_node_end_byte(t.node) > end) continue;
         if (found > 0) {
             const last = &widest[found - 1];
             if (t.key.start < ts.ts_node_end_byte(last.*)) {
