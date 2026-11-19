@@ -129,7 +129,8 @@ pub fn closeLoop(self: *File, ctx: Context) !void {
         _ = try self.report(ctx.node, "polling-loop", try self.say("This loop polls with a sleep, so the test's speed and outcome depend on timing.", .{}));
     }
     if (ctx.condition != null and ctx.iterable != null) assert.panic("{s}: the loop {f} has both @loop.condition and @loop.iterable; a loop is one or the other, so fix its query", .{ self.work.facts.path, ctx.node.where() });
-    const unbounded = if (ctx.condition) |c| self.index.marks(c, self.v.literal_true) else ctx.iterable == null;
+    if (ctx.until != null and (ctx.condition != null or ctx.iterable != null)) assert.panic("{s}: the loop {f} has @loop.until besides a condition or iterable; a loop that stops on a condition has only that, so fix its query", .{ self.work.facts.path, ctx.node.where() });
+    const unbounded = if (ctx.condition) |c| self.index.marks(c, self.v.literal_true) else ctx.iterable == null and ctx.until == null;
     if (!unbounded) return;
     if (try self.report(ctx.node, "unbounded-loop", try self.say("'{s}' has no bound, so it can run forever.", .{header(ctx.node.text(self.source))}))) {
         self.s.diagnostics.last().?.fix = try loops.unboundedFix(self, ctx.node);

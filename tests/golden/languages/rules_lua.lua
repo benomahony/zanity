@@ -40,4 +40,10 @@ it("waits", function()
   local fake = spy.new(function() end)
 end)
 
+function M.retries(work)
+  repeat work() until true
+  repeat work() until work()
+  repeat until nil
+end
+
 return M

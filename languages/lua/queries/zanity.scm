@@ -90,11 +90,12 @@
 (while_statement
   condition: (_) @loop.condition)
 
+; `repeat ... until c` stops once `c` holds, so `c` is a stop condition and `until true` stops at once.
 ; `repeat ... until false` never stops, so its condition is left uncaptured, as a loop with no
 ; condition is.
 ((repeat_statement
-  condition: (_) @loop.condition)
-  (#not-kind-eq? @loop.condition "false" "nil"))
+  condition: (_) @loop.until)
+  (#not-kind-eq? @loop.until "false" "nil"))
 
 (for_generic_clause
   (expression_list) @loop.iterable)

@@ -183,7 +183,7 @@ pub fn parameter(self: *File, part: []const u8, node: ts.Node) !void {
 pub fn assign(self: *File, ctx: *Context, part: []const u8, node: ts.Node) !void {
     if (ts.ts_node_start_byte(node) < ts.ts_node_start_byte(ctx.node)) assert.panic("{s}: @{t}.{s} captured {f}, which starts before its @{t}.outer {f}; the query must capture parts inside the outer node", .{ self.work.facts.path, ctx.family, part, node.where(), ctx.family, ctx.node.where() });
     if (ts.ts_node_end_byte(node) > ts.ts_node_end_byte(ctx.node)) assert.panic("{s}: @{t}.{s} captured {f}, which ends after its @{t}.outer {f}; the query must capture parts inside the outer node", .{ self.work.facts.path, ctx.family, part, node.where(), ctx.family, ctx.node.where() });
-    const slots = .{ "name", "callee", "receiver", "condition", "message", "iterable", "lhs", "rhs" };
+    const slots = .{ "name", "callee", "receiver", "condition", "message", "iterable", "until", "lhs", "rhs" };
     inline for (slots) |slot| {
         if (std.mem.eql(u8, part, slot)) {
             if (@field(ctx, slot) == null) @field(ctx, slot) = node;
