@@ -60,6 +60,30 @@ jobs:
             echo "::warning::The Zig cache is ${used} MB, past its ${ZIG_CACHE_LIMIT_MB} MB limit, so it is emptied and the next run builds from scratch. If this shows on every run, one build needs more: raise ZIG_CACHE_LIMIT_MB in .github/workflows/ci.yml."
           fi
 
+  semantic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: xyzzylabs/setup-zig@7e5af686da64007a0797898801de180e5f4d3762 # v1.0.5
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/zanity-semantic
+          key: zanity-semantic-${{ runner.os }}-${{ runner.arch }}-b12506-6ea3e3a
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/zanity
+          key: zanity-semantic-store-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: zanity-semantic-store-${{ runner.os }}-
+      - run: scripts/semantic-server
+      - name: zanity check . --semantic --fail-on warning
+        run: zig build && ./zig-out/bin/zanity check . --semantic --fail-on warning
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: always()
+        with:
+          path: ~/.cache/zanity
+          key: zanity-semantic-store-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+
   catalogue:
     runs-on: ubuntu-latest
     steps:

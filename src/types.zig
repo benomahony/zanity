@@ -29,7 +29,7 @@ pub fn capture(self: *File, part: []const u8, node: ts.Node) !void {
     const declared = &self.s.declared;
     if (std.mem.eql(u8, part, "declared")) {
         const last = if (declared.last()) |d| (if (d.owner == function.serial and d.type == null) d else null) else null;
-        if (last) |d| if (d.name.parent()) |declarator| if (inside(node, declarator)) {
+        if (last) |d| if (d.name.parent()) |declarator| if (within(node, declarator)) {
             d.type = node;
             return;
         };
@@ -48,14 +48,14 @@ fn declares(t: ts.Node, name: ts.Node) bool {
     const owner = t.parent() orelse return false;
     const holder = name.parent() orelse return false;
     if (ts.ts_node_start_byte(t) >= ts.ts_node_start_byte(name)) assert.panic("pairing the type at {f} with the name at {f} before it; a pending type comes before the name", .{ t.where(), name.where() });
-    if (inside(name, t)) assert.panic("the name at {f} lies inside the type at {f} said to declare it; capture the type and the name as separate nodes", .{ name.where(), t.where() });
+    if (within(name, t)) assert.panic("the name at {f} lies inside the type at {f} said to declare it; capture the type and the name as separate nodes", .{ name.where(), t.where() });
     if (owner.eql(holder)) return true;
     const outer = holder.parent() orelse return false;
     return owner.eql(outer);
 }
 
 /// Whether `node` lies within `outer`'s bytes.
-fn inside(node: ts.Node, outer: ts.Node) bool {
+fn within(node: ts.Node, outer: ts.Node) bool {
     const start = ts.ts_node_start_byte(node);
     const end = ts.ts_node_end_byte(node);
     if (end < start) assert.panic("{f} ends at byte {d}, before it starts at {d}; tree-sitter returned a broken node", .{ node.where(), end, start });
@@ -117,7 +117,7 @@ fn argumentType(self: *File, argument: ts.Node) []const u8 {
         }
     }
     const function = self.innermost(.function) orelse return "";
-    if (!inside(argument, function.node)) assert.panic("{s}: the argument at {f} lies outside its function {f}; innermost() returns an enclosing function", .{ self.work.facts.path, argument.where(), function.node.where() });
+    if (!within(argument, function.node)) assert.panic("{s}: the argument at {f} lies outside its function {f}; innermost() returns an enclosing function", .{ self.work.facts.path, argument.where(), function.node.where() });
     const declared = ownedBy(self, function.node);
     var i = declared.len;
     while (i > 0) {

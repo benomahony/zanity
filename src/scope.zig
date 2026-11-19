@@ -47,8 +47,8 @@ const Group = struct {
     len: usize = 0,
 
     fn declared(self: *const Group) []const ts.Node {
-        if (self.len > max_group) assert.panic("a declaration group holds {d} names in room for {d}; gather() must stop adding at max_group", .{ self.len, max_group });
-        if (self.len == 0) assert.panic("the declaration {f} declares no names; gather() must return null for a statement without names", .{self.statement.where()});
+        if (self.len > max_group) assert.panic("a declaration group holds {d} names in room for {d}; collect() must stop adding at max_group", .{ self.len, max_group });
+        if (self.len == 0) assert.panic("the declaration {f} declares no names; collect() must return null for a statement without names", .{self.statement.where()});
         return self.names[0..self.len];
     }
 
@@ -74,7 +74,7 @@ pub fn checkWideScope(self: *File) !void {
     for (self.index.triples) |t| {
         if (t.id != ids.outer) continue;
         checked += 1;
-        const group = try gather(self, ids, t.node) orelse continue;
+        const group = try collect(self, ids, t.node) orelse continue;
         try checkGroup(self, ids, &group);
     }
     if (checked > self.index.triples.len) assert.panic("{s}: checked {d} declarations among {d} captures; count one declaration per captured statement", .{ self.work.facts.path, checked, self.index.triples.len });
@@ -82,7 +82,7 @@ pub fn checkWideScope(self: *File) !void {
 
 /// The names `statement` declares itself, not those declared inside its initializer; null when
 /// there are none, too many, or the initializer can leave the block.
-fn gather(self: *File, ids: Ids, statement: ts.Node) !?Group {
+fn collect(self: *File, ids: Ids, statement: ts.Node) !?Group {
     const end = ts.ts_node_end_byte(statement);
     if (end <= ts.ts_node_start_byte(statement)) assert.panic("{s}: @declaration.outer matched the empty {f}; capture the declaration statement", .{ self.work.facts.path, statement.where() });
     const first = std.sort.lowerBound(captures.Triple, self.index.triples, ts.ts_node_start_byte(statement), captures.startsBefore);
@@ -97,7 +97,7 @@ fn gather(self: *File, ids: Ids, statement: ts.Node) !?Group {
         group.names[group.len] = t.node;
         group.len += 1;
     }
-    if (group.len > max_group) assert.panic("{s}: gathered {d} names in room for {d}; gather() must stop adding at max_group", .{ self.work.facts.path, group.len, max_group });
+    if (group.len > max_group) assert.panic("{s}: collected {d} names in room for {d}; collect() must stop adding at max_group", .{ self.work.facts.path, group.len, max_group });
     if (group.len == 0) return null;
     return group;
 }

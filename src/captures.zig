@@ -170,14 +170,26 @@ pub const Index = struct {
 
     /// The captures of the nodes that start inside `outer`, `outer`'s own among them, in the
     /// order the nodes start.
-    pub fn inside(self: *const Index, outer: ts.Node) []const Triple {
+    pub fn capturesWithin(self: *const Index, outer: ts.Node) []const Triple {
         const end = ts.ts_node_end_byte(outer);
         const first = std.sort.lowerBound(Triple, self.triples, ts.ts_node_start_byte(outer), compareStart);
         var last = first;
         while (last < self.triples.len and self.triples[last].key.start < end) last += 1;
-        if (last < first or last > self.triples.len) assert.panic("the captures inside the node at byte {d} run from {d} to {d} of {d}; inside() must slice within the recorded triples", .{ ts.ts_node_start_byte(outer), first, last, self.triples.len });
-        if (first < last and self.triples[first].key.start < ts.ts_node_start_byte(outer)) assert.panic("the captures inside the node at byte {d} start at byte {d}, before it; inside() must lower-bound by where the node starts", .{ ts.ts_node_start_byte(outer), self.triples[first].key.start });
+        if (last < first or last > self.triples.len) assert.panic("the captures inside the node at byte {d} run from {d} to {d} of {d}; capturesWithin() must slice within the recorded triples", .{ ts.ts_node_start_byte(outer), first, last, self.triples.len });
+        if (first < last and self.triples[first].key.start < ts.ts_node_start_byte(outer)) assert.panic("the captures inside the node at byte {d} start at byte {d}, before it; capturesWithin() must lower-bound by where the node starts", .{ ts.ts_node_start_byte(outer), self.triples[first].key.start });
         return self.triples[first..last];
+    }
+
+    pub fn enclosedFrom(self: *const Index, from: u32, node: ts.Node, capture: ?Id) bool {
+        const at = ts.ts_node_start_byte(node);
+        if (at < from) assert.panic("looking for what encloses the node at byte {d} from byte {d}, after it; start from the statement or loop that holds it", .{ at, from });
+        const first = std.sort.lowerBound(Triple, self.triples, from, startsBefore);
+        if (first > self.triples.len) assert.panic("the captures from byte {d} start at {d}, past the {d} recorded", .{ from, first, self.triples.len });
+        for (self.triples[first..]) |t| {
+            if (t.key.start > at) break;
+            if (t.id == capture and ts.ts_node_end_byte(t.node) >= ts.ts_node_end_byte(node)) return true;
+        }
+        return false;
     }
 
     /// The first node inside `outer`, or `outer` itself, that `capture` marks.

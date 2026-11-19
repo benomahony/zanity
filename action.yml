@@ -11,6 +11,9 @@ inputs:
   args:
     description: The zanity command line to run.
     default: check . --fail-on warning
+  semantic:
+    description: Run a local EmbeddingGemma 2 on llama-server and add --semantic to a check. The server is built and the model downloaded on the first run, then both are cached, as are the vectors, so later runs embed only code that changed.
+    default: "false"
 
 runs:
   using: composite
@@ -39,6 +42,38 @@ runs:
         curl -fsSL -o "$dest" "$url" || { echo "::error::Could not download $url; check that version $VERSION is listed at https://github.com/benomahony/zanity/releases."; exit 1; }
         chmod +x "$dest"
         echo "$RUNNER_TEMP/zanity" >> "$GITHUB_PATH"
+    - name: Restore the semantic server and model
+      if: inputs.semantic == 'true'
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.cache/zanity-semantic
+        key: zanity-semantic-${{ runner.os }}-${{ runner.arch }}-b12506-6ea3e3a
+    - name: Restore the vectors
+      if: inputs.semantic == 'true'
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.cache/zanity
+        key: zanity-semantic-store-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+        restore-keys: zanity-semantic-store-${{ runner.os }}-
+    - name: Start the semantic server
+      if: inputs.semantic == 'true'
+      shell: bash
+      run: |
+        if [ "$RUNNER_OS" = Windows ]; then echo "::error::semantic: true needs a Linux or macOS runner, where llama-server builds; run this job on ubuntu-latest or macos-latest."; exit 1; fi
+        "$GITHUB_ACTION_PATH/scripts/semantic-server"
     - name: Run zanity
       shell: bash
-      run: zanity ${{ inputs.args }}
+      env:
+        ARGS: ${{ inputs.args }}
+        SEMANTIC: ${{ inputs.semantic }}
+      run: |
+        case "$SEMANTIC $ARGS" in
+          "true check"*) eval "zanity $ARGS --semantic" ;;
+          *) eval "zanity $ARGS" ;;
+        esac
+    - name: Save the vectors
+      if: always() && inputs.semantic == 'true'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.cache/zanity
+        key: zanity-semantic-store-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}

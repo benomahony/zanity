@@ -957,22 +957,26 @@
     {
       "tool": "dddlint",
       "rule": "near-synonym",
-      "zanity": [],
+      "zanity": [
+        "near-synonym"
+      ],
       "old_fires": null,
       "zanity_fires": null,
       "same_line": null,
       "others": [],
-      "note": "No fixture: it comes from an embedding model in `dddlint map`, not from lint. zanity has no embedding features yet"
+      "note": "No fixture: it comes from an embedding model in `dddlint map`, not from lint. zanity's own needs `check --semantic` and an embeddings server, which the parity run doesn't start; its tests port dddlint's"
     },
     {
       "tool": "dddlint",
       "rule": "context-outlier",
-      "zanity": [],
+      "zanity": [
+        "context-outlier"
+      ],
       "old_fires": null,
       "zanity_fires": null,
       "same_line": null,
       "others": [],
-      "note": "No fixture: it comes from an embedding model in `dddlint map`, not from lint. zanity has no embedding features yet"
+      "note": "No fixture: it comes from an embedding model in `dddlint map`, not from lint. zanity's own needs `check --semantic` and an embeddings server, which the parity run doesn't start; its tests port dddlint's"
     },
     {
       "tool": "lizard",

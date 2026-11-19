@@ -19,6 +19,9 @@ const vocabulary = @import("vocabulary.zig");
 const project = @import("project.zig");
 const memory = @import("memory.zig");
 const infer = @import("infer.zig");
+const embed = @import("embed.zig");
+const semantic = @import("semantic.zig");
+const semantic_judge = @import("semantic_judge.zig");
 const store = @import("store.zig");
 const sqlite = @import("sqlite.zig");
 const Live = @import("live.zig").Live;
@@ -103,6 +106,7 @@ pub fn checkPaths(ctx: *zclig.Context, ws: *Workspace, options: CheckOptions, se
         else => return e,
     };
     if (ws.inference) |*inference| try inference.summarise(ctx);
+    if (ws.embedding) |*embedding| try judgeEmbeddings(ctx, ws, embedding, selected);
     try dropDisabled(ws);
     report.sortFindings(ws.findings.items());
     if (options.fix) try fixFiles(ctx, ws);
@@ -173,6 +177,30 @@ fn checkFiles(ctx: *zclig.Context, ws: *Workspace, selected: rules.Set) !void {
     try structure.checkStructure(&ws.facts, selected, &ws.findings, .{ .sources = sources, .live = &ws.liveness, .cycles = &ws.cycles });
     if (ws.facts.collect_units and selected.enabled("repeated-mechanics")) try structure.clusterUnits(&ws.facts, sources);
     if (ws.checked > ws.files.len) assert.panic("checked {d} files out of {d} collected; count a file as checked only once per file collected", .{ ws.checked, ws.files.len });
+}
+
+fn judgeEmbeddings(ctx: *zclig.Context, ws: *Workspace, embedding: *embed.Embedding, selected: rules.Set) !void {
+    if (selected.len == 0) assert.panic("embedding with no rules selected; a check selects at least one", .{});
+    if (!ws.facts.collect_units) assert.panic("--semantic ran without the functions kept; connectEmbedding() sets collect_units", .{});
+    const definitions = ws.facts.definitions;
+    const units = ws.facts.units;
+    semantic_judge.judge(embedding, .{ .units = units.items(), .definitions = definitions.items(), .findings = &ws.findings, .enabled = selected, .thresholds = thresholds(ws.settings) }) catch |e| switch (e) {
+        error.EmbedFailed => return ctx.fail(.io, embed.failure, embed.advice),
+        error.StoreUnavailable => return ctx.fail(.io, try storeProblem(ws), "Check that the cache directory is writable and not full, then run again."),
+        else => return e,
+    };
+    if (embedding.judging) try embedding.summarise(ctx);
+}
+
+fn thresholds(settings: ?*const config.Config) semantic.Thresholds {
+    const given = (settings orelse return semantic.default_thresholds).semantic;
+    var out = semantic.default_thresholds;
+    inline for (@typeInfo(semantic.Thresholds).@"struct".field_names) |name| if (@field(given, name)) |value| {
+        @field(out, name) = value;
+    };
+    if (!(out.@"near-synonym" > 0 and out.@"near-synonym" <= 1)) assert.panic("near-synonym's threshold is {d}; config keeps it above 0 and at most 1", .{out.@"near-synonym"});
+    if (!(out.@"intent-mismatch" > 0 and out.@"intent-mismatch" <= 1)) assert.panic("intent-mismatch's margin is {d}; config keeps it above 0 and at most 1", .{out.@"intent-mismatch"});
+    return out;
 }
 
 fn reportInference(state: *anyopaque, done: usize, total: usize) void {

@@ -82,6 +82,15 @@ Rules marked *production* hold code to what safety-critical software needs and m
 | `misplaced-test` | warning | a test in one domain or context whose subject lives in exactly one other |
 | `vocabulary-conflict` | error | a vocabulary that contradicts itself: a word both banned and canonical, an alias mapped two ways, or two domains or contexts with nearly the same name |
 
+**Semantic** (with `--semantic`; see [Comparing meanings with `--semantic`](https://benomahony.github.io/zanity/guide/#comparing-meanings-with---semantic))
+
+| Rule | Severity | Flags |
+|---|---|---|
+| `near-synonym` | warning | names that mean the same thing in unrelated words, such as `fetch_order` and `retrieve_purchase` |
+| `context-outlier` | information | a name that reads like another bounded context's vocabulary |
+| `semantic-coupling` | information | a function body that does what one in another file does, in different code |
+| `intent-mismatch` | warning | a function whose name, docstring and body disagree, saying which one |
+
 **Project files** (build, lint, type-check, test and CI configuration: `pyproject.toml`, `tsconfig.json`, `Cargo.toml`, `.github/workflows/*.yml` and others, checked as text)
 
 | Rule | Severity | Flags |

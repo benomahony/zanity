@@ -147,6 +147,16 @@ The action downloads the release binary for the runner and fails the job on any 
           TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
 ```
 
+For [`--semantic`](https://benomahony.github.io/zanity/guide/#comparing-meanings-with---semantic), set `semantic: true`. The action then runs EmbeddingGemma 2 on `llama-server` on the runner, so no code leaves it, and adds `--semantic` to a `check`:
+
+```yaml
+      - uses: benomahony/zanity@v0.1.0
+        with:
+          semantic: true
+```
+
+The first run builds `llama-server` and downloads the model (Q8_0, 310 MB), about four minutes, then caches both with `actions/cache`, so later runs start the server in seconds. The vectors are cached too, so only the first run embeds every function; after that a run embeds only what changed. It needs a Linux or macOS runner. `scripts/semantic-server` is the same setup, and runs on your own machine too.
+
 # [Usage]($heading.id('usage'))
 
 ```sh
@@ -164,6 +174,8 @@ zanity check . --plain                        # stable key=value lines for scrip
 zanity check . --agent                        # findings laid out for a coding agent to act on
 zanity check . --all                          # every finding, one path:line:column line each
 zanity check . --infer                        # also have a language model judge error messages
+zanity check . --semantic                        # also compare what names, docstrings and bodies mean
+zanity search "retry a failed payment"        # find code by what it does, as path:line:col: text
 zanity lsp                                    # serve findings and fixes to an editor
 zanity help check                             # every option
 ```
@@ -361,6 +373,41 @@ duckdb -c "ATTACH '~/.cache/zanity/zanity.db' AS z (TYPE sqlite, READ_ONLY);
   FROM z.observations GROUP BY rule ORDER BY fired DESC"
 ```
 
+## [Comparing meanings with `--semantic`]($heading.id('comparing-meanings-with---semantic'))
+
+Some problems are about meaning rather than structure: two names for one idea that share no word, a name that reads like another bounded context's vocabulary, two functions in different files doing one job in different code, or a function whose name, docstring and body tell different stories. `--semantic` finds these by embedding every name, docstring and function body with an embedding model on your own machine, then comparing the vectors. Nothing is sent anywhere else, and no model judges anything: each rule is a cosine against a threshold.
+
+Any server with an OpenAI-compatible `POST /v1/embeddings` works: llama.cpp's `llama-server --embedding`, LM Studio, or Hugging Face's Text Embeddings Inference. The default is `llama-server` on its own default address with [EmbeddingGemma 2](https://ai.google.dev/gemma/docs/embeddinggemma/model_card_2), which leads the open models under 1B parameters on MTEB's code to code retrieval:
+
+```sh
+llama-server --embedding -m embeddinggemma-2.gguf   # serves http://127.0.0.1:8080
+zanity check . --semantic
+```
+
+Point `[semantic]` in `zanity.toml` at another server or model:
+
+```toml
+[semantic]
+url = "http://127.0.0.1:1234"       # default: http://127.0.0.1:8080
+model = "google/embeddinggemma-2"   # default: google/embeddinggemma-2
+api_key_env = "EMBED_API_KEY"       # default: none; the key is read only from this variable
+```
+
+Each text uses EmbeddingGemma's prompts: a name is embedded as its words, `fetchOrderTotal` as `task: sentence similarity | query: fetch order total`, a docstring or the comment above a function the same way, and a body as a document, `title: <path> | text: <code>`, cut to its first 1500 bytes, with `<|` written as `< |` so code can't name one of the model's special tokens. Functions and methods get all three; classes and variables get a name.
+
+| Rule | Severity | Reports | `[semantic]` setting (default) |
+|---|---|---|---|
+| `near-synonym` | warning | names whose vectors cluster together across the codebase but share no word, such as `fetch_order` and `retrieve_purchase`; words count as the same when they are equal, share their first five letters, or one is the other with an ending such as `s`, `ed` or `ing` dropped, so `Definition` and `definitions`, `id` and `ids`, and `Reading` and `reads` don't | the cluster's mean cosine (0.95) |
+| `context-outlier` | information | a name nearer the centroid of another `[contexts.*]` or `[domains.*]` than its own; names in none count as one context, `global` | how much nearer (0.05) |
+| `semantic-coupling` | information | a function whose body is closest to one in another file or context; not tests, functions under six lines, functions `structural-twins` already reported, a function and one it calls (a wrapper reads like what it wraps), or two that already share a helper no other function calls | the cosine (0.92) |
+| `intent-mismatch` | warning | a function whose name, docstring and body disagree: the one furthest from the other two, said by name, when it is further from them than they are from each other | the margin (0.15) |
+
+The first two port [dddlint](https://github.com/benomahony/dddlint)'s embedding insights. `intent-mismatch` and `semantic-coupling` are cheap, deterministic first passes at what `name-behaviour-mismatch`, `comment-drift` and `structural-twins` look for. EmbeddingGemma 2 puts short names close together: on zanity's own source, half of all pairs of unrelated names score above 0.81, and clustering at 0.85 joined all 1830 names into one cluster, so `near-synonym` starts at 0.95, far above dddlint's 0.6 for MiniLM. The default thresholds are a starting point, not a measurement: every score is kept in `observations`, below the threshold as well, so `zanity mark`, `zanity review` and `zanity stats --thresholds` calibrate these rules as they do the `--infer` questions.
+
+**Search:** `zanity search "<query>"` embeds the query with `task: code retrieval | query: ` and lists the closest functions as `path:line:col: text`, which grep, Vim's quickfix list (`vim -q <(zanity search parse config)`) and VS Code's terminal all read. `--names` and `--docs` match names (of functions, classes and variables) or docstrings instead of bodies, with the similarity prompt; `--limit` sets how many (default 20); `--json` gives each match's path, line, column, last line, text and score. It reuses the vectors `check --semantic` kept, embedding only code that changed since.
+
+**Cost and speed:** vectors are kept in the same SQLite store as `--infer`'s answers, as float16 in `embeddings`, keyed by model, kind (`name`, `doc` or `body`) and the text embedded, so unchanged code is never embedded twice. Vectors are stored per model and server, as `--infer`'s answers are. Requests carry `[semantic] batch` texts each (default 32, up to 256), `[semantic] concurrency` at once (default 4, up to 64).
+
 # [Configuration]($heading.id('configuration'))
 
 zanity reads the nearest `zanity.toml` at or above the directory it runs in, stopping at the repository root. For completion, hover docs and errors as you type, make this its first line; editors with a TOML language server, such as VS Code's Even Better TOML, pick it up:
@@ -388,6 +435,22 @@ api_key_env = "KEV_API_KEY"
 concurrency = 16
 # How sure the model must be for a judgement to become a finding (above 0 up to 1, default 0.8).
 threshold = 0.9
+
+[semantic]
+# Embed on every check, as if run with --semantic (default: false).
+enabled = true
+# The OpenAI-compatible embeddings server (default: http://127.0.0.1:8080, llama-server's own).
+url = "http://127.0.0.1:8080"
+# The model to ask (default: google/embeddinggemma-2).
+model = "google/embeddinggemma-2"
+# Texts in one request (1 to 256, default 32) and requests at once (1 to 64, default 4).
+batch = 32
+concurrency = 4
+# The score at which each embedding rule reports, above 0 up to 1.
+near-synonym = 0.95
+context-outlier = 0.05
+semantic-coupling = 0.92
+intent-mismatch = 0.15
 
 # A question of your own for --infer: a table named for its rule, with the question, what a
 # finding says and how to fix it. severity (default "warning"), asks (default "function"; or

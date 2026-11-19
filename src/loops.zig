@@ -47,11 +47,7 @@ fn leaves(self: *File, exit: ts.Node, loop: ts.Node, loop_id: ?captures.Id) bool
     if (std.mem.startsWith(u8, words, "return")) return true;
     if (!std.mem.startsWith(u8, words, "break")) return false;
     const at = ts.ts_node_start_byte(exit);
-    const first = std.sort.lowerBound(captures.Triple, self.index.triples, ts.ts_node_start_byte(loop) + 1, captures.startsBefore);
-    for (self.index.triples[first..]) |t| {
-        if (t.key.start > at) break;
-        if (t.id == loop_id and ts.ts_node_end_byte(t.node) >= ts.ts_node_end_byte(exit)) return false;
-    }
+    if (self.index.enclosedFrom(ts.ts_node_start_byte(loop) + 1, exit, loop_id)) return false;
     if (at <= ts.ts_node_start_byte(loop)) assert.panic("{s}: the break {f} starts where its loop {f} does; search only inside the loop", .{ self.work.facts.path, exit.where(), loop.where() });
     return true;
 }

@@ -50,6 +50,7 @@ const parent_step = "../";
 pub const file_name = "zanity.toml";
 pub const max_excludes = 256;
 pub const max_concurrency = 64;
+pub const max_embed_batch = 256;
 /// Questions zanity.toml can define or retune.
 pub const max_questions = 64;
 pub const max_path_sections = 32;
@@ -85,6 +86,19 @@ pub const PathRules = struct {
     disable: rules.Set = .{},
 };
 
+pub const Semantic = struct {
+    enabled: bool = false,
+    url: ?[]const u8 = null,
+    model: ?[]const u8 = null,
+    api_key_env: ?[]const u8 = null,
+    batch: ?u32 = null,
+    concurrency: ?u32 = null,
+    @"near-synonym": ?f64 = null,
+    @"context-outlier": ?f64 = null,
+    @"semantic-coupling": ?f64 = null,
+    @"intent-mismatch": ?f64 = null,
+};
+
 pub const Config = struct {
     /// The directory holding the file, which `exclude` patterns are relative to; empty when none was found.
     dir: []const u8 = "",
@@ -106,6 +120,7 @@ pub const Config = struct {
     concurrency: ?u32 = null,
     /// How sure the model must be for a judgement to become a finding, above 0 and at most 1.
     threshold: ?f64 = null,
+    semantic: Semantic = .{},
     paths: [max_path_sections]PathRules = undefined,
     paths_len: usize = 0,
     terms: [max_terms]Term = undefined,

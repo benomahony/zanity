@@ -25,6 +25,7 @@ const UpgradeRow = cmd_upgrade.UpgradeRow;
 const runUpgrade = cmd_upgrade.runUpgrade;
 const previewUpgrade = cmd_upgrade.previewUpgrade;
 const renderUpgrade = cmd_upgrade.renderUpgrade;
+const cmd_search = @import("cmd_search.zig");
 const triage = @import("triage.zig");
 const CheckOptions = triage.CheckOptions;
 const workspace = @import("workspace.zig");
@@ -135,7 +136,19 @@ pub const app: zclig.App = .{
             .{ .name = "rule", .metavar = "RULE", .help = "Show only this question.", .example = "cwe-15" },
             .{ .name = "thresholds", .help = "Measure each labelled question's precision and recall at a range of thresholds." },
         },
-    }, .{ .run = calibrate.runStats }) },
+    }, .{ .run = calibrate.runStats }), zclig.command(cmd_search.SearchOptions, cmd_search.SearchRow, .{
+        .name = "search",
+        .description = "Find code by what it does: embed the query with the [semantic] server and list the closest functions as path:line:col: text, reusing the vectors check --semantic kept.",
+        .examples = &.{ "zanity search \"retry a failed payment\"", "zanity search invoice total --names", "vim -q <(zanity search parse config)" },
+        .result_title = "Matches",
+        .positional = .{ .name = "query", .metavar = "QUERY", .help = "What the code does, in words." },
+        .options = &.{
+            .{ .name = "names", .help = "Match the names of functions, classes and variables." },
+            .{ .name = "docs", .help = "Match docstrings and the comments above functions." },
+            .{ .name = "bodies", .help = "Match function bodies, the default." },
+            .{ .name = "limit", .metavar = "N", .help = "List at most N matches, up to 200.", .example = "50" },
+        },
+    }, .{ .run = cmd_search.runSearch, .human = cmd_search.renderSearch }) },
 };
 
 pub fn main(init: std.process.Init) !u8 {

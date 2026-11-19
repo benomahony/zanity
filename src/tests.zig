@@ -20,6 +20,10 @@ test {
     _ = @import("catalogue_test.zig");
     _ = @import("docs_test.zig");
     _ = @import("infer.zig");
+    _ = @import("embed.zig");
+    _ = @import("vectors.zig");
+    _ = @import("semantic.zig");
+    _ = @import("cmd_search.zig");
     _ = @import("scope.zig");
     _ = @import("schema.zig");
     _ = @import("assert.zig");

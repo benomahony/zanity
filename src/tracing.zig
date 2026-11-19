@@ -98,7 +98,7 @@ fn spanSettled(self: *File, function: ts.Node, span: TraceSpan) bool {
     if (ts.ts_node_start_byte(binding) < ts.ts_node_start_byte(function)) assert.panic("{s}: the span start {f} is bound to {f}, outside its function {f}; spanBinding() must find the name inside the function", .{ self.work.facts.path, span.start.where(), binding.where(), function.where() });
     const name = binding.text(self.source);
     if (name.len == 0) assert.panic("{s}: the span start {f} is bound to the empty {f}; capture a named node as @binding.name", .{ self.work.facts.path, span.start.where(), binding.where() });
-    for (self.index.inside(function)) |t| {
+    for (self.index.capturesWithin(function)) |t| {
         if (t.id != self.v.reference_name) continue;
         if (ts.ts_node_start_byte(t.node) < ts.ts_node_end_byte(binding)) continue;
         if (ts.ts_node_symbol(t.node) != ts.ts_node_symbol(binding) or !std.mem.eql(u8, t.node.text(self.source), name)) continue;

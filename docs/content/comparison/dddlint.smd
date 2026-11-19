@@ -24,8 +24,8 @@ Same line means zanity reports it on the tool's line, give or take one. A note i
 | `forbidden` | `forbidden-term` | [✓ yes]($text.attrs('badge','pass')) | [✓ yes]($text.attrs('badge','pass')) | [✓ yes]($text.attrs('badge','pass')) |  |
 | `forbidden:module` | `forbidden-term` | [✓ yes]($text.attrs('badge','pass')) | [✓ yes]($text.attrs('badge','pass')) | [✓ yes]($text.attrs('badge','pass')) |  |
 | `test-domain-drift` | `misplaced-test` | [✓ yes]($text.attrs('badge','pass')) | [✓ yes]($text.attrs('badge','pass')) | [✓ yes]($text.attrs('badge','pass')) |  |
-| `near-synonym` | – | [– n/a]($text.attrs('badge','none')) | [– n/a]($text.attrs('badge','none')) | [– n/a]($text.attrs('badge','none')) | No fixture: it comes from an embedding model in `dddlint map`, not from lint. zanity has no embedding features yet |
-| `context-outlier` | – | [– n/a]($text.attrs('badge','none')) | [– n/a]($text.attrs('badge','none')) | [– n/a]($text.attrs('badge','none')) | No fixture: it comes from an embedding model in `dddlint map`, not from lint. zanity has no embedding features yet |
+| `near-synonym` | `near-synonym` | [– n/a]($text.attrs('badge','none')) | [– n/a]($text.attrs('badge','none')) | [– n/a]($text.attrs('badge','none')) | No fixture: it comes from an embedding model in `dddlint map`, not from lint. zanity's own needs `check --semantic` and an embeddings server, which the parity run doesn't start; its tests port dddlint's |
+| `context-outlier` | `context-outlier` | [– n/a]($text.attrs('badge','none')) | [– n/a]($text.attrs('badge','none')) | [– n/a]($text.attrs('badge','none')) | No fixture: it comes from an embedding model in `dddlint map`, not from lint. zanity's own needs `check --semantic` and an embeddings server, which the parity run doesn't start; its tests port dddlint's |
 
 # Real code
 

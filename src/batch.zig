@@ -117,7 +117,7 @@ pub const Batch = struct {
     /// Checks every file, then returns the first failure in file order, if any. A failure doesn't
     /// stop the others, so the same files fail the same way however they were scheduled.
     pub fn run(self: *Batch, workers: []const *Worker) Io.Cancelable!?Failure {
-        if (workers.len == 0 or workers.len > max_workers) assert.panic("checking with {d} workers; initWorkers() makes between 1 and {d}", .{ workers.len, max_workers });
+        if (workers.len == 0 or workers.len > max_workers) assert.panic("checking with {d} workers; checkWorkers() makes between 1 and {d}", .{ workers.len, max_workers });
         if (self.order.len < self.files.len) assert.panic("room to order {d} files, but the run has {d}; size Batch.order from memory.Limits.files", .{ self.order.len, self.files.len });
         for (self.files, 0..) |path, index| {
             // A file that can't be read is checked last; reading it then reports why.
@@ -266,14 +266,3 @@ pub const Batch = struct {
         if (self.failure.?.index > failure.index) assert.panic("kept the failure of file {d} over the earlier file {d}; recordFailure() keeps the earliest", .{ self.failure.?.index, failure.index });
     }
 };
-
-/// One worker per core, but no more than there are files to check.
-pub fn initWorkers(gpa: Allocator, limits: memory.Limits, files: usize) Allocator.Error![]const *Worker {
-    if (files == 0) assert.panic("making workers to check no files; checkFiles() returns early when there are none", .{});
-    const cores = std.Thread.getCpuCount() catch 1;
-    const count = @max(1, @min(cores, files, max_workers));
-    const workers = try gpa.alloc(*Worker, count);
-    for (workers) |*worker| worker.* = try .initWorker(gpa, limits);
-    if (workers.len > files) assert.panic("made {d} workers for {d} files; a worker with no file only costs memory", .{ workers.len, files });
-    return workers;
-}

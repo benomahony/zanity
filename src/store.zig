@@ -125,6 +125,8 @@ pub const Store = struct {
     save_label: *sqlite.sqlite3_stmt,
     find_label: *sqlite.sqlite3_stmt,
     list_observed: *sqlite.sqlite3_stmt,
+    find_vector: *sqlite.sqlite3_stmt,
+    save_vector: *sqlite.sqlite3_stmt,
 
     /// Gives SQLite one fixed heap, then opens the store and prepares every statement, so
     /// nothing allocates after start-up. SQLite keeps the first heap for the life of the process,
