@@ -255,8 +255,9 @@ fn mostUsed(definitions: []const Definition, run: []const Keyed, names: []const 
     return .{ .name = best, .uses = best_uses };
 }
 
-/// True when the names differ only in which side of a direction word each
-/// part sits, like `copyFromTo` and `copyToFrom`, which are distinct concepts.
+/// True when the names differ only in the order of their direction words or in which side of
+/// one each part sits, like `copyFromTo` and `copyToFrom`, or `inOutSine` and `outInSine`, which
+/// are distinct concepts.
 fn directionalNames(s: *ConceptScratch, names: []const []const u8) error{LimitExceeded}!bool {
     if (names.len < 2) assert.panic("comparing the direction words of {d} names; drift needs at least 2 spellings", .{names.len});
     s.shapes.clear();
@@ -266,6 +267,8 @@ fn directionalNames(s: *ConceptScratch, names: []const []const u8) error{LimitEx
         for (try tokenise(s, name)) |token| {
             if (strings.contains(s.directional, token)) {
                 sides += 1;
+                _ = try s.words.copy("|");
+                _ = try s.words.copy(token);
                 _ = try s.words.copy("|");
             } else {
                 _ = try s.words.copy(token);

@@ -106,7 +106,7 @@ test "names split on separators, case changes and acronyms" {
 }
 
 /// Words that give a name its direction, unless zanity.toml lists its own.
-const default_directional = [_][]const u8{ "to", "from", "before", "after", "src", "dst" };
+const default_directional = [_][]const u8{ "to", "from", "before", "after", "src", "dst", "in", "out" };
 
 const max_tokens = 64;
 
