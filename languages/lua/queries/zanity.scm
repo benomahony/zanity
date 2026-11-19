@@ -78,6 +78,11 @@
     table: (_) @call.receiver
     field: (identifier) @call.name))
 
+; `t.f(x)` passes no `self`, as `t:f(x)` does, so `f` is a function in the table `t`, never a method
+; of an object such as a database connection.
+(function_call
+  name: (dot_index_expression)) @call.unbound
+
 (function_call
   name: (method_index_expression
     table: (_) @call.receiver

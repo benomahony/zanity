@@ -217,7 +217,8 @@ fn checkRiskyArgument(self: *File, ctx: Context, name: []const u8, first: ts.Nod
     if (self.calleeIn(ctx, name, self.tables.shell_calls)) |m| if (!literal) {
         _ = try self.report(ctx.callee orelse ctx.name.?, "shell-command", try self.say("'{s}' runs '{s}' through a shell, so a crafted value in it can run other commands.", .{ m, first_shown }));
     };
-    if (ctx.receiver != null and contains(self.tables.sql_methods, name) and built) {
+    // A method of a connection takes it as its receiver; a call marked @call.unbound passes none.
+    if (ctx.receiver != null and contains(self.tables.sql_methods, name) and built and !self.index.marks(ctx.node, self.checker.compiled.id("call.unbound"))) {
         _ = try self.report(first, "sql-built-from-strings", try self.say("This SQL is built from strings at runtime, so a value containing a quote can change the query: '{s}'.", .{first_shown}));
     }
     const network = self.calleeIn(ctx, name, self.tables.network_calls) != null;

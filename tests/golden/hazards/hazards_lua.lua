@@ -78,4 +78,8 @@ function M.differs(a, b)
   return not a ~= b
 end
 
+function M.vimscript(helpers, path)
+  helpers.exec("set rtp+=" .. path)
+end
+
 return M
