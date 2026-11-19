@@ -4,6 +4,7 @@ const adapters = @import("adapters");
 const ts = @import("ts.zig");
 const captures = @import("captures.zig");
 const rules = @import("rules.zig");
+const query_analysis = @import("query_analysis");
 
 pub const Adapter = adapters.Adapter;
 pub const Tables = adapters.Tables;
@@ -23,7 +24,9 @@ pub fn load(adapter: *const Adapter) LoadError!Loaded {
     var offset: u32 = 0;
     var err: ts.QueryError = .none;
     const language: *const ts.Language = @ptrCast(adapter.grammar());
-    const query = ts.ts_query_new(language, source.ptr, @intCast(source.len), &offset, &err) orelse {
+    const analysis = query_analysis.all[indexOf(adapter)];
+    const query = ts.zanity_query_new_analysed(language, source.ptr, @intCast(source.len), analysis.ptr, @intCast(analysis.len), &offset, &err) orelse {
+        if (err == .structure and offset == 0) assert.panic("{s}'s queries do not match the pattern analysis recorded when zanity was built; zig build writes it from languages/, so rebuild", .{adapter.name});
         std.log.err("{s} queries do not compile: {t} at byte {d}", .{ adapter.name, err, offset });
         return error.InvalidQuery;
     };
@@ -31,9 +34,8 @@ pub fn load(adapter: *const Adapter) LoadError!Loaded {
     return .{ .adapter = adapter, .query = query };
 }
 
-/// Each language's queries, compiled once for every test that only reads them: tree-sitter takes
-/// about 50 ms to compile a language's queries. A checker turns patterns off in its query, so a
-/// test that builds one compiles its own.
+/// Each language's queries, compiled once for every test that only reads them. A checker turns
+/// patterns off in its query, so a test that builds one compiles its own.
 pub fn loadedOnce(adapter: *const Adapter) LoadError!Loaded {
     const slot = &compiled_once[indexOf(adapter)];
     if (slot.* == null) slot.* = try load(adapter);
@@ -84,6 +86,44 @@ test "every adapter's queries compile against its grammar" {
     for (adapters.all) |*adapter| {
         _ = try loadedOnce(adapter);
     }
+}
+
+/// Compiles `adapter`'s queries with tree-sitter's own analysis and checks the query load()
+/// compiles from the recorded analysis holds exactly the same state.
+fn matchesFullAnalysis(adapter: *const Adapter, same: *bool) void {
+    const source = adapter.query;
+    if (source.len == 0) assert.panic("{s} has no queries to compare", .{adapter.name});
+    var offset: u32 = 0;
+    var err: ts.QueryError = .none;
+    const full = ts.ts_query_new(@ptrCast(adapter.grammar()), source.ptr, @intCast(source.len), &offset, &err) orelse assert.panic("{s} queries do not compile with tree-sitter's own analysis: {t} at byte {d}", .{ adapter.name, err, offset });
+    defer ts.ts_query_delete(full);
+    const recorded = load(adapter) catch |e| assert.panic("{s} queries do not compile from the recorded analysis: {t}", .{ adapter.name, e });
+    defer ts.ts_query_delete(recorded.query);
+    same.* = ts.zanity_query_equal(full, recorded.query);
+    if (same.* and ts.ts_query_pattern_count(full) != ts.ts_query_pattern_count(recorded.query)) assert.panic("{s}: queries with {d} and {d} patterns compared equal; zanity_query_equal() must compare the patterns", .{ adapter.name, ts.ts_query_pattern_count(full), ts.ts_query_pattern_count(recorded.query) });
+}
+
+test "queries compiled from the recorded analysis equal those tree-sitter analyses itself, in every language" {
+    var same: [count]bool = @splat(false);
+    var group: std.Io.Group = .init;
+    for (adapters.all, &same) |*adapter, *s| group.async(std.testing.io, matchesFullAnalysis, .{ adapter, s });
+    try group.await(std.testing.io);
+    for (adapters.all, same) |adapter, s| {
+        if (!s) std.debug.print("{s}: the query compiled from the recorded analysis differs from tree-sitter's own\n", .{adapter.name});
+        try std.testing.expect(s);
+    }
+}
+
+test "analysis recorded for one language's queries is refused for another's" {
+    if (adapters.all.len < 2) return error.SkipZigTest;
+    const one = &adapters.all[0];
+    const wrong = query_analysis.all[1];
+    var offset: u32 = 1;
+    var err: ts.QueryError = .none;
+    const query = ts.zanity_query_new_analysed(@ptrCast(one.grammar()), one.query.ptr, @intCast(one.query.len), wrong.ptr, @intCast(wrong.len), &offset, &err);
+    try std.testing.expectEqual(null, query);
+    try std.testing.expectEqual(ts.QueryError.structure, err);
+    try std.testing.expectEqual(@as(u32, 0), offset);
 }
 
 test "every @finding capture names a rule with a pattern message" {

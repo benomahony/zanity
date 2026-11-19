@@ -122,6 +122,9 @@ pub extern fn ts_tree_cursor_goto_parent(cursor: *TreeCursor) bool;
 
 pub extern fn ts_query_new(language: *const Language, source: [*]const u8, length: u32, error_offset: *u32, error_type: *QueryError) ?*Query;
 pub extern fn ts_query_delete(query: *Query) void;
+pub extern fn zanity_query_new_analysed(language: *const Language, source: [*]const u8, length: u32, analysis: [*]const u8, analysis_length: u32, error_offset: *u32, error_type: *QueryError) ?*Query;
+pub extern fn zanity_query_analysis(query: *const Query, out: ?[*]u8, capacity: u32) u32;
+pub extern fn zanity_query_equal(a: *const Query, b: *const Query) bool;
 pub extern fn ts_query_pattern_count(query: *const Query) u32;
 pub extern fn ts_query_disable_pattern(query: *Query, pattern_index: u32) void;
 pub extern fn ts_query_capture_count(query: *const Query) u32;
