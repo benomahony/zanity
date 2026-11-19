@@ -23,6 +23,7 @@ test {
     _ = @import("embed.zig");
     _ = @import("vectors.zig");
     _ = @import("semantic.zig");
+    _ = @import("body_calls.zig");
     _ = @import("cmd_search.zig");
     _ = @import("scope.zig");
     _ = @import("schema.zig");

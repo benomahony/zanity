@@ -35,7 +35,7 @@ pub const Endpoint = struct {
     api_key_env: ?[]const u8 = null,
 };
 
-const Entry = struct { kind: TextKind, text: []const u8, hash: store.Digest, known: bool = false };
+const Entry = struct { kind: TextKind, text: []const u8, hash: store.Digest };
 
 pub const UnitRow = struct { unit: *const Unit, name: u32, doc: ?u32, body: u32 };
 pub const DefinitionRow = struct { definition: *const Definition, name: u32 };
@@ -162,7 +162,7 @@ pub const Embedding = struct {
         if (self.concurrency == 0) assert.panic("embedding with no requests allowed at once; set [semantic] concurrency to at least 1", .{});
         self.missing.clear();
         var scratch: [store_vectors.max_vector]f32 = undefined;
-        for (self.entries.items(), 0..) |*entry, i| {
+        for (self.entries.items(), 0..) |entry, i| {
             const found = try store_vectors.cachedVector(&self.store, .{ .model = self.model, .kind = @tagName(entry.kind), .text = entry.hash }, &scratch);
             if (found) |n| if (self.dimensions == 0 or n == self.dimensions) {
                 if ((i + 1) * n > self.values.len) {
@@ -171,7 +171,6 @@ pub const Embedding = struct {
                 }
                 self.dimensions = n;
                 @memcpy(self.values[i * n ..][0..n], scratch[0..n]);
-                entry.known = true;
                 continue;
             };
             try self.missing.add(@intCast(i));
@@ -231,7 +230,6 @@ pub const Embedding = struct {
             const out = self.values[entry * self.dimensions ..][0..self.dimensions];
             @memcpy(out, item.embedding);
             vectors.normalise(out);
-            self.entries.items()[entry].known = true;
         }
         try store_vectors.batched(&self.store, .begin);
         for (batch) |entry| try store_vectors.keepVector(&self.store, .{ .model = self.model, .kind = @tagName(self.entries.items()[entry].kind), .text = self.entries.items()[entry].hash }, self.vector(entry));
@@ -275,6 +273,7 @@ pub const Embedding = struct {
         advice = switch (err) {
             error.ConnectionFailed => "Start an OpenAI-compatible embeddings server at [semantic] url, such as llama-server --embedding --port 8080 with EmbeddingGemma 2, then run again; vectors already received are kept.",
             error.ServerRefused => "Check [semantic] model names a model the server has loaded, and api_key_env if it needs a key, then run again; vectors already received are kept.",
+            error.WrongDimensions => try self.text.format("The server's vectors are a different length from those stored for {s}, so the model it serves changed under the same name; name the new one in [semantic] model, or delete the embeddings table in {s}, then run again.", .{ self.model, self.store.path }),
             else => "The server's answer was not an OpenAI embeddings response with one vector per text, all of one length; check [semantic] url points at /v1/embeddings of an embeddings server.",
         };
         if (failure.len == 0 or advice.len == 0) assert.panic("describing a failed embedding with no words", .{});

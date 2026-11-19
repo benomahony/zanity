@@ -79,10 +79,6 @@ fn importStatement(self: *File, node: ts.Node) ts.Node {
     return outermost;
 }
 
-/// The hash of what holds a reference at `node`: the name itself where it names the construct it
-/// belongs to (@reference.self), the construct's own name where only it keeps the name alive
-/// (@reference.held), or else the outermost named function, class or definition open around it;
-/// 0 at module level.
 /// Notes a name the code refers to for dead-symbol: a @reference.name that isn't a field, each
 /// name in a @reference.text, such as the Lua a keymap's string runs, or a @reference.key that is
 /// one whole name, such as the `"git_branch"` a plugin's table looks a function up by.
@@ -120,6 +116,10 @@ fn tallyName(self: *File, node: ts.Node, name: []const u8) !void {
     if (name.len > node.text(self.source).len) assert.panic("{s}: the name '{s}' is longer than {f}, the reference it came from", .{ self.work.facts.path, name, node.where() });
 }
 
+/// The hash of what holds a reference at `node`: the name itself where it names the construct it
+/// belongs to (@reference.self), the construct's own name where only it keeps the name alive
+/// (@reference.held), or else the outermost named function, class or definition open around it;
+/// 0 at module level.
 fn holderOf(self: *File, node: ts.Node) u64 {
     const compiled = self.checker.compiled;
     if (self.index.marks(node, compiled.id("reference.self"))) return facts_module.nameHash(node.text(self.source));

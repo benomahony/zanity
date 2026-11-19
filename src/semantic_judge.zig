@@ -63,7 +63,7 @@ pub fn judge(e: *embed.Embedding, run: Embedded) !void {
     try e.fetch();
     if (!e.judging or e.dimensions == 0 or e.entries.len == 0) return;
     var j = try Judging.initJudging(e.gpa, e.entries.len, e.dimensions);
-    j.centroids = try memory.reserveUninitialized(e.gpa, f32, @max(33 * e.dimensions, e.entries.len));
+    j.centroids = try memory.reserveUninitialized(e.gpa, f32, @max(semantic.max_contexts * e.dimensions, e.entries.len));
     for (e.names.items()) |row| {
         if (j.seen.isSet(row.name)) continue;
         j.seen.set(row.name);

@@ -4,6 +4,8 @@ const memory = @import("memory.zig");
 const vectors = @import("vectors.zig");
 const Words = @import("words.zig").Words;
 const store = @import("store.zig");
+const calls = @import("body_calls.zig").calls;
+const max_scopes = @import("config.zig").max_scopes;
 
 pub const default_thresholds: Thresholds = .{};
 pub const Thresholds = struct {
@@ -15,6 +17,8 @@ pub const Thresholds = struct {
 
 pub const global_scope = "global";
 const min_shared_prefix = 5;
+/// Every [domains.*] and [contexts.*] zanity.toml may hold, and the global scope of names in none.
+pub const max_contexts = max_scopes + 1;
 const max_members = 8;
 
 pub const Named = struct {
@@ -38,20 +42,6 @@ pub const Coded = struct {
     subject: store.Digest = @splat('0'),
     source: []const u8 = "",
 };
-
-fn calls(source: []const u8, name: []const u8) bool {
-    if (name.len == 0) assert.panic("looking for a call to a function with no name; facts.unit() records every name", .{});
-    var from: usize = 0;
-    for (0..source.len) |_| {
-        const at = std.mem.indexOfPos(u8, source, from, name) orelse return false;
-        const end = at + name.len;
-        const starts = at == 0 or !(std.ascii.isAlphanumeric(source[at - 1]) or source[at - 1] == '_');
-        if (starts and end < source.len and source[end] == '(' and !std.mem.endsWith(u8, std.mem.trimEnd(u8, source[0..at], " "), "fn") and !std.mem.endsWith(u8, std.mem.trimEnd(u8, source[0..at], " "), "def")) return true;
-        from = end;
-    }
-    if (from > source.len) assert.panic("searched past the end of a {d}-byte body for '{s}'", .{ source.len, name });
-    return false;
-}
 
 pub const Described = struct {
     name: []const u8,
@@ -178,7 +168,7 @@ pub fn contextOutliers(scratch: Room, items: []const Named, margin: f64, out: *m
     if (!(margin > 0 and margin <= 1)) assert.panic("context-outlier at a margin of {d}", .{margin});
     if (items.len == 0) return;
     const dims = items[0].vector.len;
-    var labels: [33][]const u8 = undefined;
+    var labels: [max_contexts][]const u8 = undefined;
     var count: usize = 0;
     const home = scratch.cluster[0..items.len];
     for (items, home) |item, *h| {
@@ -187,13 +177,13 @@ pub fn contextOutliers(scratch: Room, items: []const Named, margin: f64, out: *m
             if (std.mem.eql(u8, l, scope)) break @intCast(c);
         } else @intCast(count);
         if (h.* < count) continue;
-        if (count == labels.len) return;
+        if (count == labels.len) assert.panic("'{s}' is in a context past the {d} zanity.toml allows with the global one; config refuses more", .{ item.name, labels.len });
         labels[count] = scope;
         count += 1;
     }
     if (count < 2) return;
     if (scratch.centroids.len < count * dims) assert.panic("no room for {d} centroids of {d} values", .{ count, dims });
-    var centroids: [33][]const f32 = undefined;
+    var centroids: [max_contexts][]const f32 = undefined;
     for (0..count) |c| {
         const sum = scratch.centroids[c * dims ..][0..dims];
         @memset(sum, 0);
@@ -231,30 +221,39 @@ fn shareHelper(items: []const Coded, a: usize, b: usize) bool {
     return false;
 }
 
+/// The body nearest body `i` in another file or scope that neither calls the other, or `i` itself
+/// when there is none. The cosine comes first, as it is cheaper than reading both bodies for calls.
+fn nearestBody(items: []const Coded, i: usize, score: *f32) u32 {
+    if (i >= items.len) assert.panic("finding the nearest of body {d} of {d}", .{ i, items.len });
+    const a = items[i];
+    var best: u32 = @intCast(i);
+    score.* = -1;
+    for (items, 0..) |b, j| {
+        if (i == j or (std.mem.eql(u8, a.path, b.path) and std.mem.eql(u8, a.scope, b.scope))) continue;
+        const s = vectors.cosine(a.vector, b.vector);
+        if (s <= score.*) continue;
+        if (calls(a.source, b.name) or calls(b.source, a.name)) continue;
+        score.* = s;
+        best = @intCast(j);
+    }
+    if ((best == i) != (score.* == -1)) assert.panic("body {d} is nearest {d} at a cosine of {d}; a body is its own nearest only when no other qualifies", .{ i, best, score.* });
+    return best;
+}
+
 pub fn semanticCoupling(scratch: Room, items: []const Coded, threshold: f64, out: *memory.Bounded(Insight)) !void {
     if (!(threshold > 0 and threshold <= 1)) assert.panic("semantic-coupling at a threshold of {d}", .{threshold});
     if (items.len > scratch.parent.len) assert.panic("{d} bodies in room for {d}", .{ items.len, scratch.parent.len });
     const best = scratch.parent[0..items.len];
     const scores = scratch.scores[0..items.len];
-    for (items, 0..) |a, i| {
-        best[i] = @intCast(i);
-        scores[i] = -1;
-        for (items, 0..) |b, j| {
-            if (i == j or (std.mem.eql(u8, a.path, b.path) and std.mem.eql(u8, a.scope, b.scope))) continue;
-            if (calls(a.source, b.name) or calls(b.source, a.name)) continue;
-            const s = vectors.cosine(a.vector, b.vector);
-            if (s <= scores[i]) continue;
-            scores[i] = s;
-            best[i] = @intCast(j);
-        }
-    }
+    for (best, scores, 0..) |*b, *s, i| b.* = nearestBody(items, i, s);
     for (items, 0..) |a, i| {
         const j = best[i];
         if (j == i) continue;
         const b = items[j];
         if (best[j] == i and before(b, a)) continue;
-        if (shareHelper(items, i, j)) continue;
-        try out.add(.{ .rule = "semantic-coupling", .path = a.path, .line = a.line, .column = a.column, .name = a.name, .score = scores[i], .threshold = threshold, .subject = a.subject, .message = try scratch.text.format("'{s}' does what '{s}' in {s}:{d} does (cosine {d:.2}), though their code differs.", .{ a.name, b.name, b.path, b.line + 1, scores[i] }) });
+        const score = scores[i];
+        if (score >= threshold and shareHelper(items, i, j)) continue;
+        try out.add(.{ .rule = "semantic-coupling", .path = a.path, .line = a.line, .column = a.column, .name = a.name, .score = score, .threshold = threshold, .subject = a.subject, .message = try scratch.text.format("'{s}' does what '{s}' in {s}:{d} does (cosine {d:.2}), though their code differs.", .{ a.name, b.name, b.path, b.line + 1, score }) });
     }
 }
 
@@ -416,14 +415,6 @@ test "semantic-coupling leaves two bodies alone once they share a helper no othe
     };
     try semanticCoupling(f.scratch(), &bodies, 0.9, &f.insights);
     try std.testing.expectEqual(@as(usize, 0), f.fired());
-}
-
-test "a body calls a name only where it is called, not where a longer name or a definition contains it" {
-    try std.testing.expect(calls("x = cache.replay(y)", "replay"));
-    try std.testing.expect(!calls("x = replayAll(y)", "replay"));
-    try std.testing.expect(!calls("x = myreplay(y)", "replay"));
-    try std.testing.expect(!calls("pub fn replay(y: u8) void {}", "replay"));
-    try std.testing.expect(!calls("def replay(y):", "replay"));
 }
 
 test "semantic-coupling leaves bodies in the same file to structural rules" {
