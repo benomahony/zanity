@@ -69,6 +69,7 @@ pub const looked_up = [_][]const u8{
     "reference.text",
     "reference.passed",
     "storage.read",
+    "function.not_test",
     "local.reference",
     "local.scope",
     "method.override",

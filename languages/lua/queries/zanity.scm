@@ -5,6 +5,29 @@
   name: (dot_index_expression
     field: (identifier) @function.name))
 
+; luaunit runs global test functions and those of tables named Test..., so a function named like a
+; test in any other table, such as an adapter's `M.test_set`, is not one.
+((function_declaration
+  name: [
+    (dot_index_expression
+      table: (identifier) @_table)
+    (method_index_expression
+      table: (identifier) @_table)
+  ]) @function.not_test
+  (#not-any-prefix? @_table "Test"))
+
+((assignment_statement
+  (variable_list
+    .
+    name: (dot_index_expression
+      table: (identifier) @_table)
+    .)
+  (expression_list
+    .
+    value: (function_definition)
+    .)) @function.not_test
+  (#not-any-prefix? @_table "Test"))
+
 ; `function Tree:walk()` takes the table it is called on as `self`, so it is a method.
 (function_declaration
   name: (method_index_expression

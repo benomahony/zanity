@@ -188,7 +188,7 @@ pub fn assign(self: *File, ctx: *Context, part: []const u8, node: ts.Node) !void
         if (std.mem.eql(u8, part, slot)) {
             if (@field(ctx, slot) == null) @field(ctx, slot) = node;
             if (ctx.family == .function and std.mem.eql(u8, slot, "name")) {
-                ctx.is_test = self.isTestName(node.text(self.source));
+                ctx.is_test = self.isTestName(node.text(self.source)) and !self.index.marks(ctx.node, self.checker.compiled.id("function.not_test"));
                 const at = ts.ts_node_start_point(node);
                 const method = self.definedInClass() or self.index.marks(ctx.node, self.checker.compiled.id("function.method"));
                 ctx.fact = try self.work.facts.function(node.text(self.source), .{ at.row, at.column }, method);
