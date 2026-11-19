@@ -687,7 +687,7 @@ zig build test --fuzz=100K  # fuzz the checker with arbitrary bytes in every lan
 `zig build bench` times `zanity check --rules all` end to end on Zig's standard library, cold, with a private store deleted before every run, and warm, reusing it, beside the fastest this machine could parse the same files. Point it at a large codebase with `-Dcorpus`, or run the Bench workflow from the Actions tab, which times the latest commit of five codebases of increasing size (click, django, rust-analyzer, kubernetes and vscode) and puts the timings in the run's summary:
 
 ```sh
-git clone --depth 1 --branch v1.31.4 https://github.com/kubernetes/kubernetes /tmp/kubernetes
+git clone --depth 1 https://github.com/kubernetes/kubernetes /tmp/kubernetes
 zig build bench -Dcorpus=/tmp/kubernetes
 ```
 
