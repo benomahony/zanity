@@ -71,7 +71,8 @@ jobs:
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - uses: xyzzylabs/setup-zig@7e5af686da64007a0797898801de180e5f4d3762 # v1.0.5
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - id: server-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/zanity-semantic
           key: zanity-semantic-${{ runner.os }}-${{ runner.arch }}-b12506-6ea3e3a
@@ -81,6 +82,13 @@ jobs:
           key: zanity-semantic-store-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: zanity-semantic-store-${{ runner.os }}-
       - run: scripts/semantic-server
+      # Saved once the server runs, not after the check, so a run that starts while a cold one is
+      # still embedding gets the built server and the model instead of making its own.
+      - if: steps.server-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/zanity-semantic
+          key: zanity-semantic-${{ runner.os }}-${{ runner.arch }}-b12506-6ea3e3a
       - name: zanity check . --semantic --fail-on warning
         run: zig build && ./zig-out/bin/zanity check . --semantic --fail-on warning
       - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
