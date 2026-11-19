@@ -116,10 +116,9 @@ const no_coverage = "-fno-sanitize-coverage=trace-pc-guard,trace-cmp,inline-8bit
 
 var query_analysis: ?std.Build.LazyPath = null;
 
-/// What tree-sitter's pattern analysis finds for every language's queries, as a Zig file that
-/// src/query_analysis_gen.zig writes once per build on the host, so zanity compiles its queries
-/// without the analysis that took seconds for some grammars. The analysis depends only on the
-/// queries and grammars, so one file serves every target.
+/// The output of one build step, added the first time a module asks for it, that runs a host
+/// tool and hands every module compiling zanity the file it writes. It depends only on languages/,
+/// so every target shares the one step.
 fn queryAnalysis(b: *std.Build) std.Build.LazyPath {
     if (query_analysis) |path| return path;
     if (manifest.entries.len == 0) std.debug.panic("languages/manifest.zon lists no languages, so there are no queries to analyse", .{});
