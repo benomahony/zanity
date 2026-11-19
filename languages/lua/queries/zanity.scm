@@ -361,9 +361,11 @@
   (_) @finding.unreachable-code
   (#kind-eq? @finding.unreachable-code "assignment_statement" "function_call" "variable_declaration" "function_declaration" "if_statement" "while_statement" "repeat_statement" "for_statement" "do_statement" "return_statement" "break_statement" "goto_statement"))
 
+; `error` is marked @builtin.terminator, so code after it is reachable when `error` is a local, such
+; as a health check's `local error = vim.health.error`, which reports and returns.
 ((block
   (function_call
-    name: (identifier) @_error)
+    name: (identifier) @_error @builtin.terminator)
   .
   (_) @finding.unreachable-code)
   (#eq? @_error "error")

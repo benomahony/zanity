@@ -234,7 +234,7 @@ fn referencesGroup(self: *File, ids: Ids, group: *const Group, reference: ts.Nod
     if (isDefinition(self, reference)) return false;
     for (group.declared()) |name| {
         if (!std.mem.eql(u8, name.text(self.source), text)) continue;
-        return !try shadowed(self, ids, group.after(), reference);
+        return !try shadowed(self, ids.scope, group.after(), reference);
     }
     if (ts.ts_node_start_byte(reference) < group.after()) assert.panic("{s}: the reference {f} precedes the declaration it was checked against; findUses() must start after the declaration", .{ self.work.facts.path, reference.where() });
     return false;
@@ -261,8 +261,17 @@ fn isDefinition(self: *File, node: ts.Node) bool {
     return false;
 }
 
+/// Whether a definition of the same name as `reference`, made before it, holds it in its scope, so
+/// the name means that local and not a builtin, such as `local error = vim.health.error`.
+pub fn definedLocally(self: *File, reference: ts.Node) !bool {
+    const scope = self.checker.compiled.id("local.scope") orelse return false;
+    if (reference.text(self.source).len == 0) assert.panic("{s}: asked whether the empty {f} is defined locally; pass a name", .{ self.work.facts.path, reference.where() });
+    if (scope >= self.checker.compiled.captureCount()) assert.panic("{s}: @local.scope has id {d}, past the query's {d} captures; Compiled.id() returns ids within the query", .{ self.work.facts.path, scope, self.checker.compiled.captureCount() });
+    return shadowed(self, scope, 0, reference);
+}
+
 /// Whether a definition of the same name, made after `after`, holds `reference` in its scope.
-fn shadowed(self: *File, ids: Ids, after: u32, reference: ts.Node) !bool {
+fn shadowed(self: *File, scope_id: captures.Id, after: u32, reference: ts.Node) !bool {
     const text = reference.text(self.source);
     const at = ts.ts_node_start_byte(reference);
     if (at < after) assert.panic("{s}: the reference {f} comes before the declaration it might use ends at byte {d}; findUses() must start after the declaration", .{ self.work.facts.path, reference.where(), after });
@@ -272,7 +281,7 @@ fn shadowed(self: *File, ids: Ids, after: u32, reference: ts.Node) !bool {
         if (t.key.start >= at) break;
         if (!std.mem.eql(u8, names[t.id].family, "local.definition")) continue;
         if (!std.mem.eql(u8, t.node.text(self.source), text)) continue;
-        const scope = try enclosing(self, t.node, ids.scope) orelse continue;
+        const scope = try enclosing(self, t.node, scope_id) orelse continue;
         if (ts.ts_node_end_byte(scope) >= ts.ts_node_end_byte(reference)) return true;
     }
     if (first > self.index.triples.len) assert.panic("{s}: the captures after byte {d} start at {d}, past the {d} recorded; take the start from lowerBound over the recorded captures", .{ self.work.facts.path, after, first, self.index.triples.len });

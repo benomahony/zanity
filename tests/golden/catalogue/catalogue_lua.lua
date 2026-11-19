@@ -48,4 +48,17 @@ end
 
 function M.stub() end
 
+function M.fails(name)
+  error("unknown " .. name)
+  print(name)
+end
+
+function M.health(report, names)
+  local error = report.error
+  for _, name in ipairs(names) do
+    error("found " .. name)
+    break
+  end
+end
+
 return M
