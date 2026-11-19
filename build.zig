@@ -44,7 +44,7 @@ pub fn build(b: *std.Build) void {
     bench.addArg(b.graph.zig_exe);
     if (b.option([]const u8, "corpus", "The directory zig build bench checks; Zig's standard library by default")) |corpus| bench.addArg(corpus);
     bench.has_side_effects = true;
-    b.step("bench", "Time zanity check against the fastest this machine could parse the corpus").dependOn(&bench.step);
+    b.step("bench", "Time zanity check, cold and warm, against the fastest this machine could parse the corpus").dependOn(&bench.step);
 
     // `zig build test` is the fast loop: the code's own tests, with no zanity binary to build.
     const unit = b.addRunArtifact(b.addTest(.{ .root_module = module(b, "src/tests.zig", target, test_optimize) }));
