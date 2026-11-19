@@ -329,12 +329,16 @@ pub const Store = struct {
     /// every build and every workspace checked. An evicted file is analysed again on its next check.
     pub fn trimAnalyses(self: *const Store, keep: u32) !void {
         if (keep == 0) assert.panic("trimming the analysis cache to 0 rows would make every check a miss; memory.Limits.cached_analyses must be above 0", .{});
+        // One write transaction, so another process's analyses can't land between the trim and the count.
+        if (sqlite.sqlite3_exec(self.db, "SAVEPOINT zanity_trim", null, null, null) != sqlite.ok) return sqlite.captureDatabaseFailure(self.db);
+        errdefer _ = sqlite.sqlite3_exec(self.db, "ROLLBACK TO zanity_trim; RELEASE zanity_trim", null, null, null);
         defer _ = sqlite.sqlite3_reset(self.trim_analyses);
         try sqlite.bindInt(self.trim_analyses, 1, keep);
         if (sqlite.sqlite3_step(self.trim_analyses) != sqlite.done) return sqlite.captureDatabaseFailure(self.db);
         defer _ = sqlite.sqlite3_reset(self.count_analyses);
         if (sqlite.sqlite3_step(self.count_analyses) != sqlite.row) return sqlite.captureDatabaseFailure(self.db);
         const left = sqlite.sqlite3_column_int64(self.count_analyses, 0);
+        if (sqlite.sqlite3_exec(self.db, "RELEASE zanity_trim", null, null, null) != sqlite.ok) return sqlite.captureDatabaseFailure(self.db);
         if (left > keep) assert.panic("the analysis cache holds {d} rows after trimming to {d}; trim_analyses must delete every row past the most recent {d}", .{ left, keep, keep });
     }
 };
