@@ -67,6 +67,8 @@ const EmbedRun = struct {
         const work = try std.fs.path.join(arena, &.{ ".zig-cache", "tmp", &tmp.sub_path });
         const dir = try Io.Dir.cwd().realPathFileAlloc(io, work, arena);
         var env = std.process.Environ.Map.init(arena);
+        // The mock imports tests/loopback.py, the server every mock listens with.
+        try env.put("PYTHONPATH", "tests");
         try env.put("MOCK_EMBED_LOG", try std.fs.path.join(arena, &.{ dir, "requests.log" }));
         try env.put("ZANITY_STORE", try std.fs.path.join(arena, &.{ dir, "store.db" }));
         var child = try std.process.spawn(io, .{ .argv = &.{ "python3", "tests/embed/mock_embeddings.py" }, .stdin = .pipe, .stdout = .pipe, .environ_map = &env });
