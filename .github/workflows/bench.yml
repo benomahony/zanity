@@ -31,6 +31,7 @@ jobs:
       - name: Clone ${{ inputs.repository }} at ${{ inputs.ref }}
         run: git clone --quiet --depth 1 --branch "$REF" "https://github.com/$REPOSITORY" "$RUNNER_TEMP/corpus"
       - name: zig build bench
+        shell: bash
         run: |
           zig build bench -Dcorpus="$RUNNER_TEMP/corpus" | tee "$RUNNER_TEMP/bench.txt"
           {
