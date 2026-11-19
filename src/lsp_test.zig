@@ -114,3 +114,28 @@ test "zanity lsp initializes with no workspace root, as editors send for files o
     // Without a root, the working directory is the workspace.
     try expectOutput(try serve(arena, io, &.{ zanity, "lsp" }, &messages), &.{ "\"id\":1,\"result\":{\"capabilities\"", "\"id\":2,\"result\":null" }, &.{"could not handle initialize"});
 }
+
+test "zanity lsp checks the workspace again in-process on every save and publishes each check's findings" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    const io = std.testing.io;
+    const zanity = try Io.Dir.cwd().realPathFileAlloc(io, paths.zanity, arena);
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(io, .{ .sub_path = "checks.py", .data = "def f(x):\n    assert x is not None\n    assert isinstance(x, int)\n    return x\n" });
+    const work = try tmp.dir.realPathFileAlloc(io, ".", arena);
+    const save = try std.fmt.allocPrint(arena, "{{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didSave\",\"params\":{{\"textDocument\":{{\"uri\":\"file://{s}/checks.py\"}}}}}}", .{work});
+    const messages = [_][]const u8{
+        try std.fmt.allocPrint(arena, "{{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{{\"rootUri\":\"file://{s}\",\"capabilities\":{{}}}}}}", .{work}),
+        "{\"jsonrpc\":\"2.0\",\"method\":\"initialized\",\"params\":{}}",
+        save,
+        save,
+        "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"shutdown\"}",
+        "{\"jsonrpc\":\"2.0\",\"method\":\"exit\"}",
+    };
+    const output = try serve(arena, io, &.{ zanity, "lsp" }, &messages);
+    try expectOutput(output, &.{ "\"code\":\"redundant-null-check\"", "\"id\":2,\"result\":null" }, &.{"\"method\":\"window/showMessage\""});
+    // One publish of checks.py for the check on initialized and one for each save.
+    try std.testing.expectEqual(@as(usize, 3), std.mem.count(u8, output, "\"code\":\"redundant-null-check\""));
+}
