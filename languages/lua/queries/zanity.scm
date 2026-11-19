@@ -726,6 +726,13 @@
   field: (string
     content: (string_content) @reference.key))
 
+; A function written as a field of a table, `{ root_dir = function() end }`, is a member of that
+; table, so another table's `root_dir` is a different one, not a duplicate.
+(table_constructor
+  (field
+    name: (identifier)
+    value: (function_definition))) @member.field
+
 ; A function written as a field of a table, `{ setup = function() end }`, or stored in a table held
 ; by another, `function M.actions.focus()`: whatever the table is handed to reaches it by its key.
 (table_constructor

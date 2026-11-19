@@ -58,6 +58,7 @@ pub const looked_up = [_][]const u8{
     "literal.none",
     "literal.string",
     "literal.true",
+    "member.field",
     "module.syntax",
     "reference.field",
     "reference.held",

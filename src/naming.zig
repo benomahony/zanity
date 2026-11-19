@@ -66,7 +66,7 @@ pub fn closeDefinition(self: *File, ctx: Context) !void {
     const at = ts.ts_node_start_point(name_node);
     const public = self.index.marks(ctx.node, self.v.visibility_public) or (self.tables.exported_by_case and std.ascii.isUpper(name[0]));
     const method = std.mem.eql(u8, ctx.kind, "function") and self.innermost(.function) != null and self.definedInClass();
-    const member = method or std.mem.eql(u8, ctx.kind, "method") or heldByFunctionOrClass(self, ctx.node);
+    const member = method or isMember(self, ctx);
     const prefixes = self.tables.private_prefixes;
     // A module exports names explicitly; elsewhere a name is importable unless marked private.
     const importable = if (prefixes.len > 0 and !self.module) std.mem.indexOfScalar(u8, prefixes, name[0]) == null else public;
@@ -126,6 +126,16 @@ pub fn usesModuleSyntax(id: ?captures.Id, found: []const captures.Triple, source
     }
     if (found.len > 0 and source.len == 0) assert.panic("{d} captures in an empty file; pass the source its captures came from", .{found.len});
     return false;
+}
+
+/// Whether the definition belongs to something else, so that its name is only ever used through
+/// it: a method, a definition inside a function or class, or a function under a key of a table or
+/// object literal, marked @member.field.
+fn isMember(self: *File, ctx: Context) bool {
+    if (ctx.family != .definition) assert.panic("{s}: asking whether the {t} {f} is a member; only definitions are", .{ self.work.facts.path, ctx.family, ctx.node.where() });
+    if (ctx.kind.len == 0) assert.panic("{s}: the definition {f} has no kind; closeDefinition() checks it first", .{ self.work.facts.path, ctx.node.where() });
+    if (std.mem.eql(u8, ctx.kind, "method")) return true;
+    return self.index.marks(ctx.node, self.checker.compiled.id("member.field")) or heldByFunctionOrClass(self, ctx.node);
 }
 
 fn heldByFunctionOrClass(self: *File, node: ts.Node) bool {
