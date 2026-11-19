@@ -74,4 +74,8 @@ function M.classify(n)
   return -1
 end
 
+function M.differs(a, b)
+  return not a ~= b
+end
+
 return M

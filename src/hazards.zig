@@ -357,7 +357,7 @@ fn writeCheck(self: *File, template: []const u8, left: []const u8, right: []cons
     return fix;
 }
 
-const comparisons = [_][]const u8{ "==", "===", "!=", "!==", "<", ">", "<=", ">=" };
+const comparisons = [_][]const u8{ "==", "===", "!=", "!==", "~=", "<", ">", "<=", ">=" };
 const bitwise = [_][]const u8{ "&", "|", "^" };
 
 /// An operand of a binary or unary expression, and the operator text before it.
