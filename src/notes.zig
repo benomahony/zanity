@@ -1,6 +1,7 @@
 //! Captures that note something about the code for a check that runs later: member accesses for
 //! message-chain, expressions and writes for duplicated-expression, and names for the cross-file
 //! checks of dead symbols and abstractions.
+const std = @import("std");
 const assert = @import("assert.zig");
 const ts = @import("ts.zig");
 const captures = @import("captures.zig");
@@ -25,12 +26,8 @@ pub fn note(self: *File, node: ts.Node, id: captures.Id) !bool {
         try repeats.noteRepeatable(self, node);
     } else if (v.write_target == id) {
         try repeats.noteWrite(self, node, text);
-    } else if (v.reference_name == id) {
-        if (enabled.enabled("dead-symbol") and !self.index.marks(node, self.checker.compiled.id("reference.field"))) {
-            const hash = facts_module.nameHash(text);
-            try self.s.names.tally(hash, 1);
-            try self.s.names.hold(hash, holderOf(self, node));
-        }
+    } else if (v.reference_name == id or self.checker.compiled.id("reference.text") == id or self.checker.compiled.id("reference.key") == id) {
+        if (enabled.enabled("dead-symbol")) try noteReference(self, node, text, id);
     } else if (try noteImport(self, node, id)) {
         // cyclic-import's captures, noted by noteImport().
     } else if (v.abstraction_name == id) {
@@ -86,6 +83,43 @@ fn importStatement(self: *File, node: ts.Node) ts.Node {
 /// belongs to (@reference.self), the construct's own name where only it keeps the name alive
 /// (@reference.held), or else the outermost named function, class or definition open around it;
 /// 0 at module level.
+/// Notes a name the code refers to for dead-symbol: a @reference.name that isn't a field, each
+/// name in a @reference.text, such as the Lua a keymap's string runs, or a @reference.key that is
+/// one whole name, such as the `"git_branch"` a plugin's table looks a function up by.
+fn noteReference(self: *File, node: ts.Node, text: []const u8, id: captures.Id) !void {
+    if (text.len == 0) assert.panic("{s}: noting the empty {f} as a reference; note() skips empty captures", .{ self.work.facts.path, node.where() });
+    const compiled = self.checker.compiled;
+    if (self.v.reference_name == id) {
+        if (self.index.marks(node, compiled.id("reference.field"))) return;
+        return tallyName(self, node, text);
+    }
+    if (compiled.id("reference.key") == id) {
+        if (!isName(text)) return;
+        return tallyName(self, node, text);
+    }
+    if (compiled.id("reference.text") != id) assert.panic("{s}: {f} was noted as a reference but carries capture {d}, none of @reference.name, @reference.text or @reference.key", .{ self.work.facts.path, node.where(), id });
+    var words = std.mem.tokenizeAny(u8, text, " \t\r\n.:()[]{}'\",;=<>+-*/%#^~");
+    while (words.next()) |word| try tallyName(self, node, word);
+}
+
+/// Whether `text` is one whole name, a letter or `_` then letters, digits or `_`, as a key a
+/// definition can be looked up by; a string with spaces or punctuation names nothing.
+fn isName(text: []const u8) bool {
+    if (text.len == 0) assert.panic("asked whether an empty string is a name; noteReference() skips empty captures", .{});
+    if (!(std.ascii.isAlphabetic(text[0]) or text[0] == '_')) return false;
+    for (text[1..]) |c| if (!(std.ascii.isAlphanumeric(c) or c == '_')) return false;
+    if (std.mem.indexOfAny(u8, text, " \t\r\n.:\"'") != null) assert.panic("accepted '{s}' as a name with a space or separator in it; only letters, digits and '_' make a name", .{text});
+    return true;
+}
+
+fn tallyName(self: *File, node: ts.Node, name: []const u8) !void {
+    if (name.len == 0) assert.panic("{s}: tallying an empty name from {f}; split references into non-empty names", .{ self.work.facts.path, node.where() });
+    const hash = facts_module.nameHash(name);
+    try self.s.names.tally(hash, 1);
+    try self.s.names.hold(hash, holderOf(self, node));
+    if (name.len > node.text(self.source).len) assert.panic("{s}: the name '{s}' is longer than {f}, the reference it came from", .{ self.work.facts.path, name, node.where() });
+}
+
 fn holderOf(self: *File, node: ts.Node) u64 {
     const compiled = self.checker.compiled;
     if (self.index.marks(node, compiled.id("reference.self"))) return facts_module.nameHash(node.text(self.source));

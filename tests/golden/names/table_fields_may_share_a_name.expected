@@ -1,0 +1,4 @@
+rules: name-drift,duplicate-name
+exit: 0
+a.lua:3:12: warning [duplicate-name]
+b.lua:3:12: warning [duplicate-name]

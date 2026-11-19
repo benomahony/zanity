@@ -1,0 +1,3 @@
+rules: parameter-log-message
+exit: 0
+log_message_lua.lua:4:11: warning [parameter-log-message]

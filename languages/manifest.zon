@@ -72,4 +72,12 @@
         .scanner = true,
         .queries = .{ "tags", "locals", "textobjects", "zanity" },
     },
+    .{
+        .name = "lua",
+        .not_applicable = .{ "branching-double", "dynamic-allocation", "assertion-side-effect", "restated-type", "redundant-null-check", "single-impl-abstraction", "discarded-comparison", "no-effect-statement", "generic-catch", "generic-throw", "return-in-finally", "identity-comparison", "switch-fallthrough", "missing-default", "assignment-in-condition", "unawaited-call", "unsafe-deserialization", "insecure-temp-file", "xml-entity-expansion", "constant-cbc-iv", "constant-aead-nonce", "rsa-without-oaep", "parameter-xpath-expression", "parameter-ldap-filter", "parameter-expression-language", "parameter-raw-html", "parameter-window-opener", "null-catch", "empty-synchronized", "public-finalizer", "direct-thread", "unsafe-jni", "public-static-field", "public-static-array", "missing-super-finalizer", "missing-super-clone", "public-clone-method", "thread-run", "prototype-mutation", "class-name-comparison", "equals-without-hashcode", "hashcode-without-equals", "struts-public-field", "cwe-487", "cwe-609", "cwe-1235", "cwe-567" },
+        .extensions = .{"lua"},
+        .ecosystem = "lua",
+        .scanner = true,
+        .queries = .{ "tags", "locals", "textobjects", "zanity" },
+    },
 }

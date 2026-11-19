@@ -1,0 +1,10 @@
+rules: shared-state-in-test,filesystem-in-test,network-in-test,database-in-test,unmanaged-temp-in-test,process-in-test
+exit: 0
+isolation_lua_spec.lua:10:3: warning [process-in-test]
+isolation_lua_spec.lua:2:3: warning [shared-state-in-test]
+isolation_lua_spec.lua:3:3: warning [shared-state-in-test]
+isolation_lua_spec.lua:4:3: warning [shared-state-in-test]
+isolation_lua_spec.lua:5:3: warning [filesystem-in-test]
+isolation_lua_spec.lua:6:3: warning [unmanaged-temp-in-test]
+isolation_lua_spec.lua:7:3: warning [network-in-test]
+isolation_lua_spec.lua:8:3: warning [database-in-test]

@@ -1,0 +1,4 @@
+rules: call-verification
+exit: 0
+verification_spec.lua:4:3: warning [call-verification]
+verification_spec.lua:5:3: warning [call-verification]

@@ -215,6 +215,8 @@ pub const Tables = struct {
     assertion_value: []const u8 = "",
     /// Whether `$message` sits in a format string in `assertion_form`, where braces must be doubled.
     assertion_braces_doubled: bool = false,
+    /// Whether `$message` sits in a printf-style format string in `assertion_form`, where `%` must be doubled.
+    assertion_percent_doubled: bool = false,
     /// The type each kind of literal in `types.literal_kinds` has, such as `string` for text.
     literal_types: LiteralTypes = .{},
     /// Comment markers that turn a linter's, type checker's or analyser's check off, such as a

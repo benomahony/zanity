@@ -1,0 +1,6 @@
+rules: unended-span,dynamic-span-name,discarded-span-context
+exit: 0
+tracing_lua.lua:18:19: warning [discarded-span-context]
+tracing_lua.lua:25:39: warning [dynamic-span-name]
+tracing_lua.lua:32:39: warning [dynamic-span-name]
+tracing_lua.lua:6:21: warning [unended-span]

@@ -1,0 +1,4 @@
+rules: wide-scope
+exit: 0
+scope_lua.lua:35:9: warning [wide-scope]
+scope_lua.lua:4:9: warning [wide-scope]

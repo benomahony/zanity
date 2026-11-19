@@ -4,7 +4,7 @@
 
 Fast, deterministic sanity checks for code written by people and agents.
 
-Coding agents write code that compiles, passes its tests and looks fine in a diff. zanity finds the mistakes that survive all three: tests that mock the code they claim to check, error handlers that make failures vanish, `|| true` and `continue-on-error` keeping CI green, error messages that don't say what failed, and the same helper written again under a new name in every session. It checks Python, TypeScript, JavaScript, Go, Rust, Java, C#, Swift and Zig, and tells the agent, or you, how to fix each finding. [Why zanity](https://benomahony.github.io/zanity/) walks through each class of error it removes.
+Coding agents write code that compiles, passes its tests and looks fine in a diff. zanity finds the mistakes that survive all three: tests that mock the code they claim to check, error handlers that make failures vanish, `|| true` and `continue-on-error` keeping CI green, error messages that don't say what failed, and the same helper written again under a new name in every session. It checks Python, TypeScript, JavaScript, Go, Rust, Java, C#, Swift, Lua and Zig, and tells the agent, or you, how to fix each finding. [Why zanity](https://benomahony.github.io/zanity/) walks through each class of error it removes.
 
 It parses each file once with [tree-sitter](https://tree-sitter.github.io) and runs every rule in a single pass, so checking a whole repository takes moments. It is one static binary with no runtime to install, and checking never touches the network, unless you add `--infer` to have a language model judge what code structure can't, such as whether an error message misleads.
 
@@ -264,7 +264,7 @@ sqlite3 ~/.cache/zanity/zanity.db "SELECT rule, path, line, code, message FROM f
 A file edited since the last check offers no actions until it is saved, since its findings may have moved. In Neovim:
 
 ```lua
-vim.lsp.config("zanity", { cmd = { "zanity", "lsp" }, root_markers = { "zanity.toml", ".git" }, filetypes = { "python", "zig", "go", "rust", "java", "cs", "swift", "javascript", "typescript" } })
+vim.lsp.config("zanity", { cmd = { "zanity", "lsp" }, root_markers = { "zanity.toml", ".git" }, filetypes = { "python", "zig", "go", "rust", "java", "cs", "swift", "lua", "javascript", "typescript" } })
 vim.lsp.enable("zanity")
 ```
 
@@ -520,6 +520,7 @@ value = eval(text)  # zanity: ignore[forbidden-call]
 | Java | `.java` |
 | C# | `.cs` `.csx` |
 | Swift | `.swift` |
+| Lua | `.lua` |
 
 Every rule runs on every language where it means something; `dynamic-allocation`, for example, only applies where memory is managed by hand.
 
@@ -633,7 +634,7 @@ Rules marked *production* hold code to what safety-critical software needs and m
 
 `constant-condition`, `float-equality`, `discarded-comparison`, `unreachable-code`, `generic-catch`, `generic-throw`, `debug-leftover`, `hardcoded-secret`, `return-in-finally`, `identity-comparison`, `precedence-trap`, `switch-fallthrough`, `missing-default`, `no-effect-statement`, `tls-verification-disabled`, `weak-hash`, `unsafe-deserialization`, `shell-command`, `sql-built-from-strings`, `secret-in-log`, `wall-clock-duration` and `unawaited-call`.
 
-**Tracing** (OpenTelemetry's API in Python, Go, TypeScript and JavaScript, Honeycomb's Go Beeline, Swift's `swift-distributed-tracing` and a Zig tracer's `startSpan`; other tracing libraries are entries in `languages/tables.zon`)
+**Tracing** (OpenTelemetry's API in Python, Go, TypeScript and JavaScript, Honeycomb's Go Beeline, Swift's `swift-distributed-tracing`, opentelemetry-lua's `tracer:start` and a Zig tracer's `startSpan`; other tracing libraries are entries in `languages/tables.zon`)
 
 | Rule | Severity | Flags |
 |---|---|---|
@@ -689,7 +690,7 @@ zig build test --fuzz=100K  # fuzz the checker with arbitrary bytes in every lan
 
 Zig does not prune `.zig-cache`; run `./scripts/zig-cache` when its old content is no longer worth keeping. `./scripts/check-all` also runs `./scripts/zig-cache --check`, which warns above 10 GB without deleting anything. Set `ZANITY_ZIG_CACHE_WARN_MB` to choose a different warning threshold.
 
-Native test parity covers all nine adapters, including Zig, C# and Swift. `zig build test` requires a positive golden case for each of 12 common deterministic test checks in every language; `zig build test-integration` runs those cases through the binary and verifies the exact findings, including negative controls. Framework assertions include Zig's `std.testing.expect`, equality, string, slice and approximate comparisons. This native gate is independent of the six-language bonsai comparison, whose reference tool does not support Zig, C# or Swift.
+Native test parity covers all ten adapters, including Zig, C#, Swift and Lua. `zig build test` requires a positive golden case for each of 12 common deterministic test checks in every language; `zig build test-integration` runs those cases through the binary and verifies the exact findings, including negative controls. Framework assertions include Zig's `std.testing.expect`, equality, string, slice and approximate comparisons. This native gate is independent of the six-language bonsai comparison, whose reference tool does not support Zig, C#, Swift or Lua.
 
 Golden cases in `tests/golden/` run through the real binary and compare where each finding lands, its rule, its severity and the exit code, not the wording. The self-check runs zanity over its own source with every rule and fails on any finding.
 

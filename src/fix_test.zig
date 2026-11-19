@@ -105,6 +105,27 @@ test "--fix deletes a null check that the type check after it makes redundant" {
     try std.testing.expectEqualStrings("def f(x):\n    assert isinstance(x, int)\n    return x\n", try tmp.dir.readFileAlloc(io, "checks.py", arena, .unlimited));
 }
 
+test "--fix writes Lua assertion messages that run: a holding assertion passes and a failing one names its values" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    const io = std.testing.io;
+    const zanity = try Io.Dir.cwd().realPathFileAlloc(io, paths.zanity, arena);
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(io, .{ .sub_path = "assertions.lua", .data = try Io.Dir.cwd().readFileAlloc(io, "tests/fix/assertions.lua", arena, .unlimited) });
+    const work = try std.fs.path.join(arena, &.{ ".zig-cache", "tmp", &tmp.sub_path });
+    _ = try std.process.run(arena, io, .{ .argv = &.{ zanity, "check", "--fix", "--rules", "assertion-message", "assertions.lua" }, .cwd = .{ .path = work } });
+    // The probe names its interpreter in its #! line, so it runs as it would by hand.
+    const probe = try Io.Dir.cwd().realPathFileAlloc(io, "tests/behaviour/fixed_assertions.lua", arena);
+    const run = std.process.run(arena, io, .{ .argv = &.{ probe, "assertions" }, .cwd = .{ .path = work } }) catch |e| {
+        std.debug.print("could not run {s} to execute what --fix wrote: {t}; install the interpreter its #! line names, as CI does\n", .{ probe, e });
+        return e;
+    };
+    if (!std.mem.eql(u8, run.stdout, "ok\n")) std.debug.print("the fixed assertions.lua misbehaved:\n{s}{s}", .{ run.stdout, run.stderr });
+    try std.testing.expectEqualStrings("ok\n", run.stdout);
+}
+
 test "precedence-trap's fix shows how the code runs and the grouping it reads as" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();

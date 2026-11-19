@@ -11,7 +11,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-OUR_LANGUAGES = {"Python", "JavaScript", "TypeScript", "Java", "Go", "Rust", "Zig", "C#", "ASP.NET", "Swift"}
+OUR_LANGUAGES = {"Python", "JavaScript", "TypeScript", "Java", "Go", "Rust", "Zig", "C#", "ASP.NET", "Swift", "Lua"}
 GENERIC = {"Not Language-Specific", "Interpreted", "Compiled", "Object-Oriented"}
 HARDWARE_WORDS = ("Hardware", "System on Chip", "Verilog", "VHDL")
 OTHER_LANGUAGES = {"C", "C++", "PHP", "Perl", "Memory-Unsafe", "Assembly", "Ruby", "Objective-C", "Kotlin", "Shell"}

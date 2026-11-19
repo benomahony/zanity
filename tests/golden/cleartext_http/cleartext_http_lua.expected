@@ -1,0 +1,3 @@
+rules: cleartext-http
+exit: 1
+cleartext_http_lua.lua:1:14: error [cleartext-http]

@@ -1,0 +1,3 @@
+rules: sensitive-query-string
+exit: 1
+sensitive_query_lua.lua:1:15: error [sensitive-query-string]

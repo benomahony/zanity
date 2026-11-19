@@ -64,6 +64,8 @@ pub const Context = struct {
     condition: ?ts.Node = null,
     message: ?ts.Node = null,
     iterable: ?ts.Node = null,
+    /// A loop's stop condition, such as Lua's `until`, which ends the loop when it holds.
+    until: ?ts.Node = null,
     lhs: ?ts.Node = null,
     rhs: ?ts.Node = null,
     arguments: [4]?ts.Node = .{ null, null, null, null },

@@ -1,0 +1,5 @@
+rules: relaxed-check
+exit: 0
+suppressions_lua.lua:1:34: warning [relaxed-check]
+suppressions_lua.lua:4:3: warning [relaxed-check]
+suppressions_lua.lua:6:16: warning [relaxed-check]

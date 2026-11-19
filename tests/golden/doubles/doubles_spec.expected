@@ -1,0 +1,3 @@
+rules: test-double
+exit: 0
+doubles_spec.lua:4:16: warning [test-double]

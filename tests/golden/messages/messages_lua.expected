@@ -1,0 +1,10 @@
+rules: vague-error,cryptic-error,unconstructive-error
+exit: 0
+messages_lua.lua:12:11: warning [cryptic-error]
+messages_lua.lua:15:11: warning [vague-error]
+messages_lua.lua:17:13: warning [vague-error]
+messages_lua.lua:4:17: warning [unconstructive-error]
+messages_lua.lua:4:17: warning [vague-error]
+messages_lua.lua:5:17: warning [vague-error]
+messages_lua.lua:7:13: warning [vague-error]
+messages_lua.lua:9:11: warning [vague-error]

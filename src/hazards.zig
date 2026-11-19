@@ -4,6 +4,7 @@
 //! calls and file length.
 const std = @import("std");
 const secrets = @import("secrets.zig");
+const scope = @import("scope.zig");
 const checkLoggedSecret = secrets.checkLoggedSecret;
 const checkLiteralNetworkEndpoint = secrets.checkLiteralNetworkEndpoint;
 const parser_hazards = @import("parser_hazards.zig");
@@ -217,7 +218,8 @@ fn checkRiskyArgument(self: *File, ctx: Context, name: []const u8, first: ts.Nod
     if (self.calleeIn(ctx, name, self.tables.shell_calls)) |m| if (!literal) {
         _ = try self.report(ctx.callee orelse ctx.name.?, "shell-command", try self.say("'{s}' runs '{s}' through a shell, so a crafted value in it can run other commands.", .{ m, first_shown }));
     };
-    if (ctx.receiver != null and contains(self.tables.sql_methods, name) and built) {
+    // A method of a connection takes it as its receiver; a call marked @call.unbound passes none.
+    if (ctx.receiver != null and contains(self.tables.sql_methods, name) and built and !self.index.marks(ctx.node, self.checker.compiled.id("call.unbound"))) {
         _ = try self.report(first, "sql-built-from-strings", try self.say("This SQL is built from strings at runtime, so a value containing a quote can change the query: '{s}'.", .{first_shown}));
     }
     const network = self.calleeIn(ctx, name, self.tables.network_calls) != null;
@@ -293,12 +295,32 @@ pub fn recordFile(self: *File, root: ts.Node) !void {
     try facts.unit(std.fs.path.basename(facts.path), self.source, .{ .kind = .file, .reports_error = false, .at = .{ 0, 0, last } });
 }
 
+/// Whether `node` follows a call to a terminator, such as Lua's `error`, captured
+/// `@builtin.terminator`, whose name the code defines locally: the call is then to that local,
+/// which can return, so `node` can run.
+fn followsLocalTerminator(self: *File, node: ts.Node) !bool {
+    const terminator = self.checker.compiled.id("builtin.terminator") orelse return false;
+    const previous = ts.ts_node_prev_named_sibling(node);
+    if (ts.ts_node_is_null(previous)) return false;
+    const start = ts.ts_node_start_byte(previous);
+    const end = ts.ts_node_end_byte(previous);
+    if (end > ts.ts_node_start_byte(node)) assert.panic("{s}: the statement before {f} ends after it starts; a previous sibling ends before its next", .{ self.work.facts.path, node.where() });
+    const first = std.sort.lowerBound(captures.Triple, self.index.triples, start, captures.startsBefore);
+    for (self.index.triples[first..]) |t| {
+        if (t.key.start >= end) break;
+        if (t.id == terminator) return scope.definedLocally(self, t.node);
+    }
+    if (first > self.index.triples.len) assert.panic("{s}: the captures of the statement before {f} start at {d}, past the {d} recorded; take the start from lowerBound", .{ self.work.facts.path, node.where(), first, self.index.triples.len });
+    return false;
+}
+
 /// Reports a finding a query captured as `@finding.<rule>`, with the rule's message about the code.
 pub fn patternFinding(self: *File, node: ts.Node, rule_name: []const u8) !void {
     const rule = rules.find(rule_name) orelse assert.panic("expected @finding.{s} to name a rule, got no such rule; add the rule to rules.all, or fix the capture's name in the language's zanity.scm", .{rule_name});
     if (rule.pattern.len == 0) assert.panic("expected rule {s} to have a pattern message for @finding captures, got none; give it a .pattern in rules.all, with $code where the code goes", .{rule.name});
     if (self.index.marks(node, self.v.comment)) return;
     if (try cancelled(self, node, rule.name)) return;
+    if (std.mem.eql(u8, rule.name, "unreachable-code") and try followsLocalTerminator(self, node)) return;
     const specific = if (std.mem.eql(u8, rule.name, "opaque-check")) (try specificCheck(self, node)) orelse return else null;
     const code = header(node.text(self.source));
     const text = self.work.text;
@@ -357,7 +379,7 @@ fn writeCheck(self: *File, template: []const u8, left: []const u8, right: []cons
     return fix;
 }
 
-const comparisons = [_][]const u8{ "==", "===", "!=", "!==", "<", ">", "<=", ">=" };
+const comparisons = [_][]const u8{ "==", "===", "!=", "!==", "~=", "<", ">", "<=", ">=" };
 const bitwise = [_][]const u8{ "&", "|", "^" };
 
 /// An operand of a binary or unary expression, and the operator text before it.

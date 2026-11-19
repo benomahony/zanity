@@ -1,0 +1,3 @@
+rules: duplicated-expression
+exit: 0
+repeats_lua.lua:6:21: warning [duplicated-expression]

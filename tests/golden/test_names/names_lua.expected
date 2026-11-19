@@ -1,0 +1,4 @@
+rules: vague-test-name
+exit: 0
+names_lua.lua:13:22: warning [vague-test-name]
+names_lua.lua:17:10: warning [vague-test-name]

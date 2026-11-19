@@ -1,0 +1,12 @@
+rules: empty-block,constant-condition,float-equality,unreachable-code,debug-leftover,hardcoded-secret,swallowed-error,goto-statement
+exit: 1
+catalogue_lua.lua:11:3: warning [constant-condition]
+catalogue_lua.lua:14:6: warning [float-equality]
+catalogue_lua.lua:17:9: error [hardcoded-secret]
+catalogue_lua.lua:18:3: error [debug-leftover]
+catalogue_lua.lua:19:3: error [debug-leftover]
+catalogue_lua.lua:22:5: warning [unreachable-code]
+catalogue_lua.lua:4:3: warning [empty-block]
+catalogue_lua.lua:6:3: warning [empty-block]
+catalogue_lua.lua:8:3: warning [constant-condition]
+catalogue_lua.lua:53:3: warning [unreachable-code]

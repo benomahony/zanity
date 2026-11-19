@@ -1,0 +1,4 @@
+rules: variadic-parameter,goto-statement
+exit: 0
+variadics_lua.lua:20:7: warning [goto-statement]
+variadics_lua.lua:3:20: information [variadic-parameter]
