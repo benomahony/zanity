@@ -1,0 +1,11 @@
+local function f(n, t, i)
+  -- TODO: say why this must hold and what to look at when it fails.
+  assert(n % 2 == 0, string.format("expected n %% 2 == 0, got n=%s", n))
+  -- TODO: say why this must hold and what to look at when it fails.
+  assert(t[i % 2] == nil, string.format("expected t[i %% 2] == nil, got t=%s, i=%s", t, i))
+  assert(n, "already explained")
+  -- TODO: say why this must hold and what to look at when it fails.
+  assert(true, "expected true")
+end
+
+return { f = f }

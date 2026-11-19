@@ -39,6 +39,11 @@ jobs:
           path: ~/.cache/zanity
           key: zanity-store-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: zanity-store-${{ runner.os }}-
+      # The --fix behaviour tests run what --fix writes, with the interpreter each probe's #! names.
+      - name: Install Lua
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then sudo apt-get update -q && sudo apt-get install -y -q lua5.4; else brew install lua; fi
+          lua -v
       # Unit, golden, architecture and catalogue tests, and zanity checking its own Zig source.
       - run: zig build test test-integration --summary all
       # Every file in the repository, every rule, warnings included, as a user's CI would run it.

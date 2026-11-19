@@ -484,6 +484,7 @@
         .assertion_form = "assert($condition, string.format(\"expected $message, got $shown\", $values))",
         .assertion_form_bare = "assert($condition, \"expected $message\")",
         .assertion_value = "$name=%s",
+        .assertion_percent_doubled = true,
         .line_comment = "--",
         .private_prefixes = "_",
         .import_style = .dotted,

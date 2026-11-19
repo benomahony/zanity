@@ -165,7 +165,7 @@ pub fn writePlaceholder(self: *File, placeholder: []const u8, condition: []const
     if (std.mem.eql(u8, placeholder, "$condition")) {
         _ = try text.copy(condition);
     } else if (std.mem.eql(u8, placeholder, "$message")) {
-        try quote(text, condition, t.assertion_braces_doubled and values.len > 0);
+        try quote(text, condition, .{ .braces = t.assertion_braces_doubled and values.len > 0, .percent = t.assertion_percent_doubled and values.len > 0 });
     } else if (std.mem.eql(u8, placeholder, "$shown")) {
         for (values, 0..) |v, i| {
             if (i > 0) _ = try text.copy(", ");
@@ -173,7 +173,7 @@ pub fn writePlaceholder(self: *File, placeholder: []const u8, condition: []const
             _ = try text.copy(parts.first());
             var shown_name = true;
             while (parts.next()) |part| : (shown_name = false) {
-                if (shown_name) try quote(text, v, t.assertion_braces_doubled) else _ = try text.copy(v);
+                if (shown_name) try quote(text, v, .{ .braces = t.assertion_braces_doubled, .percent = t.assertion_percent_doubled }) else _ = try text.copy(v);
                 _ = try text.copy(part);
             }
         }
@@ -186,22 +186,35 @@ pub fn writePlaceholder(self: *File, placeholder: []const u8, condition: []const
 }
 
 /// Copies `code` into a string literal: quotes become apostrophes, whitespace runs one space,
-/// and braces double when the string is a format string.
-pub fn quote(text: *memory.Text, code: []const u8, doubled: bool) !void {
+/// and braces or `%` double when the string is a format string that reads them.
+pub fn quote(text: *memory.Text, code: []const u8, doubled: Doubled) !void {
     const before = text.used;
     if (before > text.buffer.len) assert.panic("expected the text buffer to hold its {d} used bytes, got {d} bytes of room; only copy() and format() may move used forward", .{ before, text.buffer.len });
     var spaced = false;
-    for (code) |c| {
+    for (code, 0..) |c, i| {
         const space = c == ' ' or c == '\n' or c == '\r' or c == '\t';
         defer spaced = space;
         if (space and spaced) continue;
-        _ = try text.copy(switch (c) {
-            '"' => "'",
-            '{' => if (doubled) "{{" else "{",
-            '}' => if (doubled) "}}" else "}",
-            '\n', '\r', '\t' => " ",
-            else => &.{c},
-        });
+        _ = try text.copy(quoted(code[i..][0..1], doubled));
     }
-    if (text.used - before > 2 * code.len) assert.panic("expected at most {d} quoted bytes for {d} of code, got {d}; quote() writes at most two bytes per byte of code, so check its switch", .{ 2 * code.len, code.len, text.used - before });
+    if (text.used - before > 2 * code.len) assert.panic("expected at most {d} quoted bytes for {d} of code, got {d}; quote() writes at most two bytes per byte of code, so check quoted()", .{ 2 * code.len, code.len, text.used - before });
+}
+
+/// Which characters a format string reads, so a literal one must be written twice.
+pub const Doubled = struct { braces: bool, percent: bool };
+
+/// What one byte of code becomes inside a string literal; `byte` is a slice of the code, so the
+/// byte returned unchanged outlives the call.
+fn quoted(byte: *const [1]u8, doubled: Doubled) []const u8 {
+    const out: []const u8 = switch (byte[0]) {
+        '"' => "'",
+        '{' => if (doubled.braces) "{{" else "{",
+        '}' => if (doubled.braces) "}}" else "}",
+        '%' => if (doubled.percent) "%%" else "%",
+        '\n', '\r', '\t' => " ",
+        else => byte,
+    };
+    if (out.len == 0 or out.len > 2) assert.panic("quoted the byte 0x{x} as {d} bytes; a byte becomes one byte or itself written twice", .{ byte[0], out.len });
+    if (out.len == 2 and !(out[0] == byte[0] and out[1] == byte[0])) assert.panic("quoted the byte '{c}' as '{s}'; only a byte the format string reads is written twice, as itself", .{ byte[0], out });
+    return out;
 }
