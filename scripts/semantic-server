@@ -13,7 +13,7 @@ if [ ! -x "$server" ]; then
   echo "semantic-server: building llama-server $llama, once per cache" >&2
   src=$(mktemp -d)
   git -c advice.detachedHead=false clone -q --depth 1 --branch "$llama" https://github.com/ggml-org/llama.cpp "$src"
-  cmake -S "$src" -B "$src/build" -DCMAKE_BUILD_TYPE=Release -DLLAMA_CURL=OFF -DGGML_NATIVE=OFF -DBUILD_SHARED_LIBS=OFF -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF >/dev/null
+  cmake -S "$src" -B "$src/build" -DCMAKE_BUILD_TYPE=Release -DLLAMA_CURL=OFF -DGGML_NATIVE=OFF -DBUILD_SHARED_LIBS=OFF -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_USE_PREBUILT_UI=OFF >/dev/null
   cmake --build "$src/build" --target llama-server -j "$(getconf _NPROCESSORS_ONLN)" >/dev/null
   cp "$src/build/bin/llama-server" "$server"
   rm -rf "$src"
