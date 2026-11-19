@@ -29,40 +29,39 @@ const cache_format = "source-analysis-4";
 /// zanity miss old rows automatically when checker logic, name tables or parser revisions change.
 const analyzer_revision = revisionOfAnalyzer();
 
+/// Every file the analysis of one source file and its encoding reach through @import, from
+/// analysis.zig and this file. A test fails when an import reaches a file missing here, since
+/// a change to it would otherwise replay findings cached by the build before.
+pub const analyzer_sources = [_][]const u8{
+    "analysis.zig",            "assert.zig",       "cache.zig",     "capture_ids.zig",     "captures.zig",
+    "catalogue_questions.zig", "chains.zig",       "check.zig",     "checker.zig",         "closing.zig",
+    "code_lines.zig",          "constructs.zig",   "crypto.zig",    "documentation.zig",   "extract.zig",
+    "facts.zig",               "file_scratch.zig", "hazards.zig",   "import_notes.zig",    "isolation.zig",
+    "language.zig",            "loops.zig",        "memory.zig",    "messages.zig",        "name_counts.zig",
+    "name_words.zig",          "naming.zig",       "notes.zig",     "parameter_sinks.zig", "parameters.zig",
+    "parser_hazards.zig",      "passthrough.zig",  "repeats.zig",   "rewrite.zig",         "rule.zig",
+    "rules.zig",               "scope.zig",        "secrets.zig",   "shapes.zig",          "spans.zig",
+    "sqlite.zig",              "store.zig",        "store_sql.zig", "strings.zig",         "suppress.zig",
+    "test_quality.zig",        "tracing.zig",      "ts.zig",        "types.zig",           "unread.zig",
+    "walk.zig",                "weak.zig",         "words.zig",
+};
+
 fn revisionOfAnalyzer() [revision_bytes]u8 {
     @setEvalBranchQuota(analyzer_hash_quota);
     var hash = std.hash.Wyhash.init(0);
-    const sources = .{
-        cache_format,
-        @embedFile("check.zig"),
-        @embedFile("documentation.zig"),
-        @embedFile("captures.zig"),
-        @embedFile("facts.zig"),
-        @embedFile("hazards.zig"),
-        @embedFile("isolation.zig"),
-        @embedFile("loops.zig"),
-        @embedFile("naming.zig"),
-        @embedFile("notes.zig"),
-        @embedFile("parameters.zig"),
-        @embedFile("passthrough.zig"),
-        @embedFile("repeats.zig"),
-        @embedFile("rules.zig"),
-        @embedFile("scope.zig"),
-        @embedFile("shapes.zig"),
-        @embedFile("strings.zig"),
-        @embedFile("suppress.zig"),
-        @embedFile("test_quality.zig"),
-        @embedFile("unread.zig"),
-        @embedFile("weak.zig"),
-    };
-    if (sources.len == 0) assert.panic("fingerprinting no analyzer source; list the code that produces cached facts and findings", .{});
+    hash.update(cache_format);
+    hash.update("\x00");
+    if (analyzer_sources.len == 0) assert.panic("fingerprinting no analyzer source; list the code that produces cached facts and findings", .{});
     var bytes: usize = 0;
-    inline for (sources) |source| {
+    inline for (analyzer_sources) |name| {
+        const source = @embedFile(name);
+        hash.update(name);
+        hash.update("\x00");
         hash.update(source);
         hash.update("\x00");
         bytes += source.len;
     }
-    if (bytes == 0) assert.panic("fingerprinting {d} empty analyzer sources; embed their contents, not empty paths", .{sources.len});
+    if (bytes == 0) assert.panic("fingerprinting {d} empty analyzer sources; embed their contents, not empty paths", .{analyzer_sources.len});
     var revision: [revision_bytes]u8 = undefined;
     std.mem.writeInt(u64, &revision, hash.final(), .little);
     return revision;
@@ -285,6 +284,56 @@ fn commitFindings(snapshot: Snapshot, run: Replay) (ReplayError || error{LimitEx
         try run.findings.add(.{ .path = run.path, .line = diagnostic.line, .column = diagnostic.column, .rule = rule.name, .message = try run.text.copy(diagnostic.message), .fix = try run.text.copy(diagnostic.fix), .edit = edit, .subject = diagnostic.subject });
     }
     if (run.findings.len != before + snapshot.findings.len) assert.panic("replayed {d} findings from a cache row holding {d}; commitFindings must add each once", .{ run.findings.len - before, snapshot.findings.len });
+}
+
+test "the analyzer's revision covers every file its analysis imports, so a changed file misses old rows" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    // Each listed file as built into this test, so the walk reads what the revision hashes.
+    const embedded = comptime embedded: {
+        var all: [analyzer_sources.len][]const u8 = undefined;
+        for (analyzer_sources, 0..) |name, i| all[i] = @embedFile(name);
+        break :embedded all;
+    };
+    var reached: std.StringArrayHashMapUnmanaged(void) = .empty;
+    try reached.put(arena, "analysis.zig", {});
+    try reached.put(arena, "cache.zig", {});
+    var next: usize = 0;
+    while (next < reached.count()) : (next += 1) {
+        const name = reached.keys()[next];
+        const index = for (analyzer_sources, 0..) |s, i| {
+            if (std.mem.eql(u8, s, name)) break i;
+        } else {
+            std.debug.print("src/{s} is reached from analysis.zig or cache.zig but is not in analyzer_sources; add it, or a change to it replays old cached findings\n", .{name});
+            return error.TestUnexpectedResult;
+        };
+        const source = embedded[index];
+        var lines = std.mem.splitScalar(u8, source, '\n');
+        while (lines.next()) |line| {
+            // Code ends at a `//` outside a string, so an import a comment quotes is not followed.
+            var code = line;
+            var from: usize = 0;
+            while (std.mem.indexOfPos(u8, line, from, "//")) |slash| : (from = slash + 2) {
+                if (std.mem.count(u8, line[0..slash], "\"") % 2 == 0) {
+                    code = line[0..slash];
+                    break;
+                }
+            }
+            var rest = code;
+            while (std.mem.indexOf(u8, rest, "@import(\"")) |at| {
+                rest = rest[at + "@import(\"".len ..];
+                const end = std.mem.indexOfScalar(u8, rest, '"') orelse break;
+                const imported = rest[0..end];
+                if (std.mem.endsWith(u8, imported, ".zig") and std.mem.indexOfScalar(u8, imported, '/') == null) try reached.put(arena, imported, {});
+            }
+        }
+    }
+    for (analyzer_sources) |name| if (!reached.contains(name)) {
+        std.debug.print("analyzer_sources lists {s}, which analysis.zig and cache.zig no longer reach; remove it\n", .{name});
+        return error.TestUnexpectedResult;
+    };
+    try std.testing.expectEqual(analyzer_sources.len, reached.count());
 }
 
 test "a cached analysis replays local findings and cross-file facts" {
