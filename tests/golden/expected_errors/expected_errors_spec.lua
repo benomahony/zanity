@@ -13,3 +13,12 @@ end
 function TestAccount:test_rejects_zero()
   lu.assertErrorMsgContains("must be positive", withdraw, 0)
 end
+
+it("accepts small amounts", function()
+  assert.has_no.errors(function() withdraw(1) end)
+  assert.is_not.error(function() withdraw(2) end)
+end)
+
+it("rejects huge amounts", function()
+  assert.has.errors(function() withdraw(10 ^ 9) end)
+end)

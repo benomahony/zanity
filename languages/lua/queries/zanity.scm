@@ -588,17 +588,29 @@
 ; luassert's `has_error(f)` with no error to match, or luaunit's assertError, which never takes one.
 ((function_call
   name: (dot_index_expression
-    table: [
-      (identifier) @_assert
-      (dot_index_expression
-        table: (identifier) @_assert)
-    ]
+    table: (identifier) @_assert
     field: (identifier) @_raises)
   arguments: (arguments
     .
     (_)
     .)) @finding.broad-expected-error
   (#eq? @_assert "assert")
+  (#any-of? @_raises "has_error" "has_errors" "error" "errors"))
+
+; The chained `assert.has.errors(f)` too, but not `assert.has_no.errors(f)` or `assert.is_not.error(f)`,
+; whose modifier asserts that no error is raised.
+((function_call
+  name: (dot_index_expression
+    table: (dot_index_expression
+      table: (identifier) @_assert
+      field: (identifier) @_modifier)
+    field: (identifier) @_raises)
+  arguments: (arguments
+    .
+    (_)
+    .)) @finding.broad-expected-error
+  (#eq? @_assert "assert")
+  (#not-any-word? @_modifier "not" "no")
   (#any-of? @_raises "has_error" "has_errors" "error" "errors"))
 
 ((function_call
