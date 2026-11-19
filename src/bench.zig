@@ -1,7 +1,8 @@
 //! `zig build bench`: how far `zanity check` is from the fastest it could be on this machine.
 //! Parsing every file once with tree-sitter is the work no check can skip, so that parse, spread
 //! over every core, is the ceiling. The report puts zanity's time beside it, and beside the parse
-//! on one core, so a slowdown shows whether the checks or the scheduling lost the time.
+//! on one core, so a slowdown shows whether the checks or the scheduling lost the time. zanity
+//! runs end to end twice: cold, with its store deleted before every run, and warm, reusing it.
 
 const std = @import("std");
 const analysis = @import("analysis.zig");
@@ -20,7 +21,7 @@ const runs = 3;
 /// More entries than this in the corpus means it was pointed at the wrong directory.
 const max_entries = 1 << 20;
 /// Room for every source in the corpus at once; Zig's standard library needs about 18 MB.
-const corpus_bytes = 1 << 28;
+const corpus_bytes = 1 << 30;
 
 /// Every file in the corpus zanity has a language for, read before any timing starts.
 const Corpus = struct {
@@ -77,18 +78,22 @@ pub fn main(init: std.process.Init) !void {
     var facts = try Facts.initFacts(arena, limits, &text);
     // zanity runs from inside the corpus, so a path relative to here would no longer find it.
     const zanity = try Io.Dir.cwd().realPathFileAlloc(io, args[1], arena);
+    const store = try std.fmt.allocPrint(arena, "{s}.bench.db", .{zanity});
+    try init.environ_map.put("ZANITY_STORE", store);
 
     var timer: Timer = .{ .io = io, .started = Io.Timestamp.now(io, .awake) };
     try corpus.read(io);
     const read = timer.lap();
     const parse = try fastest(io, parseAll, .{&corpus});
     const checked = try fastest(io, checkAll, .{ arena, &corpus, check.Work{ .scratch = &scratch, .text = &text, .facts = &facts } });
-    const wall = try fastest(io, runZanity, .{ io, zanity, corpus.dir });
+    const cold = try coldest(io, zanity, corpus.dir, init.environ_map, store);
+    const warm = try fastest(io, runZanity, .{ io, zanity, corpus.dir, init.environ_map });
+    try forget(io, store);
     if (corpus.paths.len == 0) assert.panic("timed a corpus of no files; Corpus.read() rejects an empty corpus", .{});
-    try printTimings(io, &corpus, .{ .read = read, .parse = parse, .check = checked, .wall = wall, .cores = try std.Thread.getCpuCount() });
+    try printTimings(io, &corpus, .{ .read = read, .parse = parse, .check = checked, .cold = cold, .warm = warm, .cores = try std.Thread.getCpuCount() });
 }
 
-const Timings = struct { read: u64, parse: u64, check: u64, wall: u64, cores: usize };
+const Timings = struct { read: u64, parse: u64, check: u64, cold: u64, warm: u64, cores: usize };
 
 fn printTimings(io: Io, corpus: *const Corpus, t: Timings) !void {
     if (t.parse == 0 or t.cores == 0) assert.panic("the parse took {d} ns over {d} cores; the clock can't resolve the work, so use a larger corpus", .{ t.parse, t.cores });
@@ -98,7 +103,8 @@ fn printTimings(io: Io, corpus: *const Corpus, t: Timings) !void {
     const parse = @as(f64, @floatFromInt(t.parse)) / ns;
     const ceiling = parse / @as(f64, @floatFromInt(t.cores));
     const check_s = @as(f64, @floatFromInt(t.check)) / ns;
-    const wall = @as(f64, @floatFromInt(t.wall)) / ns;
+    const cold = @as(f64, @floatFromInt(t.cold)) / ns;
+    const warm = @as(f64, @floatFromInt(t.warm)) / ns;
     var buffer: [4096]u8 = undefined;
     var writer: Io.File.Writer = .initStreaming(.stdout(), io, &buffer);
     const out = &writer.interface;
@@ -107,7 +113,8 @@ fn printTimings(io: Io, corpus: *const Corpus, t: Timings) !void {
     try out.print("parse    {d:>7.3} s   {d:.1} MB/s on one core: the work no check can skip\n", .{ parse, mb / parse });
     try out.print("check    {d:>7.3} s   {d:.1}x the parse, on one core, without the cross-file rules\n", .{ check_s, check_s / parse });
     try out.print("ceiling  {d:>7.3} s   the parse spread over {d} cores\n", .{ ceiling, t.cores });
-    try out.print("zanity   {d:>7.3} s   {d:.1}x the ceiling: zanity check --rules all, end to end\n", .{ wall, wall / ceiling });
+    try out.print("cold     {d:>7.3} s   {d:.1}x the ceiling, {d:.1} MB/s: zanity check --rules all from an empty store\n", .{ cold, cold / ceiling, mb / cold });
+    try out.print("warm     {d:>7.3} s   {d:.1}x the ceiling, {d:.1}x faster than cold: the same check, nothing changed\n", .{ warm, warm / ceiling, cold / warm });
     try out.flush();
 }
 
@@ -140,6 +147,33 @@ fn fastest(io: Io, comptime measure: anytype, args: anytype) !u64 {
     }
     if (best == std.math.maxInt(u64)) assert.panic("none of the {d} runs finished; the loop must time each run", .{runs});
     return best;
+}
+
+/// The fastest of `runs` full checks, each from an empty store.
+fn coldest(io: Io, zanity: []const u8, dir: []const u8, environ: *const std.process.Environ.Map, store: []const u8) !u64 {
+    comptime if (runs == 0) @compileError("runs is 0, so nothing would be measured; set it to at least 1");
+    var best: u64 = std.math.maxInt(u64);
+    for (0..runs) |_| {
+        try forget(io, store);
+        var timer: Timer = .{ .io = io, .started = Io.Timestamp.now(io, .awake) };
+        try runZanity(io, zanity, dir, environ);
+        best = @min(best, timer.lap());
+    }
+    if (best == std.math.maxInt(u64)) assert.panic("none of the {d} cold runs finished; the loop must time each run", .{runs});
+    return best;
+}
+
+/// Deletes the store and the files SQLite's WAL mode keeps beside it.
+fn forget(io: Io, store: []const u8) !void {
+    if (!std.fs.path.isAbsolute(store)) assert.panic("deleting the store at '{s}', a relative path; main() builds it from zanity's absolute path", .{store});
+    var buffer: [std.fs.max_path_bytes]u8 = undefined;
+    for ([_][]const u8{ "", "-wal", "-shm" }) |suffix| {
+        const path = try std.fmt.bufPrint(&buffer, "{s}{s}", .{ store, suffix });
+        Io.Dir.cwd().deleteFile(io, path) catch |e| switch (e) {
+            error.FileNotFound => {},
+            else => return e,
+        };
+    }
 }
 
 /// Asks `zig env` where its standard library is: a large corpus every toolchain ships.
@@ -185,12 +219,13 @@ fn checkAll(arena: Allocator, corpus: *const Corpus, work: check.Work) !void {
 
 /// Runs one full check of `dir`. Exit 1 means zanity found something, which is a finished run
 /// here; a higher code or a signal is a failure.
-fn runZanity(io: Io, zanity: []const u8, dir: []const u8) !void {
+fn runZanity(io: Io, zanity: []const u8, dir: []const u8, environ: *const std.process.Environ.Map) !void {
     if (!std.fs.path.isAbsolute(zanity)) assert.panic("running zanity from '{s}', a relative path, inside {s}; resolve it before changing directory", .{ zanity, dir });
     if (dir.len == 0) assert.panic("running zanity on an empty corpus path; Corpus.initCorpus() rejects one", .{});
     var child = try std.process.spawn(io, .{
         .argv = &.{ zanity, "check", "--quiet", "--no-color", "--rules", "all", "." },
         .cwd = .{ .path = dir },
+        .environ_map = environ,
         .stdout = .ignore,
         .stderr = .ignore,
     });
