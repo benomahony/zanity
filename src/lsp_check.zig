@@ -1,5 +1,6 @@
-//! Running zanity check for the language server: the command it runs over the workspace, reading
-//! its findings back, and leaving out those flagged as false positives this session.
+//! Checking the workspace for the language server: in this process, or as a zanity check command
+//! when the check asks the model, then reading its findings and leaving out those flagged as false
+//! positives this session.
 const std = @import("std");
 const assert = @import("assert.zig");
 const protocol = @import("lsp_protocol.zig");
@@ -49,8 +50,9 @@ pub fn checkWorkspace(self: *LanguageServer, trigger: []const u8) !void {
     if (shown > records.len) assert.panic("{d} findings shown from {d} reported; add() files each finding once", .{ shown, records.len });
 }
 
-/// Runs this executable as `zanity check --json` in the root and reads its findings back into
-/// `into`; null, after telling the editor why, when the check fails.
+/// Checks the root in this process, or, when the check asks the model, runs this executable as
+/// `zanity check --json` there, and reads its findings into `into`; null, after telling the
+/// editor why, when the check fails.
 pub fn runZanityCheck(self: *LanguageServer, into: *Results) !?[]const Record {
     if (!std.fs.path.isAbsolute(self.root)) assert.panic("checking the relative workspace {s}; initialize() must select an absolute workspace first", .{self.root});
     if (into.entries.len != 0 or into.files.len != 0) assert.panic("checking {s} into results that hold {d} findings in {d} files; checkWorkspace() clears them first", .{ self.root, into.entries.len, into.files.len });

@@ -1,5 +1,5 @@
-//! `zanity lsp`: a language server on stdin and stdout. It runs `zanity check --json` over the
-//! workspace when the editor connects and on every save, publishes each finding as a diagnostic,
+//! `zanity lsp`: a language server on stdin and stdout. It checks the workspace in this process
+//! when the editor connects and on every save, publishes each finding as a diagnostic,
 //! and offers the edits `--fix` would make as code actions. A finding can be flagged as a false
 //! positive from the editor: it is kept in zanity's store and, with telemetry on, sent as a span,
 //! so the rule can be made more precise, and it stays hidden for the rest of the session.
