@@ -710,6 +710,17 @@
   content: (string_content) @reference.text)
   (#any-word? @reference.text "lua"))
 
+; A string that is one whole name, as a table value such as `format = "git_branch"` or a keymap's
+; `{ "mark_delete", mode = "n" }`, or as the key of `actions["definitions"]`, names the function a
+; plugin looks up by that key. A string passed to a call, such as `print("done")`, names nothing.
+(field
+  value: (string
+    content: (string_content) @reference.key))
+
+(bracket_index_expression
+  field: (string
+    content: (string_content) @reference.key))
+
 ; A function written as a field of a table, `{ setup = function() end }`, or stored in a table held
 ; by another, `function M.actions.focus()`: whatever the table is handed to reaches it by its key.
 (table_constructor
