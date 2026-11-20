@@ -1,0 +1,129 @@
+name: macOS process diagnostics
+
+on:
+  push:
+    branches: [claude/macos-process-diagnostics]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      RUNS: 200
+      CASE_DIR: tests/golden/weak_random
+      CASE_FILE: weak_random.py
+      CASE_RULES: weak-random
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: xyzzylabs/setup-zig@7e5af686da64007a0797898801de180e5f4d3762 # v1.0.5
+      - name: Install Lua
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then sudo apt-get update -q && sudo apt-get install -y -q lua5.4; else brew install lua; fi
+      - name: Build zanity and the tests
+        run: zig build test test-integration --summary all
+
+      - name: Machine
+        run: |
+          uname -a
+          if [ "$RUNNER_OS" = macOS ]; then sysctl -n machdep.cpu.brand_string hw.ncpu hw.memsize; sw_vers; else nproc; free -m; fi
+          ls -la zig-out/bin/zanity
+
+      - name: 1. Process start alone
+        run: |
+          echo "## $RUNNER_OS: $RUNS runs of /usr/bin/true"
+          time (for i in $(seq "$RUNS"); do /usr/bin/true; done)
+          echo "## $RUNNER_OS: $RUNS runs of zanity --version"
+          time (for i in $(seq "$RUNS"); do ./zig-out/bin/zanity --version >/dev/null; done)
+
+      - name: 2. A real check from a shell, warm store and cold store
+        run: |
+          zanity="$PWD/zig-out/bin/zanity"
+          cd "$CASE_DIR"
+          export XDG_CACHE_HOME="$RUNNER_TEMP/warm"
+          "$zanity" check --json --rules "$CASE_RULES" "$CASE_FILE" >/dev/null || true
+          echo "## $RUNNER_OS: $RUNS checks, warm store"
+          time (for i in $(seq "$RUNS"); do "$zanity" check --json --rules "$CASE_RULES" "$CASE_FILE" >/dev/null || true; done)
+          echo "## $RUNNER_OS: $RUNS checks, a new empty store each run"
+          time (for i in $(seq "$RUNS"); do XDG_CACHE_HOME="$RUNNER_TEMP/cold-$i" "$zanity" check --json --rules "$CASE_RULES" "$CASE_FILE" >/dev/null || true; done)
+          echo "## $RUNNER_OS: $RUNS checks, warm store, 3 at a time"
+          time (seq "$RUNS" | xargs -P 3 -I{} sh -c '"$0" check --json --rules "$1" "$2" >/dev/null || true' "$zanity" "$CASE_RULES" "$CASE_FILE")
+
+      - name: 3. The same checks spawned by a Zig harness, as the golden test does
+        run: |
+          cat > "$RUNNER_TEMP/harness.zig" <<'EOF'
+          const std = @import("std");
+
+          pub fn main(init: std.process.Init) !void {
+              const arena = init.arena.allocator();
+              const args = try init.minimal.args.toSlice(arena);
+              const runs = try std.fmt.parseInt(usize, args[1], 10);
+              const argv = try arena.alloc([]const u8, args.len - 2);
+              for (argv, args[2..]) |*out, arg| out.* = arg;
+              for (0..runs) |_| {
+                  const result = try std.process.run(arena, init.io, .{ .argv = argv });
+                  if (result.term != .exited) return error.Crashed;
+              }
+          }
+          EOF
+          zig build-exe -O ReleaseFast -femit-bin="$RUNNER_TEMP/harness" "$RUNNER_TEMP/harness.zig"
+          zanity="$PWD/zig-out/bin/zanity"
+          cd "$CASE_DIR"
+          export XDG_CACHE_HOME="$RUNNER_TEMP/warm"
+          echo "## $RUNNER_OS: $RUNS runs of /usr/bin/true through std.process.run"
+          time "$RUNNER_TEMP/harness" "$RUNS" /usr/bin/true
+          echo "## $RUNNER_OS: $RUNS checks through std.process.run"
+          time "$RUNNER_TEMP/harness" "$RUNS" "$zanity" check --json --rules "$CASE_RULES" "$CASE_FILE"
+
+      - name: 4. Code signing
+        if: runner.os == 'macOS'
+        run: |
+          codesign -dv --verbose=4 zig-out/bin/zanity 2>&1 || true
+          cp zig-out/bin/zanity "$RUNNER_TEMP/zanity-copy"
+          cp zig-out/bin/zanity "$RUNNER_TEMP/zanity-signed"
+          codesign -f -s - "$RUNNER_TEMP/zanity-signed"
+          cd "$CASE_DIR"
+          export XDG_CACHE_HOME="$RUNNER_TEMP/warm"
+          for binary in zanity-copy zanity-signed; do
+            echo "## first run of $binary"
+            time ("$RUNNER_TEMP/$binary" check --json --rules "$CASE_RULES" "$CASE_FILE" >/dev/null || true)
+            echo "## $RUNS more runs of $binary"
+            time (for i in $(seq "$RUNS"); do "$RUNNER_TEMP/$binary" check --json --rules "$CASE_RULES" "$CASE_FILE" >/dev/null || true; done)
+          done
+
+      - name: 5. Wall time against CPU time for one check
+        run: |
+          zanity="$PWD/zig-out/bin/zanity"
+          cd "$CASE_DIR"
+          export XDG_CACHE_HOME="$RUNNER_TEMP/warm"
+          if [ "$RUNNER_OS" = macOS ]; then
+            /usr/bin/time -l "$zanity" check --json --rules "$CASE_RULES" "$CASE_FILE" >/dev/null || true
+          elif [ -x /usr/bin/time ]; then
+            /usr/bin/time -v "$zanity" check --json --rules "$CASE_RULES" "$CASE_FILE" >/dev/null || true
+          else
+            time ("$zanity" check --json --rules "$CASE_RULES" "$CASE_FILE" >/dev/null || true)
+          fi
+
+      - name: 6. Each integration and unit test's time
+        run: |
+          for binary in $(ls -t $(find .zig-cache/o -name test -type f -perm -u+x) | head -2); do
+            echo "## $binary"
+            "$binary" 2>&1 | python3 -c '
+          import sys, time
+          start = last = time.time()
+          rows = []
+          for line in sys.stdin:
+              now = time.time()
+              rows.append((now - last, line.strip()[:110]))
+              last = now
+          print(f"total {time.time() - start:.1f}s over {len(rows)} lines")
+          for seconds, line in sorted(rows, reverse=True)[:15]:
+              print(f"{seconds:8.2f}s  {line}")
+          '
+          done
