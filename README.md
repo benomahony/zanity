@@ -243,7 +243,7 @@ sqlite3 ~/.cache/zanity/zanity.db "
   LIMIT 20;"
 ```
 
-A check that finds nothing changed skips even that. The `run_analyses` table keeps, for each folder, set of paths and rules checked, the state of every file the last check read, and `run_findings` keeps that check's findings as JSON. When this zanity, `zanity.toml` and every file's contents are as they were, the check reports those findings without recomputing anything. `--fix`, `--infer` and `--semantic` always check, since they need every file's facts.
+A check that finds nothing changed skips even that. The `run_analyses` table keeps, for each folder, set of paths and rules checked, the state of every file the last check read, and `run_findings` keeps that check's findings as JSON. When this zanity, `zanity.toml` and every file's contents are as they were, the check reports those findings without recomputing anything. With `--infer` or `--semantic` it also keeps the functions and definitions they read, so they run from the answers already in the store. `--fix` always checks, since it needs every file's facts.
 
 ### In an editor with `zanity lsp`
 

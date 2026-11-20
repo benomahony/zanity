@@ -8,7 +8,10 @@ const Io = std.Io;
 const Sha256 = std.crypto.hash.sha2.Sha256;
 const assert = @import("assert.zig");
 const config = @import("config.zig");
-const Finding = @import("facts.zig").Finding;
+const facts_module = @import("facts.zig");
+const Definition = facts_module.Definition;
+const Finding = facts_module.Finding;
+const Unit = facts_module.Unit;
 const rules = @import("rules.zig");
 const store = @import("store.zig");
 const store_runs = @import("store_runs.zig");
@@ -19,14 +22,17 @@ const run_format = "run-analysis-1";
 /// The scopes the store keeps a run for, so checking many folders doesn't grow it without end.
 const kept_runs = 16;
 
-/// Findings in each row of run_findings, so no row outgrows the store's heap.
-const chunk_findings = 256;
+/// Findings, and units and definitions when --infer or --semantic reads them, in each row of
+/// run_findings, so no row outgrows the store's heap.
+const chunk_items = 256;
 
 pub const Key = store_runs.RunScope;
 
 const Chunk = struct {
     format: []const u8,
     findings: []Finding,
+    units: []Unit = &.{},
+    definitions: []Definition = &.{},
 };
 
 /// The run's key, or null when something it depends on can't be read, so the run is checked.
@@ -47,6 +53,8 @@ pub fn runKey(ws: *Workspace, paths: []const []const u8, selected: rules.Set) !?
     part(&scope, cwd);
     for (paths) |path| part(&scope, path);
     for (selected.names()) |name| part(&scope, name);
+    part(&scope, if (ws.inference != null) "infer" else "");
+    part(&scope, if (ws.embedding != null) "semantic" else "");
     if (ws.settings) |settings| if (settings.dir.len > 0) {
         var name_buffer: [std.fs.max_path_bytes]u8 = undefined;
         const file = std.fmt.bufPrint(&name_buffer, "{s}/{s}", .{ settings.dir, config.file_name }) catch return null;
@@ -69,14 +77,12 @@ pub fn replayRun(ws: *Workspace, run: Key) !bool {
     const source_cache = if (ws.source_cache) |*cache| cache else return false;
     const text_start = ws.text.used;
     const checked = store_runs.eachRunChunk(source_cache, run, ws, addChunk) catch |e| {
-        ws.findings.len = 0;
-        ws.text.used = text_start;
+        forget(ws, text_start);
         return if (e == error.LimitExceeded) e else false;
     };
     const files = checked orelse return false;
     if (files > ws.files.len) {
-        ws.findings.len = 0;
-        ws.text.used = text_start;
+        forget(ws, text_start);
         return false;
     }
     ws.checked = files;
@@ -91,17 +97,44 @@ fn addChunk(ws: *Workspace, json: []const u8) !void {
     const parsed = std.json.parseFromSlice(Chunk, fixed.allocator(), json, .{}) catch return error.InvalidCache;
     const chunk = parsed.value;
     if (!std.mem.eql(u8, chunk.format, run_format)) return error.InvalidCache;
+    if (!ws.facts.collect_units and (chunk.units.len > 0 or chunk.definitions.len > 0)) return error.InvalidCache;
     for (chunk.findings) |f| {
         const rule = rules.find(f.rule) orelse return error.InvalidCache;
         if (f.message.len == 0) return error.InvalidCache;
-        var kept = f;
-        kept.path = try ws.text.copy(f.path);
+        var kept = try copied(Finding, ws, f);
         kept.rule = rule.name;
-        kept.message = try ws.text.copy(f.message);
-        kept.fix = try ws.text.copy(f.fix);
-        if (f.edit) |edit| kept.edit = .{ .start = edit.start, .end = edit.end, .replacement = try ws.text.copy(edit.replacement) };
+        if (f.edit) |edit| kept.edit = try copied(facts_module.Edit, ws, edit);
         try ws.findings.add(kept);
     }
+    const facts = &ws.facts;
+    for (chunk.units) |unit| try facts.units.add(try copied(Unit, ws, unit));
+    for (chunk.definitions) |definition| try facts.definitions.add(try copied(Definition, ws, definition));
+}
+
+/// `value` with each of its strings copied into the run's text, out of the memory it was parsed in.
+fn copied(comptime T: type, ws: *Workspace, value: T) !T {
+    const text = &ws.text;
+    if (text.buffer.len == 0) assert.panic("copying a cached {s} into no text; reserve memory.Limits.text_bytes at startup", .{@typeName(T)});
+    var kept = value;
+    var strings: usize = 0;
+    const info = @typeInfo(T).@"struct";
+    inline for (info.field_names, info.field_types) |name, field_type| if (field_type == []const u8) {
+        @field(kept, name) = try text.copy(@field(value, name));
+        strings += 1;
+    };
+    if (strings == 0) assert.panic("{s} has no strings to copy; replay it without copied()", .{@typeName(T)});
+    return kept;
+}
+
+/// Drops what a replay that failed part of the way added, so the files are checked from nothing.
+fn forget(ws: *Workspace, text_start: usize) void {
+    if (text_start > ws.text.used) assert.panic("forgetting a replay back to byte {d} of {d} used; pass the text mark taken before it", .{ text_start, ws.text.used });
+    if (ws.checked != 0) assert.panic("forgetting a replay after {d} files were counted; count them only once it succeeds", .{ws.checked});
+    const facts = &ws.facts;
+    ws.findings.len = 0;
+    facts.units.len = 0;
+    facts.definitions.len = 0;
+    ws.text.used = text_start;
 }
 
 /// Keeps the findings checking the files produced, for the next run with the same key. A store
@@ -116,13 +149,30 @@ pub fn keep(ws: *Workspace, run: Key) void {
 
 fn encodeChunk(ws: *Workspace, chunk: usize) !?[]const u8 {
     const findings = ws.findings.items();
+    const facts = &ws.facts;
+    const units: []Unit = if (facts.collect_units) facts.units.items() else &.{};
+    const definitions: []Definition = if (ws.embedding != null) facts.definitions.items() else &.{};
     if (ws.analysis.len == 0) assert.panic("encoding a cached run into no memory; reserve memory.Limits.analysis_bytes at startup", .{});
-    const start = std.math.mul(usize, chunk, chunk_findings) catch return null;
-    if (start >= findings.len and !(chunk == 0 and findings.len == 0)) return null;
+    const start = std.math.mul(usize, chunk, chunk_items) catch return null;
+    if (start >= @max(findings.len, units.len, definitions.len) and chunk > 0) return null;
     var out: Io.Writer = .fixed(ws.analysis);
-    try std.json.Stringify.value(Chunk{ .format = run_format, .findings = findings[start..@min(findings.len, start + chunk_findings)] }, .{}, &out);
+    try std.json.Stringify.value(Chunk{
+        .format = run_format,
+        .findings = window(Finding, findings, start),
+        .units = window(Unit, units, start),
+        .definitions = window(Definition, definitions, start),
+    }, .{}, &out);
     if (out.buffered().len == 0) assert.panic("chunk {d} of a run encoded as nothing; JSON always holds the chunk's fields", .{chunk});
     return out.buffered();
+}
+
+/// The items of chunk starting at `start`, which is past the end once a shorter list runs out.
+fn window(comptime T: type, items: []T, start: usize) []T {
+    if (start % chunk_items != 0) assert.panic("a chunk starts at item {d}, not a multiple of {d}", .{ start, chunk_items });
+    const from = @min(items.len, start);
+    const to = @min(items.len, start + chunk_items);
+    if (to < from) assert.panic("chunk at {d} ends at {d}, before it starts at {d}", .{ start, to, from });
+    return items[from..to];
 }
 
 /// Adds `bytes` with its length first, so no two lists of parts hash alike.

@@ -152,12 +152,13 @@ pub fn checkPaths(ctx: *zclig.Context, ws: *Workspace, options: CheckOptions, se
 }
 
 /// Reports the findings an earlier run kept when nothing it read has changed, and otherwise
-/// checks the files and keeps their findings for the next run. --fix, --infer and --semantic
-/// need every file's facts, so they always check.
+/// checks the files and keeps their findings for the next run. --fix needs every file's facts
+/// and the renames, so it always checks; --infer and --semantic get back the units and
+/// definitions they read.
 fn checkOrReplay(ctx: *zclig.Context, ws: *Workspace, options: CheckOptions, selected: rules.Set) !void {
     if (selected.len == 0) assert.panic("checking files with no rules selected; runCheck always selects at least one", .{});
     if (ws.findings.len != 0) assert.panic("{d} findings are left from an earlier run; checkOrReplay expects a fresh workspace", .{ws.findings.len});
-    const run = if (options.fix or ws.facts.collect_units) null else try run_cache.runKey(ws, options.paths, selected);
+    const run = if (options.fix) null else try run_cache.runKey(ws, options.paths, selected);
     if (run) |k| if (try run_cache.replayRun(ws, k)) return;
     try checkFiles(ctx, ws, selected);
     if (run) |k| run_cache.keep(ws, k);
