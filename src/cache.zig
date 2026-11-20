@@ -182,7 +182,6 @@ fn validateHeader(snapshot: Snapshot, run: Replay) ReplayError!void {
     if (run.language.len == 0) assert.panic("validating a cache row against an unnamed language; adapters always have names", .{});
     if (!std.mem.eql(u8, snapshot.format, cache_format) or !std.mem.eql(u8, snapshot.path, run.path)) return error.InvalidCache;
     if (!std.mem.eql(u8, snapshot.language, run.language) or snapshot.collect_units != run.facts.collect_units) return error.InvalidCache;
-    for (snapshot.rules) |name| if (rules.find(name) == null) return error.InvalidCache;
 }
 
 fn validateDefinitions(snapshot: Snapshot, run: Replay) ReplayError!void {

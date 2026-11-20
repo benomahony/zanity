@@ -80,9 +80,9 @@ pub const Graph = struct {
         const offsets = s.offsets.items();
         s.targets.clear();
         for (facts.calls.items()) |call| {
-            const lookup: Lookup = .{ .functions = functions, .sorted = sorted, .call = call };
-            for (lookup.candidates()) |c| {
-                if (!lookup.accepts(c)) continue;
+            const resolved = (Lookup{ .functions = functions, .sorted = sorted, .call = call }).resolve();
+            for (resolved.candidates) |c| {
+                if (!resolved.accepts(c)) continue;
                 try s.targets.add(0);
                 offsets[call.caller + 1] += 1;
             }
@@ -91,9 +91,9 @@ pub const Graph = struct {
         const cursor = s.search.low[0..functions.len];
         @memcpy(cursor, offsets[0..functions.len]);
         for (facts.calls.items()) |call| {
-            const lookup: Lookup = .{ .functions = functions, .sorted = sorted, .call = call };
-            for (lookup.candidates()) |c| {
-                if (!lookup.accepts(c)) continue;
+            const resolved = (Lookup{ .functions = functions, .sorted = sorted, .call = call }).resolve();
+            for (resolved.candidates) |c| {
+                if (!resolved.accepts(c)) continue;
                 s.targets.items()[cursor[call.caller]] = c;
                 cursor[call.caller] += 1;
             }
@@ -186,21 +186,33 @@ const Lookup = struct {
         return self.sorted[lo..hi];
     }
 
-    /// A call resolves as `placed` does, and among those candidates only to the ones that fit it
-    /// best: that take as many parameters as it passes arguments, so `Emit(event)` inside the
+    /// A call resolves as `Resolved.placed` does, and among those candidates only to the ones that
+    /// fit it best: that take as many parameters as it passes arguments, so `Emit(event)` inside the
     /// five-parameter overload `Emit` reaches the one-parameter `Emit`, not itself; and of those,
     /// the ones whose parameter types its arguments plainly have, so `Sign("text")` reaches
     /// `Sign(string)` and not `Sign(byte[])`. When none fit, as with default arguments, Python's
     /// `self` or an argument of a subtype, it reaches them all.
     fn accepts(self: Lookup, c: u32) bool {
         if (c >= self.functions.len) assert.panic("call to '{s}' resolved to function {d}, but only {d} are recorded; resolve calls only against the recorded functions", .{ self.call.callee, c, self.functions.len });
-        if (!self.placed(c)) return false;
-        const own = self.fit(c);
-        for (self.candidates()) |other| {
-            if (other != c and self.fit(other) > own and self.placed(other)) return false;
+        if (!std.mem.eql(u8, self.functions[c].name, self.call.callee)) assert.panic("asked whether the call to '{s}' reaches '{s}'; ask only about candidates(), which share the call's name", .{ self.call.callee, self.functions[c].name });
+        return self.resolve().accepts(c);
+    }
+
+    /// The call's candidates with what each is compared against, worked out once per call, so
+    /// resolving a name many functions share takes time in proportion to them, not their cube.
+    fn resolve(self: Lookup) Resolved {
+        const all = self.candidates();
+        if (all.len > self.sorted.len) assert.panic("the call to '{s}' has {d} candidates among {d} functions; candidates() must return a run of the sorted names", .{ self.call.callee, all.len, self.sorted.len });
+        const caller_path = self.functions[self.call.caller].path;
+        var resolved: Resolved = .{ .lookup = self, .candidates = all, .local = false, .best = 0 };
+        for (all) |c| {
+            if (std.mem.eql(u8, self.functions[c].path, caller_path) and reaches(self.call.reach, self.functions[c].method)) resolved.local = true;
         }
-        if (own > 2) assert.panic("function {d} fits the call to '{s}' at level {d}; fit() has levels 0 to 2", .{ c, self.call.callee, own });
-        return true;
+        for (all) |c| {
+            if (resolved.placed(c)) resolved.best = @max(resolved.best, self.fit(c));
+        }
+        if (resolved.best > 2) assert.panic("the best fit for the call to '{s}' is level {d}; fit() has levels 0 to 2", .{ self.call.callee, resolved.best });
+        return resolved;
     }
 
     /// How well function `c` fits the call: 0 when it takes another number of parameters, 1 when
@@ -212,20 +224,30 @@ const Lookup = struct {
         if (function.parameters != self.call.arguments) return 0;
         return if (facts_module.typesAgree(self.call.types, function.types)) 2 else 1;
     }
+};
+
+const Resolved = struct {
+    lookup: Lookup,
+    candidates: []const u32,
+    local: bool,
+    best: u2,
+
+    fn accepts(self: Resolved, c: u32) bool {
+        const functions = self.lookup.functions;
+        if (c >= functions.len) assert.panic("call to '{s}' resolved to function {d}, but only {d} are recorded; resolve calls only against the recorded functions", .{ self.lookup.call.callee, c, functions.len });
+        if (self.candidates.len == 0) assert.panic("asked whether the call to '{s}' reaches function {d}, but no function has its name; ask only about its candidates", .{ self.lookup.call.callee, c });
+        return self.placed(c) and self.lookup.fit(c) == self.best;
+    }
 
     /// A call resolves to same-file candidates when there are any, and only
     /// to functions or methods when the call syntax says which it must be.
-    fn placed(self: Lookup, c: u32) bool {
-        const caller_path = self.functions[self.call.caller].path;
-        if (c >= self.functions.len) assert.panic("call to '{s}' resolved to function {d}, but only {d} are recorded; resolve calls only against the recorded functions", .{ self.call.callee, c, self.functions.len });
-        if (!reaches(self.call.reach, self.functions[c].method)) return false;
-        if (std.mem.eql(u8, self.functions[c].path, caller_path)) return true;
-        for (self.candidates()) |other| {
-            const local = std.mem.eql(u8, self.functions[other].path, caller_path);
-            if (local and reaches(self.call.reach, self.functions[other].method)) return false;
-        }
-        if (self.call.callee.len == 0) assert.panic("function {d} calls something with an empty name; check the @call.name capture", .{self.call.caller});
-        return true;
+    fn placed(self: Resolved, c: u32) bool {
+        const functions = self.lookup.functions;
+        const call = self.lookup.call;
+        if (c >= functions.len) assert.panic("call to '{s}' resolved to function {d}, but only {d} are recorded; resolve calls only against the recorded functions", .{ call.callee, c, functions.len });
+        if (call.callee.len == 0) assert.panic("function {d} calls something with an empty name; check the @call.name capture", .{call.caller});
+        if (!reaches(call.reach, functions[c].method)) return false;
+        return !self.local or std.mem.eql(u8, functions[c].path, functions[call.caller].path);
     }
 };
 

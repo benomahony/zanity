@@ -67,6 +67,10 @@ test "a source analysis is queryable JSON and records cache hits" {
     const source = digest(&.{"source"});
     try store.keepAnalysis(.{ .key = key, .source = source, .path = "src/a.py", .language = "lang-a", .result = "{\"findings\":[{\"rule\":\"unbounded-loop\"}]}" });
     var buffer: [1024]u8 = undefined;
+    _ = (try store.cachedAnalysis(&buffer, key, source)).?;
+    try std.testing.expectEqual(@as(f64, 0), try scalar(store.db, "SELECT hits FROM source_analyses"));
+    const yesterday = "UPDATE source_analyses SET used_at = '2026-01-01T00:00:00+00:00'";
+    if (sqlite.sqlite3_exec(store.db, yesterday, null, null, null) != sqlite.ok) return sqlite.captureDatabaseFailure(store.db);
     const result = (try store.cachedAnalysis(&buffer, key, source)).?;
     try std.testing.expectEqualStrings("{\"findings\":[{\"rule\":\"unbounded-loop\"}]}", result);
     try std.testing.expectEqual(null, try store.cachedAnalysis(&buffer, key, digest(&.{"changed"})));

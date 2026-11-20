@@ -94,7 +94,7 @@ const find_label = "SELECT real FROM labels WHERE rule = ?1 AND unit_hash = ?2";
 /// Every answer kept, newest first, with its label when it has one; ?1 narrows it to one rule,
 /// ?2 and ?3 to one path and line.
 const list_observed = "SELECT o.rule, o.path, o.line, o.unit_hash, o.unit_name, o.probability, o.threshold, l.real FROM observations o LEFT JOIN labels l ON l.rule = o.rule AND l.unit_hash = o.unit_hash WHERE (?1 = '' OR o.rule = ?1) AND (?2 = '' OR o.path = ?2) AND (?3 = 0 OR o.line = ?3) ORDER BY o.seen_at DESC";
-const touch_analysis = "UPDATE source_analyses SET used_at = strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now'), hits = hits + 1 WHERE analysis_hash = ?1";
+const touch_analysis = "UPDATE source_analyses SET used_at = strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now'), hits = hits + 1 WHERE analysis_hash = ?1 AND used_at < strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now', '-1 day')";
 const find_vector = "SELECT vector FROM embeddings WHERE model = ?1 AND kind = ?2 AND text_hash = ?3";
 const save_vector = "INSERT OR REPLACE INTO embeddings (model, kind, text_hash, vector, embedded_at) VALUES (?1, ?2, ?3, ?4, strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now'))";
 const save_analysis = "INSERT OR REPLACE INTO source_analyses (analysis_hash, source_hash, path, language, result, created_at, used_at, hits) VALUES (?1, ?2, ?3, ?4, ?5, strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now'), strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now'), 0)";
