@@ -85,6 +85,25 @@ fn checkTimings(ctx: *zclig.Context, ws: *Workspace, options: CheckOptions, sele
         return ctx.fail(.usage, try ws.text.format("Could not parse JUnit report {s}: {t}.", .{ path, e }), "Use a JUnit XML report with finite, nonnegative testcase time attributes in seconds; DTDs are unsupported.");
 }
 
+/// Fails the command with what stopped checkPaths(), naming the limit or the error, so no error
+/// reaches zclig unnamed.
+pub fn failCheck(ctx: *zclig.Context, ws: *Workspace, err: anyerror) error{UserFailure} {
+    if (err == error.UserFailure) return error.UserFailure;
+    const limit = err == error.LimitExceeded;
+    if (limit and memory.exceeded.len == 0) assert.panic("checkPaths() ran out of room, but memory.exceeded doesn't say which limit; every Bounded and Text sets it before returning error.LimitExceeded", .{});
+    const message = if (limit)
+        std.fmt.bufPrint(&ws.failure, "This run has more {s} than zanity is built to hold.", .{memory.exceeded})
+    else
+        std.fmt.bufPrint(&ws.failure, "zanity check stopped with error.{t}.", .{err});
+    const text = message catch assert.panic("the message for error.{t} doesn't fit Workspace.failure's {d} bytes; make it shorter or the buffer larger", .{ err, ws.failure.len });
+    const failed = if (limit)
+        ctx.fail(.usage, text, "Check fewer files at once, or report it if the input is ordinary.")
+    else
+        ctx.fail(.internal, text, "Report it with the command and the repository it ran on.");
+    if (ctx.failure == null) assert.panic("failing on error.{t} left no failure for zclig to report, so it would print its unnamed internal error; zclig.Context.fail() records one", .{err});
+    return failed;
+}
+
 pub fn checkPaths(ctx: *zclig.Context, ws: *Workspace, options: CheckOptions, selected: rules.Set) !report.Counts {
     const paths = options.paths;
     if (paths.len == 0) assert.panic("check ran with no paths; zclig supplies '.' when none are given", .{});

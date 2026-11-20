@@ -11,7 +11,6 @@ const zclig = @import("zclig");
 const rules = @import("rules.zig");
 const report = @import("report.zig");
 const report_agent = @import("report_agent.zig");
-const memory = @import("memory.zig");
 const infer = @import("infer.zig");
 const embed = @import("embed.zig");
 const Live = @import("live.zig").Live;
@@ -62,10 +61,7 @@ pub fn runCheck(ctx: *zclig.Context, requested: CheckOptions) ![]const Row {
     var live = Live.initLive(console(ctx, ctx.runtime.err), ws.io, !ctx.quiet);
     ws.live = &live;
     defer ws.live = null;
-    const counts = checkPaths(ctx, ws, options, selected) catch |e| switch (e) {
-        error.LimitExceeded => return ctx.fail(.usage, try ws.text.format("This run has more {s} than zanity is built to hold.", .{memory.exceeded}), "Check fewer files at once, or report it if the input is ordinary."),
-        else => return e,
-    };
+    const counts = checkPaths(ctx, ws, options, selected) catch |e| return check_paths.failCheck(ctx, ws, e);
     if (triage.failsReview(options, counts, ws.review)) ctx.status = .failure;
     if (!triage.special(options) and ws.rows.len != counts.errors + counts.warnings) assert.panic("{d} output rows for {d} errors and {d} warnings; runCheck() must add one row per error or warning", .{ ws.rows.len, counts.errors, counts.warnings });
     if (triage.special(options)) {

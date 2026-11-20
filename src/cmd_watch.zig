@@ -9,7 +9,6 @@ const rules = @import("rules.zig");
 const config = @import("config.zig");
 const report = @import("report.zig");
 const report_agent = @import("report_agent.zig");
-const memory = @import("memory.zig");
 const Live = @import("live.zig").Live;
 const watch = @import("watch.zig");
 const workspace_init = @import("workspace_init.zig");
@@ -163,10 +162,7 @@ pub fn checkAgain(ctx: *zclig.Context, resident: *Resident, options: CheckOption
     if (options.rules != null and options.production) selected.includeTier(.production);
     resident.live = Live.initLive(console(ctx, ctx.runtime.err), checks.io, !ctx.quiet);
     checks.live = &resident.live;
-    const counts = checkPaths(ctx, checks, options, selected) catch |e| switch (e) {
-        error.LimitExceeded => return ctx.fail(.usage, try checks.text.format("This run has more {s} than zanity is built to hold.", .{memory.exceeded}), "Check fewer files at once, or report it if the input is ordinary."),
-        else => return e,
-    };
+    const counts = checkPaths(ctx, checks, options, selected) catch |e| return check_paths.failCheck(ctx, checks, e);
     if (!triage.special(options) and checks.rows.len != counts.errors + counts.warnings) assert.panic("checked again into {d} rows for {d} errors and {d} warnings; checkPaths makes one row per finding", .{ checks.rows.len, counts.errors, counts.warnings });
     return counts;
 }
