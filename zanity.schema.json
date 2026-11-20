@@ -415,6 +415,7 @@
         { "const": "wide-scope", "description": "warning, on by default. Declare it inside that block, where it is used." },
         { "const": "NASA06", "description": "The NASA code for wide-scope: warning, on by default. Declare it inside that block, where it is used." },
         { "const": "long-file", "description": "warning, on by default. Split the file by responsibility into modules of a few hundred lines." },
+        { "const": "oversized-file", "description": "error, on by default. Split it into modules of a few hundred lines, or add it to exclude in zanity.toml if it is generated, vendored or copied." },
         { "const": "cwe-15", "description": "warning, on by default. Allow only a fixed set of settings and values, and reject everything else." },
         { "const": "CWE-15", "description": "The NASA code for cwe-15: warning, on by default. Allow only a fixed set of settings and values, and reject everything else." },
         { "const": "cwe-76", "description": "warning, on by default. Decode and normalise the input first, or allow only known-good characters." },

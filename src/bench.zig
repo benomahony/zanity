@@ -55,6 +55,7 @@ const Corpus = struct {
             if (entry.kind != .file or language.forPath(entry.basename) == null) continue;
             const source = try dir.readFile(io, entry.path, self.bytes[self.used..]);
             if (self.used + source.len == self.bytes.len) return error.CorpusTooLarge;
+            if (source.len > (memory.Limits{}).file_bytes) continue;
             self.used += source.len;
             try self.paths.add(try self.names.copy(entry.path));
             try self.sources.add(source);

@@ -152,10 +152,7 @@ pub const Batch = struct {
         const path = self.files[index];
         const adapter = language.forPath(path) orelse return;
         const checker = &(self.checkers[language.indexOf(adapter)] orelse unreachable);
-        if (source.len > self.file_bytes) {
-            memory.exceeded = "bytes in one file";
-            return error.LimitExceeded;
-        }
+        if (source.len > self.file_bytes) return self.commitOversized(worker, path, checker);
         const cache_context: cache_module.AnalysisContext = .{ .language = adapter.name, .query = adapter.query, .revision = adapter.revision, .enabled = checker.enabled, .collect_units = self.facts.collect_units };
         const cached_file: CachedFile = .{ .key = cache_module.key(cache_context, path), .source = @import("store.zig").digest(&.{source}), .path = path, .language = adapter.name };
         if (try self.replayCached(cached_file)) return;
@@ -200,6 +197,20 @@ pub const Batch = struct {
         self.cached += 1;
         if (self.live) |live| live.update("Checking files", self.checked, self.files.len);
         return true;
+    }
+
+    /// Reports a file too large to parse as oversized-file, unless that rule is off, and checks
+    /// nothing else in it, so one generated or copied file doesn't stop the run.
+    fn commitOversized(self: *Batch, worker: *Worker, path: []const u8, checker: *const check.Checker) !void {
+        const adapter = language.forPath(path) orelse assert.panic("{s} is too large to check but has no language; checkFile() returns before then", .{path});
+        const megabytes = self.file_bytes / (1 << 20);
+        if (megabytes == 0) assert.panic("files may have {d} bytes, under a megabyte, so the oversized-file message would say 0 MB; raise memory.Limits.file_bytes", .{self.file_bytes});
+        worker.startFile(path, adapter.name, self.facts.collect_units);
+        const message = try worker.text.format("This file is larger than {d} MB, so zanity parsed none of it and no other rule checked it.", .{megabytes});
+        const found = [_]check.Diagnostic{.{ .line = 0, .column = 0, .rule = "oversized-file", .message = message }};
+        self.mutex.lockUncancelable(self.io);
+        defer self.mutex.unlock(self.io);
+        try self.commit(worker, path, if (checker.enabled.enabled("oversized-file")) &found else &.{});
     }
 
     /// Adds one file's facts and findings to the run's; the caller holds `mutex`.
