@@ -89,15 +89,16 @@ pub fn main(init: std.process.Init) !void {
     };
     const read = timer.lap();
     const parse = try fastest(io, parseAll, .{&corpus});
-    const checked = try fastest(io, checkAll, .{ arena, &corpus, check.Work{ .scratch = &scratch, .text = &text, .facts = &facts } });
+    var oversized: usize = 0;
+    const checked = try fastest(io, checkAll, .{ arena, &corpus, check.Work{ .scratch = &scratch, .text = &text, .facts = &facts }, &oversized });
     const cold = try coldest(io, zanity, corpus.dir, init.environ_map);
     const warm = try fastest(io, runZanity, .{ io, zanity, corpus.dir, init.environ_map });
     try forget(io, store);
     if (corpus.paths.len == 0) assert.panic("timed a corpus of no files; Corpus.read() rejects an empty corpus", .{});
-    try printTimings(io, &corpus, .{ .read = read, .parse = parse, .check = checked, .cold = cold, .warm = warm, .cores = try std.Thread.getCpuCount() });
+    try printTimings(io, &corpus, .{ .read = read, .parse = parse, .check = checked, .oversized = oversized, .cold = cold, .warm = warm, .cores = try std.Thread.getCpuCount() });
 }
 
-const Timings = struct { read: u64, parse: u64, check: u64, cold: u64, warm: u64, cores: usize };
+const Timings = struct { read: u64, parse: u64, check: u64, oversized: usize, cold: u64, warm: u64, cores: usize };
 
 fn printTimings(io: Io, corpus: *const Corpus, t: Timings) !void {
     if (t.parse == 0 or t.cores == 0) assert.panic("the parse took {d} ns over {d} cores; the clock can't resolve the work, so use a larger corpus", .{ t.parse, t.cores });
@@ -115,7 +116,7 @@ fn printTimings(io: Io, corpus: *const Corpus, t: Timings) !void {
     try out.print("corpus   {s}: {d} files, {d:.1} MB\n", .{ corpus.dir, corpus.paths.len, mb });
     try out.print("read     {d:>7.3} s\n", .{@as(f64, @floatFromInt(t.read)) / ns});
     try out.print("parse    {d:>7.3} s   {d:.1} MB/s on one core: the work no check can skip\n", .{ parse, mb / parse });
-    try out.print("check    {d:>7.3} s   {d:.1}x the parse, on one core, without the cross-file rules\n", .{ check_s, check_s / parse });
+    try out.print("check    {d:>7.3} s   {d:.1}x the parse, on one core, without the cross-file rules; {d} oversized files unchecked\n", .{ check_s, check_s / parse, t.oversized });
     try out.print("ceiling  {d:>7.3} s   the parse spread over {d} cores\n", .{ ceiling, t.cores });
     try out.print("cold     {d:>7.3} s   {d:.1}x the ceiling, {d:.1} MB/s: zanity check --rules all from an empty store\n", .{ cold, cold / ceiling, mb / cold });
     try out.print("warm     {d:>7.3} s   {d:.1}x the ceiling, {d:.1}x faster than cold: the same check, nothing changed\n", .{ warm, warm / ceiling, cold / warm });
@@ -206,7 +207,10 @@ fn parseAll(corpus: *const Corpus) !void {
 }
 
 /// Runs every rule on each file, as `zanity check --rules all` does before its cross-file rules.
-fn checkAll(arena: Allocator, corpus: *const Corpus, work: check.Work) !void {
+/// A file past one of a file's limits counts in `oversized` and the rest are still checked, as
+/// `zanity check` reports it as oversized-file and goes on.
+fn checkAll(arena: Allocator, corpus: *const Corpus, work: check.Work, oversized: *usize) !void {
+    oversized.* = 0;
     if (corpus.paths.len != corpus.sources.len) assert.panic("{d} paths but {d} sources; Corpus.read() adds one source per path", .{ corpus.paths.len, corpus.sources.len });
     var selected: rules.Set = .{};
     if (!selected.includeNamed("all")) assert.panic("rules.Set has no 'all'; bench runs every rule, so includeNamed() must accept it", .{});
@@ -220,7 +224,7 @@ fn checkAll(arena: Allocator, corpus: *const Corpus, work: check.Work) !void {
         work.facts.path = path;
         work.facts.language = adapter.name;
         _ = analysis.checkFile(&slot.*.?, work, source) catch |e| switch (e) {
-            error.LimitExceeded => continue,
+            error.LimitExceeded => oversized.* += 1,
             else => return e,
         };
     }
@@ -236,10 +240,14 @@ fn runZanity(io: Io, zanity: []const u8, dir: []const u8, environ: *const std.pr
         .cwd = .{ .path = dir },
         .environ_map = environ,
         .stdout = .ignore,
-        .stderr = .ignore,
+        // --quiet leaves stderr empty on a finished run, so anything there says why zanity failed.
+        .stderr = .inherit,
     });
-    switch (try child.wait(io)) {
-        .exited => |code| if (code > 1) return error.ZanityFailed,
-        else => return error.ZanityFailed,
+    const term = try child.wait(io);
+    switch (term) {
+        .exited => |code| if (code <= 1) return,
+        else => {},
     }
+    std.debug.print("bench: zanity check in {s} ended with {any}\n", .{ dir, term });
+    return error.ZanityFailed;
 }

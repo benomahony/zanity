@@ -8,11 +8,17 @@ const ts = @import("ts.zig");
 const captures = @import("captures.zig");
 
 /// Capture families read whole, besides each `Family`: a capture in one of these, with any part, is read.
-pub const read_families = [_][]const u8{ "finding", "unless", "name", "parameter", "local.definition", "type", "import" };
+pub const read_families = [_][]const u8{ "finding", "unless", "name", "local.definition", "type", "import" };
 
 /// Captures outside those families read by their full name, through `Compiled.id`;
 /// architecture_test.zig checks every name the code looks up is read.
 pub const looked_up = [_][]const u8{
+    // walk.parameter() reads only these parts: the textobject queries' @parameter.inner and
+    // @parameter.outer select each table field or argument for editors and cost Lua's
+    // vim/filetype.lua seconds to match.
+    "parameter.name",
+    "parameter.type",
+    "parameter.field",
     "abstraction.name",
     "unit.prefix",
     "arith.difference",

@@ -9,7 +9,8 @@ pub const Review = @import("rows.zig").Review;
 
 const Snapshot = struct { schema_version: u32, identity_version: u32, findings: []const Row };
 const max_baseline_bytes = 128 * 1024 * 1024;
-const max_baseline_findings = 1 << 18;
+/// As many as a run can hold, so a run zanity checks can always be compared and saved.
+const max_baseline_findings = (@import("memory.zig").Limits{}).findings;
 const snapshot_schema_version = 1;
 const snapshot_identity_version = 1;
 

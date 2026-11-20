@@ -40,6 +40,8 @@ pub const Workspace = struct {
     init_row: [1]InitRow = undefined,
     /// What `zanity upgrade` did; one run replaces one executable.
     upgrade_row: [1]UpgradeRow = undefined,
+    /// Why a check stopped, kept apart from `text`, as the limit that ran out may be text's own.
+    failure: [256]u8 = undefined,
     /// The zanity.toml in effect, for its [paths] sections.
     settings: ?*const config.Config = null,
     limits: memory.Limits,
