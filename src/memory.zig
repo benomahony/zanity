@@ -10,8 +10,10 @@ pub const Limits = struct {
     captures: u32 = 1 << 21,
     depth: u32 = 1 << 12,
     per_file: u32 = 1 << 16,
-    findings: u32 = 1 << 18,
-    text_bytes: u32 = 1 << 26,
+    /// kubernetes, which commits its vendor/ tree, has more than 2^18 findings under --rules all.
+    findings: u32 = 1 << 20,
+    /// vscode's names, paths and messages run past 64 MB.
+    text_bytes: u32 = 1 << 28,
     definitions: u32 = 1 << 18,
     functions: u32 = 1 << 18,
     calls: u32 = 1 << 20,
