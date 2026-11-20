@@ -79,6 +79,18 @@ pub const schema =
     \\    hits INTEGER NOT NULL DEFAULT 0
     \\);
     \\CREATE INDEX IF NOT EXISTS source_analyses_used_at ON source_analyses (used_at);
+    \\CREATE TABLE IF NOT EXISTS run_analyses (
+    \\    scope_hash TEXT PRIMARY KEY,
+    \\    state_hash TEXT NOT NULL,
+    \\    checked INTEGER NOT NULL,
+    \\    created_at TEXT NOT NULL
+    \\);
+    \\CREATE TABLE IF NOT EXISTS run_findings (
+    \\    scope_hash TEXT NOT NULL,
+    \\    chunk INTEGER NOT NULL,
+    \\    result TEXT NOT NULL CHECK (json_valid(result)),
+    \\    PRIMARY KEY (scope_hash, chunk)
+    \\);
 ;
 
 const find_answer = "SELECT probability FROM answers WHERE model = ?1 AND question_hash = ?2 AND unit_hash = ?3";
@@ -102,6 +114,14 @@ const save_analysis = "INSERT OR REPLACE INTO source_analyses (analysis_hash, so
 /// Keeps the ?1 most recently used analyses and deletes the rest, walking the used_at index.
 const trim_analyses = "DELETE FROM source_analyses WHERE analysis_hash IN (SELECT analysis_hash FROM source_analyses ORDER BY used_at DESC LIMIT -1 OFFSET ?1)";
 const count_analyses = "SELECT count(*) FROM source_analyses";
+const find_run_analysis = "SELECT checked FROM run_analyses WHERE scope_hash = ?1 AND state_hash = ?2";
+const list_run_findings = "SELECT result FROM run_findings WHERE scope_hash = ?1 ORDER BY chunk";
+const save_run_analysis = "INSERT OR REPLACE INTO run_analyses (scope_hash, state_hash, checked, created_at) VALUES (?1, ?2, ?3, strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now'))";
+const clear_run_findings = "DELETE FROM run_findings WHERE scope_hash = ?1";
+const save_run_findings = "INSERT INTO run_findings (scope_hash, chunk, result) VALUES (?1, ?2, ?3)";
+/// Keeps the ?1 most recently saved runs and deletes the rest, with their findings.
+const trim_run_analyses = "DELETE FROM run_analyses WHERE scope_hash NOT IN (SELECT scope_hash FROM run_analyses ORDER BY created_at DESC LIMIT ?1)";
+const trim_run_findings = "DELETE FROM run_findings WHERE scope_hash NOT IN (SELECT scope_hash FROM run_analyses)";
 
 /// Built-in SQL for each prepared statement owned by Store, with matching field names.
 pub const statements = .{
@@ -115,6 +135,13 @@ pub const statements = .{
     .save_analysis = save_analysis,
     .trim_analyses = trim_analyses,
     .count_analyses = count_analyses,
+    .find_run_analysis = find_run_analysis,
+    .list_run_findings = list_run_findings,
+    .save_run_analysis = save_run_analysis,
+    .clear_run_findings = clear_run_findings,
+    .save_run_findings = save_run_findings,
+    .trim_run_analyses = trim_run_analyses,
+    .trim_run_findings = trim_run_findings,
     .false_positive = save_false_positive,
     .save_label = save_label,
     .find_label = find_label,

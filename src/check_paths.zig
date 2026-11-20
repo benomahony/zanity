@@ -31,6 +31,7 @@ const fix_file = @import("fix_file.zig");
 const CheckOptions = triage.CheckOptions;
 const triage = @import("triage.zig");
 const baseline = @import("baseline.zig");
+const run_cache = @import("run_cache.zig");
 const workspace = @import("workspace.zig");
 const Workspace = workspace.Workspace;
 const console = workspace.console;
@@ -92,7 +93,7 @@ pub fn checkPaths(ctx: *zclig.Context, ws: *Workspace, options: CheckOptions, se
     for (paths) |path| try collect(ctx, ws, path);
     std.mem.sort([]const u8, ws.files.items(), {}, strings.lessThan);
     try ws.initCheckers(std.heap.page_allocator, selected);
-    try checkFiles(ctx, ws, selected);
+    try checkOrReplay(ctx, ws, options, selected);
     std.mem.sort([]const u8, ws.project_files.items(), {}, strings.lessThan);
     try project.checkProjectFiles(.{ .io = ws.io, .buffer = ws.source, .facts = &ws.facts, .enabled = selected, .findings = &ws.findings }, ws.project_files.items());
     try checkTimings(ctx, ws, options, selected);
@@ -129,6 +130,18 @@ pub fn checkPaths(ctx: *zclig.Context, ws: *Workspace, options: CheckOptions, se
     }
     try baseline.prepare(ctx, ws, options);
     return report.count(findings, ws.checked + ws.project_files.len, ws.skipped);
+}
+
+/// Reports the findings an earlier run kept when nothing it read has changed, and otherwise
+/// checks the files and keeps their findings for the next run. --fix, --infer and --semantic
+/// need every file's facts, so they always check.
+fn checkOrReplay(ctx: *zclig.Context, ws: *Workspace, options: CheckOptions, selected: rules.Set) !void {
+    if (selected.len == 0) assert.panic("checking files with no rules selected; runCheck always selects at least one", .{});
+    if (ws.findings.len != 0) assert.panic("{d} findings are left from an earlier run; checkOrReplay expects a fresh workspace", .{ws.findings.len});
+    const run = if (options.fix or ws.facts.collect_units) null else try run_cache.runKey(ws, options.paths, selected);
+    if (run) |k| if (try run_cache.replayRun(ws, k)) return;
+    try checkFiles(ctx, ws, selected);
+    if (run) |k| run_cache.keep(ws, k);
 }
 
 fn checkFiles(ctx: *zclig.Context, ws: *Workspace, selected: rules.Set) !void {

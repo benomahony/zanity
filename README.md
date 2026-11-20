@@ -243,6 +243,8 @@ sqlite3 ~/.cache/zanity/zanity.db "
   LIMIT 20;"
 ```
 
+A check that finds nothing changed skips even that. The `run_analyses` table keeps, for each folder, set of paths and rules checked, the state of every file the last check read, and `run_findings` keeps that check's findings as JSON. When this zanity, `zanity.toml` and every file's contents are as they were, the check reports those findings without recomputing anything. `--fix`, `--infer` and `--semantic` always check, since they need every file's facts.
+
 ### In an editor with `zanity lsp`
 
 `zanity lsp` is a language server on stdin and stdout. It checks the workspace when the editor connects and again on every save, and shows each finding as a diagnostic, with its fix under the message. Its code actions are:

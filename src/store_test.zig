@@ -8,6 +8,7 @@ const Observation = store_module.Observation;
 const Store = store_module.Store;
 const digest = store_module.digest;
 const store_vectors = @import("store_vectors.zig");
+const store_runs = @import("store_runs.zig");
 
 test "digests stay the same, so answers already in a store keep matching" {
     const unit = digest(&.{ "lang-a", "def f():\n    return 1\n" });
@@ -99,6 +100,48 @@ test "trimming the analysis cache keeps the most recently used analyses and drop
     try std.testing.expectEqual(@as(f64, 0), try scalar(store.db, "SELECT count(*) FROM source_analyses WHERE path = 'src/old.py'"));
     try store.trimAnalyses(2);
     try std.testing.expectEqual(@as(f64, 2), try scalar(store.db, "SELECT count(*) FROM source_analyses"));
+}
+
+const Chunks = struct {
+    parts: [3][]const u8,
+    seen: usize = 0,
+
+    fn encode(self: *Chunks, chunk: usize) !?[]const u8 {
+        if (chunk > self.parts.len) assert.panic("asked for chunk {d} after {d} chunks ran out", .{ chunk, self.parts.len });
+        if (self.seen != 0) assert.panic("encoding chunks after reading {d} back", .{self.seen});
+        return if (chunk < self.parts.len) self.parts[chunk] else null;
+    }
+
+    fn visit(self: *Chunks, json: []const u8) !void {
+        if (self.seen >= self.parts.len) assert.panic("read back {d} chunks of {d} kept", .{ self.seen + 1, self.parts.len });
+        if (json.len == 0) assert.panic("read back an empty chunk; the table's JSON check rejects that", .{});
+        try std.testing.expectEqualStrings(self.parts[self.seen], json);
+        self.seen += 1;
+    }
+};
+
+test "a run's findings are found again in the order they were kept, only while its files are unchanged" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const dir = try tmp.dir.realPathFileAlloc(std.testing.io, ".", arena);
+    var environ: std.process.Environ.Map = .init(arena);
+    try environ.put("ZANITY_STORE", try std.fs.path.join(arena, &.{ dir, "store.db" }));
+    const store = try Store.initStore(std.heap.page_allocator, std.testing.io, &environ, 8 << 20);
+    var chunks: Chunks = .{ .parts = .{ "{\"n\":0}", "{\"n\":1}", "{\"n\":2}" } };
+    const run: store_runs.RunScope = .{ .scope = digest(&.{"scope"}), .state = digest(&.{"files"}) };
+    try store_runs.keepRunAnalysis(&store, .{ .run = run, .checked = 7, .keep = 2 }, &chunks, Chunks.encode);
+    try std.testing.expectEqual(@as(?u32, 7), try store_runs.eachRunChunk(&store, run, &chunks, Chunks.visit));
+    try std.testing.expectEqual(@as(usize, 3), chunks.seen);
+    try std.testing.expectEqual(@as(?u32, null), try store_runs.eachRunChunk(&store, .{ .scope = run.scope, .state = digest(&.{"edited"}) }, &chunks, Chunks.visit));
+    for ([_][]const u8{ "other", "another" }) |name| {
+        chunks.seen = 0;
+        try store_runs.keepRunAnalysis(&store, .{ .run = .{ .scope = digest(&.{name}), .state = run.state }, .checked = 1, .keep = 2 }, &chunks, Chunks.encode);
+    }
+    try std.testing.expectEqual(@as(f64, 2), try scalar(store.db, "SELECT count(*) FROM run_analyses"));
+    try std.testing.expectEqual(@as(f64, 6), try scalar(store.db, "SELECT count(*) FROM run_findings"));
 }
 
 /// The first column of the first row `sql` returns, for reading back what a test kept.
