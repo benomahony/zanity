@@ -277,7 +277,7 @@ pub const File = struct {
         if (ts.ts_node_end_byte(node) > self.source.len) assert.panic("{s}: reporting {s} on {f}, which ends past the {d}-byte file; pass a node from the tree parsed from this file", .{ self.work.facts.path, rule, node.where(), self.source.len });
         if (!self.checker.enabled.enabled(rule)) return false;
         const start = ts.ts_node_start_point(node);
-        if (suppressed(self, start.row, rule)) return false;
+        if (suppressed(self, node, rule)) return false;
         try self.s.diagnostics.add(.{
             .line = start.row,
             .column = start.column,
@@ -329,11 +329,13 @@ fn inTestDirectory(path: []const u8) bool {
     return false;
 }
 
-/// Whether a `zanity: ignore` comment on `line` suppresses `rule` there.
-fn suppressed(self: *File, line: u32, rule: []const u8) bool {
+/// Whether a `zanity: ignore` comment on the line `node` starts on suppresses `rule` there.
+fn suppressed(self: *File, node: ts.Node, rule: []const u8) bool {
     const found = rules.find(rule) orelse unreachable;
     if (!found.answers(rule)) assert.panic("rules.find('{s}') returned rule {s}, which does not answer to that name; rules.find() must return only a rule whose name or alias matches", .{ rule, found.name });
-    if (line > std.mem.count(u8, self.source, "\n")) assert.panic("{s}: checking suppressions on line {d} of a {d}-line file; pass a line number from the tree parsed from this file", .{ self.work.facts.path, line + 1, std.mem.count(u8, self.source, "\n") + 1 });
+    const line = ts.ts_node_start_point(node).row;
+    const last = ts.ts_node_end_point(ts.ts_tree_root_node(node.tree orelse assert.panic("{s}: checking suppressions for a node whose tree was deleted; report while the tree is alive", .{self.work.facts.path}))).row;
+    if (line > last) assert.panic("{s}: checking suppressions on line {d} of a {d}-line file; pass a node from the tree parsed from this file", .{ self.work.facts.path, line + 1, last + 1 });
     for (self.s.suppressions.items()) |s| {
         if (s.line != line) continue;
         if (s.len == 0) return true;

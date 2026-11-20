@@ -114,7 +114,31 @@ fn addRelease(b: *std.Build, build_info: *std.Build.Step.Options) void {
 /// in a Debug build, compiling the queries alone took over a second per language.
 const no_coverage = "-fno-sanitize-coverage=trace-pc-guard,trace-cmp,inline-8bit-counters,pc-table,trace-div,trace-gep,trace-loads,trace-stores";
 
+var query_analysis: ?std.Build.LazyPath = null;
+
+/// The output of one build step, added the first time a module asks for it, that runs a host
+/// tool and hands every module compiling zanity the file it writes. It depends only on languages/,
+/// so every target shares the one step.
+fn queryAnalysis(b: *std.Build) std.Build.LazyPath {
+    if (query_analysis) |path| return path;
+    if (manifest.entries.len == 0) std.debug.panic("languages/manifest.zon lists no languages, so there are no queries to analyse", .{});
+    const generator_module = baseModule(b, "src/query_analysis_gen.zig", b.graph.host, .Debug);
+    if (generator_module.import_table.get("query_analysis") != null) std.debug.panic("query_analysis_gen imports the analysis it writes; build it with baseModule()", .{});
+    const generator = b.addExecutable(.{ .name = "query_analysis_gen", .root_module = generator_module });
+    const path = b.addRunArtifact(generator).addOutputFileArg("query_analysis.zig");
+    query_analysis = path;
+    return path;
+}
+
 fn module(b: *std.Build, root: []const u8, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) *std.Build.Module {
+    if (std.mem.eql(u8, root, "src/query_analysis_gen.zig")) std.debug.panic("{s} is query_analysis_gen, which cannot import the analysis it writes; build it with baseModule()", .{root});
+    const mod = baseModule(b, root, target, optimize);
+    mod.addAnonymousImport("query_analysis", .{ .root_source_file = queryAnalysis(b) });
+    if (mod.import_table.get("query_analysis") == null) std.debug.panic("{s} has no query_analysis import to compile its queries with", .{root});
+    return mod;
+}
+
+fn baseModule(b: *std.Build, root: []const u8, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) *std.Build.Module {
     const cli = b.dependency("zclig", .{ .target = target, .optimize = optimize }).module("zclig");
     const adapters = b.createModule(.{
         .root_source_file = b.path("languages/adapters.zig"),
@@ -135,7 +159,7 @@ fn module(b: *std.Build, root: []const u8, target: std.Build.ResolvedTarget, opt
     if (!std.mem.endsWith(u8, root, ".zig")) std.debug.panic("module root '{s}' is not a .zig file", .{root});
     if (!std.mem.startsWith(u8, root, "src/")) std.debug.panic("module root '{s}' is outside src/; zanity's modules live there", .{root});
     mod.addCSourceFile(.{
-        .file = b.path("vendor/tree-sitter/src/lib.c"),
+        .file = b.path("src/query_analysis.c"),
         .flags = &.{ "-std=c11", "-O2", "-fno-sanitize=undefined", "-D_POSIX_C_SOURCE=200112L", "-D_DEFAULT_SOURCE", "-D_DARWIN_C_SOURCE", no_coverage },
     });
     const sqlite = b.dependency("sqlite", .{});
