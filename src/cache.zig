@@ -199,7 +199,7 @@ fn validateDefinitions(snapshot: Snapshot, run: Replay) ReplayError!void {
         if (definition.delete_end < definition.delete_start) return error.InvalidCache;
     }
     for (snapshot.imports) |i| {
-        if (!std.mem.eql(u8, i.path, run.path) or i.spec.len == 0) return error.InvalidCache;
+        if (!std.mem.eql(u8, i.path, run.path) or i.spec.len == 0 or i.spec_end < i.spec_start) return error.InvalidCache;
     }
     for (snapshot.abstractions) |abstraction| {
         if (!std.mem.eql(u8, abstraction.path, run.path) or !std.mem.eql(u8, abstraction.language, run.language)) return error.InvalidCache;
@@ -272,7 +272,7 @@ fn commitFacts(snapshot: Snapshot, run: Replay) error{LimitExceeded}!void {
         .importable = abstraction.importable,
         .unmarked = try run.text.copy(abstraction.unmarked),
     });
-    for (snapshot.imports) |i| try facts.imports.add(.{ .path = run.path, .language = run.language, .spec = try run.text.copy(i.spec), .line = i.line, .column = i.column, .names = i.names, .shown = try run.text.copy(i.shown), .submodule = i.submodule });
+    for (snapshot.imports) |i| try facts.imports.add(.{ .path = run.path, .language = run.language, .spec = try run.text.copy(i.spec), .line = i.line, .column = i.column, .names = i.names, .shown = try run.text.copy(i.shown), .submodule = i.submodule, .bound = i.bound, .spec_start = i.spec_start, .spec_end = i.spec_end });
     for (snapshot.implemented) |hash| try facts.implemented.add(hash);
     for (snapshot.passed) |hash| try facts.passed.add(hash);
     try facts.addReferences(snapshot.references);
