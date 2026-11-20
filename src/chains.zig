@@ -46,7 +46,8 @@ fn reportChain(self: *File, node: ts.Node, links: u32, first: []const u8) !void 
     if (links < rules.min_chain_links) assert.panic("{s}: reporting a chain of {d} links, under the {d} reported; checkChain() returns before short ones", .{ self.work.facts.path, links, rules.min_chain_links });
     const chain = header(node.text(self.source));
     if (!try self.report(node, "message-chain", try self.say("'{s}' reaches through {d} objects, so this code breaks when any of them changes shape.", .{ chain, links - 1 }))) return;
-    self.s.diagnostics.last().?.fix = try askInstead(self, if (calledAt(self, node)) callTarget(chain) else chain, first);
+    const asked = if (calledAt(self, node)) callTarget(chain) else chain;
+    self.s.diagnostics.last().?.fix = try askInstead(self, if (asked.len < first.len) first else asked, first);
     if (self.s.diagnostics.last().?.fix.len == 0) assert.panic("{s}: the message-chain fix for '{s}' came out empty; say() always writes text", .{ self.work.facts.path, chain });
 }
 
@@ -67,6 +68,7 @@ fn askInstead(self: *File, chain: []const u8, first: []const u8) ![]const u8 {
     if (first.len == 0 or first.len > chain.len) assert.panic("{s}: the chain '{s}' starts from '{s}'; checkChain() passes a prefix of the chain", .{ self.work.facts.path, chain, first });
     if (!std.mem.startsWith(u8, chain, first)) assert.panic("{s}: the chain '{s}' doesn't start with '{s}'; pass the chain's own start", .{ self.work.facts.path, chain, first });
     const last_dot = std.mem.lastIndexOfScalar(u8, chain, '.') orelse return self.say("Ask '{s}' for what you need with a method of its own, or pass that value in.", .{first});
+    if (last_dot < first.len) return self.say("Ask '{s}' for what you need with a method of its own, or pass that value in.", .{first});
     const wanted = memberName(chain[last_dot + 1 ..]);
     const between = std.mem.trim(u8, chain[first.len..last_dot], ".");
     if (between.len == 0 or wanted.len == 0) return self.say("Ask '{s}' for what you need with a method of its own, or pass that value in.", .{first});
