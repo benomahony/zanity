@@ -20,6 +20,9 @@ const cache_module = @import("cache.zig");
 const store = @import("store.zig");
 const Store = store.Store;
 const adapters = @import("adapters");
+const sqlite = @import("sqlite.zig");
+/// What a file's cached analysis ran out of, when it doesn't fit the room the cache keeps for one.
+const analysis_room = "bytes in one file's cached analysis";
 
 /// More workers than this would each wait on the lock more than they check.
 pub const max_workers = 64;
@@ -90,6 +93,8 @@ pub const Failure = struct {
     /// Which limit ran out, when `err` is error.LimitExceeded.
     exceeded: []const u8,
     unreadable: bool,
+    /// Why SQLite refused, when `err` is error.StoreUnavailable.
+    reason: []const u8 = "",
 };
 
 const CachedFile = struct {
@@ -112,14 +117,15 @@ pub const Batch = struct {
     facts: *Facts,
     findings: *memory.Bounded(Finding),
     cache: ?*Store = null,
-    /// Whether the run started with a store, set before the workers start so they read it
-    /// without the lock; `cache` turns null if the store fails part way.
+    /// Whether the run has a store, set before the workers start so they read it without the lock.
     caching: bool = false,
     live: ?*Live,
     mutex: Io.Mutex = .init,
     checked: usize = 0,
     cached: usize = 0,
     failure: ?Failure = null,
+    /// SQLite's words for the kept failure, copied from the worker thread that saw them.
+    reason: [sqlite.failure.len]u8 = undefined,
     next: std.atomic.Value(usize) = .init(0),
 
     /// Checks every file, then returns the first failure in file order, if any. A failure doesn't
@@ -188,32 +194,33 @@ pub const Batch = struct {
             error.LimitExceeded => return self.commitOversized(worker, path, checker),
             else => return e,
         };
-        const encoded: ?[]const u8 = if (self.caching) cache_module.encode(worker.analysis, cache_context, &worker.facts, result.diagnostics) catch null else null;
+        const encoded: ?[]const u8 = if (self.caching) cache_module.encode(worker.analysis, cache_context, &worker.facts, result.diagnostics) catch |err| switch (err) {
+            error.WriteFailed => {
+                memory.exceeded = analysis_room;
+                return error.LimitExceeded;
+            },
+        } else null;
         self.mutex.lockUncancelable(self.io);
         defer self.mutex.unlock(self.io);
-        self.keepEncoded(cached_file, encoded);
+        try self.keepEncoded(cached_file, encoded);
         try self.commit(worker, path, result.diagnostics);
         if (self.checked > self.files.len) assert.panic("committed {d} of {d} files; each file is committed once", .{ self.checked, self.files.len });
     }
 
-    /// Keeps a checked file's encoded analysis; the caller holds `mutex`. A store that fails, or an
-    /// analysis too large to encode, turns caching off for the rest of the run.
-    fn keepEncoded(self: *Batch, file: CachedFile, encoded: ?[]const u8) void {
+    /// Keeps a checked file's encoded analysis; the caller holds `mutex`. A store that fails
+    /// stops the run.
+    fn keepEncoded(self: *Batch, file: CachedFile, encoded: ?[]const u8) error{StoreUnavailable}!void {
         if (file.path.len == 0 or file.language.len == 0) assert.panic("keeping an analysis without its path or language; checkFile supplies both", .{});
         if (encoded) |payload| if (payload.len == 0) assert.panic("{s} encoded as no bytes; JSON always holds the snapshot's fields", .{file.path});
         const source_cache = self.cache orelse return;
-        const payload = encoded orelse {
-            self.cache = null;
-            return;
-        };
-        source_cache.keepAnalysis(.{ .key = file.key, .context = file.context, .source = file.source, .path = file.path, .language = file.language, .result = payload }) catch {
-            self.cache = null;
-        };
+        const payload = encoded orelse assert.panic("{s} wasn't encoded, though the run keeps analyses; checkFile() encodes whenever Batch.caching is set", .{file.path});
+        try source_cache.keepAnalysis(.{ .key = file.key, .context = file.context, .source = file.source, .path = file.path, .language = file.language, .result = payload });
     }
 
     /// Replays one valid cache row into the worker, as checking the file would fill it, then
     /// commits it as a checked file is. Only reading the row and the commit hold the lock, so
-    /// workers parse rows in parallel. A missing, unavailable or malformed row is a miss.
+    /// workers parse rows in parallel. A missing or malformed row is a miss for that file; a store
+    /// that fails, or a row too large to parse, stops the run.
     fn replayCached(self: *Batch, worker: *Worker, file: CachedFile) !bool {
         if (worker.analysis.len < 2) assert.panic("replaying cached files with {d} bytes; reserve memory.Limits.analysis_bytes for each worker", .{worker.analysis.len});
         if (file.path.len == 0 or file.language.len == 0) assert.panic("replaying a cached file without its path or language; checkFile supplies both", .{});
@@ -223,11 +230,10 @@ pub const Batch = struct {
         const diagnostics = &worker.scratch.diagnostics;
         diagnostics.clear();
         cache_module.replay(.{ .payload = json, .scratch = worker.analysis[middle..], .path = file.path, .language = file.language, .text = &worker.text, .facts = &worker.facts, .diagnostics = diagnostics }) catch |err| switch (err) {
-            error.InvalidCache, error.OutOfMemory => {
-                self.mutex.lockUncancelable(self.io);
-                defer self.mutex.unlock(self.io);
-                self.cache = null;
-                return false;
+            error.InvalidCache => return false,
+            error.OutOfMemory => {
+                memory.exceeded = analysis_room;
+                return error.LimitExceeded;
             },
             error.LimitExceeded => return error.LimitExceeded,
         };
@@ -239,17 +245,14 @@ pub const Batch = struct {
     }
 
     /// Copies the file's cache row into `buffer` while holding the lock that protects SQLite's
-    /// prepared statements; null when there is none, or the store can't be read.
+    /// prepared statements; null when there is none. A store that can't be read stops the run.
     fn cachedRow(self: *Batch, buffer: []u8, file: CachedFile) !?[]const u8 {
         if (buffer.len == 0) assert.panic("reading a cache row into no memory; reserve memory.Limits.analysis_bytes for each worker", .{});
         if (std.mem.eql(u8, &file.key, &file.source)) assert.panic("{s}'s cache key and source digest are both {s}; one was passed as the other", .{ file.path, &file.key });
         self.mutex.lockUncancelable(self.io);
         defer self.mutex.unlock(self.io);
         const source_cache = self.cache orelse return null;
-        return source_cache.cachedAnalysis(buffer, file.key, file.source) catch {
-            self.cache = null;
-            return null;
-        };
+        return try source_cache.cachedAnalysis(buffer, file.key, file.source);
     }
 
     /// Reports a file that ran past one of a file's limits, `memory.exceeded`, as oversized-file,
@@ -334,7 +337,15 @@ pub const Batch = struct {
         if (failure.index >= self.files.len) assert.panic("file {d} failed, but the run has {d}; only handed-out indexes can fail", .{ failure.index, self.files.len });
         self.mutex.lockUncancelable(self.io);
         defer self.mutex.unlock(self.io);
-        if (self.failure == null or failure.index < self.failure.?.index) self.failure = failure;
+        if (self.failure == null or failure.index < self.failure.?.index) {
+            self.failure = failure;
+            // SQLite's message is the worker thread's own, so copy it while still on that thread.
+            if (failure.err == error.StoreUnavailable) {
+                const said = sqlite.failure[0..sqlite.failure_len];
+                @memcpy(self.reason[0..said.len], said);
+                self.failure.?.reason = self.reason[0..said.len];
+            }
+        }
         if (self.failure.?.index > failure.index) assert.panic("kept the failure of file {d} over the earlier file {d}; recordFailure() keeps the earliest", .{ self.failure.?.index, failure.index });
     }
 };

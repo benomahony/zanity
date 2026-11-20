@@ -166,6 +166,21 @@ fn checkOrReplay(ctx: *zclig.Context, ws: *Workspace, options: CheckOptions, sel
     if (run) |k| if (ws.keep_runs) run_cache.keep(ws, k);
 }
 
+/// Fails the run with what stopped `failure`'s file: a file zanity couldn't read, an analysis cache
+/// it couldn't use, or a limit the run ran past.
+fn failBatch(ctx: *zclig.Context, ws: *Workspace, cache: ?*const store.Store, failure: batch.Failure) anyerror!noreturn {
+    if (failure.index >= ws.files.len) assert.panic("file {d} stopped a run of {d}; Batch only fails on files it handed out", .{ failure.index, ws.files.len });
+    const path = ws.files.items()[failure.index];
+    if (path.len == 0) assert.panic("file {d} stopped the run but has no path; collect() only adds named files", .{failure.index});
+    if (failure.unreadable) return ctx.fail(.io, try ws.text.format("Could not read {s}: {t}.", .{ path, failure.err }), "Check the file exists and is readable.");
+    if (failure.err == error.StoreUnavailable) {
+        const used = cache orelse assert.panic("{s} failed on the analysis cache, but the run had none; only a store call returns error.StoreUnavailable", .{path});
+        return ctx.fail(.io, try ws.text.format("Could not use the analysis cache for {s} in {s}: {s}.", .{ path, used.path, failure.reason }), "Check the disk is not full and the store is writable, or set ZANITY_STORE to a file zanity can write.");
+    }
+    memory.exceeded = failure.exceeded;
+    return failure.err;
+}
+
 fn checkFiles(ctx: *zclig.Context, ws: *Workspace, selected: rules.Set) !void {
     if (selected.len == 0) assert.panic("checking files with no rules selected; runCheck always selects at least one", .{});
     if (ws.findings.len != 0) assert.panic("{d} findings are left from an earlier run; checkFiles expects a fresh workspace", .{ws.findings.len});
@@ -182,12 +197,7 @@ fn checkFiles(ctx: *zclig.Context, ws: *Workspace, selected: rules.Set) !void {
             .cache = if (ws.source_cache) |*source_cache| source_cache else null,
             .live = ws.live,
         };
-        if (try run.run(try ws.checkWorkers(std.heap.page_allocator, ws.files.len))) |failure| {
-            const path = ws.files.items()[failure.index];
-            if (failure.unreadable) return ctx.fail(.io, try ws.text.format("Could not read {s}: {t}.", .{ path, failure.err }), "Check the file exists and is readable.");
-            memory.exceeded = failure.exceeded;
-            return failure.err;
-        }
+        if (try run.run(try ws.checkWorkers(std.heap.page_allocator, ws.files.len))) |failure| try failBatch(ctx, ws, run.cache, failure);
         ws.checked = run.checked;
         ws.cache_hits = run.cached;
         var contexts: [language.count]store.Digest = undefined;
