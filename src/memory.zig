@@ -10,18 +10,26 @@ pub const Limits = struct {
     captures: u32 = 1 << 21,
     depth: u32 = 1 << 12,
     per_file: u32 = 1 << 16,
-    /// kubernetes, which commits its vendor/ tree, has more than 2^18 findings under --rules all.
+    // The run-wide limits below hold about four times the most that zanity check --rules all
+    // needed on dotnet/roslyn, kubernetes/kubernetes and microsoft/vscode, the largest codebases
+    // zig build bench is run on; the counts are the most any of the three needed.
+    /// 312,315 on kubernetes, which commits its vendor/ tree.
     findings: u32 = 1 << 20,
-    /// vscode's names, paths and messages run past 64 MB.
+    /// 90 MB of names, paths and messages on roslyn.
     text_bytes: u32 = 1 << 28,
-    definitions: u32 = 1 << 18,
-    functions: u32 = 1 << 18,
-    calls: u32 = 1 << 20,
-    /// Distinct names each file refers to, summed over all files, for dead-symbol.
-    references: u32 = 1 << 22,
-    edges: u32 = 1 << 21,
-    /// Top-level imports across all files, for cyclic-import.
-    imports: u32 = 1 << 18,
+    /// 262,845 on roslyn.
+    definitions: u32 = 1 << 20,
+    /// 229,454 on roslyn.
+    functions: u32 = 1 << 20,
+    /// 543,780 on roslyn.
+    calls: u32 = 1 << 21,
+    /// Distinct names each file refers to, summed over all files, for dead-symbol: 2,981,595 on
+    /// kubernetes.
+    references: u32 = 1 << 24,
+    /// 3,591,986 call targets on roslyn, where a call reaches every overload it could mean.
+    edges: u32 = 1 << 24,
+    /// Top-level imports across all files, for cyclic-import: 161,262 on vscode.
+    imports: u32 = 1 << 20,
     ignore_patterns: u32 = 1 << 14,
     ignore_bytes: u32 = 1 << 20,
     store_bytes: usize = 1 << 25,
