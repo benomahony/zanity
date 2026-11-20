@@ -76,6 +76,7 @@
 
 (table_constructor
   (field) @parameter.inner @parameter.outer
+  .
   ","? @parameter.outer)
 
 (arguments

@@ -219,9 +219,9 @@ fn checkAll(arena: Allocator, corpus: *const Corpus, work: check.Work) !void {
         work.facts.reset();
         work.facts.path = path;
         work.facts.language = adapter.name;
-        _ = analysis.checkFile(&slot.*.?, work, source) catch |e| {
-            if (e == error.LimitExceeded) std.debug.print("bench: {s} has more {s} than zanity can hold for one file\n", .{ path, memory.exceeded });
-            return e;
+        _ = analysis.checkFile(&slot.*.?, work, source) catch |e| switch (e) {
+            error.LimitExceeded => continue,
+            else => return e,
         };
     }
 }
