@@ -18,36 +18,40 @@ jobs:
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - uses: xyzzylabs/setup-zig@7e5af686da64007a0797898801de180e5f4d3762 # v1.0.5
-      - name: Which python3
-        run: |
-          echo "PATH=$PATH"
-          which -a python3 || true
-          ls -la /usr/bin/python3 /usr/local/bin/python3 /opt/homebrew/bin/python3 2>&1 || true
-      - name: python3 started five ways, three times each
+      - name: Reverse lookup of 127.0.0.1, which HTTPServer.server_bind makes through socket.getfqdn
         run: |
           for i in 1 2 3; do
-            echo "## inherited environment"; time (python3 -c pass)
-            echo "## empty environment, python3 found on env's default path"; time (env -i python3 -c pass || true)
-            echo "## empty environment, /usr/bin/python3"; time (env -i /usr/bin/python3 -c pass || true)
-            echo "## PATH only"; time (env -i PATH="$PATH" python3 -c pass)
-            echo "## HOME only, /usr/bin/python3"; time (env -i HOME="$HOME" /usr/bin/python3 -c pass || true)
+            echo "## socket.getfqdn('127.0.0.1')"
+            time python3 -c "import socket; print(socket.getfqdn('127.0.0.1'))"
           done
-      - name: python3 spawned by std.process.spawn with an empty environment, as the mock servers are
+      - name: Each mock server from start to printing its port, and a server that skips the lookup
+        env:
+          MOCK_EMBED_LOG: ${{ runner.temp }}/embed.log
+          MOCK_TYPESAFE_LOG: ${{ runner.temp }}/typesafe.log
+          MOCK_TYPESAFE_HANG: ${{ runner.temp }}/hang
         run: |
-          cat > "$RUNNER_TEMP/spawn.zig" <<'EOF'
-          const std = @import("std");
-
-          pub fn main(init: std.process.Init) !void {
-              const arena = init.arena.allocator();
-              var empty = std.process.Environ.Map.init(arena);
-              for (0..3) |_| {
-                  const result = try std.process.run(arena, init.io, .{ .argv = &.{ "python3", "-c", "import sys; print(sys.executable)" }, .environ_map = &empty });
-                  std.debug.print("{s}", .{result.stdout});
-              }
-          }
+          python3 - <<'EOF'
+          import subprocess, sys, time
+          for _ in range(3):
+              for mock in ("tests/embed/mock_embeddings.py", "tests/infer/mock_typesafe.py"):
+                  start = time.time()
+                  child = subprocess.Popen([sys.executable, mock], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+                  port = child.stdout.readline().strip()
+                  print(f"## {mock} printed port {port} after {time.time() - start:.2f}s", flush=True)
+                  child.stdin.close()
+                  child.wait()
           EOF
-          zig build-exe -O ReleaseFast -femit-bin="$RUNNER_TEMP/spawn" "$RUNNER_TEMP/spawn.zig"
-          time "$RUNNER_TEMP/spawn"
+          for i in 1 2 3; do
+            echo "## ThreadingHTTPServer with server_bind skipping getfqdn"
+            time python3 -c "
+          import http.server, socketserver
+          class Server(http.server.ThreadingHTTPServer):
+              def server_bind(self):
+                  socketserver.TCPServer.server_bind(self)
+                  self.server_name, self.server_port = self.server_address[:2]
+          print(Server(('127.0.0.1', 0), http.server.BaseHTTPRequestHandler).server_address[1])
+          "
+          done
 
   diagnose:
     if: github.event_name == 'workflow_dispatch'
@@ -58,8 +62,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       RUNS: 200
-      CASE_DIR: tests/golden/weak_random
-      CASE_FILE: weak_random.py
+      CASE_DIR: src
+      CASE_FILE: assert.zig
       CASE_RULES: weak-random
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
@@ -88,13 +92,13 @@ jobs:
           zanity="$PWD/zig-out/bin/zanity"
           cd "$CASE_DIR"
           export XDG_CACHE_HOME="$RUNNER_TEMP/warm"
-          "$zanity" check --json --rules "$CASE_RULES" "$CASE_FILE" >/dev/null || true
+          "$zanity" check --json --rules "$CASE_RULES" "$CASE_FILE" >/dev/null
           echo "## $RUNNER_OS: $RUNS checks, warm store"
-          time (for i in $(seq "$RUNS"); do "$zanity" check --json --rules "$CASE_RULES" "$CASE_FILE" >/dev/null || true; done)
+          time (for i in $(seq "$RUNS"); do "$zanity" check --json --rules "$CASE_RULES" "$CASE_FILE" >/dev/null; done)
           echo "## $RUNNER_OS: $RUNS checks, a new empty store each run"
-          time (for i in $(seq "$RUNS"); do XDG_CACHE_HOME="$RUNNER_TEMP/cold-$i" "$zanity" check --json --rules "$CASE_RULES" "$CASE_FILE" >/dev/null || true; done)
+          time (for i in $(seq "$RUNS"); do XDG_CACHE_HOME="$RUNNER_TEMP/cold-$i" "$zanity" check --json --rules "$CASE_RULES" "$CASE_FILE" >/dev/null; done)
           echo "## $RUNNER_OS: $RUNS checks, warm store, 3 at a time"
-          time (seq "$RUNS" | xargs -P 3 -I{} sh -c '"$0" check --json --rules "$1" "$2" >/dev/null || true' "$zanity" "$CASE_RULES" "$CASE_FILE")
+          time (seq "$RUNS" | xargs -P 3 -I{} sh -c '"$0" check --json --rules "$1" "$2" >/dev/null' "$zanity" "$CASE_RULES" "$CASE_FILE")
 
       - name: 3. The same checks spawned by a Zig harness, as the golden test does
         run: |
@@ -125,7 +129,7 @@ jobs:
       - name: 4. Code signing
         if: runner.os == 'macOS'
         run: |
-          codesign -dv --verbose=4 zig-out/bin/zanity 2>&1 || true
+          codesign -dv --verbose=4 zig-out/bin/zanity 2>&1
           cp zig-out/bin/zanity "$RUNNER_TEMP/zanity-copy"
           cp zig-out/bin/zanity "$RUNNER_TEMP/zanity-signed"
           codesign -f -s - "$RUNNER_TEMP/zanity-signed"
@@ -133,9 +137,9 @@ jobs:
           export XDG_CACHE_HOME="$RUNNER_TEMP/warm"
           for binary in zanity-copy zanity-signed; do
             echo "## first run of $binary"
-            time ("$RUNNER_TEMP/$binary" check --json --rules "$CASE_RULES" "$CASE_FILE" >/dev/null || true)
+            time ("$RUNNER_TEMP/$binary" check --json --rules "$CASE_RULES" "$CASE_FILE" >/dev/null)
             echo "## $RUNS more runs of $binary"
-            time (for i in $(seq "$RUNS"); do "$RUNNER_TEMP/$binary" check --json --rules "$CASE_RULES" "$CASE_FILE" >/dev/null || true; done)
+            time (for i in $(seq "$RUNS"); do "$RUNNER_TEMP/$binary" check --json --rules "$CASE_RULES" "$CASE_FILE" >/dev/null; done)
           done
 
       - name: 5. Wall time against CPU time for one check
@@ -144,11 +148,11 @@ jobs:
           cd "$CASE_DIR"
           export XDG_CACHE_HOME="$RUNNER_TEMP/warm"
           if [ "$RUNNER_OS" = macOS ]; then
-            /usr/bin/time -l "$zanity" check --json --rules "$CASE_RULES" "$CASE_FILE" >/dev/null || true
+            /usr/bin/time -l "$zanity" check --json --rules "$CASE_RULES" "$CASE_FILE" >/dev/null
           elif [ -x /usr/bin/time ]; then
-            /usr/bin/time -v "$zanity" check --json --rules "$CASE_RULES" "$CASE_FILE" >/dev/null || true
+            /usr/bin/time -v "$zanity" check --json --rules "$CASE_RULES" "$CASE_FILE" >/dev/null
           else
-            time ("$zanity" check --json --rules "$CASE_RULES" "$CASE_FILE" >/dev/null || true)
+            time ("$zanity" check --json --rules "$CASE_RULES" "$CASE_FILE" >/dev/null)
           fi
 
       - name: 6. Each integration and unit test's time
