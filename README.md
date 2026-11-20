@@ -570,8 +570,9 @@ Rules marked *production* hold code to what safety-critical software needs and m
 
 | Rule | Severity | Flags |
 |---|---|---|
-| `allocation-in-loop` | warning | a call that allocates or copies on every pass of a loop, such as `list(row)`, `slice()`, `clone()`, `ToList()`, `fmt.Sprintf` or `allocPrint`; not one in the loop's iterable, which runs once, an init function, or a call that only adds an element, which `append-without-reserve` checks |
+| `allocation-in-loop` | warning, *production* | a call that allocates or copies on every pass of a loop, such as `list(row)`, `slice()`, `clone()`, `ToList()`, `fmt.Sprintf` or `allocPrint`; not one in the loop's iterable, which runs once, an init function, or a call that only adds an element, which `append-without-reserve` checks |
 | `append-without-reserve` | warning | a loop over a collection that only adds each element to another collection, such as `out.append(f(x))`, `push`, `Add` or Go's `out = append(out, x)`, when the function didn't size that collection first with a reserve or capacity call (`with_capacity`, `make(..., n)`, `new ArrayList<>(n)`, `reserveCapacity`); in Python, JavaScript and Lua, which can't reserve, it suggests a comprehension or `map` |
+| `invariant-in-loop` | warning | a call on every pass of a loop that gives the same value each time, such as `len(items)`, `word.toLowerCase()` or `strings.ToLower(word)`, because the loop neither binds, assigns nor mutates anything it reads; only calls the language's tables list as pure count, such as `len`, `re.compile` and `trim`, so a call that reads or changes state, such as `next()`, is never reported |
 
 **Tests**
 

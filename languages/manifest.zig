@@ -209,6 +209,11 @@ pub const Tables = struct {
     /// Calls that size a collection before it grows, such as `reserve` or `Vec::with_capacity`,
     /// when given an argument.
     reserve_calls: []const []const u8 = &.{},
+    /// Calls that give the same value for the same arguments and change nothing, such as `len` or
+    /// `toLowerCase`; one written with its module, such as `re.compile`, matches only in full.
+    pure_calls: []const []const u8 = &.{},
+    /// Lowercase words the language reserves that read no variable, such as `and`, `nil` or `await`.
+    reserved_words: []const []const u8 = &.{},
     test_file_prefixes: []const []const u8 = &.{},
     test_file_suffixes: []const []const u8 = &.{},
     /// How to write an assertion that explains its failure. `$condition` is the

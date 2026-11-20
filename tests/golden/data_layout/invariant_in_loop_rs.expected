@@ -1,0 +1,3 @@
+rules: allocation-in-loop,append-without-reserve,invariant-in-loop
+exit: 0
+invariant_in_loop_rs.rs:4:27: warning [invariant-in-loop]

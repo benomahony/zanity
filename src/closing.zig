@@ -131,7 +131,8 @@ pub fn checkAllocation(self: *File, ctx: Context, callee: []const u8) !void {
     for (self.tables.initializer_prefixes) |prefix| if (std.mem.startsWith(u8, owner, prefix)) return;
     const shown = if (ctx.callee) |c| c.text(self.source) else callee;
     _ = try self.report(ctx.node, "dynamic-allocation", try self.say("'{s}' allocates memory after initialization in '{s}', so memory use depends on input and can fail at any point.", .{ shown, owner }));
-    if (!contains(self.tables.growth_calls, callee)) try data_layout.checkAllocationInLoop(self, ctx, function, shown);
+    const reserves = contains(self.tables.reserve_calls, callee) and if (ctx.receiver) |r| !std.ascii.isUpper(r.text(self.source)[0]) else false;
+    if (!contains(self.tables.growth_calls, callee) and !reserves) try data_layout.checkAllocationInLoop(self, ctx, function, shown);
 }
 
 pub fn closeLoop(self: *File, ctx: Context) !void {

@@ -1,0 +1,3 @@
+rules: allocation-in-loop,append-without-reserve,invariant-in-loop
+exit: 0
+InvariantInLoop.java:7:31: warning [invariant-in-loop]

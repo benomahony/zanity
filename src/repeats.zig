@@ -46,22 +46,35 @@ pub fn noteWrite(self: *File, node: ts.Node, target: []const u8) !void {
 pub fn noteRepeatable(self: *File, node: ts.Node) !void {
     if (!self.checker.enabled.enabled("duplicated-expression")) return;
     if (ts.ts_node_end_byte(node) <= ts.ts_node_start_byte(node)) assert.panic("{s}: the expression {f} covers no text; put @expression.repeatable on the whole expression in the language's zanity.scm", .{ self.work.facts.path, node.where() });
-    if (self.enclosingFunction() == null or self.innermost(.assertion) != null) return;
-    if (self.index.marks(node, self.v.chain_link)) return;
-    if (self.index.marks(node, self.checker.compiled.id("call.discarded"))) return;
-    if (self.index.marks(node, self.checker.compiled.id("expression.returned"))) return;
+    if (!candidate(self, node)) return;
     const text = node.text(self.source);
-    if (std.mem.indexOfScalar(u8, text, '\n') != null) return;
     var hasher = std.hash.Wyhash.init(0);
     var size: u32 = 0;
     for (text) |c| if (!std.ascii.isWhitespace(c)) {
         hasher.update(&.{c});
         size += 1;
     };
-    if (size < rules.min_repeated_expression) return;
-    if (copiesDiffer(self, text) or self.inTest() or self.inTestFile()) return;
     if (size > text.len) assert.panic("{s}: counted {d} visible bytes in the {d}-byte expression {f}; noteRepeatable() must count each byte once", .{ self.work.facts.path, size, text.len, node.where() });
     try self.s.repeats.add(.{ .node = node, .hash = hasher.final(), .size = size });
+}
+
+/// Whether an `@expression.repeatable` capture is one computation worth writing once: it computes
+/// something, sits on one line in a function outside a test or an assertion, is used rather than
+/// called for its effect or returned, is long enough to matter, and gives the same value each
+/// time it runs.
+pub fn candidate(self: *File, node: ts.Node) bool {
+    if (ts.ts_node_end_byte(node) > self.source.len) assert.panic("{s}: the expression {f} ends past the {d}-byte file; pass a node from this file's tree", .{ self.work.facts.path, node.where(), self.source.len });
+    if (self.enclosingFunction() == null or self.innermost(.assertion) != null) return false;
+    if (self.index.marks(node, self.v.chain_link)) return false;
+    if (self.index.marks(node, self.checker.compiled.id("call.discarded"))) return false;
+    if (self.index.marks(node, self.checker.compiled.id("expression.returned"))) return false;
+    const text = node.text(self.source);
+    if (std.mem.indexOfScalar(u8, text, '\n') != null) return false;
+    var size: u32 = 0;
+    for (text) |c| size += @intFromBool(!std.ascii.isWhitespace(c));
+    if (size > text.len) assert.panic("{s}: counted {d} visible bytes in the {d}-byte expression {f}; candidate() must count each byte once", .{ self.work.facts.path, size, text.len, node.where() });
+    if (size < rules.min_repeated_expression) return false;
+    return !(copiesDiffer(self, text) or self.inTest() or self.inTestFile());
 }
 
 /// Whether the expression calls, or names, a method that changes state, such as `items.pop()`,

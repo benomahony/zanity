@@ -1,6 +1,8 @@
 .{
     .{
         .ecosystem = "python",
+        .reserved_words = .{ "and", "or", "not", "in", "is", "await", "lambda", "if", "else", "for" },
+        .pure_calls = .{ "len", "str", "int", "float", "abs", "min", "max", "round", "lower", "upper", "strip", "lstrip", "rstrip", "casefold", "startswith", "endswith", "re.compile", "re.escape", "os.path.join", "os.path.basename", "os.path.dirname", "os.path.splitext", "math.sqrt", "math.log", "math.floor", "math.ceil" },
         .growth_calls = .{ "append", "add" },
         .allocating_calls = .{ "list", "dict", "tuple", "bytearray", "copy.copy", "copy.deepcopy", "deepcopy" },
         .suppression_markers = .{ "noqa", "type: ignore", "type:ignore", "pyright: ignore", "pyright:ignore", "pylint: disable", "pylint:disable", "mypy: ignore-errors", "mypy: disable-error-code", "pyre-ignore", "pyre-fixme", "pytype: disable", "pragma: no cover", "pragma: no branch", "nosec", "NOSONAR", "lgtm[", "codeql[" },
@@ -92,6 +94,8 @@
     },
     .{
         .ecosystem = "zig",
+        .reserved_words = .{ "and", "or", "try", "null", "undefined", "true", "false", "orelse", "catch" },
+        .pure_calls = .{ "std.mem.trim", "std.mem.trimStart", "std.mem.trimEnd", "std.mem.eql", "std.mem.indexOf", "std.mem.indexOfScalar", "std.mem.lastIndexOf", "std.mem.lastIndexOfScalar", "std.mem.startsWith", "std.mem.endsWith", "std.mem.count", "std.math.sqrt", "std.math.log2", "std.fs.path.basename", "std.fs.path.dirname", "std.fs.path.extension" },
         .growth_calls = .{ "append", "appendSlice", "addOne", "put", "putNoClobber", "getOrPut" },
         .reserve_calls = .{ "ensureTotalCapacity", "ensureUnusedCapacity", "ensureTotalCapacityPrecise", "initCapacity" },
         .specific_checks = .{
@@ -131,6 +135,8 @@
     },
     .{
         .ecosystem = "go",
+        .reserved_words = .{ "nil", "true", "false", "range", "func" },
+        .pure_calls = .{ "len", "strings.ToLower", "strings.ToUpper", "strings.TrimSpace", "strings.Trim", "strings.TrimPrefix", "strings.TrimSuffix", "strings.Contains", "strings.HasPrefix", "strings.HasSuffix", "strings.Index", "strings.EqualFold", "regexp.MustCompile", "strconv.Itoa", "strconv.Quote", "filepath.Join", "filepath.Base", "filepath.Dir", "filepath.Ext", "path.Join", "math.Sqrt", "math.Max", "math.Min", "math.Abs" },
         .growth_calls = .{"append"},
         .reserve_calls = .{"make"},
         .allocating_calls = .{ "make", "new", "fmt.Sprintf", "fmt.Sprint", "fmt.Sprintln", "strings.Join", "strings.Split", "strings.Fields", "strings.Repeat", "bytes.Repeat", "slices.Clone", "maps.Clone" },
@@ -182,6 +188,8 @@
     },
     .{
         .ecosystem = "node",
+        .reserved_words = .{ "null", "undefined", "true", "false", "await", "new", "typeof", "instanceof", "in", "of", "void" },
+        .pure_calls = .{ "toLowerCase", "toUpperCase", "trim", "trimStart", "trimEnd", "startsWith", "endsWith", "Math.max", "Math.min", "Math.abs", "Math.floor", "Math.ceil", "Math.round", "Math.sqrt", "Math.pow", "parseInt", "parseFloat", "encodeURIComponent", "JSON.stringify" },
         .growth_calls = .{ "push", "unshift" },
         .allocating_calls = .{ "Array.from", "Array.of", "structuredClone", "concat", "slice", "Buffer.alloc", "Buffer.from", "Buffer.concat" },
         .suppression_markers = .{ "eslint-disable", "@ts-ignore", "@ts-expect-error", "@ts-nocheck", "biome-ignore", "deno-lint-ignore", "oxlint-disable", "tslint:disable", "jshint ignore", "istanbul ignore", "c8 ignore", "v8 ignore", "NOSONAR", "lgtm[", "codeql[" },
@@ -253,6 +261,8 @@
     },
     .{
         .ecosystem = "rust",
+        .reserved_words = .{ "true", "false", "mut", "ref", "as", "await", "move" },
+        .pure_calls = .{ "to_lowercase", "to_uppercase", "to_ascii_lowercase", "to_ascii_uppercase", "trim", "trim_start", "trim_end", "starts_with", "ends_with", "len", "is_empty", "Regex::new", "sqrt", "abs", "max", "min" },
         .growth_calls = .{ "push", "push_str", "push_back", "insert" },
         .reserve_calls = .{ "with_capacity", "reserve", "reserve_exact" },
         .import_style = .crate_path,
@@ -295,6 +305,8 @@
     },
     .{
         .ecosystem = "jvm",
+        .reserved_words = .{ "null", "true", "false", "new", "instanceof" },
+        .pure_calls = .{ "toLowerCase", "toUpperCase", "trim", "strip", "length", "startsWith", "endsWith", "Pattern.compile", "String.valueOf", "Integer.parseInt", "Long.parseLong", "Math.max", "Math.min", "Math.abs", "Math.sqrt", "Math.floor", "Math.ceil" },
         .growth_calls = .{ "add", "put" },
         .reserve_calls = .{ "ArrayList", "HashMap", "HashSet", "ArrayDeque", "StringBuilder", "ensureCapacity" },
         .allocating_calls = .{ "String.format", "Arrays.copyOf", "Arrays.copyOfRange", "Arrays.asList", "List.copyOf", "Map.copyOf", "Set.copyOf", "toArray", "toList", "clone" },
@@ -346,6 +358,8 @@
     },
     .{
         .ecosystem = "dotnet",
+        .reserved_words = .{ "null", "true", "false", "new", "await", "ref", "out", "is", "as", "typeof", "nameof" },
+        .pure_calls = .{ "ToLower", "ToUpper", "ToLowerInvariant", "ToUpperInvariant", "Trim", "TrimStart", "TrimEnd", "StartsWith", "EndsWith", "Math.Max", "Math.Min", "Math.Abs", "Math.Sqrt", "Math.Floor", "Math.Ceiling", "int.Parse", "long.Parse", "string.IsNullOrEmpty", "Path.Combine", "Path.GetFileName", "Path.GetExtension" },
         .growth_calls = .{"Add"},
         .reserve_calls = .{ "List", "Dictionary", "HashSet", "StringBuilder", "EnsureCapacity" },
         .allocating_calls = .{ "ToList", "ToArray", "ToDictionary", "ToHashSet", "string.Format", "String.Format", "string.Join", "String.Join", "string.Concat", "String.Concat", "Split", "Clone" },
@@ -400,6 +414,8 @@
     },
     .{
         .ecosystem = "swift",
+        .reserved_words = .{ "nil", "true", "false", "try", "await", "as", "is", "inout" },
+        .pure_calls = .{ "lowercased", "uppercased", "trimmingCharacters", "hasPrefix", "hasSuffix", "max", "min", "abs", "sqrt" },
         .growth_calls = .{ "append", "insert" },
         .reserve_calls = .{"reserveCapacity"},
         .allocating_calls = .{ "Array", "Dictionary", "Set", "ContiguousArray" },
@@ -467,6 +483,8 @@
     },
     .{
         .ecosystem = "lua",
+        .reserved_words = .{ "nil", "true", "false", "and", "or", "not", "function" },
+        .pure_calls = .{ "string.lower", "string.upper", "string.len", "string.rep", "math.max", "math.min", "math.abs", "math.floor", "math.ceil", "math.sqrt", "tostring", "tonumber" },
         .growth_calls = .{"table.insert"},
         .reserve_calls = .{"table.new"},
         .allocating_calls = .{ "table.concat", "string.format", "string.rep", "string.gsub" },
