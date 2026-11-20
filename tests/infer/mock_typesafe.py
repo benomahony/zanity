@@ -16,10 +16,11 @@ takes it down, and the mock can't hold the build's output open forever.
 import json
 import os
 import re
+import socketserver
 import sys
 import threading
 import time
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler
 
 
 # The real caller batches at most 64 questions. Larger requests indicate a broken test/client.
@@ -204,12 +205,14 @@ class Handler(BaseHTTPRequestHandler):
         assert format.count("%") >= len(args), f"the log format {format!r} has fewer placeholders than its {len(args)} values; check how this Python's http.server calls log_message"
 
 
-class MockServer(ThreadingHTTPServer):
-    """ThreadingHTTPServer with a listen backlog for zanity's most concurrent requests. Python's
-    default of 5 overflows under [infer] concurrency, so the client retries and the abandoned
-    connection's response fails with a broken pipe."""
+class MockServer(socketserver.ThreadingTCPServer):
+    """A threading TCP server for the HTTP handler, with a listen backlog for zanity's most
+    concurrent requests. Python's default of 5 overflows under [infer] concurrency, so the client
+    retries and the abandoned connection's response fails with a broken pipe. It is not an
+    HTTPServer, whose server_bind looks up the address's name, which took 35 s on macOS runners."""
 
     request_queue_size = MAX_CONCURRENCY
+    daemon_threads = True
 
 
 def exit_when_parent_goes() -> None:
