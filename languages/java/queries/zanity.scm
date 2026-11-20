@@ -753,3 +753,16 @@
     (scoped_identifier) @import.module
     (asterisk) @import.name) @import.statement
   (#any-prefix? @import.statement "import static"))
+
+; Data layout: a collection or array of boxed primitives, so each element is its own object on the
+; heap rather than a value in one block.
+(generic_type
+  (type_identifier) @_collection
+  (type_arguments
+    (type_identifier) @_boxed)
+  (#any-of? @_collection "List" "ArrayList" "LinkedList" "Set" "HashSet" "TreeSet" "Collection" "Queue" "Deque" "ArrayDeque" "Stack" "Vector")
+  (#any-of? @_boxed "Integer" "Long" "Double" "Float" "Short" "Byte" "Character" "Boolean")) @finding.pointer-collection
+
+(array_type
+  (type_identifier) @_boxed
+  (#any-of? @_boxed "Integer" "Long" "Double" "Float" "Short" "Byte" "Character" "Boolean")) @finding.pointer-collection

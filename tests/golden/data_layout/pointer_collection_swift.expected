@@ -1,0 +1,4 @@
+rules: allocation-in-loop,append-without-reserve,invariant-in-loop,pointer-collection
+exit: 0
+pointer_collection_swift.swift:2:16: warning [pointer-collection]
+pointer_collection_swift.swift:3:18: warning [pointer-collection]

@@ -1231,3 +1231,20 @@
   arguments: (argument_list . (argument (_) @test.value) . (argument (_) @test.value) .)) @test.constant
   (#any-of? @_assert "Assert" "ClassicAssert")
   (#any-of? @_check "Equal" "NotEqual" "AreEqual" "AreNotEqual" "Same" "NotSame"))
+
+; Data layout: a collection of `object`, which boxes every value type stored in it, and the
+; non-generic ArrayList and Hashtable, which do the same.
+(generic_name
+  (identifier) @_collection
+  (type_argument_list
+    (predefined_type) @_object)
+  (#any-of? @_collection "List" "HashSet" "Queue" "Stack" "LinkedList" "IList" "ICollection")
+  (#eq? @_object "object")) @finding.pointer-collection
+
+(array_type
+  (predefined_type) @_object
+  (#eq? @_object "object")) @finding.pointer-collection
+
+(variable_declaration
+  type: (identifier) @finding.pointer-collection
+  (#any-of? @finding.pointer-collection "ArrayList" "Hashtable"))

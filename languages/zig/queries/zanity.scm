@@ -623,3 +623,18 @@
 (field_expression
   object: (identifier) @import.via
   member: (identifier) @import.used)
+
+; Data layout: a slice, array or list of pointers, so walking it follows a pointer per element.
+(slice_type
+  (pointer_type)) @finding.pointer-collection
+
+(array_type
+  (pointer_type)) @finding.pointer-collection
+
+(call_expression
+  (field_expression
+    (identifier) @_list .)
+  (arguments
+    .
+    (pointer_type))
+  (#any-of? @_list "ArrayList" "ArrayListUnmanaged" "SegmentedList")) @finding.pointer-collection

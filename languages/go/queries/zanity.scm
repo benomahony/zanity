@@ -470,3 +470,13 @@
   arguments: (argument_list . (_) (_) @test.value (_) @test.value)) @test.constant
   (#any-of? @_assert "assert" "require")
   (#any-of? @_check "Equal" "NotEqual" "EqualValues" "Greater" "Less"))
+
+; Data layout: a slice, array or map of pointers, so walking it follows a pointer per element.
+(slice_type
+  element: (pointer_type)) @finding.pointer-collection
+
+(array_type
+  element: (pointer_type)) @finding.pointer-collection
+
+(map_type
+  value: (pointer_type)) @finding.pointer-collection

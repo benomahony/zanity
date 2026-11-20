@@ -1,3 +1,9 @@
-rules: allocation-in-loop,append-without-reserve,invariant-in-loop
+rules: allocation-in-loop,append-without-reserve,invariant-in-loop,pointer-collection
 exit: 0
+AppendWithoutReserve.java:5:12: warning [pointer-collection]
+AppendWithoutReserve.java:5:34: warning [pointer-collection]
+AppendWithoutReserve.java:6:9: warning [pointer-collection]
 AppendWithoutReserve.java:8:13: warning [append-without-reserve]
+AppendWithoutReserve.java:13:12: warning [pointer-collection]
+AppendWithoutReserve.java:13:39: warning [pointer-collection]
+AppendWithoutReserve.java:14:9: warning [pointer-collection]

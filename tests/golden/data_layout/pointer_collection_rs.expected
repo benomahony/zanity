@@ -1,0 +1,4 @@
+rules: allocation-in-loop,append-without-reserve,invariant-in-loop,pointer-collection
+exit: 0
+pointer_collection_rs.rs:5:12: warning [pointer-collection]
+pointer_collection_rs.rs:6:13: warning [pointer-collection]

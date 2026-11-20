@@ -1029,3 +1029,18 @@
         ])))) @finding.opaque-check @opaque.negated
   (#eq? @_check "XCTAssertFalse")
   (#not-kind-eq? @opaque.right "conjunction_expression" "disjunction_expression" "ternary_expression" "equality_expression" "comparison_expression"))
+
+; Data layout: an array of `Any` or `AnyObject`, which boxes each element behind an existential
+; container rather than storing it in one block.
+(array_type
+  (user_type
+    (type_identifier) @_any)
+  (#any-of? @_any "Any" "AnyObject")) @finding.pointer-collection
+
+(user_type
+  (type_identifier) @_collection
+  (type_arguments
+    (user_type
+      (type_identifier) @_any))
+  (#any-of? @_collection "Array" "ContiguousArray" "Set")
+  (#any-of? @_any "Any" "AnyObject")) @finding.pointer-collection

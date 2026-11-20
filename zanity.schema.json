@@ -231,6 +231,7 @@
         { "const": "dynamic-allocation", "description": "error, on with --production. Allocate what it needs up front in an init function and reuse it." },
         { "const": "allocation-in-loop", "description": "warning, on with --production. Allocate once before the loop, sized for every pass, and reuse it." },
         { "const": "append-without-reserve", "description": "warning, on by default. Size it from the loop's length before the loop, with a reserve or capacity call, or build it in one step from what the loop walks." },
+        { "const": "pointer-collection", "description": "warning, on with --production. Store the elements by value in one contiguous array, such as Vec<T>, []T or int[], and refer to them by index." },
         { "const": "invariant-in-loop", "description": "warning, on by default. Compute it once before the loop, into a variable named for what it is, and use that inside." },
         { "const": "assertion-side-effect", "description": "error, on by default. Do the work before the assertion and assert on its result." },
         { "const": "long-parameter-list", "description": "warning, on by default. Group related parameters into a struct or split the function." },

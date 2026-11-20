@@ -1,0 +1,5 @@
+rules: allocation-in-loop,append-without-reserve,invariant-in-loop,pointer-collection
+exit: 0
+PointerCollection_cs.cs:6:5: warning [pointer-collection]
+PointerCollection_cs.cs:7:5: warning [pointer-collection]
+PointerCollection_cs.cs:8:5: warning [pointer-collection]

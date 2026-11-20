@@ -49,6 +49,18 @@ intent-mismatch = 0.2
 [paths."src/golden_test.zig"]
 disable = ["filesystem-in-test", "process-in-test"]
 
+# Each worker owns its own buffers and runs on its own thread, so the pool holds them by pointer
+# rather than side by side, where they would share cache lines.
+[paths."src/batch.zig"]
+disable = ["pointer-collection"]
+
+[paths."src/workspace.zig"]
+disable = ["pointer-collection"]
+
+# The parameters a function tracks are pointers into the walk's own list, which stays where it is.
+[paths."src/extract.zig"]
+disable = ["pointer-collection"]
+
 [paths."src/infer_test.zig"]
 disable = ["filesystem-in-test", "process-in-test"]
 
