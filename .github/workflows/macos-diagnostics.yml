@@ -9,7 +9,48 @@ permissions:
   contents: read
 
 jobs:
+  python:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: xyzzylabs/setup-zig@7e5af686da64007a0797898801de180e5f4d3762 # v1.0.5
+      - name: Which python3
+        run: |
+          echo "PATH=$PATH"
+          which -a python3 || true
+          ls -la /usr/bin/python3 /usr/local/bin/python3 /opt/homebrew/bin/python3 2>&1 || true
+      - name: python3 started five ways, three times each
+        run: |
+          for i in 1 2 3; do
+            echo "## inherited environment"; time (python3 -c pass)
+            echo "## empty environment, python3 found on env's default path"; time (env -i python3 -c pass || true)
+            echo "## empty environment, /usr/bin/python3"; time (env -i /usr/bin/python3 -c pass || true)
+            echo "## PATH only"; time (env -i PATH="$PATH" python3 -c pass)
+            echo "## HOME only, /usr/bin/python3"; time (env -i HOME="$HOME" /usr/bin/python3 -c pass || true)
+          done
+      - name: python3 spawned by std.process.spawn with an empty environment, as the mock servers are
+        run: |
+          cat > "$RUNNER_TEMP/spawn.zig" <<'EOF'
+          const std = @import("std");
+
+          pub fn main(init: std.process.Init) !void {
+              const arena = init.arena.allocator();
+              var empty = std.process.Environ.Map.init(arena);
+              for (0..3) |_| {
+                  const result = try std.process.run(arena, init.io, .{ .argv = &.{ "python3", "-c", "import sys; print(sys.executable)" }, .environ_map = &empty });
+                  std.debug.print("{s}", .{result.stdout});
+              }
+          }
+          EOF
+          zig build-exe -O ReleaseFast -femit-bin="$RUNNER_TEMP/spawn" "$RUNNER_TEMP/spawn.zig"
+          time "$RUNNER_TEMP/spawn"
+
   diagnose:
+    if: github.event_name == 'workflow_dispatch'
     strategy:
       fail-fast: false
       matrix:
