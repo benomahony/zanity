@@ -206,6 +206,7 @@ pub const Batch = struct {
         const megabytes = self.file_bytes / (1 << 20);
         if (megabytes == 0) assert.panic("files may have {d} bytes, under a megabyte, so the oversized-file message would say 0 MB; raise memory.Limits.file_bytes", .{self.file_bytes});
         worker.startFile(path, adapter.name, self.facts.collect_units);
+        if (!std.mem.eql(u8, worker.facts.path, path)) assert.panic("starting {s} left the worker on {s}; startFile() sets the path it is given", .{ path, worker.facts.path });
         const message = try worker.text.format("This file is larger than {d} MB, so zanity parsed none of it and no other rule checked it.", .{megabytes});
         const found = [_]check.Diagnostic{.{ .line = 0, .column = 0, .rule = "oversized-file", .message = message }};
         self.mutex.lockUncancelable(self.io);
