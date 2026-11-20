@@ -55,6 +55,7 @@ const Corpus = struct {
             if (entry.kind != .file or language.forPath(entry.basename) == null) continue;
             const source = try dir.readFile(io, entry.path, self.bytes[self.used..]);
             if (self.used + source.len == self.bytes.len) return error.CorpusTooLarge;
+            if (source.len > (memory.Limits{}).file_bytes) continue;
             self.used += source.len;
             try self.paths.add(try self.names.copy(entry.path));
             try self.sources.add(source);
@@ -82,7 +83,10 @@ pub fn main(init: std.process.Init) !void {
     try init.environ_map.put("ZANITY_STORE", store);
 
     var timer: Timer = .{ .io = io, .started = Io.Timestamp.now(io, .awake) };
-    try corpus.read(io);
+    corpus.read(io) catch |e| {
+        if (e == error.LimitExceeded) std.debug.print("bench: the corpus has more {s} than bench can hold\n", .{memory.exceeded});
+        return e;
+    };
     const read = timer.lap();
     const parse = try fastest(io, parseAll, .{&corpus});
     const checked = try fastest(io, checkAll, .{ arena, &corpus, check.Work{ .scratch = &scratch, .text = &text, .facts = &facts } });
@@ -215,7 +219,10 @@ fn checkAll(arena: Allocator, corpus: *const Corpus, work: check.Work) !void {
         work.facts.reset();
         work.facts.path = path;
         work.facts.language = adapter.name;
-        _ = try analysis.checkFile(&slot.*.?, work, source);
+        _ = analysis.checkFile(&slot.*.?, work, source) catch |e| {
+            if (e == error.LimitExceeded) std.debug.print("bench: {s} has more {s} than zanity can hold for one file\n", .{ path, memory.exceeded });
+            return e;
+        };
     }
 }
 

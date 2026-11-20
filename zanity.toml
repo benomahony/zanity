@@ -275,4 +275,5 @@ disable = [
   # "complex-function",                # warning, on by default. Split the function so each part makes fewer decisions, or replace a chain of branches with a table.
   # "wide-scope",                      # warning, on by default. Declare it inside that block, where it is used.
   # "long-file",                       # warning, on by default. Split the file by responsibility into modules of a few hundred lines.
+  # "oversized-file",                  # error, on by default. Split it into modules of a few hundred lines, or add it to exclude in zanity.toml if it is generated, vendored or copied.
 ]
