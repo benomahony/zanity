@@ -1,4 +1,4 @@
-rules: allocation-in-loop,append-without-reserve,invariant-in-loop,pointer-collection
+rules: allocation-in-loop,append-without-reserve,invariant-in-loop,pointer-collection,field-chain-in-loop,per-element-call
 exit: 0
 PointerCollection.java:5:5: warning [pointer-collection]
 PointerCollection.java:6:5: warning [pointer-collection]

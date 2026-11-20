@@ -5,6 +5,7 @@ const assert = @import("assert.zig");
 const ts = @import("ts.zig");
 const check = @import("check.zig");
 const rules = @import("rules.zig");
+const data_layout = @import("data_layout.zig");
 /// The longest call chain walked before the tree must be wrong.
 const max_chain_links = 64;
 const File = check.File;
@@ -35,6 +36,7 @@ pub fn checkChain(self: *File, node: ts.Node) !void {
     // An object's own fields are its to use, so a chain from `self` starts at `self.field`.
     const own = contains(self.tables.self_receivers, start);
     if (own) links -|= 1;
+    try data_layout.checkFieldChain(self, node, links, start);
     if (links < rules.min_chain_links) return;
     if (!own and !ownName(self, start)) return;
     if (links > max_chain_links) assert.panic("{s}: counted {d} links in the chain at {f}, past the max_chain_links the loop allows; checkChain() must stop counting at its loop bound", .{ self.work.facts.path, links, node.where() });

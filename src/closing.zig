@@ -90,6 +90,7 @@ pub fn closeCall(self: *File, ctx: Context) !void {
         try test_quality.checkStorageRead(self, ctx, name);
     }
     try checkMemoryCall(self, ctx, name);
+    try data_layout.checkPerElement(self, ctx);
     try repeats.noteCallWrites(self, ctx, name);
     if (contains(self.tables.mutating_calls, name) and inAssertionCondition(self, ctx.node)) {
         _ = try self.report(ctx.node, "assertion-side-effect", try self.say("This assertion calls '{s}', which changes state, so the program behaves differently when assertions are disabled.", .{name}));

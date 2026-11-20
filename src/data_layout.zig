@@ -4,6 +4,7 @@ const std = @import("std");
 const assert = @import("assert.zig");
 const ts = @import("ts.zig");
 const check = @import("check.zig");
+const rules = @import("rules.zig");
 const repeats = @import("repeats.zig");
 const captures = @import("captures.zig");
 const scope = @import("scope.zig");
@@ -289,18 +290,34 @@ fn assignedIn(self: *File, loop: ts.Node, word: []const u8, expression: ts.Node)
 /// `const stop` or `local line`, or bound by a loop, as in `|entry|`, `for name in` or
 /// `for (String line : lines)`.
 fn binds(before: []const u8, after: []const u8) bool {
-    const left = std.mem.trimEnd(u8, before, " \t*");
-    const right = std.mem.trimStart(u8, after, " \t");
+    const left = std.mem.trimEnd(u8, before, " \t\r\n*");
+    const right = std.mem.trimStart(u8, after, " \t\r\n");
     if (left.len > before.len) assert.panic("trimming '{s}' before a name gave the longer '{s}'; binds() must only trim", .{ before, left });
     if (right.len > after.len) assert.panic("trimming '{s}' after a name gave the longer '{s}'; binds() must only trim", .{ after, right });
-    if (left.len > 0 and left[left.len - 1] == '|') return true;
-    if (std.mem.startsWith(u8, right, "|") or std.mem.startsWith(u8, right, "in ")) return true;
+    if (payload(left, right) or std.mem.startsWith(u8, right, "in ")) return true;
     if (std.mem.startsWith(u8, right, ":") and !std.mem.startsWith(u8, right, "::")) return true;
+    return declared(left);
+}
+
+/// Whether a name sits in a capture list between pipes, as `item` does in `|item|` or `|i, item|`.
+fn payload(left: []const u8, right: []const u8) bool {
+    if (left.len > 0 and std.ascii.isWhitespace(left[left.len - 1])) assert.panic("'{s}' ends with whitespace; trim it before calling payload()", .{left});
+    if (right.len > 0 and std.ascii.isWhitespace(right[0])) assert.panic("'{s}' starts with whitespace; trim it before calling payload()", .{right});
+    const opening = if (left.len > 0) left[left.len - 1] else ' ';
+    const closing = if (right.len > 0) right[0] else ' ';
+    const separators = (opening == '|' or opening == ',') and (closing == '|' or closing == ',');
+    return separators and (opening == '|' or closing == '|');
+}
+
+/// Whether `left`, the text before a name, ends with a declaration keyword, as `const stop` does.
+fn declared(left: []const u8) bool {
+    if (declarations.len == 0) assert.panic("no declaration keywords to compare '{s}' with; list them in declarations", .{left});
+    if (left.len > 0 and std.ascii.isWhitespace(left[left.len - 1])) assert.panic("'{s}' ends with whitespace; trim it before calling declared()", .{left});
     for (declarations) |keyword| {
         if (left.len < keyword.len or !std.mem.endsWith(u8, left, keyword)) continue;
-        if (left.len == keyword.len or !(std.ascii.isAlphanumeric(left[left.len - keyword.len - 1]) or left[left.len - keyword.len - 1] == '_')) return true;
+        const start = left.len - keyword.len;
+        if (start == 0 or !(std.ascii.isAlphanumeric(left[start - 1]) or left[start - 1] == '_')) return true;
     }
-    if (declarations.len == 0) assert.panic("no declaration keywords to compare '{s}' with; list them in declarations", .{left});
     return false;
 }
 
@@ -331,3 +348,59 @@ fn assigns(rest: []const u8) bool {
 }
 
 const assignments = [_][]const u8{ "+=", "-=", "*=", "/=", "%=", "|=", "&=", "^=", "<<=", ">>=", ":=", "++", "--" };
+
+/// A loop over a collection whose whole body is one call on its element, as in
+/// `for o in orders: o.process()`, so each element is handled on its own, with the call's setup
+/// and dispatch paid once per element rather than once for them all.
+pub fn checkPerElement(self: *File, ctx: Context) !void {
+    if (ctx.family != .call) assert.panic("{s}: checking {f} as a per-element call, but it is a {t}; call checkPerElement() only from closeCall()", .{ self.work.facts.path, ctx.node.where(), ctx.family });
+    if (!self.checker.enabled.enabled("per-element-call") or self.inTest() or self.inTestFile()) return;
+    const receiver = ctx.receiver orelse return;
+    const element = receiver.text(self.source);
+    if (element.len == 0) assert.panic("{s}: the call {f} has an empty receiver; capture the object as @call.receiver", .{ self.work.facts.path, ctx.node.where() });
+    if (std.mem.indexOfNone(u8, element, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_") != null) return;
+    const function = self.enclosingFunction() orelse return;
+    const loop = passLoop(self, ctx.node, function) orelse return;
+    if (loop.iterable == null or !self.index.marks(ctx.node, self.checker.compiled.id("call.discarded"))) return;
+    if (!onlyStatement(self, loop.node, ctx.node) or !boundByLoop(self, loop, element)) return;
+    _ = try self.report(ctx.node, "per-element-call", try self.say("'{s}' is all the loop on line {d} does, one call per element of '{s}', so the elements are handled one by one and the call's setup is paid for each.", .{ check.header(ctx.node.text(self.source)), ts.ts_node_start_point(loop.node).row + 1, check.header(loop.iterable.?.text(self.source)) }));
+}
+
+/// A chain of two member reads from a loop's element, as `row.customer.name` is, on every pass,
+/// so each pass follows a pointer out of the element to another object. Longer chains are
+/// message-chain's.
+pub fn checkFieldChain(self: *File, node: ts.Node, links: u32, root: []const u8) !void {
+    if (root.len == 0) assert.panic("{s}: the chain {f} starts from no name; checkChain() skips those", .{ self.work.facts.path, node.where() });
+    if (!std.mem.startsWith(u8, node.text(self.source), root)) assert.panic("{s}: the chain {f} doesn't start with its root '{s}'; checkChain() passes the text of the chain's first object", .{ self.work.facts.path, node.where(), root });
+    if (links + 1 != rules.min_chain_links or !self.checker.enabled.enabled("field-chain-in-loop")) return;
+    if (check.contains(self.tables.self_receivers, root)) return;
+    const function = self.enclosingFunction() orelse return;
+    const loop = passLoop(self, node, function) orelse return;
+    if (!boundByLoop(self, loop, root)) return;
+    _ = try self.report(node, "field-chain-in-loop", try self.say("'{s}' reaches from each element of the loop on line {d} into another object, so every pass follows a pointer to memory that sits somewhere else.", .{ check.header(node.text(self.source)), ts.ts_node_start_point(loop.node).row + 1 }));
+}
+
+/// Whether `name` is what the loop binds on each pass: written in its header outside its
+/// iterable, as `o` is in `for o in orders`, or bound on the header's line, as `|item|` is.
+fn boundByLoop(self: *File, loop: *const Context, name: []const u8) bool {
+    const start = ts.ts_node_start_byte(loop.node);
+    const header_end = bodyStart(self, loop);
+    if (name.len == 0) assert.panic("{s}: asked whether the loop {f} binds an empty name", .{ self.work.facts.path, loop.node.where() });
+    if (header_end < start) assert.panic("{s}: the header of {f} ends at {d}, before the loop starts at {d}", .{ self.work.facts.path, loop.node.where(), header_end, start });
+    const line_end = std.mem.indexOfScalarPos(u8, self.source, header_end, '\n') orelse self.source.len;
+    const text = self.source[start..@min(line_end, ts.ts_node_end_byte(loop.node))];
+    const iterable = loop.iterable orelse return false;
+    var from: usize = 0;
+    while (std.mem.indexOfPos(u8, text, from, name)) |at| : (from = at + 1) {
+        const before = if (at > 0) text[at - 1] else ' ';
+        const after = at + name.len;
+        if (std.ascii.isAlphanumeric(before) or before == '_' or before == '.') continue;
+        if (after < text.len and (std.ascii.isAlphanumeric(text[after]) or text[after] == '_')) continue;
+        const where = start + at;
+        const in_iterable = where >= ts.ts_node_start_byte(iterable) and where < ts.ts_node_end_byte(iterable);
+        if (in_iterable and assigns(std.mem.trimStart(u8, text[after..], " \t"))) return true;
+        if (in_iterable) continue;
+        if (where < header_end or binds(text[0..at], text[after..])) return true;
+    }
+    return false;
+}

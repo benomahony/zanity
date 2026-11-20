@@ -1,3 +1,3 @@
-rules: allocation-in-loop,append-without-reserve,invariant-in-loop,pointer-collection
+rules: allocation-in-loop,append-without-reserve,invariant-in-loop,pointer-collection,field-chain-in-loop,per-element-call
 exit: 0
 AllocationInLoop_cs.cs:11:24: warning [allocation-in-loop]
