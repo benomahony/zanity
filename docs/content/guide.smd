@@ -484,9 +484,11 @@ customer = ["client", "user"]
 
 # Parts of the code with words of their own: [domains.<name>] and [contexts.<name>] take
 # include (.gitignore patterns), forbidden and a synonyms table. A context applies after a
-# domain, and the same name may be defined once in each context.
+# domain, and the same name may be defined once in each context. A context's exports are the
+# files other contexts may import from it; context-leak reports imports of the rest.
 [contexts.billing]
 include = ["src/billing/**"]
+exports = ["src/billing/__init__.py"]
 forbidden = ["discount"]
 
 [contexts.billing.synonyms]
