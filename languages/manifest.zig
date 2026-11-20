@@ -214,6 +214,9 @@ pub const Tables = struct {
     pure_calls: []const []const u8 = &.{},
     /// Lowercase words the language reserves that read no variable, such as `and`, `nil` or `await`.
     reserved_words: []const []const u8 = &.{},
+    /// How many bytes a field of each type takes and the boundary it is aligned to, for the
+    /// structs whose fields the language lays out in the order they are written.
+    field_sizes: []const FieldSize = &.{},
     test_file_prefixes: []const []const u8 = &.{},
     test_file_suffixes: []const []const u8 = &.{},
     /// How to write an assertion that explains its failure. `$condition` is the
@@ -265,6 +268,10 @@ pub const Tables = struct {
 
 /// A comparison operator or method, such as `==` or `contains`, and the specific checks that show
 /// both sides when they fail.
+/// The bytes a field of `type` takes and the boundary it starts on; a `prefix` entry covers every
+/// type written starting with it, as `*` does a Go pointer.
+pub const FieldSize = struct { type: []const u8, size: u8, alignment: u8, prefix: bool = false };
+
 pub const SpecificCheck = struct { when: []const u8, check: []const u8, negated: []const u8 = "" };
 
 pub const entries: []const Entry = @import("manifest.zon");

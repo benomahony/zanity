@@ -8,7 +8,7 @@ const ts = @import("ts.zig");
 const captures = @import("captures.zig");
 
 /// Capture families read whole, besides each `Family`: a capture in one of these, with any part, is read.
-pub const read_families = [_][]const u8{ "finding", "unless", "name", "local.definition", "type", "import" };
+pub const read_families = [_][]const u8{ "finding", "unless", "name", "local.definition", "type", "import", "layout" };
 
 /// Captures outside those families read by their full name, through `Compiled.id`;
 /// architecture_test.zig checks every name the code looks up is read.

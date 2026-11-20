@@ -1,0 +1,3 @@
+rules: allocation-in-loop,append-without-reserve,invariant-in-loop,pointer-collection,field-chain-in-loop,per-element-call,padded-struct
+exit: 0
+PaddedStruct_cs.cs:1:1: warning [padded-struct]

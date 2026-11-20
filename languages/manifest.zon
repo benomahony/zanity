@@ -1,7 +1,7 @@
 .{
     .{
         .name = "python",
-        .not_applicable = .{ "pointer-collection", "branching-double", "dynamic-allocation", "precedence-trap", "switch-fallthrough", "wide-scope", "assignment-in-condition", "null-catch", "empty-synchronized", "public-finalizer", "direct-thread", "unsafe-jni", "public-static-field", "public-static-array", "missing-super-finalizer", "missing-super-clone", "public-clone-method", "thread-run", "prototype-mutation", "class-name-comparison", "equals-without-hashcode", "hashcode-without-equals", "struts-public-field", "cwe-487", "cwe-609", "cwe-1235", "cwe-567", "goto-statement", "discarded-span-context" },
+        .not_applicable = .{ "padded-struct", "pointer-collection", "branching-double", "dynamic-allocation", "precedence-trap", "switch-fallthrough", "wide-scope", "assignment-in-condition", "null-catch", "empty-synchronized", "public-finalizer", "direct-thread", "unsafe-jni", "public-static-field", "public-static-array", "missing-super-finalizer", "missing-super-clone", "public-clone-method", "thread-run", "prototype-mutation", "class-name-comparison", "equals-without-hashcode", "hashcode-without-equals", "struts-public-field", "cwe-487", "cwe-609", "cwe-1235", "cwe-567", "goto-statement", "discarded-span-context" },
         .extensions = .{ "py", "pyi" },
         .ecosystem = "python",
         .scanner = true,
@@ -25,7 +25,7 @@
     },
     .{
         .name = "typescript",
-        .not_applicable = .{ "pointer-collection", "dynamic-allocation", "restated-type", "redundant-null-check", "conversion-assertion", "guaranteed-length", "float-equality", "generic-catch", "identity-comparison", "generic-throw", "weak-hash", "constant-random-seed", "null-catch", "empty-synchronized", "public-finalizer", "direct-thread", "unsafe-jni", "public-static-field", "public-static-array", "missing-super-finalizer", "missing-super-clone", "public-clone-method", "thread-run", "class-name-comparison", "equals-without-hashcode", "hashcode-without-equals", "struts-public-field", "cwe-487", "cwe-609", "cwe-1235", "cwe-567", "goto-statement", "discarded-span-context" },
+        .not_applicable = .{ "padded-struct", "pointer-collection", "dynamic-allocation", "restated-type", "redundant-null-check", "conversion-assertion", "guaranteed-length", "float-equality", "generic-catch", "identity-comparison", "generic-throw", "weak-hash", "constant-random-seed", "null-catch", "empty-synchronized", "public-finalizer", "direct-thread", "unsafe-jni", "public-static-field", "public-static-array", "missing-super-finalizer", "missing-super-clone", "public-clone-method", "thread-run", "class-name-comparison", "equals-without-hashcode", "hashcode-without-equals", "struts-public-field", "cwe-487", "cwe-609", "cwe-1235", "cwe-567", "goto-statement", "discarded-span-context" },
         .extensions = .{ "ts", "mts", "cts" },
         .ecosystem = "node",
         .scanner = true,
@@ -33,7 +33,7 @@
     },
     .{
         .name = "javascript",
-        .not_applicable = .{ "pointer-collection", "single-impl-abstraction", "dynamic-allocation", "restated-type", "redundant-null-check", "conversion-assertion", "guaranteed-length", "float-equality", "generic-catch", "identity-comparison", "generic-throw", "weak-hash", "constant-random-seed", "null-catch", "empty-synchronized", "public-finalizer", "direct-thread", "unsafe-jni", "public-static-field", "public-static-array", "missing-super-finalizer", "missing-super-clone", "public-clone-method", "thread-run", "class-name-comparison", "equals-without-hashcode", "hashcode-without-equals", "struts-public-field", "cwe-487", "cwe-609", "cwe-1235", "cwe-567", "goto-statement", "discarded-span-context" },
+        .not_applicable = .{ "padded-struct", "pointer-collection", "single-impl-abstraction", "dynamic-allocation", "restated-type", "redundant-null-check", "conversion-assertion", "guaranteed-length", "float-equality", "generic-catch", "identity-comparison", "generic-throw", "weak-hash", "constant-random-seed", "null-catch", "empty-synchronized", "public-finalizer", "direct-thread", "unsafe-jni", "public-static-field", "public-static-array", "missing-super-finalizer", "missing-super-clone", "public-clone-method", "thread-run", "class-name-comparison", "equals-without-hashcode", "hashcode-without-equals", "struts-public-field", "cwe-487", "cwe-609", "cwe-1235", "cwe-567", "goto-statement", "discarded-span-context" },
         .extensions = .{ "js", "mjs", "cjs", "jsx" },
         .ecosystem = "node",
         .scanner = true,
@@ -49,7 +49,7 @@
     },
     .{
         .name = "java",
-        .not_applicable = .{ "branching-double", "dynamic-allocation", "restated-type", "redundant-null-check", "conversion-assertion", "guaranteed-length", "discarded-comparison", "unreachable-code", "debug-leftover", "no-effect-statement", "tls-verification-disabled", "weak-hash", "constant-random-seed", "constant-cbc-iv", "constant-aead-nonce", "unsafe-deserialization", "shell-command", "unawaited-call", "prototype-mutation", "goto-statement", "unended-span", "discarded-span-context" },
+        .not_applicable = .{ "padded-struct", "branching-double", "dynamic-allocation", "restated-type", "redundant-null-check", "conversion-assertion", "guaranteed-length", "discarded-comparison", "unreachable-code", "debug-leftover", "no-effect-statement", "tls-verification-disabled", "weak-hash", "constant-random-seed", "constant-cbc-iv", "constant-aead-nonce", "unsafe-deserialization", "shell-command", "unawaited-call", "prototype-mutation", "goto-statement", "unended-span", "discarded-span-context" },
         .extensions = .{"java"},
         .ecosystem = "jvm",
         .scanner = false,
@@ -74,7 +74,7 @@
     },
     .{
         .name = "lua",
-        .not_applicable = .{ "pointer-collection", "branching-double", "dynamic-allocation", "assertion-side-effect", "restated-type", "redundant-null-check", "single-impl-abstraction", "discarded-comparison", "no-effect-statement", "generic-catch", "generic-throw", "return-in-finally", "identity-comparison", "switch-fallthrough", "missing-default", "assignment-in-condition", "unawaited-call", "unsafe-deserialization", "insecure-temp-file", "xml-entity-expansion", "constant-cbc-iv", "constant-aead-nonce", "rsa-without-oaep", "parameter-xpath-expression", "parameter-ldap-filter", "parameter-expression-language", "parameter-raw-html", "parameter-window-opener", "null-catch", "empty-synchronized", "public-finalizer", "direct-thread", "unsafe-jni", "public-static-field", "public-static-array", "missing-super-finalizer", "missing-super-clone", "public-clone-method", "thread-run", "prototype-mutation", "class-name-comparison", "equals-without-hashcode", "hashcode-without-equals", "struts-public-field", "cwe-487", "cwe-609", "cwe-1235", "cwe-567" },
+        .not_applicable = .{ "padded-struct", "pointer-collection", "branching-double", "dynamic-allocation", "assertion-side-effect", "restated-type", "redundant-null-check", "single-impl-abstraction", "discarded-comparison", "no-effect-statement", "generic-catch", "generic-throw", "return-in-finally", "identity-comparison", "switch-fallthrough", "missing-default", "assignment-in-condition", "unawaited-call", "unsafe-deserialization", "insecure-temp-file", "xml-entity-expansion", "constant-cbc-iv", "constant-aead-nonce", "rsa-without-oaep", "parameter-xpath-expression", "parameter-ldap-filter", "parameter-expression-language", "parameter-raw-html", "parameter-window-opener", "null-catch", "empty-synchronized", "public-finalizer", "direct-thread", "unsafe-jni", "public-static-field", "public-static-array", "missing-super-finalizer", "missing-super-clone", "public-clone-method", "thread-run", "prototype-mutation", "class-name-comparison", "equals-without-hashcode", "hashcode-without-equals", "struts-public-field", "cwe-487", "cwe-609", "cwe-1235", "cwe-567" },
         .extensions = .{"lua"},
         .ecosystem = "lua",
         .scanner = true,

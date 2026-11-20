@@ -215,7 +215,7 @@ fn readName(self: *File, text: []const u8, from: usize, to: usize) ?[]const u8 {
     if (to <= from or to > text.len) assert.panic("{s}: the identifier at {d}..{d} is outside the {d}-byte expression '{s}'", .{ self.work.facts.path, from, to, text.len, text });
     if (!(std.ascii.isAlphabetic(text[from]) or text[from] == '_')) assert.panic("{s}: the identifier at {d} of '{s}' starts with '{c}'; Reads must start names at a letter or _", .{ self.work.facts.path, from, text, text[from] });
     const word = text[from..to];
-    if (member(text[0..from])) return null;
+    if (isMember(text[0..from])) return null;
     const after = std.mem.trimStart(u8, text[to..], " ");
     if (after.len > 0 and after[0] == '(') return null;
     const receiver = check.contains(self.tables.self_receivers, word);
@@ -229,7 +229,7 @@ fn readName(self: *File, text: []const u8, from: usize, to: usize) ?[]const u8 {
 
 /// Whether a name after `before` is a member, as `len` is in `items.len` or `Path::new`, rather
 /// than the end of a range, as `len` is in `0..len`.
-fn member(before: []const u8) bool {
+fn isMember(before: []const u8) bool {
     if (before.len == 0) return false;
     if (before.len > 1 and before[before.len - 1] == '.' and before[before.len - 2] == '.') return false;
     if (std.mem.indexOfScalar(u8, before, '\n') != null) assert.panic("'{s}' spans lines; candidate() keeps only expressions on one line", .{before});

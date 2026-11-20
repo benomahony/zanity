@@ -1,4 +1,4 @@
-rules: allocation-in-loop,append-without-reserve,invariant-in-loop,pointer-collection,field-chain-in-loop,per-element-call
+rules: allocation-in-loop,append-without-reserve,invariant-in-loop,pointer-collection,field-chain-in-loop,per-element-call,padded-struct
 exit: 0
 allocation_in_loop_js.js:4:5: warning [append-without-reserve]
 allocation_in_loop_js.js:4:14: warning [allocation-in-loop]

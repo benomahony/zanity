@@ -11,6 +11,7 @@ const types = @import("types.zig");
 const test_quality = @import("test_quality.zig");
 const isolation = @import("isolation.zig");
 const notes = @import("notes.zig");
+const padding = @import("padding.zig");
 const check = @import("check.zig");
 const Family = check.Family;
 pub const Summary = check.Summary;
@@ -79,6 +80,8 @@ pub fn enterSignal(self: *File, node: ts.Node, id: captures.Id, found: []const c
         try self.s.async_names.add(node.text(self.source));
     } else if (v.statement_call == id) {
         try self.s.statement_calls.add(node);
+    } else if (v.layout_struct == id) {
+        try padding.checkPadding(self, node);
     } else if (v.error_message == id) {
         if (self.innermost(.assertion) == null) try messages.checkMessage(self, node, null);
     } else return false;

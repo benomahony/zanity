@@ -33,17 +33,17 @@ const analyzer_revision = revisionOfAnalyzer();
 /// analysis.zig and this file. A test fails when an import reaches a file missing here, since
 /// a change to it would otherwise replay findings cached by the build before.
 pub const analyzer_sources = [_][]const u8{
-    "analysis.zig",            "assert.zig",         "cache.zig",        "capture_ids.zig", "captures.zig",
-    "catalogue_questions.zig", "chains.zig",         "check.zig",        "checker.zig",     "closing.zig",
-    "code_lines.zig",          "constructs.zig",     "crypto.zig",       "data_layout.zig", "documentation.zig",
-    "extract.zig",             "facts.zig",          "file_scratch.zig", "hazards.zig",     "import_notes.zig",
-    "isolation.zig",           "language.zig",       "loops.zig",        "memory.zig",      "messages.zig",
-    "name_counts.zig",         "name_words.zig",     "naming.zig",       "notes.zig",       "parameter_sinks.zig",
-    "parameters.zig",          "parser_hazards.zig", "passthrough.zig",  "repeats.zig",     "rewrite.zig",
-    "rule.zig",                "rules.zig",          "scope.zig",        "secrets.zig",     "shapes.zig",
-    "spans.zig",               "sqlite.zig",         "store.zig",        "store_sql.zig",   "strings.zig",
-    "suppress.zig",            "test_quality.zig",   "tracing.zig",      "ts.zig",          "types.zig",
-    "unread.zig",              "walk.zig",           "weak.zig",         "words.zig",
+    "analysis.zig",            "assert.zig",     "cache.zig",          "capture_ids.zig", "captures.zig",
+    "catalogue_questions.zig", "chains.zig",     "check.zig",          "checker.zig",     "closing.zig",
+    "code_lines.zig",          "constructs.zig", "crypto.zig",         "data_layout.zig", "documentation.zig",
+    "extract.zig",             "facts.zig",      "file_scratch.zig",   "hazards.zig",     "import_notes.zig",
+    "isolation.zig",           "language.zig",   "loops.zig",          "memory.zig",      "messages.zig",
+    "name_counts.zig",         "name_words.zig", "naming.zig",         "notes.zig",       "padding.zig",
+    "parameter_sinks.zig",     "parameters.zig", "parser_hazards.zig", "passthrough.zig", "repeats.zig",
+    "rewrite.zig",             "rule.zig",       "rules.zig",          "scope.zig",       "secrets.zig",
+    "shapes.zig",              "spans.zig",      "sqlite.zig",         "store.zig",       "store_sql.zig",
+    "strings.zig",             "suppress.zig",   "test_quality.zig",   "tracing.zig",     "ts.zig",
+    "types.zig",               "unread.zig",     "walk.zig",           "weak.zig",        "words.zig",
 };
 
 fn revisionOfAnalyzer() [revision_bytes]u8 {

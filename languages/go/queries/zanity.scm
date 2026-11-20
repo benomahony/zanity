@@ -480,3 +480,14 @@
 
 (map_type
   value: (pointer_type)) @finding.pointer-collection
+
+; Data layout: a struct whose fields sit in the order they are written, each stored member, the
+; type that sizes it, members that take no room in it, and ones whose size can't be read.
+(struct_type) @layout.struct
+
+(field_declaration
+  type: (_) @layout.field) @layout.member
+
+(field_declaration
+  name: (field_identifier)
+  name: (field_identifier)) @layout.unknown

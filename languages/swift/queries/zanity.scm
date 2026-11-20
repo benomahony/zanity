@@ -1044,3 +1044,22 @@
       (type_identifier) @_any))
   (#any-of? @_collection "Array" "ContiguousArray" "Set")
   (#any-of? @_any "Any" "AnyObject")) @finding.pointer-collection
+
+; Data layout: a struct whose fields sit in the order they are written, each stored member, the
+; type that sizes it, members that take no room in it, and ones whose size can't be read.
+(class_declaration
+  declaration_kind: "struct") @layout.struct
+
+(property_declaration
+  (type_annotation
+    (_) @layout.field)) @layout.member
+
+(property_declaration) @layout.member
+
+(property_declaration
+  (modifiers
+    (property_modifier) @_shared)
+  (#any-of? @_shared "static" "class")) @layout.skip
+
+(property_declaration
+  computed_value: (computed_property)) @layout.skip

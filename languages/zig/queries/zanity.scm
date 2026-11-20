@@ -642,3 +642,11 @@
     .
     (pointer_type))
   (#any-of? @_list "ArrayList" "ArrayListUnmanaged" "SegmentedList")) @finding.pointer-collection
+
+; Data layout: a struct whose fields sit in the order they are written, each stored member, the
+; type that sizes it, members that take no room in it, and ones whose size can't be read.
+(struct_declaration
+  "extern") @layout.struct
+
+(container_field
+  type: (_) @layout.field) @layout.member

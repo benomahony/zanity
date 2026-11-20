@@ -1248,3 +1248,23 @@
 (variable_declaration
   type: (identifier) @finding.pointer-collection
   (#any-of? @finding.pointer-collection "ArrayList" "Hashtable"))
+
+; Data layout: a struct whose fields sit in the order they are written, each stored member, the
+; type that sizes it, members that take no room in it, and ones whose size can't be read.
+(struct_declaration) @layout.struct
+
+(field_declaration
+  (variable_declaration
+    type: (_) @layout.field)) @layout.member
+
+(field_declaration
+  (modifier) @_shared
+  (#any-of? @_shared "static" "const")) @layout.skip
+
+(variable_declaration
+  (variable_declarator)
+  (variable_declarator)) @layout.unknown
+
+(struct_declaration
+  (declaration_list
+    (property_declaration) @layout.unknown))
