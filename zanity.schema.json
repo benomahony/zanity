@@ -229,6 +229,7 @@
         { "const": "assertion-message", "description": "warning, on with --production. Add a message saying what must be true and why, so whoever fixes a failure can tell whether the code or the expectation is wrong." },
         { "const": "NASA05-A", "description": "The NASA code for assertion-message: warning, on with --production. Add a message saying what must be true and why, so whoever fixes a failure can tell whether the code or the expectation is wrong." },
         { "const": "dynamic-allocation", "description": "error, on with --production. Allocate what it needs up front in an init function and reuse it." },
+        { "const": "allocation-in-loop", "description": "warning, on by default. Allocate once before the loop, sized for every pass, and reuse it." },
         { "const": "assertion-side-effect", "description": "error, on by default. Do the work before the assertion and assert on its result." },
         { "const": "long-parameter-list", "description": "warning, on by default. Group related parameters into a struct or split the function." },
         { "const": "dead-parameter", "description": "warning, on by default. Remove it and stop passing it, or name it with a leading underscore where the signature is fixed by an interface or a callback." },

@@ -566,6 +566,12 @@ Rules marked *production* hold code to what safety-critical software needs and m
 | `long-file` | warning | a file too long to hold in mind |
 | `oversized-file` | error | a file too large for zanity to check, such as one over 4 MB, so no other rule checks it |
 
+**Data layout**
+
+| Rule | Severity | Flags |
+|---|---|---|
+| `allocation-in-loop` | warning | a call that allocates on every pass of a loop, in Zig and Rust; not one in the loop's iterable, which runs once, or in an init function |
+
 **Tests**
 
 | Rule | Severity | Flags |

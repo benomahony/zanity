@@ -1,0 +1,4 @@
+rules: allocation-in-loop
+exit: 0
+allocation_in_loop_zig.zig:12:13: warning [allocation-in-loop]
+allocation_in_loop_zig.zig:12:33: warning [allocation-in-loop]

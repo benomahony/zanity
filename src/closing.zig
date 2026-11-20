@@ -121,6 +121,10 @@ pub fn checkAllocation(self: *File, ctx: Context, callee: []const u8) !void {
     for (self.tables.initializer_prefixes) |prefix| if (std.mem.startsWith(u8, owner, prefix)) return;
     const shown = if (ctx.callee) |c| c.text(self.source) else callee;
     _ = try self.report(ctx.node, "dynamic-allocation", try self.say("'{s}' allocates memory after initialization in '{s}', so memory use depends on input and can fail at any point.", .{ shown, owner }));
+    const loop = self.innermost(.loop) orelse return;
+    if (ts.ts_node_start_byte(loop.node) < ts.ts_node_start_byte(function.node)) return;
+    if (loop.iterable) |iterable| if (ts.ts_node_start_byte(ctx.node) >= ts.ts_node_start_byte(iterable) and ts.ts_node_end_byte(ctx.node) <= ts.ts_node_end_byte(iterable)) return;
+    _ = try self.report(ctx.node, "allocation-in-loop", try self.say("'{s}' allocates on every pass of the loop on line {d} of '{s}', so its cost grows with the data and the allocations scatter it across memory.", .{ shown, ts.ts_node_start_point(loop.node).row + 1, owner }));
 }
 
 pub fn closeLoop(self: *File, ctx: Context) !void {
