@@ -141,9 +141,7 @@ def checks_of_tests() -> list[str]:
     assert found and asked, "src/rules.zig marks no test rules; mark them .tests = true"
     untiered = [r["name"] for r in rules if r["tier"] not in when]
     assert not untiered, f"{untiered[:3]} in src/rules.zig have a tier tier_descriptions doesn't describe; describe it there"
-    rows = []
-    for rule in found:
-        rows.append(f"| `{rule['name']}` | {rule['severity']}, {when[rule['tier']]} | {rule['advice']} |")
+    rows = [f"| `{rule['name']}` | {rule['severity']}, {when[rule['tier']]} | {rule['advice']} |" for rule in found]
     questions = []
     for rule in asked:
         settled = ", ".join(f"`{name.strip()}`" for name in rule.get("settled_by", "").split(",") if name.strip())

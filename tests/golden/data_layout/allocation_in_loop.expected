@@ -1,0 +1,3 @@
+rules: allocation-in-loop,append-without-reserve
+exit: 0
+allocation_in_loop.py:4:20: warning [allocation-in-loop]

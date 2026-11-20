@@ -570,7 +570,8 @@ Rules marked *production* hold code to what safety-critical software needs and m
 
 | Rule | Severity | Flags |
 |---|---|---|
-| `allocation-in-loop` | warning | a call that allocates on every pass of a loop, in Zig and Rust; not one in the loop's iterable, which runs once, or in an init function |
+| `allocation-in-loop` | warning | a call that allocates or copies on every pass of a loop, such as `list(row)`, `slice()`, `clone()`, `ToList()`, `fmt.Sprintf` or `allocPrint`; not one in the loop's iterable, which runs once, an init function, or a call that only adds an element, which `append-without-reserve` checks |
+| `append-without-reserve` | warning | a loop over a collection that only adds each element to another collection, such as `out.append(f(x))`, `push`, `Add` or Go's `out = append(out, x)`, when the function didn't size that collection first with a reserve or capacity call (`with_capacity`, `make(..., n)`, `new ArrayList<>(n)`, `reserveCapacity`); in Python, JavaScript and Lua, which can't reserve, it suggests a comprehension or `map` |
 
 **Tests**
 

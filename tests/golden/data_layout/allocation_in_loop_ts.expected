@@ -1,0 +1,4 @@
+rules: allocation-in-loop,append-without-reserve
+exit: 0
+allocation_in_loop_ts.ts:4:5: warning [append-without-reserve]
+allocation_in_loop_ts.ts:4:14: warning [allocation-in-loop]

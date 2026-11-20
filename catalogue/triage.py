@@ -90,8 +90,7 @@ def write_triage() -> None:
         "| Bucket | Families | Meaning |",
         "|---|---:|---|",
     ]
-    for name, meaning in BUCKETS.items():
-        lines.append(f"| {name} | {counts[name]} | {meaning} |")
+    lines += [f"| {name} | {counts[name]} | {meaning} |" for name, meaning in BUCKETS.items()]
     lines += ["", f"Total: {sum(counts.values())} families.", ""]
     for name in ("static", "inference"):
         lines += [f"## {name}: next candidates", "", "| ID | Kind | Title |", "|---|---|---|"]

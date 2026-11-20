@@ -19,6 +19,7 @@ const shapes = @import("shapes.zig");
 const notes = @import("notes.zig");
 const extract = @import("extract.zig");
 const loops = @import("loops.zig");
+const data_layout = @import("data_layout.zig");
 const naming = @import("naming.zig");
 const passthrough = @import("passthrough.zig");
 const contains = strings.contains;
@@ -88,8 +89,7 @@ pub fn closeCall(self: *File, ctx: Context) !void {
         try test_quality.checkBranchingDouble(self, ctx, name);
         try test_quality.checkStorageRead(self, ctx, name);
     }
-    const allocating = self.calleeIn(ctx, name, self.tables.allocating_calls) orelse (if (contains(self.tables.allocating_calls, name)) name else null);
-    if (allocating) |matched| try checkAllocation(self, ctx, matched);
+    try checkMemoryCall(self, ctx, name);
     try repeats.noteCallWrites(self, ctx, name);
     if (contains(self.tables.mutating_calls, name) and inAssertionCondition(self, ctx.node)) {
         _ = try self.report(ctx.node, "assertion-side-effect", try self.say("This assertion calls '{s}', which changes state, so the program behaves differently when assertions are disabled.", .{name}));
@@ -112,6 +112,16 @@ pub fn inAssertionCondition(self: *File, node: ts.Node) bool {
     return ts.ts_node_start_byte(node) >= ts.ts_node_start_byte(condition) and ts.ts_node_end_byte(node) <= ts.ts_node_end_byte(condition);
 }
 
+/// A call from the language's allocating or growth calls, for the checks on memory use.
+fn checkMemoryCall(self: *File, ctx: Context, name: []const u8) !void {
+    if (ctx.family != .call) assert.panic("{s}: checking {f} as an allocating call, but it is a {t}; call checkMemoryCall() only from closeCall()", .{ self.work.facts.path, ctx.node.where(), ctx.family });
+    if (name.len == 0) assert.panic("{s}: the call {f} has an empty name; capture the callee as @call.name in the language's zanity.scm", .{ self.work.facts.path, ctx.node.where() });
+    const allocating = self.calleeIn(ctx, name, self.tables.allocating_calls) orelse (if (contains(self.tables.allocating_calls, name)) name else null);
+    if (allocating) |matched| try checkAllocation(self, ctx, matched);
+    const growing = self.calleeIn(ctx, name, self.tables.growth_calls) orelse (if (contains(self.tables.growth_calls, name)) name else null);
+    if (growing) |matched| try data_layout.checkGrowth(self, ctx, matched);
+}
+
 pub fn checkAllocation(self: *File, ctx: Context, callee: []const u8) !void {
     if (ctx.family != .call) assert.panic("{s}: checking the allocation in {f}, which is a {t}, not a call; call checkAllocation() only from closeCall()", .{ self.work.facts.path, ctx.node.where(), ctx.family });
     if (callee.len == 0) assert.panic("{s}: the allocating call {f} has an empty callee; capture the callee as @call.name in the language's zanity.scm", .{ self.work.facts.path, ctx.node.where() });
@@ -121,10 +131,7 @@ pub fn checkAllocation(self: *File, ctx: Context, callee: []const u8) !void {
     for (self.tables.initializer_prefixes) |prefix| if (std.mem.startsWith(u8, owner, prefix)) return;
     const shown = if (ctx.callee) |c| c.text(self.source) else callee;
     _ = try self.report(ctx.node, "dynamic-allocation", try self.say("'{s}' allocates memory after initialization in '{s}', so memory use depends on input and can fail at any point.", .{ shown, owner }));
-    const loop = self.innermost(.loop) orelse return;
-    if (ts.ts_node_start_byte(loop.node) < ts.ts_node_start_byte(function.node)) return;
-    if (loop.iterable) |iterable| if (ts.ts_node_start_byte(ctx.node) >= ts.ts_node_start_byte(iterable) and ts.ts_node_end_byte(ctx.node) <= ts.ts_node_end_byte(iterable)) return;
-    _ = try self.report(ctx.node, "allocation-in-loop", try self.say("'{s}' allocates on every pass of the loop on line {d} of '{s}', so its cost grows with the data and the allocations scatter it across memory.", .{ shown, ts.ts_node_start_point(loop.node).row + 1, owner }));
+    if (!contains(self.tables.growth_calls, callee)) try data_layout.checkAllocationInLoop(self, ctx, function, shown);
 }
 
 pub fn closeLoop(self: *File, ctx: Context) !void {

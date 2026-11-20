@@ -1,6 +1,8 @@
 .{
     .{
         .ecosystem = "python",
+        .growth_calls = .{ "append", "add" },
+        .allocating_calls = .{ "list", "dict", "tuple", "bytearray", "copy.copy", "copy.deepcopy", "deepcopy" },
         .suppression_markers = .{ "noqa", "type: ignore", "type:ignore", "pyright: ignore", "pyright:ignore", "pylint: disable", "pylint:disable", "mypy: ignore-errors", "mypy: disable-error-code", "pyre-ignore", "pyre-fixme", "pytype: disable", "pragma: no cover", "pragma: no branch", "nosec", "NOSONAR", "lgtm[", "codeql[" },
         .specific_checks = .{
             .{ .when = "==", .check = "self.assertEqual($1, $2)", .negated = "self.assertNotEqual($1, $2)" },
@@ -90,6 +92,8 @@
     },
     .{
         .ecosystem = "zig",
+        .growth_calls = .{ "append", "appendSlice", "addOne", "put", "putNoClobber", "getOrPut" },
+        .reserve_calls = .{ "ensureTotalCapacity", "ensureUnusedCapacity", "ensureTotalCapacityPrecise", "initCapacity" },
         .specific_checks = .{
             .{ .when = "==", .check = "std.testing.expectEqual($2, $1)" },
             .{ .when = "eql", .check = "std.testing.expectEqualStrings($2, $1)" },
@@ -127,6 +131,9 @@
     },
     .{
         .ecosystem = "go",
+        .growth_calls = .{"append"},
+        .reserve_calls = .{"make"},
+        .allocating_calls = .{ "make", "new", "fmt.Sprintf", "fmt.Sprint", "fmt.Sprintln", "strings.Join", "strings.Split", "strings.Fields", "strings.Repeat", "bytes.Repeat", "slices.Clone", "maps.Clone" },
         .suppression_markers = .{ "nolint", "lint:ignore", "lint:file-ignore", "nosec", "NOSONAR", "lgtm[", "codeql[" },
         .exported_by_case = true,
         .fixed_signatures = .{ "ServeHTTP", "Read", "Write", "Less", "Swap", "MarshalJSON", "UnmarshalJSON", "MarshalText", "UnmarshalText", "Is", "As", "Format", "Scan", "Value" },
@@ -175,6 +182,8 @@
     },
     .{
         .ecosystem = "node",
+        .growth_calls = .{ "push", "unshift" },
+        .allocating_calls = .{ "Array.from", "Array.of", "structuredClone", "concat", "slice", "Buffer.alloc", "Buffer.from", "Buffer.concat" },
         .suppression_markers = .{ "eslint-disable", "@ts-ignore", "@ts-expect-error", "@ts-nocheck", "biome-ignore", "deno-lint-ignore", "oxlint-disable", "tslint:disable", "jshint ignore", "istanbul ignore", "c8 ignore", "v8 ignore", "NOSONAR", "lgtm[", "codeql[" },
         .specific_checks = .{
             .{ .when = "===", .check = "expect($1).toBe($2)", .negated = "expect($1).not.toBe($2)" },
@@ -244,6 +253,8 @@
     },
     .{
         .ecosystem = "rust",
+        .growth_calls = .{ "push", "push_str", "push_back", "insert" },
+        .reserve_calls = .{ "with_capacity", "reserve", "reserve_exact" },
         .import_style = .crate_path,
         .import_suffixes = .{ ".rs", "/mod.rs" },
         .suppression_markers = .{ "NOSONAR", "lgtm[", "codeql[" },
@@ -284,6 +295,9 @@
     },
     .{
         .ecosystem = "jvm",
+        .growth_calls = .{ "add", "put" },
+        .reserve_calls = .{ "ArrayList", "HashMap", "HashSet", "ArrayDeque", "StringBuilder", "ensureCapacity" },
+        .allocating_calls = .{ "String.format", "Arrays.copyOf", "Arrays.copyOfRange", "Arrays.asList", "List.copyOf", "Map.copyOf", "Set.copyOf", "toArray", "toList", "clone" },
         .literal_types = .{ .text = "String", .letter = "char", .whole = "int", .fraction = "double", .truth = "boolean" },
         .suppression_markers = .{ "NOPMD", "CHECKSTYLE:OFF", "CHECKSTYLE.OFF", "CHECKSTYLE:SUPPRESS", "noinspection", "NOSONAR", "lgtm[", "codeql[" },
         .specific_checks = .{
@@ -332,6 +346,9 @@
     },
     .{
         .ecosystem = "dotnet",
+        .growth_calls = .{"Add"},
+        .reserve_calls = .{ "List", "Dictionary", "HashSet", "StringBuilder", "EnsureCapacity" },
+        .allocating_calls = .{ "ToList", "ToArray", "ToDictionary", "ToHashSet", "string.Format", "String.Format", "string.Join", "String.Join", "string.Concat", "String.Concat", "Split", "Clone" },
         .literal_types = .{ .text = "string", .letter = "char", .whole = "int", .fraction = "double", .truth = "bool" },
         .suppression_markers = .{ "ReSharper disable", "NOSONAR", "lgtm[", "codeql[" },
         .specific_checks = .{
@@ -383,6 +400,9 @@
     },
     .{
         .ecosystem = "swift",
+        .growth_calls = .{ "append", "insert" },
+        .reserve_calls = .{"reserveCapacity"},
+        .allocating_calls = .{ "Array", "Dictionary", "Set", "ContiguousArray" },
         .literal_types = .{ .text = "String", .letter = "Character", .whole = "Int", .fraction = "Double", .truth = "Bool" },
         .suppression_markers = .{ "swiftlint:disable", "swiftformat:disable", "periphery:ignore", "NOSONAR", "lgtm[", "codeql[" },
         .specific_checks = .{
@@ -447,6 +467,9 @@
     },
     .{
         .ecosystem = "lua",
+        .growth_calls = .{"table.insert"},
+        .reserve_calls = .{"table.new"},
+        .allocating_calls = .{ "table.concat", "string.format", "string.rep", "string.gsub" },
         .suppression_markers = .{ "luacheck: ignore", "luacheck:ignore", "luacheck: push ignore", "luacheck: no ", "@diagnostic disable", "selene: allow", "selene:allow", "NOSONAR", "lgtm[", "codeql[" },
         .specific_checks = .{
             .{ .when = "==", .check = "assert.are.equal($2, $1)", .negated = "assert.are_not.equal($2, $1)" },

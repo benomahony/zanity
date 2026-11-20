@@ -203,6 +203,12 @@ pub const Tables = struct {
     generic_types: []const []const u8 = &.{},
     allocating_calls: []const []const u8 = &.{},
     initializer_prefixes: []const []const u8 = &.{},
+    /// Calls that add one element to a collection, such as `push` or `append`; one written with a
+    /// module, such as Lua's `table.insert`, takes the collection as its first argument.
+    growth_calls: []const []const u8 = &.{},
+    /// Calls that size a collection before it grows, such as `reserve` or `Vec::with_capacity`,
+    /// when given an argument.
+    reserve_calls: []const []const u8 = &.{},
     test_file_prefixes: []const []const u8 = &.{},
     test_file_suffixes: []const []const u8 = &.{},
     /// How to write an assertion that explains its failure. `$condition` is the

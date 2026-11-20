@@ -1,0 +1,4 @@
+rules: allocation-in-loop,append-without-reserve
+exit: 0
+allocation_in_loop_go.go:8:21: warning [allocation-in-loop]
+allocation_in_loop_go.go:16:12: warning [allocation-in-loop]
