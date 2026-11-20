@@ -2,40 +2,52 @@ name: Bench
 
 on:
   workflow_dispatch:
-    inputs:
-      repository:
-        description: The GitHub repository to check, as owner/name
-        default: kubernetes/kubernetes
-      ref:
-        description: The tag or branch of it to check
-        default: v1.31.4
-      runner:
-        description: The machine to time it on
-        type: choice
-        options: [ubuntu-latest, macos-latest]
-        default: ubuntu-latest
 
 permissions:
   contents: read
 
 jobs:
   bench:
-    runs-on: ${{ inputs.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: Python
+            repository: https://github.com/django/django
+          - language: TypeScript
+            repository: https://github.com/microsoft/vscode
+          - language: JavaScript
+            repository: https://github.com/webpack/webpack
+          - language: Go
+            repository: https://github.com/kubernetes/kubernetes
+          - language: Rust
+            repository: https://github.com/rust-lang/rust-analyzer
+          - language: Java
+            repository: https://github.com/spring-projects/spring-framework
+          - language: C#
+            repository: https://github.com/dotnet/roslyn
+          - language: Swift
+            repository: https://github.com/swiftlang/swift-syntax
+          - language: Lua
+            repository: https://github.com/neovim/neovim
+          - language: Zig
+            repository: https://codeberg.org/ziglang/zig
+    name: ${{ matrix.language }}
+    runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
-      REPOSITORY: ${{ inputs.repository }}
-      REF: ${{ inputs.ref }}
+      REPOSITORY: ${{ matrix.repository }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - uses: xyzzylabs/setup-zig@7e5af686da64007a0797898801de180e5f4d3762 # v1.0.5
-      - name: Clone ${{ inputs.repository }} at ${{ inputs.ref }}
-        run: git clone --quiet --depth 1 --branch "$REF" "https://github.com/$REPOSITORY" "$RUNNER_TEMP/corpus"
+      - name: Clone ${{ matrix.repository }}
+        run: git clone --quiet --depth 1 "$REPOSITORY" "$RUNNER_TEMP/corpus"
       - name: zig build bench
         shell: bash
         run: |
           zig build bench -Dcorpus="$RUNNER_TEMP/corpus" | tee "$RUNNER_TEMP/bench.txt"
           {
-            echo "### $REPOSITORY at $REF on $RUNNER_OS"
+            echo "### ${{ matrix.language }}: $REPOSITORY at $(git -C "$RUNNER_TEMP/corpus" rev-parse --short HEAD)"
             echo '```'
             cat "$RUNNER_TEMP/bench.txt"
             echo '```'

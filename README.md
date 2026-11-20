@@ -684,10 +684,10 @@ zig build test --fuzz=100K  # fuzz the checker with arbitrary bytes in every lan
 ./scripts/check-all         # optional full validation, including every release target
 ```
 
-`zig build bench` times `zanity check --rules all` end to end on Zig's standard library, cold, with a private store deleted before every run, and warm, reusing it, beside the fastest this machine could parse the same files. Point it at a large codebase with `-Dcorpus`, or run the Bench workflow from the Actions tab, which clones the repository and tag you give it (kubernetes v1.31.4 by default) and puts the timings in the run's summary:
+`zig build bench` times `zanity check --rules all` end to end on Zig's standard library, cold, with a private store deleted before every run, and warm, reusing it, beside the fastest this machine could parse the same files. Point it at a large codebase with `-Dcorpus`, or run the Bench workflow from the Actions tab, which times the latest commit of a large codebase in each language zanity checks (django, vscode, webpack, kubernetes, rust-analyzer, spring-framework, roslyn, swift-syntax, neovim and zig) and puts the timings in the run's summary:
 
 ```sh
-git clone --depth 1 --branch v1.31.4 https://github.com/kubernetes/kubernetes /tmp/kubernetes
+git clone --depth 1 https://github.com/kubernetes/kubernetes /tmp/kubernetes
 zig build bench -Dcorpus=/tmp/kubernetes
 ```
 

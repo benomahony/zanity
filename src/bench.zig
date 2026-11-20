@@ -127,10 +127,10 @@ const Timer = struct {
         const now = Io.Timestamp.now(self.io, .awake);
         const before = self.started;
         const nanoseconds = before.durationTo(now).toNanoseconds();
-        const elapsed = std.math.cast(u64, nanoseconds) orelse assert.panic("a lap of {d} ns is negative or past 584 years; the .awake clock is monotonic, so the timestamps came from different clocks", .{nanoseconds});
+        const elapsed = std.math.cast(u64, nanoseconds) orelse assert.panic("a lap of {d} s is negative or past 584 years; the .awake clock is monotonic, so the timestamps came from different clocks", .{before.durationTo(now).toSeconds()});
         self.started = now;
         if (self.started.toNanoseconds() < elapsed) assert.panic("a lap of {d} ns ended before the clock had run that long; lap() must measure from the previous lap", .{elapsed});
-        if (before.toNanoseconds() + elapsed != now.toNanoseconds()) assert.panic("a lap of {d} ns from {d} doesn't end at {d}; lap() must measure from the previous lap to now", .{ elapsed, before.toNanoseconds(), now.toNanoseconds() });
+        if (before.toNanoseconds() + elapsed != now.toNanoseconds()) assert.panic("a lap of {d} ns doesn't end at now; lap() must measure from the previous lap to now", .{elapsed});
         return elapsed;
     }
 };
@@ -212,7 +212,7 @@ fn checkAll(arena: Allocator, corpus: *const Corpus, work: check.Work) !void {
         const slot = &checkers[language.indexOf(adapter)];
         if (slot.* == null) slot.* = try check.Checker.initChecker(arena, try language.load(adapter), selected);
         work.text.used = 0;
-        inline for (.{ "definitions", "functions", "calls", "units" }) |field| @field(work.facts, field).clear();
+        work.facts.reset();
         work.facts.path = path;
         work.facts.language = adapter.name;
         _ = try analysis.checkFile(&slot.*.?, work, source);
