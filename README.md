@@ -564,7 +564,7 @@ Rules marked *production* hold code to what safety-critical software needs and m
 | `deep-nesting` | warning | code nested too deep to follow |
 | `complex-function` | warning | a function or test with too many paths through it |
 | `long-file` | warning | a file too long to hold in mind |
-| `oversized-file` | error | a file over 4 MB, too large for zanity to parse, so no other rule checks it |
+| `oversized-file` | error | a file too large for zanity to check, such as one over 4 MB, so no other rule checks it |
 
 **Tests**
 

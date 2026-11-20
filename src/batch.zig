@@ -152,12 +152,18 @@ pub const Batch = struct {
         const path = self.files[index];
         const adapter = language.forPath(path) orelse return;
         const checker = &(self.checkers[language.indexOf(adapter)] orelse unreachable);
-        if (source.len > self.file_bytes) return self.commitOversized(worker, path, checker);
+        if (source.len > self.file_bytes) {
+            memory.exceeded = "bytes in one file";
+            return self.commitOversized(worker, path, checker);
+        }
         const cache_context: cache_module.AnalysisContext = .{ .language = adapter.name, .query = adapter.query, .revision = adapter.revision, .enabled = checker.enabled, .collect_units = self.facts.collect_units };
         const cached_file: CachedFile = .{ .key = cache_module.key(cache_context, path), .source = @import("store.zig").digest(&.{source}), .path = path, .language = adapter.name };
         if (try self.replayCached(cached_file)) return;
         worker.startFile(path, adapter.name, self.facts.collect_units);
-        const result = try analysis.checkFile(checker, .{ .scratch = &worker.scratch, .text = &worker.text, .facts = &worker.facts }, source);
+        const result = analysis.checkFile(checker, .{ .scratch = &worker.scratch, .text = &worker.text, .facts = &worker.facts }, source) catch |e| switch (e) {
+            error.LimitExceeded => return self.commitOversized(worker, path, checker),
+            else => return e,
+        };
         self.mutex.lockUncancelable(self.io);
         defer self.mutex.unlock(self.io);
         if (self.cache) |source_cache| {
@@ -199,15 +205,16 @@ pub const Batch = struct {
         return true;
     }
 
-    /// Reports a file too large to parse as oversized-file, unless that rule is off, and checks
-    /// nothing else in it, so one generated or copied file doesn't stop the run.
+    /// Reports a file that ran past one of a file's limits, `memory.exceeded`, as oversized-file,
+    /// unless that rule is off, and keeps nothing else from it, so one generated or copied file
+    /// doesn't stop the run.
     fn commitOversized(self: *Batch, worker: *Worker, path: []const u8, checker: *const check.Checker) !void {
         const adapter = language.forPath(path) orelse assert.panic("{s} is too large to check but has no language; checkFile() returns before then", .{path});
-        const megabytes = self.file_bytes / (1 << 20);
-        if (megabytes == 0) assert.panic("files may have {d} bytes, under a megabyte, so the oversized-file message would say 0 MB; raise memory.Limits.file_bytes", .{self.file_bytes});
+        const exceeded = memory.exceeded;
+        if (exceeded.len == 0) assert.panic("{s} ran out of room, but memory.exceeded doesn't say which limit; every Bounded and Text sets it before returning error.LimitExceeded", .{path});
         worker.startFile(path, adapter.name, self.facts.collect_units);
         if (!std.mem.eql(u8, worker.facts.path, path)) assert.panic("starting {s} left the worker on {s}; startFile() sets the path it is given", .{ path, worker.facts.path });
-        const message = try worker.text.format("This file is larger than {d} MB, so zanity parsed none of it and no other rule checked it.", .{megabytes});
+        const message = try worker.text.format("This file is too large for zanity to check: it has more {s} than zanity can hold, so no rule checked it.", .{exceeded});
         const found = [_]check.Diagnostic{.{ .line = 0, .column = 0, .rule = "oversized-file", .message = message }};
         self.mutex.lockUncancelable(self.io);
         defer self.mutex.unlock(self.io);
