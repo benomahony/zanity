@@ -206,7 +206,7 @@ pub const core = [_]Rule{
     .{ .name = "complex-function", .advice = "Split the function so each part makes fewer decisions, or replace a chain of branches with a table.", .severity = .warning, .tier = .default, .catalogue = &.{"CWE-1121"}, .needs = &.{ "function.outer", "function.name", "decision.point" } },
     .{ .name = "wide-scope", .alias = "NASA06", .advice = "Declare it inside that block, where it is used.", .severity = .warning, .tier = .default, .catalogue = &.{"CWE-1126"}, .needs = &.{ "declaration.outer", "declaration.name", "declaration.block", "local.scope", "local.reference", "function.outer", "loop.outer" } },
     .{ .name = "long-file", .advice = "Split the file by responsibility into modules of a few hundred lines.", .severity = .warning, .tier = .default, .catalogue = &.{"CWE-1080"} },
-    .{ .name = "oversized-file", .advice = "Split it into modules of a few hundred lines, or add it to exclude in zanity.toml if it is generated, vendored or copied.", .severity = .@"error", .tier = .default, .catalogue = &.{"CWE-1080"} },
+    .{ .name = "oversized-file", .advice = "Split it into modules of a few hundred lines, or add it to exclude in zanity.toml if it is generated, vendored or copied.", .severity = .@"error", .tier = .default },
 };
 
 /// The questions zanity.toml defines or retunes under [questions."<name>"], set once the file is

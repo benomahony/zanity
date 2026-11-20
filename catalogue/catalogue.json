@@ -36215,8 +36215,7 @@
       "detection_review": "unreviewed",
       "implementation_status": "partial",
       "rule_ids": [
-        "long-file",
-        "oversized-file"
+        "long-file"
       ],
       "tags": []
     },
