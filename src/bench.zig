@@ -212,7 +212,7 @@ fn checkAll(arena: Allocator, corpus: *const Corpus, work: check.Work) !void {
         const slot = &checkers[language.indexOf(adapter)];
         if (slot.* == null) slot.* = try check.Checker.initChecker(arena, try language.load(adapter), selected);
         work.text.used = 0;
-        inline for (.{ "definitions", "functions", "calls", "units" }) |field| @field(work.facts, field).clear();
+        work.facts.reset();
         work.facts.path = path;
         work.facts.language = adapter.name;
         _ = try analysis.checkFile(&slot.*.?, work, source);
