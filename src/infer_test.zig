@@ -17,6 +17,8 @@ const MockTypeSafe = struct { child: std.process.Child, env: std.process.Environ
 fn startMock(arena: std.mem.Allocator, io: Io, dir: []const u8) !MockTypeSafe {
     if (!std.fs.path.isAbsolute(dir)) assert.panic("the mock's directory '{s}' is relative; pass an absolute path, since zanity runs in another directory", .{dir});
     var env = std.process.Environ.Map.init(arena);
+    // The mock imports tests/loopback.py, the server every mock listens with.
+    try env.put("PYTHONPATH", "tests");
     try env.put("MOCK_TYPESAFE_LOG", try std.fs.path.join(arena, &.{ dir, "requests.log" }));
     try env.put("MOCK_TYPESAFE_HANG", try std.fs.path.join(arena, &.{ dir, "hang" }));
     var child = try std.process.spawn(io, .{ .argv = &.{ "python3", "tests/infer/mock_typesafe.py" }, .stdin = .pipe, .stdout = .pipe, .environ_map = &env });

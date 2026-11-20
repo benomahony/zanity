@@ -62,7 +62,8 @@ pub fn build(b: *std.Build) void {
     const options = b.addOptions();
     options.addOptionPathUntracked("zanity", .{ .relative = .{ .base = .install_bin, .sub_path = b.fmt("zanity{s}", .{target.result.exeFileExt()}) } });
     integration_module.addOptions("paths", options);
-    const integration = b.addRunArtifact(b.addTest(.{ .root_module = integration_module }));
+    // Its runner prints each test's time and the slowest tests, so a slow CI run shows its cause.
+    const integration = b.addRunArtifact(b.addTest(.{ .root_module = integration_module, .test_runner = .{ .path = b.path("src/test_runner.zig"), .mode = .simple } }));
     integration.step.dependOn(b.getInstallStep());
     integration.setCwd(b.path("."));
     integration.has_side_effects = true;

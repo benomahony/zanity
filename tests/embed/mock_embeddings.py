@@ -4,7 +4,9 @@ import os
 import re
 import sys
 import threading
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler
+
+from loopback import LoopbackServer
 
 DIMENSIONS = 64
 FIXED = {"fetch": 0, "order": 1, "charge": 2, "card": 3, "send": 4, "lines": 5}
@@ -48,7 +50,7 @@ class EmbeddingsHandler(BaseHTTPRequestHandler):
 
 
 def main():
-    server = ThreadingHTTPServer(("127.0.0.1", 0), EmbeddingsHandler)
+    server = LoopbackServer(EmbeddingsHandler)
     assert server.server_address[1] > 0, f"the mock listens at {server.server_address}; it must have a real port to print"
     print(server.server_address[1], flush=True)
     threading.Thread(target=server.serve_forever, daemon=True).start()

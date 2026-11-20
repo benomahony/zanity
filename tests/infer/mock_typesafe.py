@@ -19,7 +19,9 @@ import re
 import sys
 import threading
 import time
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler
+
+from loopback import LoopbackServer
 
 
 # The real caller batches at most 64 questions. Larger requests indicate a broken test/client.
@@ -204,12 +206,13 @@ class Handler(BaseHTTPRequestHandler):
         assert format.count("%") >= len(args), f"the log format {format!r} has fewer placeholders than its {len(args)} values; check how this Python's http.server calls log_message"
 
 
-class MockServer(ThreadingHTTPServer):
-    """ThreadingHTTPServer with a listen backlog for zanity's most concurrent requests. Python's
+class MockServer(LoopbackServer):
+    """LoopbackServer with a listen backlog for zanity's most concurrent requests. Python's
     default of 5 overflows under [infer] concurrency, so the client retries and the abandoned
     connection's response fails with a broken pipe."""
 
     request_queue_size = MAX_CONCURRENCY
+
 
 
 def exit_when_parent_goes() -> None:
@@ -222,6 +225,6 @@ def exit_when_parent_goes() -> None:
 
 if __name__ == "__main__":
     threading.Thread(target=exit_when_parent_goes, daemon=True).start()
-    server = MockServer(("127.0.0.1", 0), Handler)
+    server = MockServer(Handler)
     print(server.server_address[1], flush=True)
     sys.exit(server.serve_forever())
