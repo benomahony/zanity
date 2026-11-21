@@ -1,4 +1,4 @@
-rules: allocation-in-loop,append-without-reserve,invariant-in-loop,pointer-collection,field-chain-in-loop,per-element-call,padded-struct
+rules: allocation-in-loop,invariant-in-loop,pointer-collection,field-chain-in-loop,padded-struct
 exit: 0
 allocation_in_loop_go.go:8:21: warning [allocation-in-loop]
 allocation_in_loop_go.go:16:12: warning [allocation-in-loop]

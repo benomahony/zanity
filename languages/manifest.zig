@@ -203,11 +203,11 @@ pub const Tables = struct {
     generic_types: []const []const u8 = &.{},
     allocating_calls: []const []const u8 = &.{},
     initializer_prefixes: []const []const u8 = &.{},
-    /// Calls that add one element to a collection, such as `push` or `append`; one written with a
-    /// module, such as Lua's `table.insert`, takes the collection as its first argument.
+    /// Calls that add one element to a collection, such as `push` or `append`, which
+    /// allocation-in-loop leaves out because growing costs little spread over the elements.
     growth_calls: []const []const u8 = &.{},
-    /// Calls that size a collection before it grows, such as `reserve` or `Vec::with_capacity`,
-    /// when given an argument.
+    /// Calls that size a collection, such as `reserve` or `Vec::with_capacity`; reserving on an
+    /// existing collection in a loop is how growth is meant to be amortised.
     reserve_calls: []const []const u8 = &.{},
     /// Calls that give the same value for the same arguments and change nothing, such as `len` or
     /// `toLowerCase`; one written with its module, such as `re.compile`, matches only in full.

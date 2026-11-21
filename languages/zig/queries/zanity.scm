@@ -483,10 +483,6 @@
   (expression_statement
     (try_expression
       (call_expression) @call.discarded))
-  (for_statement
-    body: (call_expression) @call.discarded)
-  (while_statement
-    body: (call_expression) @call.discarded)
 ]
 
 ; A returned value: each early return computes it once, on its own way out.

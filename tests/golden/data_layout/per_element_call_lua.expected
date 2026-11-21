@@ -1,4 +1,0 @@
-rules: allocation-in-loop,append-without-reserve,invariant-in-loop,pointer-collection,field-chain-in-loop,per-element-call,padded-struct
-exit: 0
-per_element_call_lua.lua:3:5: information [per-element-call]
-per_element_call_lua.lua:10:17: warning [field-chain-in-loop]

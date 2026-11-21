@@ -89,8 +89,8 @@ pub fn closeCall(self: *File, ctx: Context) !void {
         try test_quality.checkBranchingDouble(self, ctx, name);
         try test_quality.checkStorageRead(self, ctx, name);
     }
-    try checkMemoryCall(self, ctx, name);
-    try data_layout.checkPerElement(self, ctx);
+    const allocating = self.calleeIn(ctx, name, self.tables.allocating_calls) orelse (if (contains(self.tables.allocating_calls, name)) name else null);
+    if (allocating) |matched| try checkAllocation(self, ctx, matched);
     try repeats.noteCallWrites(self, ctx, name);
     if (contains(self.tables.mutating_calls, name) and inAssertionCondition(self, ctx.node)) {
         _ = try self.report(ctx.node, "assertion-side-effect", try self.say("This assertion calls '{s}', which changes state, so the program behaves differently when assertions are disabled.", .{name}));
@@ -111,16 +111,6 @@ pub fn inAssertionCondition(self: *File, node: ts.Node) bool {
     if (ts.ts_node_start_byte(condition) < ts.ts_node_start_byte(assertion.node)) assert.panic("{s}: @assertion.condition captured {f}, before its assertion {f}; capture it inside @assertion.outer", .{ self.work.facts.path, condition.where(), assertion.node.where() });
     if (ts.ts_node_end_byte(condition) > ts.ts_node_end_byte(assertion.node)) assert.panic("{s}: @assertion.condition captured {f}, after its assertion {f} ends; capture it inside @assertion.outer", .{ self.work.facts.path, condition.where(), assertion.node.where() });
     return ts.ts_node_start_byte(node) >= ts.ts_node_start_byte(condition) and ts.ts_node_end_byte(node) <= ts.ts_node_end_byte(condition);
-}
-
-/// A call from the language's allocating or growth calls, for the checks on memory use.
-fn checkMemoryCall(self: *File, ctx: Context, name: []const u8) !void {
-    if (ctx.family != .call) assert.panic("{s}: checking {f} as an allocating call, but it is a {t}; call checkMemoryCall() only from closeCall()", .{ self.work.facts.path, ctx.node.where(), ctx.family });
-    if (name.len == 0) assert.panic("{s}: the call {f} has an empty name; capture the callee as @call.name in the language's zanity.scm", .{ self.work.facts.path, ctx.node.where() });
-    const allocating = self.calleeIn(ctx, name, self.tables.allocating_calls) orelse (if (contains(self.tables.allocating_calls, name)) name else null);
-    if (allocating) |matched| try checkAllocation(self, ctx, matched);
-    const growing = self.calleeIn(ctx, name, self.tables.growth_calls) orelse (if (contains(self.tables.growth_calls, name)) name else null);
-    if (growing) |matched| try data_layout.checkGrowth(self, ctx, matched);
 }
 
 pub fn checkAllocation(self: *File, ctx: Context, callee: []const u8) !void {
