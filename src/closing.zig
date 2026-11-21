@@ -82,6 +82,7 @@ pub fn closeCall(self: *File, ctx: Context) !void {
     }
     try hazards.checkRiskyCall(self, ctx, name);
     try tracing.checkSpanCall(self, ctx, name);
+    try tracing.noteTracingCall(self, ctx, name);
     if (self.inTest()) {
         try test_quality.checkTestCall(self, ctx, name);
     } else if (self.inTestFile()) {
@@ -188,7 +189,7 @@ pub fn closeFunction(self: *File, ctx: Context) !void {
     if (self.index.marks(ctx.span, self.v.function_passthrough) or self.index.marks(ctx.node, self.v.function_passthrough)) try passthrough.checkPassthrough(self, ctx, name_node, name);
     try weak.checkAssertionDensity(self, ctx, ctx, name_node);
     try tracing.checkUnendedSpan(self, ctx);
-    try tracing.noteUntracedHandler(self, ctx, name_node, name);
+    try tracing.noteHandlerFunction(self, ctx, name_node, name);
     if (ctx.decisions + 1 > rules.max_complexity) {
         if (try self.report(name_node, "complex-function", try self.say("'{s}' makes {d} decisions (cyclomatic complexity {d}), past the {d} a reader can follow and a test suite can cover.", .{ name, ctx.decisions, ctx.decisions + 1, rules.max_complexity }))) self.s.diagnostics.last().?.fix = try extract.decisionsFix(self, ctx, name);
     }

@@ -76,6 +76,8 @@ pub const Function = struct {
     parameters: u32 = 0,
     /// Its parameters' declared types, separated by `;`, when every one declares one.
     types: []const u8 = "",
+    /// Whether it or its decorators start a span, for untraced-entry-point.
+    traced: bool = false,
 };
 
 /// A change that fixes a finding: bytes `start..end` of its file become `replacement`.
@@ -233,6 +235,11 @@ pub const Facts = struct {
     imports: memory.Bounded(Import),
     /// Request handlers that start no span, for untraced-entry-point.
     untraced: memory.Bounded(Definition),
+    /// The names of functions registered as request handlers, where they are registered.
+    routes: memory.Bounded(Definition),
+    /// Each file's first call getting a tracer or starting a span, kind "tracer", and its first
+    /// registering instrumentation, kind "instrumentation".
+    tracing: memory.Bounded(Definition),
     /// Whether to keep `units`; only `check --infer` needs them.
     collect_units: bool = false,
 
@@ -252,12 +259,14 @@ pub const Facts = struct {
             .passed = try .initBounded(gpa, limits.references, "functions passed as values across all files"),
             .imports = try .initBounded(gpa, limits.imports, "top-level imports across all files"),
             .untraced = try .initBounded(gpa, limits.functions, "request handlers that start no span across all files"),
+            .routes = try .initBounded(gpa, limits.functions, "request handlers registered by name across all files"),
+            .tracing = try .initBounded(gpa, limits.functions, "files that trace or register instrumentation"),
         };
     }
 
     /// Empties one run's facts while retaining their allocations.
     pub fn reset(self: *Facts) void {
-        inline for (.{ "definitions", "functions", "calls", "units", "references", "shapes", "abstractions", "implemented", "passed", "imports", "untraced" }) |field| @field(self, field).clear();
+        inline for (.{ "definitions", "functions", "calls", "units", "references", "shapes", "abstractions", "implemented", "passed", "imports", "untraced", "routes", "tracing" }) |field| @field(self, field).clear();
         self.path = "";
         self.language = "";
         self.collect_units = false;
@@ -310,11 +319,36 @@ pub const Facts = struct {
         try self.abstractions.add(.{ .path = self.path, .language = self.language, .name = try self.text.copy(name), .kind = "abstraction", .line = at[0], .column = at[1] });
     }
 
-    /// Records a request handler that starts no span by its name.
-    pub fn untracedHandler(self: *Facts, name: []const u8, at: [2]u32) error{LimitExceeded}!void {
+    /// Records a request handler that starts no span: a function by its name, kind "handler", or
+    /// one passed inline by its route, kind "route".
+    pub fn untracedHandler(self: *Facts, kind: []const u8, name: []const u8, at: [2]u32) error{LimitExceeded}!void {
         if (self.path.len == 0 or self.language.len == 0) assert.panic("recording handler '{s}' before the file is known; set facts.path and facts.language first", .{name});
         if (name.len == 0) assert.panic("a handler in {s} at {d}:{d} has an empty name; check the @function.name capture", .{ self.path, at[0] + 1, at[1] + 1 });
-        try self.untraced.add(.{ .path = self.path, .language = self.language, .name = try self.text.copy(name), .kind = "handler", .line = at[0], .column = at[1] });
+        if (!std.mem.eql(u8, kind, "handler") and !std.mem.eql(u8, kind, "route")) assert.panic("recording a handler of kind '{s}'; it is \"handler\" or \"route\"", .{kind});
+        try self.untraced.add(.{ .path = self.path, .language = self.language, .name = try self.text.copy(name), .kind = kind, .line = at[0], .column = at[1] });
+    }
+
+    /// Marks function `id`, recorded by function(), as starting a span.
+    pub fn markTraced(self: *Facts, id: u32) void {
+        if (id >= self.functions.len) assert.panic("marking function {d} of {d} traced; pass an id function() returned", .{ id, self.functions.len });
+        const f = &self.functions.items()[id];
+        if (f.name.len == 0) assert.panic("function {d} in {s} has no name; function() records only named functions", .{ id, self.path });
+        f.traced = true;
+    }
+
+    /// Records the name of a function registered as a request handler, where it is registered.
+    pub fn route(self: *Facts, name: []const u8, at: [2]u32) error{LimitExceeded}!void {
+        if (self.path.len == 0 or self.language.len == 0) assert.panic("recording route '{s}' before the file is known; set facts.path and facts.language first", .{name});
+        if (name.len == 0) assert.panic("a route in {s} at {d}:{d} names no handler; pass the handler's name", .{ self.path, at[0] + 1, at[1] + 1 });
+        try self.routes.add(.{ .path = self.path, .language = self.language, .name = try self.text.copy(name), .kind = "route", .line = at[0], .column = at[1] });
+    }
+
+    /// Records that the file traces, kind "tracer", or registers instrumentation, kind
+    /// "instrumentation", by the call that shows it.
+    pub fn tracingCall(self: *Facts, kind: []const u8, name: []const u8, at: [2]u32) error{LimitExceeded}!void {
+        if (self.path.len == 0 or self.language.len == 0) assert.panic("recording a {s} call before the file is known; set facts.path and facts.language first", .{kind});
+        if (!std.mem.eql(u8, kind, "tracer") and !std.mem.eql(u8, kind, "instrumentation")) assert.panic("recording a tracing call of kind '{s}'; it is \"tracer\" or \"instrumentation\"", .{kind});
+        try self.tracing.add(.{ .path = self.path, .language = self.language, .name = try self.text.copy(name), .kind = kind, .line = at[0], .column = at[1] });
     }
 
     pub fn function(self: *Facts, name: []const u8, at: [2]u32, method: bool) error{LimitExceeded}!u32 {

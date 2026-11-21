@@ -133,6 +133,11 @@
   (call_suffix
     (lambda_literal) @call.argument))
 
+; A trailing closure, which the call runs: a request handler when the call registers a route.
+(call_expression
+  (call_suffix
+    (lambda_literal) @call.handler))
+
 (constructor_expression
   (constructor_suffix
     (value_arguments

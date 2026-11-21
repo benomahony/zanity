@@ -239,6 +239,22 @@ pub const Batch = struct {
         try self.commit(worker, path, if (checker.enabled.enabled("oversized-file")) &found else &.{});
     }
 
+    /// Adds one file's handlers, routes and tracing calls to the run's, for untraced-entry-point.
+    fn commitTracing(self: *Batch, worker: *const Worker) error{LimitExceeded}!void {
+        const recorded = worker.facts;
+        if (recorded.path.len == 0) assert.panic("committing tracing facts for no file; startFile() sets the path of the file being checked", .{});
+        const before = self.facts.untraced.len + self.facts.routes.len + self.facts.tracing.len;
+        inline for (.{ "untraced", "routes", "tracing" }) |field| {
+            for (@field(recorded, field).items()) |d| {
+                var kept = d;
+                kept.name = try worker.retain(self.text, d.name);
+                try @field(self.facts, field).add(kept);
+            }
+        }
+        const added = self.facts.untraced.len + self.facts.routes.len + self.facts.tracing.len - before;
+        if (added != recorded.untraced.len + recorded.routes.len + recorded.tracing.len) assert.panic("{s}: committed {d} tracing facts of {d} recorded; each is added once", .{ recorded.path, added, recorded.untraced.len + recorded.routes.len + recorded.tracing.len });
+    }
+
     /// Adds one file's facts and findings to the run's; the caller holds `mutex`.
     fn commit(self: *Batch, worker: *const Worker, path: []const u8, diagnostics: []const check.Diagnostic) !void {
         if (!std.mem.eql(u8, worker.facts.path, path)) assert.panic("committing {s} with facts recorded for {s}; startFile() must set the path of the file being checked", .{ path, worker.facts.path });
@@ -276,11 +292,7 @@ pub const Batch = struct {
             kept.shown = try worker.retain(self.text, i.shown);
             try facts.imports.add(kept);
         }
-        for (recorded.untraced.items()) |u| {
-            var kept = u;
-            kept.name = try worker.retain(self.text, u.name);
-            try facts.untraced.add(kept);
-        }
+        try self.commitTracing(worker);
         for (recorded.implemented.items()) |hash| try facts.implemented.add(hash);
         for (recorded.passed.items()) |hash| try facts.passed.add(hash);
         try facts.addReferences(recorded.references.items());

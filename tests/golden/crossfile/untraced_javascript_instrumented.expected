@@ -1,0 +1,2 @@
+rules: untraced-entry-point
+exit: 0

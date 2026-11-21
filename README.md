@@ -655,7 +655,7 @@ Rules marked *production* hold code to what safety-critical software needs and m
 | `unended-span` | warning | a span started by hand, such as with `start_span`, `startSpan`, `startActiveSpan` or Go's `tracer.Start`, that the function never ends; not one in a `with` block, returned, or stored on an object |
 | `dynamic-span-name` | warning | a span named with text built at runtime, such as an f-string, a template string, `fmt.Sprintf`, `"\(id)"` or `std.fmt.allocPrint`, so each value makes a new span name |
 | `discarded-span-context` | warning | a Go span start whose context is thrown away, as in `_, span := tracer.Start(ctx, name)`, so later spans are not its children |
-| `untraced-entry-point` | warning | a Python request handler, such as one under `@app.get(...)` or `@app.route(...)`, that starts no span, in a project that imports OpenTelemetry and no `opentelemetry.instrumentation` package |
+| `untraced-entry-point` | warning | a request handler that starts no span, in a project that gets a tracer or starts spans and registers no instrumentation that traces handlers itself, such as `FastAPIInstrumentor`, `otelhttp.NewHandler`, `registerInstrumentations` or Vapor's `TracingMiddleware`; handlers are functions under a route decorator such as `@app.get(...)`, or passed inline or by name to a route such as `app.get("/orders", handler)`, `mux.HandleFunc`, `app:get` or `router.get` |
 
 `parse-error` reports a file tree-sitter could not fully parse; the other rules still run on what it recovered.
 

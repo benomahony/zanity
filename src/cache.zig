@@ -90,6 +90,8 @@ pub const Snapshot = struct {
     abstractions: []const Definition,
     imports: []const facts_module.Import,
     untraced: []const Definition,
+    routes: []const Definition,
+    tracing: []const Definition,
     implemented: []const u64,
     passed: []const u64,
 };
@@ -143,6 +145,8 @@ pub fn encode(buffer: []u8, context: AnalysisContext, facts: *const Facts, findi
         .abstractions = facts.abstractions.items(),
         .imports = facts.imports.items(),
         .untraced = facts.untraced.items(),
+        .routes = facts.routes.items(),
+        .tracing = facts.tracing.items(),
         .implemented = facts.implemented.items(),
         .passed = facts.passed.items(),
     };
@@ -183,6 +187,7 @@ pub fn replay(run: Replay) (ReplayError || error{ OutOfMemory, LimitExceeded })!
     try validateUnits(snapshot, run);
     try validateFindings(snapshot);
     try commitFacts(snapshot, run);
+    try commitTracing(snapshot, run);
     try commitFindings(snapshot, run);
 }
 
@@ -213,7 +218,13 @@ fn validateHandlers(snapshot: Snapshot, run: Replay) ReplayError!void {
     if (run.path.len == 0) assert.panic("validating handlers without their path; facts always belong to a file", .{});
     if (run.language.len == 0) assert.panic("validating handlers without their language; facts always belong to an adapter", .{});
     for (snapshot.untraced) |handler| {
-        if (!std.mem.eql(u8, handler.path, run.path) or handler.name.len == 0) return error.InvalidCache;
+        if (!std.mem.eql(u8, handler.path, run.path) or handler.name.len == 0 or !(std.mem.eql(u8, handler.kind, "handler") or std.mem.eql(u8, handler.kind, "route"))) return error.InvalidCache;
+    }
+    for (snapshot.routes) |route| {
+        if (!std.mem.eql(u8, route.path, run.path) or route.name.len == 0) return error.InvalidCache;
+    }
+    for (snapshot.tracing) |call| {
+        if (!std.mem.eql(u8, call.path, run.path) or !(std.mem.eql(u8, call.kind, "tracer") or std.mem.eql(u8, call.kind, "instrumentation"))) return error.InvalidCache;
     }
 }
 
@@ -263,7 +274,7 @@ fn commitFacts(snapshot: Snapshot, run: Replay) error{LimitExceeded}!void {
         .delete_start = definition.delete_start,
         .delete_end = definition.delete_end,
     });
-    for (snapshot.functions) |function| try facts.functions.add(.{ .path = run.path, .name = try run.text.copy(function.name), .method = function.method, .line = function.line, .column = function.column, .parameters = function.parameters, .types = try run.text.copy(function.types) });
+    for (snapshot.functions) |function| try facts.functions.add(.{ .path = run.path, .name = try run.text.copy(function.name), .method = function.method, .line = function.line, .column = function.column, .parameters = function.parameters, .types = try run.text.copy(function.types), .traced = function.traced });
     for (snapshot.calls) |call| try facts.calls.add(.{ .caller = @intCast(first + call.caller), .callee = try run.text.copy(call.callee), .reach = call.reach, .arguments = call.arguments, .types = try run.text.copy(call.types) });
     for (snapshot.shapes) |shape| {
         var kept = shape;
@@ -284,12 +295,23 @@ fn commitFacts(snapshot: Snapshot, run: Replay) error{LimitExceeded}!void {
         .unmarked = try run.text.copy(abstraction.unmarked),
     });
     for (snapshot.imports) |i| try facts.imports.add(.{ .path = run.path, .language = run.language, .spec = try run.text.copy(i.spec), .line = i.line, .column = i.column, .names = i.names, .shown = try run.text.copy(i.shown), .submodule = i.submodule });
-    for (snapshot.untraced) |handler| try facts.untraced.add(.{ .path = run.path, .language = run.language, .name = try run.text.copy(handler.name), .kind = "handler", .line = handler.line, .column = handler.column });
     for (snapshot.implemented) |hash| try facts.implemented.add(hash);
     for (snapshot.passed) |hash| try facts.passed.add(hash);
     try facts.addReferences(snapshot.references);
     for (snapshot.units) |unit| try facts.units.add(.{ .kind = unit.kind, .reports_error = unit.reports_error, .path = run.path, .language = run.language, .name = try run.text.copy(unit.name), .line = unit.line, .column = unit.column, .end_line = unit.end_line, .source = try run.text.copy(unit.source), .fix = try run.text.copy(unit.fix) });
     if (facts.functions.len != first + snapshot.functions.len) assert.panic("replayed {d} functions from a cache row holding {d}; commitFacts must add each once", .{ facts.functions.len - first, snapshot.functions.len });
+}
+
+/// Adds a cached file's handlers, routes and tracing calls, for untraced-entry-point.
+fn commitTracing(snapshot: Snapshot, run: Replay) error{ OutOfMemory, LimitExceeded }!void {
+    if (run.path.len == 0 or run.language.len == 0) assert.panic("committing cached tracing facts without their file; validateHeader must run first", .{});
+    const facts = run.facts;
+    const before = facts.untraced.len + facts.routes.len + facts.tracing.len;
+    for (snapshot.untraced) |handler| try facts.untraced.add(.{ .path = run.path, .language = run.language, .name = try run.text.copy(handler.name), .kind = if (std.mem.eql(u8, handler.kind, "route")) "route" else "handler", .line = handler.line, .column = handler.column });
+    for (snapshot.routes) |route| try facts.routes.add(.{ .path = run.path, .language = run.language, .name = try run.text.copy(route.name), .kind = "route", .line = route.line, .column = route.column });
+    for (snapshot.tracing) |call| try facts.tracing.add(.{ .path = run.path, .language = run.language, .name = try run.text.copy(call.name), .kind = if (std.mem.eql(u8, call.kind, "tracer")) "tracer" else "instrumentation", .line = call.line, .column = call.column });
+    const added = facts.untraced.len + facts.routes.len + facts.tracing.len - before;
+    if (added != snapshot.untraced.len + snapshot.routes.len + snapshot.tracing.len) assert.panic("{s}: replayed {d} tracing facts of {d} cached; each is added once", .{ run.path, added, snapshot.untraced.len + snapshot.routes.len + snapshot.tracing.len });
 }
 
 fn commitFindings(snapshot: Snapshot, run: Replay) (ReplayError || error{LimitExceeded})!void {

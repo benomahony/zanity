@@ -1,0 +1,4 @@
+rules: untraced-entry-point
+exit: 0
+handlers.go:5:6: warning [untraced-entry-point]
+routes.go:13:28: warning [untraced-entry-point]

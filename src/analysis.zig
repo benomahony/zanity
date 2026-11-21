@@ -51,7 +51,7 @@ pub fn checkFile(self: *const Checker, work: Work, source: []const u8) !Result {
     try hazards.checkLength(&file, root);
     try scope.checkWideScope(&file);
     const scratch = work.scratch;
-    if (self.enabled.enabled("cyclic-import") or self.enabled.enabled("untraced-entry-point")) try scratch.imports.flush(work.facts, source);
+    if (self.enabled.enabled("cyclic-import")) try scratch.imports.flush(work.facts, source);
     const reflects = for (file.tables.reflective_calls) |call| {
         if (scratch.names.mentioned(nameHash(call))) break true;
     } else false;
