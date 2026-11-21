@@ -67,6 +67,14 @@
   arguments: (arguments
     (_) @call.argument))
 
+; A function passed to a call, which runs it: a request handler when the call registers a route.
+(call_expression
+  arguments: (arguments
+    [
+      (arrow_function)
+      (function_expression)
+    ] @call.handler))
+
 (while_statement
   condition: (parenthesized_expression
     (_) @loop.condition))

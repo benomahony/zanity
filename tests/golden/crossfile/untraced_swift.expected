@@ -1,0 +1,4 @@
+rules: untraced-entry-point
+exit: 0
+handlers.swift:4:6: warning [untraced-entry-point]
+routes.swift:5:30: warning [untraced-entry-point]

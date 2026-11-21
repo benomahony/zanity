@@ -138,6 +138,14 @@ fn isMember(self: *File, ctx: Context) bool {
     return self.index.marks(ctx.node, self.checker.compiled.id("member.field")) or heldByFunctionOrClass(self, ctx.node);
 }
 
+/// Whether `outer` holds nothing but `inner`, as `export function charge() {}` holds the function
+/// a textobject query marks the whole statement as.
+fn wraps(outer: ts.Node, inner: ts.Node) bool {
+    if (ts.ts_node_start_byte(inner) < ts.ts_node_start_byte(outer)) assert.panic("{f} starts before {f}, which is meant to hold it", .{ inner.where(), outer.where() });
+    if (ts.ts_node_end_byte(inner) > ts.ts_node_end_byte(outer)) assert.panic("{f} ends after {f}, which is meant to hold it", .{ inner.where(), outer.where() });
+    return ts.ts_node_named_child_count(outer) == 1 and ts.ts_node_named_child(outer, 0).eql(inner);
+}
+
 fn heldByFunctionOrClass(self: *File, node: ts.Node) bool {
     const start = ts.ts_node_start_byte(node);
     const end = ts.ts_node_end_byte(node);
@@ -147,7 +155,7 @@ fn heldByFunctionOrClass(self: *File, node: ts.Node) bool {
         const from = ts.ts_node_start_byte(held.node);
         const to = ts.ts_node_end_byte(held.node);
         if (from == start and to == end) continue;
-        if (from <= start and end <= to) return true;
+        if (from <= start and end <= to and !wraps(held.node, node)) return true;
     }
     if (self.s.contexts.len > self.s.contexts.capacity()) assert.panic("{s}: {d} open constructs in room for {d}; leave() must pop what enter() opened", .{ self.work.facts.path, self.s.contexts.len, self.s.contexts.capacity() });
     return false;

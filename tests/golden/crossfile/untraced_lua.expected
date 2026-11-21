@@ -1,0 +1,4 @@
+rules: untraced-entry-point
+exit: 0
+app.lua:7:24: warning [untraced-entry-point]
+handlers.lua:5:19: warning [untraced-entry-point]

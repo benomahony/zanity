@@ -99,3 +99,20 @@ def temporary_files(fake):
     tempfile.mktemp()
     tempfile.NamedTemporaryFile()
     fake.mktemp()
+
+
+def stop():
+    os._exit(1)
+
+
+def release(handle):
+    handle.__del__()
+    handle.close()
+
+
+def main():
+    os._exit(0)
+
+
+if __name__ == "__main__":
+    os.abort()

@@ -1,0 +1,3 @@
+rules: untraced-entry-point
+exit: 0
+handlers.zig:5:8: warning [untraced-entry-point]

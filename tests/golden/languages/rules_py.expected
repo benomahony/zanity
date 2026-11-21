@@ -1,0 +1,3 @@
+rules: assertion-message
+exit: 0
+rules_py.py:2:5: warning [assertion-message]

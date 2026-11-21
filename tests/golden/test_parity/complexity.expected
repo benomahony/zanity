@@ -1,0 +1,18 @@
+rules: complex-function,deep-nesting
+exit: 0
+Structure.cs:3:9: warning [complex-function]
+Structure.cs:34:25: warning [deep-nesting]
+Structure.java:2:9: warning [complex-function]
+Structure.java:27:25: warning [deep-nesting]
+Structure.swift:1:6: warning [complex-function]
+Structure.swift:58:21: warning [deep-nesting]
+structure.go:3:6: warning [complex-function]
+structure.go:60:6: warning [deep-nesting]
+structure.js:1:10: warning [complex-function]
+structure.js:26:11: warning [deep-nesting]
+structure.rs:1:8: warning [complex-function]
+structure.rs:58:21: warning [deep-nesting]
+structure.ts:1:17: warning [complex-function]
+structure.ts:26:11: warning [deep-nesting]
+structure.zig:1:8: warning [complex-function]
+structure.zig:26:21: warning [deep-nesting]

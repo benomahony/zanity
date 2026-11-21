@@ -1,0 +1,4 @@
+rules: untraced-entry-point
+exit: 0
+app.ts:9:24: warning [untraced-entry-point]
+handlers.ts:6:17: warning [untraced-entry-point]

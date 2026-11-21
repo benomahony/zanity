@@ -1,0 +1,4 @@
+rules: untraced-entry-point
+exit: 0
+app.py:9:5: warning [untraced-entry-point]
+views.py:7:5: warning [untraced-entry-point]

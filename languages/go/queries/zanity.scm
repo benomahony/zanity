@@ -68,6 +68,11 @@
   arguments: (argument_list
     (_) @call.argument))
 
+; A function passed to a call, which runs it: a request handler when the call registers a route.
+(call_expression
+  arguments: (argument_list
+    (func_literal) @call.handler))
+
 (for_statement
   (range_clause) @loop.iterable)
 

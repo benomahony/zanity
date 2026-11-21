@@ -5,6 +5,10 @@ pub const Entry = struct {
     scanner: bool,
     queries: []const []const u8,
     not_applicable: []const []const u8 = &.{},
+    /// Rules the language runs that no golden finding exercises in it yet. This only shrinks:
+    /// cover one with a positive fixture and its negative controls, or move it to
+    /// not_applicable when it can't fire in the language.
+    untested: []const []const u8 = &.{},
     /// The grammar's C symbol after `tree_sitter_`, when it differs from the name, as
     /// tree-sitter-c-sharp's `c_sharp` differs from `csharp`.
     symbol: []const u8 = "",
@@ -187,6 +191,19 @@ pub const Tables = struct {
     /// Whether a span start returns the context and the span together, as Go's `tracer.Start` does,
     /// so a call to one of its methods that doesn't is something else, such as `cmd.Start()`.
     span_start_pairs: bool = false,
+    /// Methods that register a request handler for the route their first argument names, passed
+    /// last, as Express's `app.get("/orders", handler)` and Go's `mux.HandleFunc` do.
+    route_methods: []const []const u8 = &.{},
+    /// Decorator methods that register the function below as a request handler, as FastAPI's
+    /// `@app.get(...)` and Flask's `@app.route(...)` do.
+    route_decorators: []const []const u8 = &.{},
+    /// Methods that get a tracer, such as OpenTelemetry's `trace.get_tracer`, so a file calling
+    /// one traces even before it starts a span.
+    tracer_methods: []const []const u8 = &.{},
+    /// Calls and methods that register instrumentation tracing a framework's handlers without
+    /// spans of their own, such as `otelhttp.NewHandler` and `FastAPIInstrumentor.instrument_app`.
+    instrumentation_calls: []const []const u8 = &.{},
+    instrumentation_methods: []const []const u8 = &.{},
     /// Calls that stop the program for a debugger or dump its state for one.
     debug_calls: []const []const u8 = &.{},
     mutating_calls: []const []const u8 = &.{},
