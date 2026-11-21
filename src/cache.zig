@@ -9,7 +9,6 @@ const facts_module = @import("facts.zig");
 const Definition = facts_module.Definition;
 const Diagnostic = check.Diagnostic;
 const Facts = facts_module.Facts;
-const Finding = facts_module.Finding;
 const Function = facts_module.Function;
 const Edge = facts_module.Edge;
 const Shape = facts_module.Shape;
@@ -160,10 +159,11 @@ pub const Replay = struct {
     language: []const u8,
     text: *memory.Text,
     facts: *Facts,
-    findings: *memory.Bounded(Finding),
+    diagnostics: *memory.Bounded(Diagnostic),
 };
 
-/// Adds a cached file to the run exactly as Batch.commit adds a freshly checked one.
+/// Fills a worker's facts and diagnostics from a cached file exactly as checking it would, so
+/// Batch.commit adds it to the run as it adds a freshly checked one.
 pub fn replay(run: Replay) (ReplayError || error{ OutOfMemory, LimitExceeded })!void {
     if (run.payload.len == 0 or run.scratch.len == 0) assert.panic("replaying a cache row without its JSON or parsing memory; split memory.Limits.analysis_bytes between both", .{});
     if (run.path.len == 0 or run.language.len == 0) assert.panic("replaying a cache row without a path or language; Batch passes both from the collected file", .{});
@@ -282,13 +282,13 @@ fn commitFacts(snapshot: Snapshot, run: Replay) error{LimitExceeded}!void {
 
 fn commitFindings(snapshot: Snapshot, run: Replay) (ReplayError || error{LimitExceeded})!void {
     if (snapshot.path.len == 0) assert.panic("committing cached findings without a path; validateHeader must run first", .{});
-    const before = run.findings.len;
+    const before = run.diagnostics.len;
     for (snapshot.findings) |diagnostic| {
         const rule = rules.find(diagnostic.rule) orelse return error.InvalidCache;
         const edit: ?facts_module.Edit = if (diagnostic.edit) |change| .{ .start = change.start, .end = change.end, .replacement = try run.text.copy(change.replacement) } else null;
-        try run.findings.add(.{ .path = run.path, .line = diagnostic.line, .column = diagnostic.column, .rule = rule.name, .message = try run.text.copy(diagnostic.message), .fix = try run.text.copy(diagnostic.fix), .edit = edit, .subject = diagnostic.subject });
+        try run.diagnostics.add(.{ .line = diagnostic.line, .column = diagnostic.column, .rule = rule.name, .message = try run.text.copy(diagnostic.message), .fix = try run.text.copy(diagnostic.fix), .edit = edit, .subject = diagnostic.subject });
     }
-    if (run.findings.len != before + snapshot.findings.len) assert.panic("replayed {d} findings from a cache row holding {d}; commitFindings must add each once", .{ run.findings.len - before, snapshot.findings.len });
+    if (run.diagnostics.len != before + snapshot.findings.len) assert.panic("replayed {d} findings from a cache row holding {d}; commitFindings must add each once", .{ run.diagnostics.len - before, snapshot.findings.len });
 }
 
 test "the analyzer's revision covers every file its analysis imports, so a changed file misses old rows" {
@@ -363,9 +363,9 @@ test "a cached analysis replays local findings and cross-file facts" {
 
     var target_text = try memory.Text.initText(arena, 4096);
     var target_facts = try Facts.initFacts(arena, .{ .definitions = 8, .functions = 8, .calls = 8, .references = 8, .text_bytes = 4096 }, &target_text);
-    var findings = try memory.Bounded(Finding).initBounded(arena, 8, "test findings");
+    var findings = try memory.Bounded(Diagnostic).initBounded(arena, 8, "test findings");
     var scratch: [64 * 1024]u8 = undefined;
-    try replay(.{ .payload = payload, .scratch = &scratch, .path = "src/a.py", .language = loaded.adapter.name, .text = &target_text, .facts = &target_facts, .findings = &findings });
+    try replay(.{ .payload = payload, .scratch = &scratch, .path = "src/a.py", .language = loaded.adapter.name, .text = &target_text, .facts = &target_facts, .diagnostics = &findings });
     try std.testing.expectEqual(@as(usize, 1), target_facts.definitions.len);
     try std.testing.expectEqual(@as(usize, 1), target_facts.functions.len);
     try std.testing.expectEqual(@as(usize, 1), target_facts.calls.len);
