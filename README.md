@@ -707,7 +707,7 @@ zig build bench -Dcorpus=/tmp/kubernetes
 
 It keeps the fastest of three runs of each. Cold means zanity's cache is empty, not the operating system's: the corpus is read once before any timing, so files are already in memory.
 
-Each run also reports zanity's peak memory. `-Dcompare=` takes a branch, tag or commit, builds zanity there in `.zig-cache/bench-compare/<commit>`, and measures it the same way, ending with a table of both and the change; the Bench workflow's `compare` input does the same for each codebase. Each zanity runs its own `--rules all`, so a commit that adds rules does more work:
+Each run also reports zanity's peak memory. `-Dcompare=` takes a branch, tag or commit, builds zanity there in `.zig-cache/bench-compare/<commit>`, and measures it the same way, ending with a table of both and the change; the Bench workflow's `compare` input does the same for each codebase. Each zanity runs its own `--rules all`, so a commit that adds rules does more work; `-Drules=` takes a list as `--rules` does, so passing the older commit's rules compares the same work:
 
 ```sh
 zig build bench -Dcompare=main

@@ -72,17 +72,18 @@ pub fn main(init: std.process.Init) !void {
     const io = init.io;
     const minimal = init.minimal;
     const args = try minimal.args.toSlice(arena);
-    if (args.len < 3 or args.len > 5) std.process.fatal("bench takes the zanity binary, the compiler, and optional --corpus=DIR and --compare=REF, but got {d} arguments; run it with zig build bench", .{args.len - 1});
+    if (args.len < 3 or args.len > 6) std.process.fatal("bench takes the zanity binary, the compiler, and optional --corpus=DIR, --compare=REF and --rules=LIST, but got {d} arguments; run it with zig build bench", .{args.len - 1});
     const limits: memory.Limits = .{};
     if (limits.files == 0 or limits.file_bytes == 0) assert.panic("the default limits allow {d} files of {d} bytes, so bench could check nothing; restore them in memory.Limits", .{ limits.files, limits.file_bytes });
-    const corpus_dir = option(args[3..], "--corpus=") orelse try stdDir(arena, io, args[2]);
+    const given = args[3..];
+    const corpus_dir = option(given, "--corpus=") orelse try stdDir(arena, io, args[2]);
     var corpus = try Corpus.initCorpus(arena, corpus_dir, limits);
     var scratch = try check.FileScratch.initCheckScratch(arena, limits);
     var text = try memory.Text.initText(arena, limits.text_bytes);
     var facts = try Facts.initFacts(arena, limits, &text);
     // zanity runs from inside the corpus, so a path relative to here would no longer find it.
     const zanity = try Io.Dir.cwd().realPathFileAlloc(io, args[1], arena);
-    const compared = if (option(args[3..], "--compare=")) |ref| try buildRef(arena, io, args[2], ref) else null;
+    const compared = if (option(given, "--compare=")) |ref| try buildRef(arena, io, args[2], ref) else null;
 
     var timer: Timer = .{ .io = io, .started = Io.Timestamp.now(io, .awake) };
     corpus.read(io) catch |e| {
@@ -93,18 +94,19 @@ pub fn main(init: std.process.Init) !void {
     const parse = try fastest(io, parseAll, .{&corpus});
     var oversized: usize = 0;
     const checked = try fastest(io, checkAll, .{ arena, &corpus, check.Work{ .scratch = &scratch, .text = &text, .facts = &facts }, &oversized });
-    const here: Target = .{ .zanity = zanity, .dir = corpus.dir, .environ = init.environ_map, .store = try std.fmt.allocPrint(arena, "{s}.bench.db", .{zanity}) };
+    const selection = option(given, "--rules=") orelse "all";
+    const here: Target = .{ .zanity = zanity, .dir = corpus.dir, .environ = init.environ_map, .rules = selection, .store = try std.fmt.allocPrint(arena, "{s}.bench.db", .{zanity}) };
     try init.environ_map.put("ZANITY_STORE", here.store);
     const this = try measureZanity(io, here);
     if (corpus.paths.len == 0) assert.panic("timed a corpus of no files; Corpus.read() rejects an empty corpus", .{});
-    try printTimings(io, &corpus, .{ .read = read, .parse = parse, .check = checked, .oversized = oversized, .cold = this.cold.ns, .warm = this.warm.ns, .cores = try std.Thread.getCpuCount() });
+    try printTimings(io, &corpus, .{ .read = read, .parse = parse, .check = checked, .oversized = oversized, .cold = this.cold.ns, .warm = this.warm.ns, .cores = try std.Thread.getCpuCount(), .rules = selection });
     const c = compared orelse return printMemory(io, this, null);
-    const there: Target = .{ .zanity = c.zanity, .dir = corpus.dir, .environ = init.environ_map, .store = try std.fmt.allocPrint(arena, "{s}.bench.db", .{c.zanity}) };
+    const there: Target = .{ .zanity = c.zanity, .dir = corpus.dir, .environ = init.environ_map, .rules = selection, .store = try std.fmt.allocPrint(arena, "{s}.bench.db", .{c.zanity}) };
     try init.environ_map.put("ZANITY_STORE", there.store);
     try printMemory(io, this, .{ .label = c.label, .runs = try measureZanity(io, there) });
 }
 
-const Timings = struct { read: u64, parse: u64, check: u64, oversized: usize, cold: u64, warm: u64, cores: usize };
+const Timings = struct { read: u64, parse: u64, check: u64, oversized: usize, cold: u64, warm: u64, cores: usize, rules: []const u8 };
 
 /// One way of running zanity, measured: the fastest of its runs and the most memory any used.
 const Run = struct { ns: u64, peak: usize };
@@ -116,7 +118,7 @@ const Runs = struct { cold: Run, warm: Run };
 const Compared = struct { zanity: []const u8, label: []const u8 };
 
 /// A zanity to run, the corpus it checks, and the store of its own that ZANITY_STORE names.
-const Target = struct { zanity: []const u8, dir: []const u8, environ: *const std.process.Environ.Map, store: []const u8 };
+const Target = struct { zanity: []const u8, dir: []const u8, environ: *const std.process.Environ.Map, rules: []const u8, store: []const u8 };
 
 /// Another commit's runs beside this one's, for the comparison table.
 const Other = struct { label: []const u8, runs: Runs };
@@ -124,12 +126,20 @@ const Other = struct { label: []const u8, runs: Runs };
 /// One line of the comparison table: a figure for this zanity and for the compared one.
 const Figure = struct { name: []const u8, unit: []const u8, this: f64, other: f64 };
 
+/// The flags bench takes after the zanity binary and the compiler.
+const flags = [_][]const u8{ "--corpus=", "--compare=", "--rules=" };
+
 /// The value of the flag that starts with `prefix`, such as `--corpus=`, among `args`.
 fn option(args: []const []const u8, prefix: []const u8) ?[]const u8 {
     if (prefix.len == 0 or prefix[prefix.len - 1] != '=') assert.panic("looking for the flag '{s}', which doesn't end with '='; name flags as --name=", .{prefix});
-    if (args.len > 2) assert.panic("bench got {d} flags, but it takes only --corpus= and --compare=; main() checks the count", .{args.len});
+    if (args.len > flags.len) assert.panic("bench got {d} flags, but it takes only {d}; main() checks the count", .{ args.len, flags.len });
     for (args) |arg| if (std.mem.startsWith(u8, arg, prefix)) return arg[prefix.len..];
-    for (args) |arg| if (!std.mem.startsWith(u8, arg, "--corpus=") and !std.mem.startsWith(u8, arg, "--compare=")) std.process.fatal("bench doesn't know the argument '{s}'; it takes --corpus=DIR and --compare=REF", .{arg});
+    for (args) |arg| {
+        const known = for (flags) |flag| {
+            if (std.mem.startsWith(u8, arg, flag)) break true;
+        } else false;
+        if (!known) std.process.fatal("bench doesn't know the argument '{s}'; it takes --corpus=DIR, --compare=REF and --rules=LIST", .{arg});
+    }
     return null;
 }
 
@@ -204,7 +214,7 @@ fn printMemory(io: Io, this: Runs, other: ?Other) !void {
     try out.print("memory   {d:>7.1} MB peak cold, {d:.1} MB peak warm\n", .{ @as(f64, @floatFromInt(this.cold.peak)) / mb, @as(f64, @floatFromInt(this.warm.peak)) / mb });
     const o = other orelse return out.flush();
     const theirs = o.runs;
-    try out.print("\ncompared with {s}, which runs its own --rules all\n", .{o.label});
+    try out.print("\ncompared with {s}, each running the rules it has of those selected\n", .{o.label});
     try out.print("{s:<12} {s:>12} {s:>12} {s:>8}\n", .{ "", "this", "compared", "change" });
     const figures = [_]Figure{
         .{ .name = "cold time", .unit = "s", .this = @as(f64, @floatFromInt(this.cold.ns)) / ns, .other = @as(f64, @floatFromInt(theirs.cold.ns)) / ns },
@@ -242,7 +252,7 @@ fn printTimings(io: Io, corpus: *const Corpus, t: Timings) !void {
     try out.print("parse    {d:>7.3} s   {d:.1} MB/s on one core: the work no check can skip\n", .{ parse, mb / parse });
     try out.print("check    {d:>7.3} s   {d:.1}x the parse, on one core, without the cross-file rules; {d} oversized files unchecked\n", .{ check_s, check_s / parse, t.oversized });
     try out.print("ceiling  {d:>7.3} s   the parse spread over {d} cores\n", .{ ceiling, t.cores });
-    try out.print("cold     {d:>7.3} s   {d:.1}x the ceiling, {d:.1} MB/s: zanity check --rules all from an empty store\n", .{ cold, cold / ceiling, mb / cold });
+    try out.print("cold     {d:>7.3} s   {d:.1}x the ceiling, {d:.1} MB/s: zanity check --rules {s} from an empty store\n", .{ cold, cold / ceiling, mb / cold, if (t.rules.len > 40) "(the list given)" else t.rules });
     try out.print("warm     {d:>7.3} s   {d:.1}x the ceiling, {d:.1}x faster than cold: the same check, nothing changed\n", .{ warm, warm / ceiling, cold / warm });
     try out.flush();
 }
@@ -287,7 +297,7 @@ fn timeZanity(io: Io, target: Target, cold: bool) !Run {
     for (0..runs) |_| {
         if (cold) try forget(io, target.store);
         var timer: Timer = .{ .io = io, .started = Io.Timestamp.now(io, .awake) };
-        const peak = try runZanity(io, target.zanity, target.dir, target.environ);
+        const peak = try runZanity(io, target);
         best = .{ .ns = @min(best.ns, timer.lap()), .peak = @max(best.peak, peak) };
     }
     if (best.ns == std.math.maxInt(u64)) assert.panic("none of the {d} runs finished; the loop must time each run", .{runs});
@@ -357,13 +367,15 @@ fn checkAll(arena: Allocator, corpus: *const Corpus, work: check.Work, oversized
 
 /// Runs one full check of `dir` and returns the most memory it held, in bytes. Exit 1 means
 /// zanity found something, which is a finished run here; a higher code or a signal is a failure.
-fn runZanity(io: Io, zanity: []const u8, dir: []const u8, environ: *const std.process.Environ.Map) !usize {
+fn runZanity(io: Io, target: Target) !usize {
+    const zanity = target.zanity;
+    const dir = target.dir;
     if (!std.fs.path.isAbsolute(zanity)) assert.panic("running zanity from '{s}', a relative path, inside {s}; resolve it before changing directory", .{ zanity, dir });
     if (dir.len == 0) assert.panic("running zanity on an empty corpus path; Corpus.initCorpus() rejects one", .{});
     var child = try std.process.spawn(io, .{
-        .argv = &.{ zanity, "check", "--quiet", "--no-color", "--rules", "all", "." },
+        .argv = &.{ zanity, "check", "--quiet", "--no-color", "--rules", target.rules, "." },
         .cwd = .{ .path = dir },
-        .environ_map = environ,
+        .environ_map = target.environ,
         .stdout = .ignore,
         // --quiet leaves stderr empty on a finished run, so anything there says why zanity failed.
         .stderr = .inherit,
