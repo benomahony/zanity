@@ -94,25 +94,33 @@ pub const Snapshot = struct {
     passed: []const u64,
 };
 
-/// The cache key changes with the path, language queries, enabled rules, inference units and cache
-/// schema. The store matches the source digest separately, so an edit replaces this context's row.
-pub fn key(context: AnalysisContext, path: []const u8) store.Digest {
-    if (path.len == 0) assert.panic("caching an empty path; Batch only caches named files", .{});
+/// The context every row a checker caches shares: this analyzer, the language's queries and
+/// grammar, the enabled rules and whether units are kept. The store keeps the most recently used
+/// contexts, so a new zanity or rule selection drops the rows of the old one in time.
+pub fn contextOf(context: AnalysisContext) store.Digest {
     if (context.language.len == 0 or context.query.len == 0 or context.revision.len == 0) assert.panic("caching a language without a name, query or revision; adapters provide all three", .{});
-    var parts: [rules.all.len + 6][]const u8 = undefined;
+    if (context.enabled.len == 0) assert.panic("caching {s} with no rules enabled; a check enables at least one", .{context.language});
+    var parts: [rules.all.len + 5][]const u8 = undefined;
     parts[0] = &analyzer_revision;
-    parts[1] = path;
-    parts[2] = context.language;
-    parts[3] = context.query;
-    parts[4] = if (context.collect_units) "units" else "no-units";
-    parts[5] = context.revision;
-    var count: usize = 6;
+    parts[1] = context.language;
+    parts[2] = context.query;
+    parts[3] = if (context.collect_units) "units" else "no-units";
+    parts[4] = context.revision;
+    var count: usize = 5;
     for (context.enabled.names()) |name| {
         parts[count] = name;
         count += 1;
     }
     if (count > parts.len) assert.panic("{d} cache-key parts in room for {d}; size parts for every selected rule", .{ count, parts.len });
     return store.digest(parts[0..count]);
+}
+
+/// The row for `path` in `context`. The store matches the source digest separately, so an edit
+/// replaces the row.
+pub fn key(context: store.Digest, path: []const u8) store.Digest {
+    if (path.len == 0) assert.panic("caching an empty path; Batch only caches named files", .{});
+    if (std.mem.indexOfNone(u8, &context, "0123456789abcdef") != null) assert.panic("keying {s} by context '{s}', which is not a digest; pass contextOf()'s", .{ path, &context });
+    return store.digest(&.{ &context, path });
 }
 
 /// Encodes exactly what one language checker produced into memory reserved at startup. Cross-file

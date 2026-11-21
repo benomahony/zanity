@@ -23,6 +23,7 @@ const embed = @import("embed.zig");
 const semantic = @import("semantic.zig");
 const semantic_judge = @import("semantic_judge.zig");
 const store = @import("store.zig");
+const language = @import("language.zig");
 const sqlite = @import("sqlite.zig");
 const Live = @import("live.zig").Live;
 const config = @import("config.zig");
@@ -190,8 +191,9 @@ fn checkFiles(ctx: *zclig.Context, ws: *Workspace, selected: rules.Set) !void {
         }
         ws.checked = run.checked;
         ws.cache_hits = run.cached;
-        if (run.checked > run.cached) if (run.cache) |source_cache| source_cache.trimAnalyses(ws.limits.cached_analyses) catch {
-            const line = try ws.text.format("zanity: could not trim the analysis cache in {s} to its {d} most recently used files: {s}. Check the disk is not full and the store is writable.", .{ source_cache.path, ws.limits.cached_analyses, sqlite.failure[0..sqlite.failure_len] });
+        var contexts: [language.count]store.Digest = undefined;
+        if (run.cache) |source_cache| source_cache.useContexts(run.contexts(&contexts), ws.limits.cached_contexts) catch {
+            const line = try ws.text.format("zanity: could not trim the analysis cache in {s} to its {d} most recently used contexts: {s}. Check the disk is not full and the store is writable.", .{ source_cache.path, ws.limits.cached_contexts, sqlite.failure[0..sqlite.failure_len] });
             const err = console(ctx, ctx.runtime.err);
             try err.styled(line, .{ .fg = .{ .named = .yellow } });
             try err.writer.writeByte('\n');

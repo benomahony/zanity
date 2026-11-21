@@ -17,7 +17,9 @@ const Facts = facts_module.Facts;
 const Finding = facts_module.Finding;
 const Live = @import("live.zig").Live;
 const cache_module = @import("cache.zig");
-const Store = @import("store.zig").Store;
+const store = @import("store.zig");
+const Store = store.Store;
+const adapters = @import("adapters");
 
 /// More workers than this would each wait on the lock more than they check.
 pub const max_workers = 64;
@@ -89,6 +91,7 @@ pub const Failure = struct {
 
 const CachedFile = struct {
     key: @import("store.zig").Digest,
+    context: @import("store.zig").Digest,
     source: @import("store.zig").Digest,
     path: []const u8,
     language: []const u8,
@@ -132,6 +135,20 @@ pub const Batch = struct {
         return self.failure;
     }
 
+    /// The analysis context of each language the run has a checker for, which the store marks
+    /// used once the run is done.
+    pub fn contexts(self: *const Batch, out: *[language.count]store.Digest) []const store.Digest {
+        if (self.checkers.len != adapters.all.len) assert.panic("{d} checker slots for {d} languages; the workspace makes one slot per adapter", .{ self.checkers.len, adapters.all.len });
+        var count: usize = 0;
+        for (self.checkers, adapters.all) |slot, *adapter| {
+            const checker = slot orelse continue;
+            out[count] = cache_module.contextOf(.{ .language = adapter.name, .query = adapter.query, .revision = adapter.revision, .enabled = checker.enabled, .collect_units = self.facts.collect_units });
+            count += 1;
+        }
+        if (count > out.len) assert.panic("{d} contexts in room for {d}; there is one checker slot per language", .{ count, out.len });
+        return out[0..count];
+    }
+
     fn work(self: *Batch, worker: *Worker) void {
         if (worker.source.len <= self.file_bytes) assert.panic("a worker's source buffer holds {d} bytes, but files may have {d}; it needs one more to see a file is too long", .{ worker.source.len, self.file_bytes });
         for (0..self.files.len) |_| {
@@ -157,7 +174,8 @@ pub const Batch = struct {
             return self.commitOversized(worker, path, checker);
         }
         const cache_context: cache_module.AnalysisContext = .{ .language = adapter.name, .query = adapter.query, .revision = adapter.revision, .enabled = checker.enabled, .collect_units = self.facts.collect_units };
-        const cached_file: CachedFile = .{ .key = cache_module.key(cache_context, path), .source = @import("store.zig").digest(&.{source}), .path = path, .language = adapter.name };
+        const context = cache_module.contextOf(cache_context);
+        const cached_file: CachedFile = .{ .key = cache_module.key(context, path), .context = context, .source = @import("store.zig").digest(&.{source}), .path = path, .language = adapter.name };
         if (try self.replayCached(cached_file)) return;
         worker.startFile(path, adapter.name, self.facts.collect_units);
         const result = analysis.checkFile(checker, .{ .scratch = &worker.scratch, .text = &worker.text, .facts = &worker.facts }, source) catch |e| switch (e) {
@@ -169,7 +187,7 @@ pub const Batch = struct {
         if (self.cache) |source_cache| {
             const room = self.cache_buffer[0 .. self.cache_buffer.len / 2];
             if (cache_module.encode(room, cache_context, &worker.facts, result.diagnostics)) |payload| {
-                source_cache.keepAnalysis(.{ .key = cached_file.key, .source = cached_file.source, .path = path, .language = adapter.name, .result = payload }) catch {
+                source_cache.keepAnalysis(.{ .key = cached_file.key, .context = cached_file.context, .source = cached_file.source, .path = path, .language = adapter.name, .result = payload }) catch {
                     self.cache = null;
                 };
             } else |_| self.cache = null;

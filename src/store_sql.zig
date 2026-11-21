@@ -1,6 +1,13 @@
 //! The SQL zanity's store runs: its schema, and the statements Store prepares, one per field.
 //! Every statement is fixed text, so no file contents, environment or request data become SQL.
 
+/// The version of `schema`, kept in the store's user_version. A store from before it is migrated
+/// by running `migration` first, which drops what the schema now makes differently.
+pub const schema_version = 2;
+
+/// Version 2 keys source_analyses by analysis context and trims whole contexts, not rows.
+pub const migration = "DROP TABLE IF EXISTS source_analyses;";
+
 /// The tables the store keeps, created on first use; WAL lets several runs share them.
 pub const schema =
     \\PRAGMA journal_mode = WAL;
@@ -70,14 +77,18 @@ pub const schema =
     \\);
     \\CREATE TABLE IF NOT EXISTS source_analyses (
     \\    analysis_hash TEXT PRIMARY KEY,
+    \\    context_hash TEXT NOT NULL,
     \\    source_hash TEXT NOT NULL,
     \\    path TEXT NOT NULL,
     \\    language TEXT NOT NULL,
     \\    result TEXT NOT NULL CHECK (json_valid(result)),
-    \\    created_at TEXT NOT NULL,
+    \\    created_at TEXT NOT NULL
+    \\);
+    \\CREATE INDEX IF NOT EXISTS source_analyses_context ON source_analyses (context_hash);
+    \\CREATE TABLE IF NOT EXISTS analysis_contexts (
+    \\    context_hash TEXT PRIMARY KEY,
     \\    used_at TEXT NOT NULL
     \\);
-    \\CREATE INDEX IF NOT EXISTS source_analyses_used_at ON source_analyses (used_at);
     \\CREATE TABLE IF NOT EXISTS run_analyses (
     \\    scope_hash TEXT PRIMARY KEY,
     \\    state_hash TEXT NOT NULL,
@@ -105,14 +116,15 @@ const find_label = "SELECT real FROM labels WHERE rule = ?1 AND unit_hash = ?2";
 /// Every answer kept, newest first, with its label when it has one; ?1 narrows it to one rule,
 /// ?2 and ?3 to one path and line.
 const list_observed = "SELECT o.rule, o.path, o.line, o.unit_hash, o.unit_name, o.probability, o.threshold, l.real FROM observations o LEFT JOIN labels l ON l.rule = o.rule AND l.unit_hash = o.unit_hash WHERE (?1 = '' OR o.rule = ?1) AND (?2 = '' OR o.path = ?2) AND (?3 = 0 OR o.line = ?3) ORDER BY o.seen_at DESC";
-const touch_analysis = "UPDATE source_analyses SET used_at = strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now') WHERE analysis_hash = ?1 AND used_at < strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now', '-1 day')";
 const find_vector = "SELECT vector FROM embeddings WHERE model = ?1 AND kind = ?2 AND text_hash = ?3";
 const save_vector = "INSERT OR REPLACE INTO embeddings (model, kind, text_hash, vector, embedded_at) VALUES (?1, ?2, ?3, ?4, strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now'))";
-const save_analysis = "INSERT OR REPLACE INTO source_analyses (analysis_hash, source_hash, path, language, result, created_at, used_at) VALUES (?1, ?2, ?3, ?4, ?5, strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now'), strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now'))";
+const save_analysis = "INSERT OR REPLACE INTO source_analyses (analysis_hash, context_hash, source_hash, path, language, result, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now'))";
 
-/// Keeps the ?1 most recently used analyses and deletes the rest, walking the used_at index.
-const trim_analyses = "DELETE FROM source_analyses WHERE analysis_hash IN (SELECT analysis_hash FROM source_analyses ORDER BY used_at DESC LIMIT -1 OFFSET ?1)";
-const count_analyses = "SELECT count(*) FROM source_analyses";
+const use_context = "INSERT OR REPLACE INTO analysis_contexts (context_hash, used_at) VALUES (?1, strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now'))";
+/// Keeps the ?1 most recently used analysis contexts and forgets the rest.
+const trim_contexts = "DELETE FROM analysis_contexts WHERE context_hash NOT IN (SELECT context_hash FROM analysis_contexts ORDER BY used_at DESC LIMIT ?1)";
+/// Deletes the analyses of every context the store no longer keeps.
+const drop_unused_analyses = "DELETE FROM source_analyses WHERE context_hash NOT IN (SELECT context_hash FROM analysis_contexts)";
 const find_run_analysis = "SELECT checked FROM run_analyses WHERE scope_hash = ?1 AND state_hash = ?2";
 const list_run_findings = "SELECT result FROM run_findings WHERE scope_hash = ?1 ORDER BY chunk";
 const save_run_analysis = "INSERT OR REPLACE INTO run_analyses (scope_hash, state_hash, checked, created_at) VALUES (?1, ?2, ?3, strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now'))";
@@ -130,10 +142,10 @@ pub const statements = .{
     .observation = save_observation,
     .run = save_run,
     .find_analysis = find_analysis,
-    .touch_analysis = touch_analysis,
     .save_analysis = save_analysis,
-    .trim_analyses = trim_analyses,
-    .count_analyses = count_analyses,
+    .use_context = use_context,
+    .trim_contexts = trim_contexts,
+    .drop_unused_analyses = drop_unused_analyses,
     .find_run_analysis = find_run_analysis,
     .list_run_findings = list_run_findings,
     .save_run_analysis = save_run_analysis,

@@ -231,15 +231,15 @@ With baseline or triage/report filters, `--json` returns a versioned object:
 
 Every language rule caches each source file's local findings and the facts needed by project-wide rules in `~/.cache/zanity/zanity.db`, or the file named by `ZANITY_STORE`. An unchanged file is not parsed again; recursion, naming, vocabulary, dead-symbol and the other cross-file rules are still recomputed from the cached facts together with facts from changed files. The key includes the source, path, language queries, selected rules and whether `--infer` needs function bodies, so changing any of them runs the checker again. An unavailable cache never stops a check.
 
-The `source_analyses` table keeps one row per path and analysis context, replacing it when that source changes. Its `result` column is JSON rather than an opaque blob, so agents and people can inspect the exact findings and facts zanity reused. Agent output says when rows were reused and names the database. For example:
+The `source_analyses` table keeps one row per path and analysis context, replacing it when that source changes. An analysis context is this zanity, the language and the rules, and `analysis_contexts` records when each was last used: the store keeps the 16 most recent and deletes the rows of the rest, so an old zanity's rows go once newer ones have been used. The `result` column is JSON rather than an opaque blob, so agents and people can inspect the exact findings and facts zanity reused. Agent output says when rows were reused and names the database. For example:
 
 ```sh
 sqlite3 ~/.cache/zanity/zanity.db "
-  SELECT path, language, used_at,
+  SELECT path, language, created_at,
          json_array_length(result, '$.findings') AS findings,
          json_array_length(result, '$.functions') AS functions
   FROM source_analyses
-  ORDER BY used_at DESC, path
+  ORDER BY created_at DESC, path
   LIMIT 20;"
 ```
 
