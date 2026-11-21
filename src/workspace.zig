@@ -61,6 +61,8 @@ pub const Workspace = struct {
     dirs: memory.Bounded([]const u8),
     /// The order checkFiles() hands files to its workers in.
     order: []batch.Sized,
+    /// Room for report.sortFindings() to sort the findings' indices.
+    finding_order: []u32,
     rows: memory.Bounded(Row),
     table: report.TableScratch,
     source: []u8,

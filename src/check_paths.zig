@@ -129,7 +129,7 @@ pub fn checkPaths(ctx: *zclig.Context, ws: *Workspace, options: CheckOptions, se
     if (ws.inference) |*inference| try inference.summarise(ctx);
     if (ws.embedding) |*embedding| try judgeEmbeddings(ctx, ws, embedding, selected);
     try dropDisabled(ws);
-    report.sortFindings(ws.findings.items());
+    report.sortFindings(ws.findings.items(), ws.finding_order);
     if (options.fix) try fixFiles(ctx, ws);
     const findings = ws.findings.items();
     ws.rows.clear();

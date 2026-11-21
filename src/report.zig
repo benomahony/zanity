@@ -29,23 +29,65 @@ pub const Counts = struct {
     skipped: usize = 0,
 };
 
-pub fn sortFindings(findings: []Finding) void {
-    std.mem.sort(Finding, findings, {}, findingOrder);
+/// Where an index's finding has been moved to its sorted place.
+const moved = std.math.maxInt(u32);
+
+/// Sorts findings by path and position, keeping equal ones in the order they came. A finding is
+/// over a hundred bytes, so it sorts their indices in `order` and then moves each finding once.
+pub fn sortFindings(findings: []Finding, order: []u32) void {
+    if (findings.len >= moved) assert.panic("{d} findings is more than a report can number; raise the u32 counts in report.zig", .{findings.len});
+    if (order.len < findings.len) assert.panic("sorting {d} findings with room to order {d}; reserve memory.Limits.findings indices", .{ findings.len, order.len });
+    const indices = order[0..findings.len];
+    for (indices, 0..) |*index, i| index.* = @intCast(i);
+    std.sort.pdq(u32, indices, findings, indexOrder);
+    for (0..indices.len) |start| {
+        if (indices[start] == moved) continue;
+        const first = findings[start];
+        var at = start;
+        for (0..indices.len) |_| {
+            const from = indices[at];
+            indices[at] = moved;
+            if (from == start) {
+                findings[at] = first;
+                break;
+            }
+            findings[at] = findings[from];
+            at = from;
+        }
+    }
     if (!std.sort.isSorted(Finding, findings, {}, findingOrder)) assert.panic("expected findings sorted by path and position, got {d} findings out of order; sort with findingOrder before checking the order", .{findings.len});
-    if (findings.len >= std.math.maxInt(u32)) assert.panic("{d} findings is more than a report can number; raise the u32 counts in report.zig", .{findings.len});
+}
+
+/// Index order for sortFindings(): by finding, then by index, which keeps equal findings stable.
+fn indexOrder(findings: []const Finding, a: u32, b: u32) bool {
+    if (a >= findings.len) assert.panic("ordering finding {d} of {d}; sortFindings() fills indices below the count", .{ a, findings.len });
+    if (b >= findings.len) assert.panic("ordering finding {d} of {d}; sortFindings() fills indices below the count", .{ b, findings.len });
+    return switch (compareFindings(findings[a], findings[b])) {
+        .lt => true,
+        .gt => false,
+        .eq => a < b,
+    };
 }
 
 fn findingOrder(_: void, a: Finding, b: Finding) bool {
+    if (a.rule.len == 0) assert.panic("a finding at {s}:{d} has no rule; every finding is reported under one", .{ a.path, a.line + 1 });
+    if (b.rule.len == 0) assert.panic("a finding at {s}:{d} has no rule; every finding is reported under one", .{ b.path, b.line + 1 });
+    return compareFindings(a, b) == .lt;
+}
+
+fn compareFindings(a: Finding, b: Finding) std.math.Order {
     if (a.path.len == 0) assert.panic("a {s} finding at line {d} has no path; findings are added with the path of the file checked", .{ a.rule, a.line + 1 });
     if (b.path.len == 0) assert.panic("a {s} finding at line {d} has no path; findings are added with the path of the file checked", .{ b.rule, b.line + 1 });
-    const by_path = std.mem.order(u8, a.path, b.path);
-    if (by_path != .eq) return by_path == .lt;
-    if (a.line != b.line) return a.line < b.line;
-    if (a.column != b.column) return a.column < b.column;
+    // Findings of one file nearly always share its path's bytes, which needs no comparing.
+    const same_path = a.path.ptr == b.path.ptr and a.path.len == b.path.len;
+    const by_path = if (same_path) .eq else std.mem.order(u8, a.path, b.path);
+    if (by_path != .eq) return by_path;
+    if (a.line != b.line) return std.math.order(a.line, b.line);
+    if (a.column != b.column) return std.math.order(a.column, b.column);
     const by_rule = std.mem.order(u8, a.rule, b.rule);
-    if (by_rule != .eq) return by_rule == .lt;
+    if (by_rule != .eq) return by_rule;
     // Two renames of one name edit the same bytes; the lower number goes first in every file.
-    return a.rename < b.rename;
+    return std.math.order(a.rename, b.rename);
 }
 
 pub fn count(findings: []const Finding, files: usize, skipped: usize) Counts {

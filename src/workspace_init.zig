@@ -45,6 +45,7 @@ pub fn initWorkspace(comptime Workspace: type, gpa: std.mem.Allocator, process_i
         .project_files = try .initBounded(gpa, project_manifest_capacity, "project files"),
         .dirs = try .initBounded(gpa, limits.files, "directories"),
         .order = try memory.reserveUninitialized(gpa, batch.Sized, limits.files),
+        .finding_order = try memory.reserveUninitialized(gpa, u32, limits.findings),
         .rows = try .initBounded(gpa, row_capacity, "findings and resolved baseline entries"),
         .table = try .initTableScratch(gpa, limits.files),
         .history = try .initHistory(gpa, limits.findings),

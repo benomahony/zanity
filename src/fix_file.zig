@@ -39,7 +39,7 @@ pub fn mergeRenames(ws: anytype) error{LimitExceeded}!void {
     }
     for (ws.renames.items()) |use| if (live[use.rename]) try ws.findings.add(use);
     const findings = ws.findings.items();
-    report.sortFindings(findings);
+    report.sortFindings(findings, ws.finding_order);
     var start: usize = 0;
     while (start < findings.len) {
         var end = start + 1;
