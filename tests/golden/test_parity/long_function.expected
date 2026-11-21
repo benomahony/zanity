@@ -1,0 +1,10 @@
+rules: long-function
+exit: 0
+Structure.cs:3:9: warning [long-function]
+Structure.java:2:9: warning [long-function]
+Structure.swift:1:6: warning [long-function]
+structure.go:3:6: warning [long-function]
+structure.js:1:10: warning [long-function]
+structure.lua:3:12: warning [long-function]
+structure.rs:1:8: warning [long-function]
+structure.ts:1:17: warning [long-function]

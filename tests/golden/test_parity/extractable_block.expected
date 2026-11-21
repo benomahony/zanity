@@ -1,0 +1,9 @@
+rules: extractable-block
+exit: 0
+Structure.cs:5:9: information [extractable-block]
+Structure.java:3:9: information [extractable-block]
+Structure.swift:2:5: information [extractable-block]
+structure.js:2:3: information [extractable-block]
+structure.rs:2:5: information [extractable-block]
+structure.ts:2:3: information [extractable-block]
+structure.zig:2:5: information [extractable-block]

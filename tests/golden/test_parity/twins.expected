@@ -1,0 +1,18 @@
+rules: structural-twins
+exit: 0
+csharp/Invoices.cs:3:9: warning [structural-twins]
+csharp/Orders.cs:3:9: warning [structural-twins]
+go/invoices.go:3:6: warning [structural-twins]
+go/orders.go:3:6: warning [structural-twins]
+java/Invoices.java:2:9: warning [structural-twins]
+java/Orders.java:2:9: warning [structural-twins]
+javascript/invoices.js:1:10: warning [structural-twins]
+javascript/orders.js:1:10: warning [structural-twins]
+rust/invoices.rs:1:8: warning [structural-twins]
+rust/orders.rs:1:8: warning [structural-twins]
+swift/invoices.swift:1:6: warning [structural-twins]
+swift/orders.swift:1:6: warning [structural-twins]
+typescript/invoices.ts:1:17: warning [structural-twins]
+typescript/orders.ts:1:17: warning [structural-twins]
+zig/invoices.zig:1:8: warning [structural-twins]
+zig/orders.zig:1:8: warning [structural-twins]
