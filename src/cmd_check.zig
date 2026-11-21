@@ -61,6 +61,7 @@ pub fn runCheck(ctx: *zclig.Context, requested: CheckOptions) ![]const Row {
     var live = Live.initLive(console(ctx, ctx.runtime.err), ws.io, !ctx.quiet);
     ws.live = &live;
     defer ws.live = null;
+    ws.keep_runs = !watching(ws);
     const counts = checkPaths(ctx, ws, options, selected) catch |e| return check_paths.failCheck(ctx, ws, e);
     if (triage.failsReview(options, counts, ws.review)) ctx.status = .failure;
     if (!triage.special(options) and ws.rows.len != counts.errors + counts.warnings) assert.panic("{d} output rows for {d} errors and {d} warnings; runCheck() must add one row per error or warning", .{ ws.rows.len, counts.errors, counts.warnings });

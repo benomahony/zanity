@@ -162,6 +162,7 @@ pub fn checkAgain(ctx: *zclig.Context, resident: *Resident, options: CheckOption
     if (options.rules != null and options.production) selected.includeTier(.production);
     resident.live = Live.initLive(console(ctx, ctx.runtime.err), checks.io, !ctx.quiet);
     checks.live = &resident.live;
+    checks.keep_runs = false;
     const counts = checkPaths(ctx, checks, options, selected) catch |e| return check_paths.failCheck(ctx, checks, e);
     if (!triage.special(options) and checks.rows.len != counts.errors + counts.warnings) assert.panic("checked again into {d} rows for {d} errors and {d} warnings; checkPaths makes one row per finding", .{ checks.rows.len, counts.errors, counts.warnings });
     return counts;

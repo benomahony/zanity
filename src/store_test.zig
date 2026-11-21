@@ -8,6 +8,7 @@ const Observation = store_module.Observation;
 const Store = store_module.Store;
 const digest = store_module.digest;
 const store_vectors = @import("store_vectors.zig");
+const store_runs = @import("store_runs.zig");
 
 test "digests stay the same, so answers already in a store keep matching" {
     const unit = digest(&.{ "lang-a", "def f():\n    return 1\n" });
@@ -53,28 +54,92 @@ test "a vector kept in the store comes back as float16 kept it, under its model 
     try std.testing.expectEqual(@as(?usize, null), try store_vectors.cachedVector(&store, .{ .model = key.model, .kind = "name", .text = key.text }, &out));
 }
 
-test "a source analysis is queryable JSON and records cache hits" {
+fn openStore(arena: std.mem.Allocator, dir: []const u8) !Store {
+    var environ: std.process.Environ.Map = .init(arena);
+    try environ.put("ZANITY_STORE", try std.fs.path.join(arena, &.{ dir, "store.db" }));
+    return Store.initStore(std.heap.page_allocator, std.testing.io, &environ, 8 << 20);
+}
+
+test "a source analysis is queryable JSON, and reading it back writes nothing" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
     const arena = arena_state.allocator();
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
-    const dir = try tmp.dir.realPathFileAlloc(std.testing.io, ".", arena);
-    var environ: std.process.Environ.Map = .init(arena);
-    try environ.put("ZANITY_STORE", try std.fs.path.join(arena, &.{ dir, "store.db" }));
-    const store = try Store.initStore(std.heap.page_allocator, std.testing.io, &environ, 8 << 20);
+    const store = try openStore(arena, try tmp.dir.realPathFileAlloc(std.testing.io, ".", arena));
     const key = digest(&.{"analysis"});
     const source = digest(&.{"source"});
-    try store.keepAnalysis(.{ .key = key, .source = source, .path = "src/a.py", .language = "lang-a", .result = "{\"findings\":[{\"rule\":\"unbounded-loop\"}]}" });
+    try store.keepAnalysis(.{ .key = key, .context = digest(&.{"context"}), .source = source, .path = "src/a.py", .language = "lang-a", .result = "{\"findings\":[{\"rule\":\"unbounded-loop\"}]}" });
+    const written = try scalar(store.db, "SELECT total_changes()");
     var buffer: [1024]u8 = undefined;
     const result = (try store.cachedAnalysis(&buffer, key, source)).?;
     try std.testing.expectEqualStrings("{\"findings\":[{\"rule\":\"unbounded-loop\"}]}", result);
     try std.testing.expectEqual(null, try store.cachedAnalysis(&buffer, key, digest(&.{"changed"})));
+    try std.testing.expectEqual(written, try scalar(store.db, "SELECT total_changes()"));
     try std.testing.expectEqual(@as(f64, 1), try scalar(store.db, "SELECT json_array_length(result, '$.findings') FROM source_analyses"));
-    try std.testing.expectEqual(@as(f64, 1), try scalar(store.db, "SELECT hits FROM source_analyses"));
 }
 
-test "trimming the analysis cache keeps the most recently used analyses and drops the rest" {
+test "trimming the analysis cache keeps the analyses of the most recently used contexts and drops the rest" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const store = try openStore(arena, try tmp.dir.realPathFileAlloc(std.testing.io, ".", arena));
+    const old = "00000000000000000000000000000000";
+    const used = "11111111111111111111111111111111";
+    const contexts = [_]store_module.Digest{ old.*, used.*, "22222222222222222222222222222222".* };
+    for (contexts) |context| for ([_][]const u8{ "src/a.py", "src/b.py" }) |path| {
+        try store.keepAnalysis(.{ .key = digest(&.{ &context, path }), .context = context, .source = digest(&.{"source"}), .path = path, .language = "lang-a", .result = "{\"findings\":[]}" });
+    };
+    try store.useContexts(&contexts, 3);
+    try std.testing.expectEqual(@as(f64, 6), try scalar(store.db, "SELECT count(*) FROM source_analyses"));
+    const stamps = "UPDATE analysis_contexts SET used_at = CASE context_hash WHEN '" ++ old ++ "' THEN '2026-01-01T00:00:00+00:00' WHEN '" ++ used ++ "' THEN '2026-01-03T00:00:00+00:00' ELSE '2026-01-02T00:00:00+00:00' END";
+    if (sqlite.sqlite3_exec(store.db, stamps, null, null, null) != sqlite.ok) return sqlite.captureDatabaseFailure(store.db);
+    try store.useContexts(&.{}, 2);
+    try std.testing.expectEqual(@as(f64, 2), try scalar(store.db, "SELECT count(*) FROM analysis_contexts"));
+    try std.testing.expectEqual(@as(f64, 4), try scalar(store.db, "SELECT count(*) FROM source_analyses"));
+    try std.testing.expectEqual(@as(f64, 0), try scalar(store.db, "SELECT count(*) FROM source_analyses WHERE context_hash = '" ++ old ++ "'"));
+    try store.useContexts(&.{}, 2);
+    try std.testing.expectEqual(@as(f64, 4), try scalar(store.db, "SELECT count(*) FROM source_analyses"));
+}
+
+test "a store from before schema versions drops its old analyses and keeps working" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const dir = try tmp.dir.realPathFileAlloc(std.testing.io, ".", arena);
+    const old = try openStore(arena, dir);
+    const before = "DROP TABLE source_analyses; CREATE TABLE source_analyses (analysis_hash TEXT PRIMARY KEY, used_at TEXT NOT NULL); INSERT INTO source_analyses VALUES ('a', 'b'); PRAGMA user_version = 0;";
+    if (sqlite.sqlite3_exec(old.db, before, null, null, null) != sqlite.ok) return sqlite.captureDatabaseFailure(old.db);
+    const store = try openStore(arena, dir);
+    try std.testing.expectEqual(@as(f64, 2), try scalar(store.db, "SELECT user_version FROM pragma_user_version"));
+    try std.testing.expectEqual(@as(f64, 0), try scalar(store.db, "SELECT count(*) FROM source_analyses"));
+    try store.keepAnalysis(.{ .key = digest(&.{"analysis"}), .context = digest(&.{"context"}), .source = digest(&.{"source"}), .path = "src/a.py", .language = "lang-a", .result = "{\"findings\":[]}" });
+    try std.testing.expectEqual(@as(f64, 1), try scalar(store.db, "SELECT count(*) FROM source_analyses WHERE context_hash != ''"));
+}
+
+const Chunks = struct {
+    parts: [3][]const u8,
+    seen: usize = 0,
+
+    fn encode(self: *Chunks, chunk: usize) !?[]const u8 {
+        if (chunk > self.parts.len) assert.panic("asked for chunk {d} after {d} chunks ran out", .{ chunk, self.parts.len });
+        if (self.seen != 0) assert.panic("encoding chunks after reading {d} back", .{self.seen});
+        return if (chunk < self.parts.len) self.parts[chunk] else null;
+    }
+
+    fn visit(self: *Chunks, json: []const u8) !void {
+        if (self.seen >= self.parts.len) assert.panic("read back {d} chunks of {d} kept", .{ self.seen + 1, self.parts.len });
+        if (json.len == 0) assert.panic("read back an empty chunk; the table's JSON check rejects that", .{});
+        try std.testing.expectEqualStrings(self.parts[self.seen], json);
+        self.seen += 1;
+    }
+};
+
+test "a run's findings are found again in the order they were kept, only while its files are unchanged" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
     const arena = arena_state.allocator();
@@ -84,17 +149,18 @@ test "trimming the analysis cache keeps the most recently used analyses and drop
     var environ: std.process.Environ.Map = .init(arena);
     try environ.put("ZANITY_STORE", try std.fs.path.join(arena, &.{ dir, "store.db" }));
     const store = try Store.initStore(std.heap.page_allocator, std.testing.io, &environ, 8 << 20);
-    const source = digest(&.{"source"});
-    for ([_][]const u8{ "src/old.py", "src/used.py", "src/new.py" }) |path| {
-        try store.keepAnalysis(.{ .key = digest(&.{path}), .source = source, .path = path, .language = "lang-a", .result = "{\"findings\":[]}" });
+    var chunks: Chunks = .{ .parts = .{ "{\"n\":0}", "{\"n\":1}", "{\"n\":2}" } };
+    const run: store_runs.RunScope = .{ .scope = digest(&.{"scope"}), .state = digest(&.{"files"}) };
+    try store_runs.keepRunAnalysis(&store, .{ .run = run, .checked = 7, .keep = 2 }, &chunks, Chunks.encode);
+    try std.testing.expectEqual(@as(?u32, 7), try store_runs.eachRunChunk(&store, run, &chunks, Chunks.visit));
+    try std.testing.expectEqual(@as(usize, 3), chunks.seen);
+    try std.testing.expectEqual(@as(?u32, null), try store_runs.eachRunChunk(&store, .{ .scope = run.scope, .state = digest(&.{"edited"}) }, &chunks, Chunks.visit));
+    for ([_][]const u8{ "other", "another" }) |name| {
+        chunks.seen = 0;
+        try store_runs.keepRunAnalysis(&store, .{ .run = .{ .scope = digest(&.{name}), .state = run.state }, .checked = 1, .keep = 2 }, &chunks, Chunks.encode);
     }
-    const stamps = "UPDATE source_analyses SET used_at = CASE path WHEN 'src/old.py' THEN '2026-01-01T00:00:00+00:00' WHEN 'src/used.py' THEN '2026-01-03T00:00:00+00:00' ELSE '2026-01-02T00:00:00+00:00' END";
-    if (sqlite.sqlite3_exec(store.db, stamps, null, null, null) != sqlite.ok) return sqlite.captureDatabaseFailure(store.db);
-    try store.trimAnalyses(2);
-    try std.testing.expectEqual(@as(f64, 2), try scalar(store.db, "SELECT count(*) FROM source_analyses"));
-    try std.testing.expectEqual(@as(f64, 0), try scalar(store.db, "SELECT count(*) FROM source_analyses WHERE path = 'src/old.py'"));
-    try store.trimAnalyses(2);
-    try std.testing.expectEqual(@as(f64, 2), try scalar(store.db, "SELECT count(*) FROM source_analyses"));
+    try std.testing.expectEqual(@as(f64, 2), try scalar(store.db, "SELECT count(*) FROM run_analyses"));
+    try std.testing.expectEqual(@as(f64, 6), try scalar(store.db, "SELECT count(*) FROM run_findings"));
 }
 
 /// The first column of the first row `sql` returns, for reading back what a test kept.

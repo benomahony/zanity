@@ -78,6 +78,9 @@ pub const Workspace = struct {
     /// The notice after a check a person reads, when a newer release is out.
     notice: Notice = .{},
     cache_hits: usize = 0,
+    /// Whether a check keeps its run for the next one. A check that runs because a file just
+    /// changed, in --watch or the language server, is never followed by one that could reuse it.
+    keep_runs: bool = true,
     checkers: [language.count]?check.Checker = @splat(null),
     checker_rules: rules.Set = .{},
     workers: [batch.max_workers]batch.Worker = undefined,

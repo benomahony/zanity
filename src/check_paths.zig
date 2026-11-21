@@ -23,6 +23,7 @@ const embed = @import("embed.zig");
 const semantic = @import("semantic.zig");
 const semantic_judge = @import("semantic_judge.zig");
 const store = @import("store.zig");
+const language = @import("language.zig");
 const sqlite = @import("sqlite.zig");
 const Live = @import("live.zig").Live;
 const config = @import("config.zig");
@@ -31,6 +32,7 @@ const fix_file = @import("fix_file.zig");
 const CheckOptions = triage.CheckOptions;
 const triage = @import("triage.zig");
 const baseline = @import("baseline.zig");
+const run_cache = @import("run_cache.zig");
 const workspace = @import("workspace.zig");
 const Workspace = workspace.Workspace;
 const console = workspace.console;
@@ -111,7 +113,7 @@ pub fn checkPaths(ctx: *zclig.Context, ws: *Workspace, options: CheckOptions, se
     for (paths) |path| try collect(ctx, ws, path);
     std.mem.sort([]const u8, ws.files.items(), {}, strings.lessThan);
     try ws.initCheckers(std.heap.page_allocator, selected);
-    try checkFiles(ctx, ws, selected);
+    try checkOrReplay(ctx, ws, options, selected);
     std.mem.sort([]const u8, ws.project_files.items(), {}, strings.lessThan);
     try project.checkProjectFiles(.{ .io = ws.io, .buffer = ws.source, .facts = &ws.facts, .enabled = selected, .findings = &ws.findings }, ws.project_files.items());
     try checkTimings(ctx, ws, options, selected);
@@ -150,6 +152,20 @@ pub fn checkPaths(ctx: *zclig.Context, ws: *Workspace, options: CheckOptions, se
     return report.count(findings, ws.checked + ws.project_files.len, ws.skipped);
 }
 
+/// Reports the findings an earlier run kept when nothing it read has changed, and otherwise
+/// checks the files and keeps their findings for the next run, unless the workspace keeps none.
+/// --fix needs every file's facts
+/// and the renames, so it always checks; --infer and --semantic get back the units and
+/// definitions they read.
+fn checkOrReplay(ctx: *zclig.Context, ws: *Workspace, options: CheckOptions, selected: rules.Set) !void {
+    if (selected.len == 0) assert.panic("checking files with no rules selected; runCheck always selects at least one", .{});
+    if (ws.findings.len != 0) assert.panic("{d} findings are left from an earlier run; checkOrReplay expects a fresh workspace", .{ws.findings.len});
+    const run = if (options.fix) null else try run_cache.runKey(ws, options.paths, selected);
+    if (run) |k| if (try run_cache.replayRun(ws, k)) return;
+    try checkFiles(ctx, ws, selected);
+    if (run) |k| if (ws.keep_runs) run_cache.keep(ws, k);
+}
+
 fn checkFiles(ctx: *zclig.Context, ws: *Workspace, selected: rules.Set) !void {
     if (selected.len == 0) assert.panic("checking files with no rules selected; runCheck always selects at least one", .{});
     if (ws.findings.len != 0) assert.panic("{d} findings are left from an earlier run; checkFiles expects a fresh workspace", .{ws.findings.len});
@@ -175,8 +191,9 @@ fn checkFiles(ctx: *zclig.Context, ws: *Workspace, selected: rules.Set) !void {
         }
         ws.checked = run.checked;
         ws.cache_hits = run.cached;
-        if (run.checked > run.cached) if (run.cache) |source_cache| source_cache.trimAnalyses(ws.limits.cached_analyses) catch {
-            const line = try ws.text.format("zanity: could not trim the analysis cache in {s} to its {d} most recently used files: {s}. Check the disk is not full and the store is writable.", .{ source_cache.path, ws.limits.cached_analyses, sqlite.failure[0..sqlite.failure_len] });
+        var contexts: [language.count]store.Digest = undefined;
+        if (run.cache) |source_cache| source_cache.useContexts(run.contexts(&contexts), ws.limits.cached_contexts) catch {
+            const line = try ws.text.format("zanity: could not trim the analysis cache in {s} to its {d} most recently used contexts: {s}. Check the disk is not full and the store is writable.", .{ source_cache.path, ws.limits.cached_contexts, sqlite.failure[0..sqlite.failure_len] });
             const err = console(ctx, ctx.runtime.err);
             try err.styled(line, .{ .fg = .{ .named = .yellow } });
             try err.writer.writeByte('\n');

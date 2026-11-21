@@ -82,6 +82,7 @@ pub const Narrow = struct { rule: []const u8 = "", path: []const u8 = "", line: 
 /// and every fact cross-file rules need, so `source_analyses` remains useful outside zanity.
 pub const Analysis = struct {
     key: Digest,
+    context: Digest,
     source: Digest,
     path: []const u8,
     language: []const u8,
@@ -117,10 +118,17 @@ pub const Store = struct {
     observation: *sqlite.sqlite3_stmt,
     run: *sqlite.sqlite3_stmt,
     find_analysis: *sqlite.sqlite3_stmt,
-    touch_analysis: *sqlite.sqlite3_stmt,
     save_analysis: *sqlite.sqlite3_stmt,
-    trim_analyses: *sqlite.sqlite3_stmt,
-    count_analyses: *sqlite.sqlite3_stmt,
+    use_context: *sqlite.sqlite3_stmt,
+    trim_contexts: *sqlite.sqlite3_stmt,
+    drop_unused_analyses: *sqlite.sqlite3_stmt,
+    find_run_analysis: *sqlite.sqlite3_stmt,
+    list_run_findings: *sqlite.sqlite3_stmt,
+    save_run_analysis: *sqlite.sqlite3_stmt,
+    clear_run_findings: *sqlite.sqlite3_stmt,
+    save_run_findings: *sqlite.sqlite3_stmt,
+    trim_run_analyses: *sqlite.sqlite3_stmt,
+    trim_run_findings: *sqlite.sqlite3_stmt,
     false_positive: *sqlite.sqlite3_stmt,
     save_label: *sqlite.sqlite3_stmt,
     find_label: *sqlite.sqlite3_stmt,
@@ -290,7 +298,8 @@ pub const Store = struct {
         if (sqlite.sqlite3_step(self.false_positive) != sqlite.done) return sqlite.captureDatabaseFailure(self.db);
     }
 
-    /// Copies a cached JSON analysis into caller-owned memory, and records that it was reused.
+    /// Copies a cached JSON analysis into caller-owned memory. It writes nothing: the store marks
+    /// whole contexts used, once a check, with useContexts().
     pub fn cachedAnalysis(self: *const Store, buffer: []u8, key: Digest, source: Digest) !?[]const u8 {
         if (buffer.len == 0) assert.panic("reading a cached analysis into no memory; reserve memory.Limits.analysis_bytes at startup", .{});
         if (std.mem.eql(u8, &key, &source)) assert.panic("an analysis context and its source have the same digest {s}; one was passed as the other", .{&key});
@@ -308,9 +317,6 @@ pub const Store = struct {
         const pointer = sqlite.sqlite3_column_text(self.find_analysis, 0) orelse return error.StoreUnavailable;
         const result = buffer[0..@intCast(length)];
         @memcpy(result, pointer[0..@intCast(length)]);
-        defer _ = sqlite.sqlite3_reset(self.touch_analysis);
-        try sqlite.bind(self.touch_analysis, 1, &key);
-        if (sqlite.sqlite3_step(self.touch_analysis) != sqlite.done) return sqlite.captureDatabaseFailure(self.db);
         return result;
     }
 
@@ -320,28 +326,35 @@ pub const Store = struct {
         if (analysis.result.len == 0) assert.panic("keeping an empty analysis for {s}; encode its facts and findings as JSON first", .{analysis.path});
         defer _ = sqlite.sqlite3_reset(self.save_analysis);
         try sqlite.bind(self.save_analysis, 1, &analysis.key);
-        try sqlite.bind(self.save_analysis, 2, &analysis.source);
-        try sqlite.bind(self.save_analysis, 3, analysis.path);
-        try sqlite.bind(self.save_analysis, 4, analysis.language);
-        try sqlite.bind(self.save_analysis, 5, analysis.result);
+        try sqlite.bind(self.save_analysis, 2, &analysis.context);
+        try sqlite.bind(self.save_analysis, 3, &analysis.source);
+        try sqlite.bind(self.save_analysis, 4, analysis.path);
+        try sqlite.bind(self.save_analysis, 5, analysis.language);
+        try sqlite.bind(self.save_analysis, 6, analysis.result);
         if (sqlite.sqlite3_step(self.save_analysis) != sqlite.done) return sqlite.captureDatabaseFailure(self.db);
     }
 
-    /// Deletes all but the `keep` most recently used analyses, so the cache stops growing with
-    /// every build and every workspace checked. An evicted file is analysed again on its next check.
-    pub fn trimAnalyses(self: *const Store, keep: u32) !void {
-        if (keep == 0) assert.panic("trimming the analysis cache to 0 rows would make every check a miss; memory.Limits.cached_analyses must be above 0", .{});
-        // One write transaction, so another process's analyses can't land between the trim and the count.
-        if (sqlite.sqlite3_exec(self.db, "SAVEPOINT zanity_trim", null, null, null) != sqlite.ok) return sqlite.captureDatabaseFailure(self.db);
-        errdefer _ = sqlite.sqlite3_exec(self.db, "ROLLBACK TO zanity_trim; RELEASE zanity_trim", null, null, null);
-        defer _ = sqlite.sqlite3_reset(self.trim_analyses);
-        try sqlite.bindInt(self.trim_analyses, 1, keep);
-        if (sqlite.sqlite3_step(self.trim_analyses) != sqlite.done) return sqlite.captureDatabaseFailure(self.db);
-        defer _ = sqlite.sqlite3_reset(self.count_analyses);
-        if (sqlite.sqlite3_step(self.count_analyses) != sqlite.row) return sqlite.captureDatabaseFailure(self.db);
-        const left = sqlite.sqlite3_column_int64(self.count_analyses, 0);
-        if (sqlite.sqlite3_exec(self.db, "RELEASE zanity_trim", null, null, null) != sqlite.ok) return sqlite.captureDatabaseFailure(self.db);
-        if (left > keep) assert.panic("the analysis cache holds {d} rows after trimming to {d}; trim_analyses must delete every row past the most recent {d}", .{ left, keep, keep });
+    /// Marks the analysis contexts a check used, keeps the `keep` most recently used, and deletes
+    /// the analyses of the rest, so a new zanity or rule selection drops the rows of the old one
+    /// once enough others have been used since, without the store recording every reuse.
+    pub fn useContexts(self: *const Store, contexts: []const Digest, keep: u32) !void {
+        if (keep == 0) assert.panic("keeping no analysis contexts would make every check a miss; memory.Limits.cached_contexts must be above 0", .{});
+        if (contexts.len > keep) assert.panic("a check used {d} analysis contexts, more than the {d} kept; keep one per language at least", .{ contexts.len, keep });
+        if (sqlite.sqlite3_exec(self.db, "SAVEPOINT zanity_contexts", null, null, null) != sqlite.ok) return sqlite.captureDatabaseFailure(self.db);
+        errdefer _ = sqlite.sqlite3_exec(self.db, "ROLLBACK TO zanity_contexts; RELEASE zanity_contexts", null, null, null);
+        for (contexts) |context| {
+            defer _ = sqlite.sqlite3_reset(self.use_context);
+            try sqlite.bind(self.use_context, 1, &context);
+            if (sqlite.sqlite3_step(self.use_context) != sqlite.done) return sqlite.captureDatabaseFailure(self.db);
+        }
+        defer _ = sqlite.sqlite3_reset(self.trim_contexts);
+        try sqlite.bindInt(self.trim_contexts, 1, keep);
+        if (sqlite.sqlite3_step(self.trim_contexts) != sqlite.done) return sqlite.captureDatabaseFailure(self.db);
+        if (sqlite.sqlite3_changes(self.db) > 0) {
+            defer _ = sqlite.sqlite3_reset(self.drop_unused_analyses);
+            if (sqlite.sqlite3_step(self.drop_unused_analyses) != sqlite.done) return sqlite.captureDatabaseFailure(self.db);
+        }
+        if (sqlite.sqlite3_exec(self.db, "RELEASE zanity_contexts", null, null, null) != sqlite.ok) return sqlite.captureDatabaseFailure(self.db);
     }
 };
 
@@ -369,7 +382,10 @@ fn openLocalCache(path: [:0]const u8) !*sqlite.sqlite3 {
     const db = handle orelse return error.StoreUnavailable;
     errdefer _ = sqlite.sqlite3_close_v2(db);
     if (sqlite.sqlite3_busy_timeout(db, busy_timeout_ms) != sqlite.ok) return sqlite.captureDatabaseFailure(db);
+    const version = try sqlite.userVersion(db);
+    if (version < store_sql.schema_version) if (sqlite.sqlite3_exec(db, store_sql.migration, null, null, null) != sqlite.ok) return sqlite.captureDatabaseFailure(db);
     if (sqlite.sqlite3_exec(db, store_sql.schema, null, null, null) != sqlite.ok) return sqlite.captureDatabaseFailure(db);
+    if (version < store_sql.schema_version) if (sqlite.sqlite3_exec(db, std.fmt.comptimePrint("PRAGMA user_version = {d};", .{store_sql.schema_version}), null, null, null) != sqlite.ok) return sqlite.captureDatabaseFailure(db);
     if (db != handle.?) assert.panic("opened local-cache connection 0x{x}, expected SQLite's handle 0x{x}; openLocalCache() must return that handle", .{ @intFromPtr(db), @intFromPtr(handle.?) });
     return db;
 }

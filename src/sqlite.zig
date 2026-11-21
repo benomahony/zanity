@@ -30,6 +30,7 @@ pub extern fn sqlite3_column_double(stmt: *sqlite3_stmt, i: c_int) f64;
 pub extern fn sqlite3_column_text(stmt: *sqlite3_stmt, i: c_int) ?[*]const u8;
 pub extern fn sqlite3_column_bytes(stmt: *sqlite3_stmt, i: c_int) c_int;
 pub extern fn sqlite3_column_int64(stmt: *sqlite3_stmt, i: c_int) i64;
+pub extern fn sqlite3_changes(db: *sqlite3) c_int;
 pub extern fn sqlite3_column_type(stmt: *sqlite3_stmt, i: c_int) c_int;
 pub extern fn sqlite3_column_count(stmt: *sqlite3_stmt) c_int;
 
@@ -91,6 +92,17 @@ pub fn describeStoreFailure(comptime template: []const u8, args: anytype) void {
     const shown = std.fmt.bufPrint(&failure, template, args) catch assert.panic("store diagnostic '{s}' exceeds the {d}-byte diagnostic buffer; shorten the template", .{ template, failure.len });
     failure_len = shown.len;
     if (failure_len == 0) assert.panic("the store diagnostic template '{s}' formatted to no diagnostic; retain its description for the caller", .{template});
+}
+
+/// The schema version a store was last made at, 0 for one from before versions were kept.
+pub fn userVersion(db: *sqlite3) !i64 {
+    const stmt = try prepareStatement(db, "PRAGMA user_version");
+    defer _ = sqlite3_finalize(stmt);
+    if (sqlite3_db_handle(stmt) != db) assert.panic("the user_version statement uses connection 0x{x}, not 0x{x}; prepare it on the store's", .{ @intFromPtr(sqlite3_db_handle(stmt)), @intFromPtr(db) });
+    if (sqlite3_step(stmt) != row) return captureDatabaseFailure(db);
+    const version = sqlite3_column_int64(stmt, 0);
+    if (version < 0) assert.panic("the store's user_version is {d}; zanity only ever sets it to a schema version, which is positive", .{version});
+    return version;
 }
 
 pub fn prepareStatement(db: *sqlite3, comptime trusted_sql: []const u8) !*sqlite3_stmt {
