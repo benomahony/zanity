@@ -275,16 +275,21 @@ pub const Batch = struct {
     fn commitTracing(self: *Batch, worker: *const Worker) error{LimitExceeded}!void {
         const recorded = worker.facts;
         if (recorded.path.len == 0) assert.panic("committing tracing facts for no file; startFile() sets the path of the file being checked", .{});
-        const before = self.facts.untraced.len + self.facts.routes.len + self.facts.tracing.len;
-        inline for (.{ "untraced", "routes", "tracing" }) |field| {
-            for (@field(recorded, field).items()) |d| {
-                var kept = d;
-                kept.name = try worker.retain(self.text, d.name);
-                try @field(self.facts, field).add(kept);
+        if (@intFromPtr(self.facts) == @intFromPtr(&worker.facts)) assert.panic("committing {s}'s tracing facts into the worker's own; commit them to the run's", .{recorded.path});
+        const Retained = struct {
+            worker: *const Worker,
+            text: *memory.Text,
+            path: []const u8,
+            /// Copies the fact's name out of the worker's text, which the next file reuses.
+            pub fn keep(r: @This(), fact: facts_module.Definition, comptime _: []const u8) error{LimitExceeded}!facts_module.Definition {
+                if (!std.mem.eql(u8, fact.path, r.path)) assert.panic("committing a tracing fact of {s} with {s}'s; a worker records facts for one file at a time", .{ fact.path, r.path });
+                var kept = fact;
+                kept.name = try r.worker.retain(r.text, fact.name);
+                if (!std.mem.eql(u8, kept.name, fact.name)) assert.panic("{s}: kept tracing fact '{s}' as '{s}'; retain() copies the text unchanged", .{ r.path, fact.name, kept.name });
+                return kept;
             }
-        }
-        const added = self.facts.untraced.len + self.facts.routes.len + self.facts.tracing.len - before;
-        if (added != recorded.untraced.len + recorded.routes.len + recorded.tracing.len) assert.panic("{s}: committed {d} tracing facts of {d} recorded; each is added once", .{ recorded.path, added, recorded.untraced.len + recorded.routes.len + recorded.tracing.len });
+        };
+        try self.facts.addTracing(.{ .untraced = recorded.untraced.items(), .routes = recorded.routes.items(), .tracing = recorded.tracing.items() }, Retained{ .worker = worker, .text = self.text, .path = recorded.path });
     }
 
     /// Adds one file's facts and findings to the run's; the caller holds `mutex`.

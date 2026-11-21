@@ -325,6 +325,22 @@ pub const Facts = struct {
         try self.abstractions.add(.{ .path = self.path, .language = self.language, .name = try self.text.copy(name), .kind = "abstraction", .line = at[0], .column = at[1] });
     }
 
+    /// Request handlers, routes and tracing calls from one file, for `addTracing`.
+    pub const Tracing = struct { untraced: []const Definition, routes: []const Definition, tracing: []const Definition };
+
+    /// Adds one file's request handlers, routes and tracing calls, for untraced-entry-point, each
+    /// as `keeper.keep(fact, list)` makes it outlive the memory it came from.
+    pub fn addTracing(self: *Facts, from: Tracing, keeper: anytype) !void {
+        if (from.untraced.ptr == self.untraced.items().ptr and from.untraced.len > 0) assert.panic("adding {s}'s tracing facts to the facts they came from; add a file's facts to the run's", .{self.path});
+        const before = self.untraced.len + self.routes.len + self.tracing.len;
+        inline for (.{ "untraced", "routes", "tracing" }) |list| {
+            for (@field(from, list)) |fact| try @field(self, list).add(try keeper.keep(fact, list));
+        }
+        const added = self.untraced.len + self.routes.len + self.tracing.len - before;
+        const given = from.untraced.len + from.routes.len + from.tracing.len;
+        if (added != given) assert.panic("added {d} tracing facts of {d}; addTracing() adds each once", .{ added, given });
+    }
+
     /// Records a request handler that starts no span: a function by its name, kind "handler", or
     /// one passed inline by its route, kind "route".
     pub fn untracedHandler(self: *Facts, kind: []const u8, name: []const u8, at: [2]u32) error{LimitExceeded}!void {

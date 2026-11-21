@@ -302,16 +302,31 @@ fn replayFacts(snapshot: Snapshot, run: Replay) error{LimitExceeded}!void {
     if (facts.functions.len != first + snapshot.functions.len) assert.panic("replayed {d} functions from a cache row holding {d}; replayFacts must add each once", .{ facts.functions.len - first, snapshot.functions.len });
 }
 
-/// Adds a cached file's handlers, routes and tracing calls, for untraced-entry-point.
+/// Fills the worker with a cached file's handlers, routes and tracing calls, for
+/// untraced-entry-point; Batch.commitTracing then adds them to the run.
 fn replayTracing(snapshot: Snapshot, run: Replay) error{ OutOfMemory, LimitExceeded }!void {
     if (run.path.len == 0 or run.language.len == 0) assert.panic("committing cached tracing facts without their file; validateHeader must run first", .{});
-    const facts = run.facts;
-    const before = facts.untraced.len + facts.routes.len + facts.tracing.len;
-    for (snapshot.untraced) |handler| try facts.untraced.add(.{ .path = run.path, .language = run.language, .name = try run.text.copy(handler.name), .kind = if (std.mem.eql(u8, handler.kind, "route")) "route" else "handler", .line = handler.line, .column = handler.column });
-    for (snapshot.routes) |route| try facts.routes.add(.{ .path = run.path, .language = run.language, .name = try run.text.copy(route.name), .kind = "route", .line = route.line, .column = route.column });
-    for (snapshot.tracing) |call| try facts.tracing.add(.{ .path = run.path, .language = run.language, .name = try run.text.copy(call.name), .kind = if (std.mem.eql(u8, call.kind, "tracer")) "tracer" else if (std.mem.eql(u8, call.kind, "span")) "span" else "instrumentation", .line = call.line, .column = call.column });
-    const added = facts.untraced.len + facts.routes.len + facts.tracing.len - before;
-    if (added != snapshot.untraced.len + snapshot.routes.len + snapshot.tracing.len) assert.panic("{s}: replayed {d} tracing facts of {d} cached; each is added once", .{ run.path, added, snapshot.untraced.len + snapshot.routes.len + snapshot.tracing.len });
+    if (snapshot.untraced.len + snapshot.routes.len + snapshot.tracing.len > 0 and !std.mem.eql(u8, snapshot.path, run.path)) assert.panic("replaying {s}'s tracing facts into {s}; validateHeader must reject the row first", .{ snapshot.path, run.path });
+    const Cached = struct {
+        path: []const u8,
+        language: []const u8,
+        text: *memory.Text,
+        /// Points the fact at this run's file, copies its name out of the row's parse, and gives
+        /// it the kind validateHandlers allowed as a string that outlives the row.
+        pub fn keep(c: @This(), fact: Definition, comptime list: []const u8) error{LimitExceeded}!Definition {
+            if (!std.mem.eql(u8, fact.path, c.path)) assert.panic("replaying a tracing fact of {s} into {s}; validateHandlers rejects a row naming another file", .{ fact.path, c.path });
+            const kind = if (comptime std.mem.eql(u8, list, "routes"))
+                "route"
+            else if (comptime std.mem.eql(u8, list, "untraced"))
+                (if (std.mem.eql(u8, fact.kind, "route")) "route" else "handler")
+            else
+                (if (std.mem.eql(u8, fact.kind, "tracer")) "tracer" else if (std.mem.eql(u8, fact.kind, "span")) "span" else "instrumentation");
+            const name = try c.text.copy(fact.name);
+            if (!std.mem.eql(u8, name, fact.name)) assert.panic("{s}: replayed tracing fact '{s}' as '{s}'; Text.copy() copies the bytes unchanged", .{ c.path, fact.name, name });
+            return .{ .path = c.path, .language = c.language, .name = name, .kind = kind, .line = fact.line, .column = fact.column };
+        }
+    };
+    try run.facts.addTracing(.{ .untraced = snapshot.untraced, .routes = snapshot.routes, .tracing = snapshot.tracing }, Cached{ .path = run.path, .language = run.language, .text = run.text });
 }
 
 fn replayFindings(snapshot: Snapshot, run: Replay) (ReplayError || error{LimitExceeded})!void {
