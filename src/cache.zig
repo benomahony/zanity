@@ -23,7 +23,7 @@ const revision_bytes = 8;
 /// Comptime branches allowed for hashing every source file of the analyzer into its revision.
 const analyzer_hash_quota = 10_000_000;
 
-const cache_format = "source-analysis-4";
+const cache_format = "source-analysis-5";
 
 /// The source code that produces local findings and facts. Its compile-time digest makes a rebuilt
 /// zanity miss old rows automatically when checker logic, name tables or parser revisions change.
@@ -79,7 +79,6 @@ pub const Snapshot = struct {
     format: []const u8,
     path: []const u8,
     language: []const u8,
-    rules: []const []const u8,
     collect_units: bool,
     findings: []const Diagnostic,
     definitions: []const Definition,
@@ -132,7 +131,6 @@ pub fn encode(buffer: []u8, context: AnalysisContext, facts: *const Facts, findi
         .format = cache_format,
         .path = facts.path,
         .language = facts.language,
-        .rules = context.enabled.names(),
         .collect_units = facts.collect_units,
         .findings = findings,
         .definitions = facts.definitions.items(),

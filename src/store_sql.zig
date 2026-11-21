@@ -11,6 +11,7 @@ pub const migration = "DROP TABLE IF EXISTS source_analyses;";
 /// The tables the store keeps, created on first use; WAL lets several runs share them.
 pub const schema =
     \\PRAGMA journal_mode = WAL;
+    \\PRAGMA synchronous = NORMAL;
     \\PRAGMA journal_size_limit = 67108864;
     \\CREATE TABLE IF NOT EXISTS units (
     \\    unit_hash TEXT PRIMARY KEY,
