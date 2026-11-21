@@ -323,6 +323,7 @@
     },
     .{
         .ecosystem = "jvm",
+        .forbidden_methods = .{"eval"},
         .reserved_words = .{ "null", "true", "false", "new", "instanceof" },
         .pure_calls = .{ "toLowerCase", "toUpperCase", "trim", "strip", "length", "startsWith", "endsWith", "Pattern.compile", "String.valueOf", "Integer.parseInt", "Long.parseLong", "Math.max", "Math.min", "Math.abs", "Math.sqrt", "Math.floor", "Math.ceil" },
         .growth_calls = .{ "add", "put" },
@@ -376,6 +377,7 @@
     },
     .{
         .ecosystem = "dotnet",
+        .forbidden_methods = .{"EvaluateAsync"},
         .field_sizes = .{ .{ .type = "bool", .size = 1, .alignment = 1 }, .{ .type = "byte", .size = 1, .alignment = 1 }, .{ .type = "sbyte", .size = 1, .alignment = 1 }, .{ .type = "short", .size = 2, .alignment = 2 }, .{ .type = "ushort", .size = 2, .alignment = 2 }, .{ .type = "char", .size = 2, .alignment = 2 }, .{ .type = "int", .size = 4, .alignment = 4 }, .{ .type = "uint", .size = 4, .alignment = 4 }, .{ .type = "float", .size = 4, .alignment = 4 }, .{ .type = "long", .size = 8, .alignment = 8 }, .{ .type = "ulong", .size = 8, .alignment = 8 }, .{ .type = "double", .size = 8, .alignment = 8 }, .{ .type = "nint", .size = 8, .alignment = 8 }, .{ .type = "nuint", .size = 8, .alignment = 8 }, .{ .type = "decimal", .size = 16, .alignment = 8 }, .{ .type = "string", .size = 8, .alignment = 8 }, .{ .type = "object", .size = 8, .alignment = 8 } },
         .reserved_words = .{ "null", "true", "false", "new", "await", "ref", "out", "is", "as", "typeof", "nameof" },
         .pure_calls = .{ "ToLower", "ToUpper", "ToLowerInvariant", "ToUpperInvariant", "Trim", "TrimStart", "TrimEnd", "StartsWith", "EndsWith", "Math.Max", "Math.Min", "Math.Abs", "Math.Sqrt", "Math.Floor", "Math.Ceiling", "int.Parse", "long.Parse", "string.IsNullOrEmpty", "Path.Combine", "Path.GetFileName", "Path.GetExtension" },
@@ -433,6 +435,7 @@
     },
     .{
         .ecosystem = "swift",
+        .forbidden_methods = .{"evaluateScript"},
         .field_sizes = .{ .{ .type = "Bool", .size = 1, .alignment = 1 }, .{ .type = "Int8", .size = 1, .alignment = 1 }, .{ .type = "UInt8", .size = 1, .alignment = 1 }, .{ .type = "Int16", .size = 2, .alignment = 2 }, .{ .type = "UInt16", .size = 2, .alignment = 2 }, .{ .type = "Int32", .size = 4, .alignment = 4 }, .{ .type = "UInt32", .size = 4, .alignment = 4 }, .{ .type = "Float", .size = 4, .alignment = 4 }, .{ .type = "Int", .size = 8, .alignment = 8 }, .{ .type = "UInt", .size = 8, .alignment = 8 }, .{ .type = "Int64", .size = 8, .alignment = 8 }, .{ .type = "UInt64", .size = 8, .alignment = 8 }, .{ .type = "Double", .size = 8, .alignment = 8 }, .{ .type = "String", .size = 16, .alignment = 8 } },
         .reserved_words = .{ "nil", "true", "false", "try", "await", "as", "is", "inout" },
         .pure_calls = .{ "lowercased", "uppercased", "trimmingCharacters", "hasPrefix", "hasSuffix", "max", "min", "abs", "sqrt" },

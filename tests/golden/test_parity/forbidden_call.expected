@@ -1,0 +1,8 @@
+rules: forbidden-call
+exit: 0
+ForbiddenCall.cs:8:29: warning [forbidden-call]
+ForbiddenCall.java:5:23: warning [forbidden-call]
+ForbiddenCall.swift:4:12: warning [forbidden-call]
+forbidden_call.js:2:10: warning [forbidden-call]
+forbidden_call.lua:4:10: warning [forbidden-call]
+forbidden_call.ts:2:10: warning [forbidden-call]
