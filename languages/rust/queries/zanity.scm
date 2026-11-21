@@ -447,3 +447,32 @@
     argument: (use_wildcard
       (_) @import.module
       "*" @import.name)) @import.statement)
+
+; Data layout: a collection whose elements each sit behind their own pointer, so walking it follows
+; a pointer per element; a boxed trait object is left alone, since it can't be stored inline.
+(generic_type
+  (type_identifier) @_collection
+  (type_arguments
+    (generic_type
+      (type_identifier) @_box
+      (type_arguments
+        .
+        (_) @_boxed)))
+  (#any-of? @_collection "Vec" "VecDeque" "LinkedList" "HashMap" "BTreeMap" "HashSet" "BTreeSet")
+  (#any-of? @_box "Box" "Rc" "Arc")
+  (#not-kind-eq? @_boxed "dynamic_type")) @finding.pointer-collection
+
+; Data layout: a struct whose fields sit in the order they are written, each stored member, the
+; type that sizes it, members that take no room in it, and ones whose size can't be read.
+((attribute_item
+  (attribute
+    (identifier) @_repr
+    arguments: (token_tree
+      (identifier) @_c)))
+  .
+  (struct_item) @layout.struct
+  (#eq? @_repr "repr")
+  (#eq? @_c "C"))
+
+(field_declaration
+  type: (_) @layout.field) @layout.member

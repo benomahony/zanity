@@ -80,8 +80,9 @@ pub const Workspace = struct {
     cache_hits: usize = 0,
     checkers: [language.count]?check.Checker = @splat(null),
     checker_rules: rules.Set = .{},
-    workers: [batch.max_workers]?*batch.Worker = @splat(null),
-    worker_view: [batch.max_workers]*batch.Worker = undefined,
+    workers: [batch.max_workers]batch.Worker = undefined,
+    /// How many of `workers` have been made; each is kept and reused by later checks.
+    worker_count: usize = 0,
     checked: usize = 0,
     /// Checkable files under the walk that zanity.toml's `exclude` left out.
     skipped: usize = 0,
@@ -108,16 +109,14 @@ pub const Workspace = struct {
     }
 
     /// Workers are expensive, so watched checks keep one per core and reuse their buffers.
-    pub fn checkWorkers(ws: *Workspace, gpa: Allocator, files: usize) ![]const *batch.Worker {
+    pub fn checkWorkers(ws: *Workspace, gpa: Allocator, files: usize) ![]batch.Worker {
         if (files == 0) assert.panic("making workers to check no files; checkFiles() returns early when there are none", .{});
         const cores = std.Thread.getCpuCount() catch 1;
         const count = @max(1, @min(cores, files, batch.max_workers));
         if (count > files) assert.panic("using {d} workers for {d} files; no worker should be idle", .{ count, files });
-        for (0..count) |i| {
-            if (ws.workers[i] == null) ws.workers[i] = try .initWorker(gpa, ws.limits);
-            ws.worker_view[i] = ws.workers[i].?;
-        }
-        return ws.worker_view[0..count];
+        while (ws.worker_count < count) : (ws.worker_count += 1) try ws.workers[ws.worker_count].initWorker(gpa, ws.limits);
+        if (ws.worker_count > ws.workers.len) assert.panic("made {d} workers in room for {d}; checkWorkers() stops at max_workers", .{ ws.worker_count, ws.workers.len });
+        return ws.workers[0..count];
     }
 
     /// Starts another check without reallocating its large, fixed-capacity buffers.

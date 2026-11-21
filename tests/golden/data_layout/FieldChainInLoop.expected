@@ -1,0 +1,3 @@
+rules: allocation-in-loop,invariant-in-loop,pointer-collection,field-chain-in-loop,padded-struct
+exit: 0
+FieldChainInLoop.java:7:20: warning [field-chain-in-loop]

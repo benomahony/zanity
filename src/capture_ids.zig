@@ -63,6 +63,8 @@ pub const Vocabulary = struct {
     test_constant: ?captures.Id,
     test_shared_state: ?captures.Id,
     chain_link: ?captures.Id,
+    /// A struct whose fields sit in the order they are written, for padded-struct.
+    layout_struct: ?captures.Id,
     expression_repeatable: ?captures.Id,
     write_target: ?captures.Id,
     reference_name: ?captures.Id,

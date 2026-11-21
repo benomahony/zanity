@@ -1,0 +1,5 @@
+rules: allocation-in-loop,invariant-in-loop,pointer-collection,field-chain-in-loop,padded-struct
+exit: 0
+PointerCollection_cs.cs:6:5: warning [pointer-collection]
+PointerCollection_cs.cs:7:5: warning [pointer-collection]
+PointerCollection_cs.cs:8:5: warning [pointer-collection]

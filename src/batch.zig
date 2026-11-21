@@ -29,10 +29,11 @@ pub const Worker = struct {
     facts: Facts,
     source: []u8,
 
-    pub fn initWorker(gpa: Allocator, limits: memory.Limits) Allocator.Error!*Worker {
+    /// Fills in `worker` where it lies: its facts keep a pointer to its own text, so a worker must
+    /// stay where it was made.
+    pub fn initWorker(worker: *Worker, gpa: Allocator, limits: memory.Limits) Allocator.Error!void {
         if (limits.file_bytes == 0) assert.panic("memory.Limits.file_bytes is 0, so a worker could read no file", .{});
         if (limits.text_bytes == 0) assert.panic("memory.Limits.text_bytes is 0, so a worker could keep no message", .{});
-        const worker = try gpa.create(Worker);
         worker.* = .{
             .scratch = try .initCheckScratch(gpa, limits),
             .text = try .initText(gpa, limits.text_bytes),
@@ -40,7 +41,6 @@ pub const Worker = struct {
             .source = try memory.reserveUninitialized(gpa, u8, std.math.add(usize, limits.file_bytes, 1) catch return error.OutOfMemory),
         };
         worker.facts = try .initFacts(gpa, limits, &worker.text);
-        return worker;
     }
 
     fn startFile(self: *Worker, path: []const u8, name: []const u8, collect_units: bool) void {
@@ -116,7 +116,7 @@ pub const Batch = struct {
 
     /// Checks every file, then returns the first failure in file order, if any. A failure doesn't
     /// stop the others, so the same files fail the same way however they were scheduled.
-    pub fn run(self: *Batch, workers: []const *Worker) Io.Cancelable!?Failure {
+    pub fn run(self: *Batch, workers: []Worker) Io.Cancelable!?Failure {
         if (workers.len == 0 or workers.len > max_workers) assert.panic("checking with {d} workers; checkWorkers() makes between 1 and {d}", .{ workers.len, max_workers });
         if (self.order.len < self.files.len) assert.panic("room to order {d} files, but the run has {d}; size Batch.order from memory.Limits.files", .{ self.order.len, self.files.len });
         for (self.files, 0..) |path, index| {
@@ -126,7 +126,7 @@ pub const Batch = struct {
         }
         std.mem.sort(Sized, self.order[0..self.files.len], self.files.len, Sized.largestFirst);
         var group: Io.Group = .init;
-        for (workers) |worker| group.async(self.io, work, .{ self, worker });
+        for (workers) |*worker| group.async(self.io, work, .{ self, worker });
         try group.await(self.io);
         if (self.failure == null and self.checked > self.files.len) assert.panic("checked {d} of {d} files; each index is handed to one worker once", .{ self.checked, self.files.len });
         return self.failure;

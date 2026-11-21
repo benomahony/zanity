@@ -8,6 +8,7 @@ const captures = @import("captures.zig");
 const check = @import("check.zig");
 const chains = @import("chains.zig");
 const repeats = @import("repeats.zig");
+const data_layout = @import("data_layout.zig");
 const facts_module = @import("facts.zig");
 const types = @import("types.zig");
 const File = check.File;
@@ -24,6 +25,7 @@ pub fn note(self: *File, node: ts.Node, id: captures.Id) !bool {
         try chains.checkChain(self, node);
     } else if (v.expression_repeatable == id) {
         try repeats.noteRepeatable(self, node);
+        try data_layout.checkInvariant(self, node);
     } else if (v.write_target == id) {
         try repeats.noteWrite(self, node, text);
     } else if (v.reference_name == id or self.checker.compiled.id("reference.text") == id or self.checker.compiled.id("reference.key") == id) {

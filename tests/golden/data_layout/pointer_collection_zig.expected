@@ -1,0 +1,5 @@
+rules: allocation-in-loop,invariant-in-loop,pointer-collection,field-chain-in-loop,padded-struct
+exit: 0
+pointer_collection_zig.zig:6:12: warning [pointer-collection]
+pointer_collection_zig.zig:7:12: warning [pointer-collection]
+pointer_collection_zig.zig:8:11: warning [pointer-collection]

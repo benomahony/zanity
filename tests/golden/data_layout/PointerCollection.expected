@@ -1,0 +1,4 @@
+rules: allocation-in-loop,invariant-in-loop,pointer-collection,field-chain-in-loop,padded-struct
+exit: 0
+PointerCollection.java:5:5: warning [pointer-collection]
+PointerCollection.java:6:5: warning [pointer-collection]

@@ -1,0 +1,5 @@
+rules: allocation-in-loop,invariant-in-loop,pointer-collection,field-chain-in-loop,padded-struct
+exit: 0
+toys.py:24:18: warning [field-chain-in-loop]
+toys.py:38:12: warning [invariant-in-loop]
+toys.py:55:12: warning [invariant-in-loop]

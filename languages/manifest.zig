@@ -203,6 +203,20 @@ pub const Tables = struct {
     generic_types: []const []const u8 = &.{},
     allocating_calls: []const []const u8 = &.{},
     initializer_prefixes: []const []const u8 = &.{},
+    /// Calls that add one element to a collection, such as `push` or `append`, which
+    /// allocation-in-loop leaves out because growing costs little spread over the elements.
+    growth_calls: []const []const u8 = &.{},
+    /// Calls that size a collection, such as `reserve` or `Vec::with_capacity`; reserving on an
+    /// existing collection in a loop is how growth is meant to be amortised.
+    reserve_calls: []const []const u8 = &.{},
+    /// Calls that give the same value for the same arguments and change nothing, such as `len` or
+    /// `toLowerCase`; one written with its module, such as `re.compile`, matches only in full.
+    pure_calls: []const []const u8 = &.{},
+    /// Lowercase words the language reserves that read no variable, such as `and`, `nil` or `await`.
+    reserved_words: []const []const u8 = &.{},
+    /// How many bytes a field of each type takes and the boundary it is aligned to, for the
+    /// structs whose fields the language lays out in the order they are written.
+    field_sizes: []const FieldSize = &.{},
     test_file_prefixes: []const []const u8 = &.{},
     test_file_suffixes: []const []const u8 = &.{},
     /// How to write an assertion that explains its failure. `$condition` is the
@@ -254,6 +268,10 @@ pub const Tables = struct {
 
 /// A comparison operator or method, such as `==` or `contains`, and the specific checks that show
 /// both sides when they fail.
+/// The bytes a field of `type` takes and the boundary it starts on; a `prefix` entry covers every
+/// type written starting with it, as `*` does a Go pointer.
+pub const FieldSize = struct { type: []const u8, size: u8, alignment: u8, prefix: bool = false };
+
 pub const SpecificCheck = struct { when: []const u8, check: []const u8, negated: []const u8 = "" };
 
 pub const entries: []const Entry = @import("manifest.zon");

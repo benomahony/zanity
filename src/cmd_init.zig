@@ -35,8 +35,10 @@ pub fn runInit(ctx: *zclig.Context, options: InitOptions) ![]const InitRow {
     };
     var present: [starter.usual_excludes.len][]const u8 = undefined;
     var found: usize = 0;
+    const here = std.mem.eql(u8, dir, ".");
+    const root = std.mem.trimEnd(u8, dir, "/");
     for (starter.usual_excludes) |candidate| {
-        const path = if (std.mem.eql(u8, dir, ".")) candidate else try ws.text.format("{s}/{s}", .{ std.mem.trimEnd(u8, dir, "/"), candidate });
+        const path = if (here) candidate else try ws.text.format("{s}/{s}", .{ root, candidate });
         cwd.access(ws.io, path, .{}) catch continue;
         present[found] = candidate;
         found += 1;

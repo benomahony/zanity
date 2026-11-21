@@ -1,0 +1,3 @@
+rules: allocation-in-loop,invariant-in-loop,pointer-collection,field-chain-in-loop,padded-struct
+exit: 0
+field_chain_in_loop_ts.ts:9:12: warning [field-chain-in-loop]

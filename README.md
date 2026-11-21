@@ -566,6 +566,17 @@ Rules marked *production* hold code to what safety-critical software needs and m
 | `long-file` | warning | a file too long to hold in mind |
 | `oversized-file` | error | a file too large for zanity to check, such as one over 4 MB, so no other rule checks it |
 
+**Data layout**
+
+| Rule | Severity | Flags |
+|---|---|---|
+| `allocation-in-loop` | warning, *production* | a call that allocates or copies on every pass of a loop, such as `list(row)`, `slice()`, `clone()`, `ToList()`, `fmt.Sprintf` or `allocPrint`; not one in the loop's iterable, which runs once, an init function, or a call that only adds an element, such as `push`, whose cost is spread over the collection |
+| `invariant-in-loop` | warning | a call on every pass of a loop that gives the same value each time, such as `len(items)`, `word.toLowerCase()` or `strings.ToLower(word)`, because the loop neither binds, assigns nor mutates anything it reads; only calls the language's tables list as pure count, such as `len`, `re.compile` and `trim`, so a call that reads or changes state, such as `next()`, is never reported |
+| `pointer-collection` | warning, *production* | a collection whose elements each sit behind their own pointer or box, so walking it chases one pointer per element: Rust's `Vec<Box<T>>` and `Rc` or `Arc` elements (not `Box<dyn Trait>`), Zig's `[]*T` and `ArrayList(*T)`, Go's `[]*T` and `map[K]*V`, Java's `List<Integer>` and other boxed primitives, C#'s `List<object>`, `object[]` and `ArrayList`, and Swift's `[Any]` and `[AnyObject]`; not Python, JavaScript, TypeScript or Lua, which have no unboxed collections |
+| `field-chain-in-loop` | warning, *production* | two member reads from a loop's element on every pass, such as `row.customer.balance`, which follow a pointer out of each element to another object; longer chains are `message-chain`'s. Python, JavaScript, TypeScript, Java and Lua, where every object field is a reference; not Zig, Rust, Go, C# or Swift, where a struct's fields sit inline |
+| `padded-struct` | warning, *production* | a struct that takes more bytes with its fields in the order written than ordered from the largest alignment to the smallest, such as `bool`, `int64`, `bool` (24 bytes, not 16), from each field type's size and alignment in `languages/tables.zon`; only where the compiler keeps that order: Go and Swift structs, C# `struct`s, Rust's `#[repr(C)]` and Zig's `extern struct`. A struct with a field it can't size is left alone |
+| `wide-hot-struct` | information, *production* | a loop over structs or objects with many fields that uses only one or two of them on each pass, so most of every element is loaded and unused; needs `--infer` |
+
 **Tests**
 
 | Rule | Severity | Flags |
@@ -693,6 +704,12 @@ zig build bench -Dcorpus=/tmp/kubernetes
 ```
 
 It keeps the fastest of three runs of each. Cold means zanity's cache is empty, not the operating system's: the corpus is read once before any timing, so files are already in memory.
+
+Each run also reports zanity's peak memory. `-Dcompare=` takes a branch, tag or commit, builds zanity there in `.zig-cache/bench-compare/<commit>`, and measures it the same way, ending with a table of both and the change; the Bench workflow's `compare` input does the same for each codebase. Each zanity runs its own `--rules all`, so a commit that adds rules does more work; `-Drules=` takes a list as `--rules` does, so passing the older commit's rules compares the same work:
+
+```sh
+zig build bench -Dcompare=main
+```
 
 `git config core.hooksPath .githooks` turns on the lightweight `pre-commit` formatting check. Pushes do not run local validation or require a clean working tree; CI validates pushed commits. Run `./scripts/check-all` when you want the full local gate: formatting, unit and integration tests, zanity's warning-level self-check, every release build, the generated catalogue check, and the feature-parity ratchet. It checks the current working tree, including uncommitted changes, and stops at the first failure. It requires Zig, Python 3 and `uv`; `uv` supplies the pinned PyYAML dependency for catalogue generation.
 

@@ -1,0 +1,5 @@
+rules: allocation-in-loop,invariant-in-loop,pointer-collection,field-chain-in-loop,padded-struct
+exit: 0
+pointer_collection_go.go:6:9: warning [pointer-collection]
+pointer_collection_go.go:7:9: warning [pointer-collection]
+pointer_collection_go.go:8:9: warning [pointer-collection]

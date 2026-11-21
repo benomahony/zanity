@@ -55,7 +55,7 @@ const Body = struct {
     }
 };
 
-const Window = struct { start: usize, end: usize, inputs: [rules.max_parameters]*const Tracked = undefined, input_count: usize = 0, output: ?*const Tracked = null };
+const Window = struct { start: usize, end: usize, inputs: [rules.max_parameters]u16 = undefined, input_count: usize = 0, output: ?u16 = null };
 
 /// Reports, in a long function, the longest run of top-level statements that could move into a
 /// function of its own; when long-function reported the function, the run becomes its fix instead.
@@ -88,9 +88,9 @@ fn windowMessage(self: *File, body: *const Body, window: Window, name: []const u
     _ = try text.format("Lines {d}-{d} of '{s}' need only ", .{ first, last, name });
     if (window.input_count == 0) _ = try text.copy("what they set themselves");
     for (window.inputs[0..window.input_count], 0..) |input, i| {
-        _ = try text.format("{s}'{s}'", .{ if (i == 0) "" else if (i + 1 == window.input_count) " and " else ", ", input.text });
+        _ = try text.format("{s}'{s}'", .{ if (i == 0) "" else if (i + 1 == window.input_count) " and " else ", ", body.names[input].text });
     }
-    if (window.output) |output| _ = try text.format(" and give back only '{s}'", .{output.text}) else _ = try text.copy(" and set nothing read after them");
+    if (window.output) |output| _ = try text.format(" and give back only '{s}'", .{body.names[output].text}) else _ = try text.copy(" and set nothing read after them");
     _ = try text.copy(", so they can move into a function of their own.");
     if (last < first) assert.panic("{s}: the block of '{s}' ends on line {d}, before it starts on {d}", .{ self.work.facts.path, name, last, first });
     return text.buffer[start..text.used];
@@ -286,16 +286,16 @@ fn fits(body: *const Body, start: usize, end: usize) ?Window {
     const before: Mask = (@as(Mask, 1) << @intCast(start)) - 1;
     const after = ~(before | inside);
     var window: Window = .{ .start = start, .end = end };
-    for (body.names[0..body.name_count]) |*n| {
+    for (body.names[0..body.name_count], 0..) |*n, index| {
         if (!n.parameter and n.assigned & inside != 0 and firstOf(n.read & after) < firstOf(n.declared & after)) {
             if (window.output != null) return null;
-            window.output = n;
+            window.output = @intCast(index);
         }
         const used = (n.read | n.touched) & inside;
         if (used == 0 or firstOf(n.declared & inside) <= firstOf(used)) continue;
         if (!n.parameter and (n.assigned | n.touched) & before == 0) continue;
         if (window.input_count == window.inputs.len) return null;
-        window.inputs[window.input_count] = n;
+        window.inputs[window.input_count] = @intCast(index);
         window.input_count += 1;
     }
     return window;

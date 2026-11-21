@@ -623,3 +623,26 @@
 (field_expression
   object: (identifier) @import.via
   member: (identifier) @import.used)
+
+; Data layout: a slice, array or list of pointers, so walking it follows a pointer per element.
+(slice_type
+  (pointer_type)) @finding.pointer-collection
+
+(array_type
+  (pointer_type)) @finding.pointer-collection
+
+(call_expression
+  (field_expression
+    (identifier) @_list .)
+  (arguments
+    .
+    (pointer_type))
+  (#any-of? @_list "ArrayList" "ArrayListUnmanaged" "SegmentedList")) @finding.pointer-collection
+
+; Data layout: a struct whose fields sit in the order they are written, each stored member, the
+; type that sizes it, members that take no room in it, and ones whose size can't be read.
+(struct_declaration
+  "extern") @layout.struct
+
+(container_field
+  type: (_) @layout.field) @layout.member
