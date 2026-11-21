@@ -1,8 +1,7 @@
 .{
     .{
         .name = "python",
-        .not_applicable = .{ "padded-struct", "pointer-collection", "branching-double", "dynamic-allocation", "precedence-trap", "switch-fallthrough", "wide-scope", "assignment-in-condition", "null-catch", "empty-synchronized", "public-finalizer", "direct-thread", "unsafe-jni", "public-static-field", "public-static-array", "missing-super-finalizer", "missing-super-clone", "public-clone-method", "thread-run", "prototype-mutation", "class-name-comparison", "equals-without-hashcode", "hashcode-without-equals", "struts-public-field", "cwe-487", "cwe-609", "cwe-1235", "cwe-567", "goto-statement", "discarded-span-context" },
-        .untested = .{ "assertion-message", "explicit-finalizer", "missing-integer-radix", "parameter-expression-language", "parameter-format-string", "parameter-header-value", "parameter-window-opener", "process-exit", "storage-read-in-test" },
+        .not_applicable = .{ "padded-struct", "pointer-collection", "branching-double", "dynamic-allocation", "precedence-trap", "switch-fallthrough", "wide-scope", "assignment-in-condition", "null-catch", "empty-synchronized", "public-finalizer", "direct-thread", "unsafe-jni", "public-static-field", "public-static-array", "missing-super-finalizer", "missing-super-clone", "public-clone-method", "thread-run", "prototype-mutation", "class-name-comparison", "equals-without-hashcode", "hashcode-without-equals", "struts-public-field", "cwe-487", "cwe-609", "cwe-1235", "cwe-567", "goto-statement", "discarded-span-context", "missing-integer-radix", "parameter-window-opener", "parameter-expression-language" },
         .extensions = .{ "py", "pyi" },
         .ecosystem = "python",
         .scanner = true,

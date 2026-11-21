@@ -215,16 +215,16 @@ class MockServer(LoopbackServer):
 
 
 
-def exit_when_parent_goes() -> None:
-    """Exits once stdin reaches end of file, which happens when the test that started the mock ends."""
+def shut_down_when_parent_goes(server: MockServer) -> None:
+    """Stops the server once stdin reaches end of file, which happens when the test that started the mock ends."""
     assert not sys.stdin.closed, "the mock's stdin was closed before it could watch for its parent exiting"
     assert not sys.stdin.isatty(), "the mock was started from a terminal; tests start it with stdin as a pipe they hold open"
     sys.stdin.buffer.read()
-    os._exit(0)
+    server.shutdown()
 
 
 if __name__ == "__main__":
-    threading.Thread(target=exit_when_parent_goes, daemon=True).start()
     server = MockServer(Handler)
+    threading.Thread(target=shut_down_when_parent_goes, args=(server,), daemon=True).start()
     print(server.server_address[1], flush=True)
-    sys.exit(server.serve_forever())
+    server.serve_forever()
