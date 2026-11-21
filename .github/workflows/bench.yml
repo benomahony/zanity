@@ -7,6 +7,10 @@ on:
         description: A branch, tag or commit to measure beside this one, for time and peak memory
         required: false
         default: ""
+      rules:
+        description: The rules each zanity check runs, as --rules takes them; all by default
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -43,6 +47,7 @@ jobs:
     env:
       REPOSITORY: ${{ matrix.repository }}
       COMPARE: ${{ inputs.compare }}
+      RULES: ${{ inputs.rules }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
@@ -53,7 +58,7 @@ jobs:
       - name: zig build bench
         shell: bash
         run: |
-          zig build bench -Dcorpus="$RUNNER_TEMP/corpus" ${COMPARE:+-Dcompare="$COMPARE"} | tee "$RUNNER_TEMP/bench.txt"
+          zig build bench -Dcorpus="$RUNNER_TEMP/corpus" ${COMPARE:+-Dcompare="$COMPARE"} ${RULES:+-Drules="$RULES"} | tee "$RUNNER_TEMP/bench.txt"
           {
             echo "### ${{ matrix.language }}: $REPOSITORY at $(git -C "$RUNNER_TEMP/corpus" rev-parse --short HEAD)"
             echo '```'
