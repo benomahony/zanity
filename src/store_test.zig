@@ -54,7 +54,7 @@ test "a vector kept in the store comes back as float16 kept it, under its model 
     try std.testing.expectEqual(@as(?usize, null), try store_vectors.cachedVector(&store, .{ .model = key.model, .kind = "name", .text = key.text }, &out));
 }
 
-test "a source analysis is queryable JSON and records cache hits" {
+test "a source analysis is queryable JSON and is marked used once a day" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
     const arena = arena_state.allocator();
@@ -69,14 +69,14 @@ test "a source analysis is queryable JSON and records cache hits" {
     try store.keepAnalysis(.{ .key = key, .source = source, .path = "src/a.py", .language = "lang-a", .result = "{\"findings\":[{\"rule\":\"unbounded-loop\"}]}" });
     var buffer: [1024]u8 = undefined;
     _ = (try store.cachedAnalysis(&buffer, key, source)).?;
-    try std.testing.expectEqual(@as(f64, 0), try scalar(store.db, "SELECT hits FROM source_analyses"));
+    try std.testing.expectEqual(@as(f64, 1), try scalar(store.db, "SELECT used_at = created_at FROM source_analyses"));
     const yesterday = "UPDATE source_analyses SET used_at = '2026-01-01T00:00:00+00:00'";
     if (sqlite.sqlite3_exec(store.db, yesterday, null, null, null) != sqlite.ok) return sqlite.captureDatabaseFailure(store.db);
     const result = (try store.cachedAnalysis(&buffer, key, source)).?;
     try std.testing.expectEqualStrings("{\"findings\":[{\"rule\":\"unbounded-loop\"}]}", result);
     try std.testing.expectEqual(null, try store.cachedAnalysis(&buffer, key, digest(&.{"changed"})));
     try std.testing.expectEqual(@as(f64, 1), try scalar(store.db, "SELECT json_array_length(result, '$.findings') FROM source_analyses"));
-    try std.testing.expectEqual(@as(f64, 1), try scalar(store.db, "SELECT hits FROM source_analyses"));
+    try std.testing.expectEqual(@as(f64, 1), try scalar(store.db, "SELECT used_at > '2026-01-01T00:00:00+00:00' FROM source_analyses"));
 }
 
 test "trimming the analysis cache keeps the most recently used analyses and drops the rest" {

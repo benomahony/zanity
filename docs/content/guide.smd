@@ -238,7 +238,7 @@ The `source_analyses` table keeps one row per path and analysis context, replaci
 
 ```sh
 sqlite3 ~/.cache/zanity/zanity.db "
-  SELECT path, language, hits,
+  SELECT path, language, used_at,
          json_array_length(result, '$.findings') AS findings,
          json_array_length(result, '$.functions') AS functions
   FROM source_analyses
