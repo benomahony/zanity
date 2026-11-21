@@ -2,6 +2,11 @@ name: Bench
 
 on:
   workflow_dispatch:
+    inputs:
+      compare:
+        description: A branch, tag or commit to measure beside this one, for time and peak memory
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -37,15 +42,18 @@ jobs:
     timeout-minutes: 60
     env:
       REPOSITORY: ${{ matrix.repository }}
+      COMPARE: ${{ inputs.compare }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: ${{ inputs.compare != '' && '0' || '1' }}
       - uses: xyzzylabs/setup-zig@7e5af686da64007a0797898801de180e5f4d3762 # v1.0.5
       - name: Clone ${{ matrix.repository }}
         run: git clone --quiet --depth 1 "$REPOSITORY" "$RUNNER_TEMP/corpus"
       - name: zig build bench
         shell: bash
         run: |
-          zig build bench -Dcorpus="$RUNNER_TEMP/corpus" | tee "$RUNNER_TEMP/bench.txt"
+          zig build bench -Dcorpus="$RUNNER_TEMP/corpus" ${COMPARE:+-Dcompare="$COMPARE"} | tee "$RUNNER_TEMP/bench.txt"
           {
             echo "### ${{ matrix.language }}: $REPOSITORY at $(git -C "$RUNNER_TEMP/corpus" rev-parse --short HEAD)"
             echo '```'

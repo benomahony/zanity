@@ -707,6 +707,12 @@ zig build bench -Dcorpus=/tmp/kubernetes
 
 It keeps the fastest of three runs of each. Cold means zanity's cache is empty, not the operating system's: the corpus is read once before any timing, so files are already in memory.
 
+Each run also reports zanity's peak memory. `-Dcompare=` takes a branch, tag or commit, builds zanity there in `.zig-cache/bench-compare/<commit>`, and measures it the same way, ending with a table of both and the change; the Bench workflow's `compare` input does the same for each codebase. Each zanity runs its own `--rules all`, so a commit that adds rules does more work:
+
+```sh
+zig build bench -Dcompare=main
+```
+
 `git config core.hooksPath .githooks` turns on the lightweight `pre-commit` formatting check. Pushes do not run local validation or require a clean working tree; CI validates pushed commits. Run `./scripts/check-all` when you want the full local gate: formatting, unit and integration tests, zanity's warning-level self-check, every release build, the generated catalogue check, and the feature-parity ratchet. It checks the current working tree, including uncommitted changes, and stops at the first failure. It requires Zig, Python 3 and `uv`; `uv` supplies the pinned PyYAML dependency for catalogue generation.
 
 `python3 bench/parity/ratchet.py` protects every covered comparison fixture, inference question, and language/rule match count in `bench/parity/results.json`. After the full parity benchmark improves coverage, run it with `--write` and commit the raised `bench/parity/floors.json`; it refuses to write over a regression.

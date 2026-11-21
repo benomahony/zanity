@@ -2,7 +2,9 @@
 //! Parsing every file once with tree-sitter is the work no check can skip, so that parse, spread
 //! over every core, is the ceiling. The report puts zanity's time beside it, and beside the parse
 //! on one core, so a slowdown shows whether the checks or the scheduling lost the time. zanity
-//! runs end to end twice: cold, with its store deleted before every run, and warm, reusing it.
+//! runs end to end twice: cold, with its store deleted before every run, and warm, reusing it,
+//! and each run reports its peak memory. `--compare=REF` builds zanity at that commit and runs it
+//! the same way, so the report shows what a change did to its time and memory.
 
 const std = @import("std");
 const analysis = @import("analysis.zig");
@@ -70,17 +72,17 @@ pub fn main(init: std.process.Init) !void {
     const io = init.io;
     const minimal = init.minimal;
     const args = try minimal.args.toSlice(arena);
-    if (args.len < 3 or args.len > 4) std.process.fatal("bench takes the zanity binary, the compiler and an optional corpus directory, but got {d} arguments; run it with zig build bench", .{args.len - 1});
+    if (args.len < 3 or args.len > 5) std.process.fatal("bench takes the zanity binary, the compiler, and optional --corpus=DIR and --compare=REF, but got {d} arguments; run it with zig build bench", .{args.len - 1});
     const limits: memory.Limits = .{};
     if (limits.files == 0 or limits.file_bytes == 0) assert.panic("the default limits allow {d} files of {d} bytes, so bench could check nothing; restore them in memory.Limits", .{ limits.files, limits.file_bytes });
-    var corpus = try Corpus.initCorpus(arena, if (args.len == 4) args[3] else try stdDir(arena, io, args[2]), limits);
+    const corpus_dir = option(args[3..], "--corpus=") orelse try stdDir(arena, io, args[2]);
+    var corpus = try Corpus.initCorpus(arena, corpus_dir, limits);
     var scratch = try check.FileScratch.initCheckScratch(arena, limits);
     var text = try memory.Text.initText(arena, limits.text_bytes);
     var facts = try Facts.initFacts(arena, limits, &text);
     // zanity runs from inside the corpus, so a path relative to here would no longer find it.
     const zanity = try Io.Dir.cwd().realPathFileAlloc(io, args[1], arena);
-    const store = try std.fmt.allocPrint(arena, "{s}.bench.db", .{zanity});
-    try init.environ_map.put("ZANITY_STORE", store);
+    const compared = if (option(args[3..], "--compare=")) |ref| try buildRef(arena, io, args[2], ref) else null;
 
     var timer: Timer = .{ .io = io, .started = Io.Timestamp.now(io, .awake) };
     corpus.read(io) catch |e| {
@@ -91,14 +93,136 @@ pub fn main(init: std.process.Init) !void {
     const parse = try fastest(io, parseAll, .{&corpus});
     var oversized: usize = 0;
     const checked = try fastest(io, checkAll, .{ arena, &corpus, check.Work{ .scratch = &scratch, .text = &text, .facts = &facts }, &oversized });
-    const cold = try coldest(io, zanity, corpus.dir, init.environ_map);
-    const warm = try fastest(io, runZanity, .{ io, zanity, corpus.dir, init.environ_map });
-    try forget(io, store);
+    const here: Target = .{ .zanity = zanity, .dir = corpus.dir, .environ = init.environ_map, .store = try std.fmt.allocPrint(arena, "{s}.bench.db", .{zanity}) };
+    try init.environ_map.put("ZANITY_STORE", here.store);
+    const this = try measureZanity(io, here);
     if (corpus.paths.len == 0) assert.panic("timed a corpus of no files; Corpus.read() rejects an empty corpus", .{});
-    try printTimings(io, &corpus, .{ .read = read, .parse = parse, .check = checked, .oversized = oversized, .cold = cold, .warm = warm, .cores = try std.Thread.getCpuCount() });
+    try printTimings(io, &corpus, .{ .read = read, .parse = parse, .check = checked, .oversized = oversized, .cold = this.cold.ns, .warm = this.warm.ns, .cores = try std.Thread.getCpuCount() });
+    const c = compared orelse return printMemory(io, this, null);
+    const there: Target = .{ .zanity = c.zanity, .dir = corpus.dir, .environ = init.environ_map, .store = try std.fmt.allocPrint(arena, "{s}.bench.db", .{c.zanity}) };
+    try init.environ_map.put("ZANITY_STORE", there.store);
+    try printMemory(io, this, .{ .label = c.label, .runs = try measureZanity(io, there) });
 }
 
 const Timings = struct { read: u64, parse: u64, check: u64, oversized: usize, cold: u64, warm: u64, cores: usize };
+
+/// One way of running zanity, measured: the fastest of its runs and the most memory any used.
+const Run = struct { ns: u64, peak: usize };
+
+/// A zanity measured cold and warm.
+const Runs = struct { cold: Run, warm: Run };
+
+/// The zanity built at the commit `--compare` names, and how to name it in the report.
+const Compared = struct { zanity: []const u8, label: []const u8 };
+
+/// A zanity to run, the corpus it checks, and the store of its own that ZANITY_STORE names.
+const Target = struct { zanity: []const u8, dir: []const u8, environ: *const std.process.Environ.Map, store: []const u8 };
+
+/// Another commit's runs beside this one's, for the comparison table.
+const Other = struct { label: []const u8, runs: Runs };
+
+/// One line of the comparison table: a figure for this zanity and for the compared one.
+const Figure = struct { name: []const u8, unit: []const u8, this: f64, other: f64 };
+
+/// The value of the flag that starts with `prefix`, such as `--corpus=`, among `args`.
+fn option(args: []const []const u8, prefix: []const u8) ?[]const u8 {
+    if (prefix.len == 0 or prefix[prefix.len - 1] != '=') assert.panic("looking for the flag '{s}', which doesn't end with '='; name flags as --name=", .{prefix});
+    if (args.len > 2) assert.panic("bench got {d} flags, but it takes only --corpus= and --compare=; main() checks the count", .{args.len});
+    for (args) |arg| if (std.mem.startsWith(u8, arg, prefix)) return arg[prefix.len..];
+    for (args) |arg| if (!std.mem.startsWith(u8, arg, "--corpus=") and !std.mem.startsWith(u8, arg, "--compare=")) std.process.fatal("bench doesn't know the argument '{s}'; it takes --corpus=DIR and --compare=REF", .{arg});
+    return null;
+}
+
+/// Runs a zanity cold and then warm, then deletes the store it used.
+fn measureZanity(io: Io, target: Target) !Runs {
+    if (!std.fs.path.isAbsolute(target.zanity)) assert.panic("measuring zanity at '{s}', a relative path; resolve it before measuring", .{target.zanity});
+    const named = target.environ.get("ZANITY_STORE") orelse "";
+    if (!std.mem.eql(u8, named, target.store)) assert.panic("measuring {s} with ZANITY_STORE at '{s}', not its own '{s}'; main() sets it for each zanity", .{ target.zanity, named, target.store });
+    const cold = try timeZanity(io, target, true);
+    const warm = try timeZanity(io, target, false);
+    try forget(io, target.store);
+    return .{ .cold = cold, .warm = warm };
+}
+
+/// Builds zanity at `ref` in its own directory under `.zig-cache/bench-compare`, named by the
+/// commit, so a second bench of the same commit reuses the build. It shares this checkout's
+/// fetched packages, which are named by their hashes, rather than fetching them again.
+fn buildRef(arena: Allocator, io: Io, compiler: []const u8, ref: []const u8) !Compared {
+    if (ref.len == 0) std.process.fatal("--compare was given no branch, tag or commit", .{});
+    if (compiler.len == 0) assert.panic("building {s} with an empty compiler path; build.zig passes b.graph.zig_exe", .{ref});
+    const resolved = try std.process.run(arena, io, .{ .argv = &.{ "git", "rev-parse", "--verify", "--short", try std.fmt.allocPrint(arena, "{s}^{{commit}}", .{ref}) } });
+    const commit = std.mem.trim(u8, resolved.stdout, " \n");
+    if (commit.len == 0) std.process.fatal("git can't find the commit '{s}' to compare with: {s}", .{ ref, resolved.stderr });
+    for (commit) |c| if (!std.ascii.isHex(c)) assert.panic("git rev-parse --short gave '{s}' for {s}, which isn't a commit hash; it prints only hex digits", .{ commit, ref });
+    const cwd = Io.Dir.cwd();
+    const dir = try cwd.realPathFileAlloc(io, ".", arena);
+    const root = try std.fs.path.join(arena, &.{ dir, ".zig-cache", "bench-compare", commit });
+    const label = if (std.mem.startsWith(u8, commit, ref)) commit else try std.fmt.allocPrint(arena, "{s} ({s})", .{ ref, commit });
+    const built: Compared = .{ .zanity = try std.fs.path.join(arena, &.{ root, "zig-out", "bin", "zanity" }), .label = label };
+    if (exists(io, built.zanity)) return built;
+    try cwd.createDirPath(io, root);
+    const archive = try std.fmt.allocPrint(arena, "{s}.tar", .{root});
+    try runOrFail(arena, io, &.{ "git", "archive", "--format=tar", "-o", archive, commit }, null);
+    try runOrFail(arena, io, &.{ "tar", "-xf", archive, "-C", root }, null);
+    try cwd.deleteFile(io, archive);
+    const packages = try std.fs.path.join(arena, &.{ dir, "zig-pkg" });
+    if (exists(io, packages)) try cwd.symLink(io, packages, try std.fs.path.join(arena, &.{ root, "zig-pkg" }), .{ .is_directory = true });
+    try runOrFail(arena, io, &.{ compiler, "build", "-Doptimize=ReleaseFast" }, root);
+    if (!exists(io, built.zanity)) std.process.fatal("bench built {s} but found no zanity at {s}", .{ commit, built.zanity });
+    return built;
+}
+
+/// Whether something is at `path`.
+fn exists(io: Io, path: []const u8) bool {
+    if (path.len == 0) assert.panic("asked whether an empty path exists; pass the path bench built", .{});
+    if (!std.fs.path.isAbsolute(path)) assert.panic("asked whether '{s}' exists, a relative path; buildRef() works from absolute paths", .{path});
+    Io.Dir.cwd().access(io, path, .{}) catch return false;
+    return true;
+}
+
+/// Runs `argv`, in `cwd` when given, and stops bench saying what failed if it doesn't succeed.
+fn runOrFail(arena: Allocator, io: Io, argv: []const []const u8, cwd: ?[]const u8) !void {
+    if (argv.len == 0) assert.panic("running no command; pass the program and its arguments", .{});
+    if (argv[0].len == 0) assert.panic("running a command with an empty program name", .{});
+    const result = try std.process.run(arena, io, .{ .argv = argv, .cwd = if (cwd) |path| .{ .path = path } else .inherit });
+    switch (result.term) {
+        .exited => |code| if (code == 0) return,
+        else => {},
+    }
+    std.process.fatal("bench: '{s}' failed while building the commit to compare with: {s}", .{ argv[0], result.stderr });
+}
+
+/// The peak memory of each run, and with `--compare`, a table of both commits and the change.
+fn printMemory(io: Io, this: Runs, other: ?Other) !void {
+    if (this.cold.ns == 0 or this.warm.ns == 0) assert.panic("a run of zanity took no time; the clock can't resolve the work, so use a larger corpus", .{});
+    if (other) |o| if (o.label.len == 0) assert.panic("comparing with a commit that has no name; buildRef() names it by ref and commit", .{});
+    var buffer: [4096]u8 = undefined;
+    var writer: Io.File.Writer = .initStreaming(.stdout(), io, &buffer);
+    const out = &writer.interface;
+    const mb: f64 = 1e6;
+    const ns: f64 = std.time.ns_per_s;
+    try out.print("memory   {d:>7.1} MB peak cold, {d:.1} MB peak warm\n", .{ @as(f64, @floatFromInt(this.cold.peak)) / mb, @as(f64, @floatFromInt(this.warm.peak)) / mb });
+    const o = other orelse return out.flush();
+    const theirs = o.runs;
+    try out.print("\ncompared with {s}, which runs its own --rules all\n", .{o.label});
+    try out.print("{s:<12} {s:>12} {s:>12} {s:>8}\n", .{ "", "this", "compared", "change" });
+    const figures = [_]Figure{
+        .{ .name = "cold time", .unit = "s", .this = @as(f64, @floatFromInt(this.cold.ns)) / ns, .other = @as(f64, @floatFromInt(theirs.cold.ns)) / ns },
+        .{ .name = "warm time", .unit = "s", .this = @as(f64, @floatFromInt(this.warm.ns)) / ns, .other = @as(f64, @floatFromInt(theirs.warm.ns)) / ns },
+        .{ .name = "cold memory", .unit = "MB", .this = @as(f64, @floatFromInt(this.cold.peak)) / mb, .other = @as(f64, @floatFromInt(theirs.cold.peak)) / mb },
+        .{ .name = "warm memory", .unit = "MB", .this = @as(f64, @floatFromInt(this.warm.peak)) / mb, .other = @as(f64, @floatFromInt(theirs.warm.peak)) / mb },
+    };
+    for (figures) |figure| try row(out, figure);
+    try out.flush();
+}
+
+/// One line of the comparison: this zanity's figure, the compared one's, and the change.
+fn row(out: *Io.Writer, figure: Figure) !void {
+    if (figure.name.len == 0 or figure.unit.len == 0) assert.panic("a comparison row with no name or unit; printMemory() names each", .{});
+    if (figure.this < 0 or figure.other < 0) assert.panic("{s} came out negative, {d} against {d}; times and sizes are never below zero", .{ figure.name, figure.this, figure.other });
+    const change = if (figure.other == 0) 0 else (figure.this - figure.other) / figure.other * 100;
+    try out.print("{s:<12} {d:>9.3} {s:<2} {d:>9.3} {s:<2} {s}{d:.1}%\n", .{ figure.name, figure.this, figure.unit, figure.other, figure.unit, if (change >= 0) "  +" else "  ", change });
+}
 
 fn printTimings(io: Io, corpus: *const Corpus, t: Timings) !void {
     if (t.parse == 0 or t.cores == 0) assert.panic("the parse took {d} ns over {d} cores; the clock can't resolve the work, so use a larger corpus", .{ t.parse, t.cores });
@@ -154,18 +278,19 @@ fn fastest(io: Io, comptime measure: anytype, args: anytype) !u64 {
     return best;
 }
 
-/// The fastest of `runs` full checks, each from an empty store.
-fn coldest(io: Io, zanity: []const u8, dir: []const u8, environ: *const std.process.Environ.Map) !u64 {
+/// The fastest of `runs` full checks and the most memory any of them used: each from an empty
+/// store when `cold`, or reusing what the run before kept.
+fn timeZanity(io: Io, target: Target, cold: bool) !Run {
     comptime if (runs == 0) @compileError("runs is 0, so nothing would be measured; set it to at least 1");
-    const store = environ.get("ZANITY_STORE") orelse assert.panic("timing cold runs without ZANITY_STORE; main() sets it so bench never deletes the user's own store", .{});
-    var best: u64 = std.math.maxInt(u64);
+    if (target.store.len == 0) assert.panic("timing {s} without a store of its own; main() names one beside it so bench never deletes the user's own", .{target.zanity});
+    var best: Run = .{ .ns = std.math.maxInt(u64), .peak = 0 };
     for (0..runs) |_| {
-        try forget(io, store);
+        if (cold) try forget(io, target.store);
         var timer: Timer = .{ .io = io, .started = Io.Timestamp.now(io, .awake) };
-        try runZanity(io, zanity, dir, environ);
-        best = @min(best, timer.lap());
+        const peak = try runZanity(io, target.zanity, target.dir, target.environ);
+        best = .{ .ns = @min(best.ns, timer.lap()), .peak = @max(best.peak, peak) };
     }
-    if (best == std.math.maxInt(u64)) assert.panic("none of the {d} cold runs finished; the loop must time each run", .{runs});
+    if (best.ns == std.math.maxInt(u64)) assert.panic("none of the {d} runs finished; the loop must time each run", .{runs});
     return best;
 }
 
@@ -230,9 +355,9 @@ fn checkAll(arena: Allocator, corpus: *const Corpus, work: check.Work, oversized
     }
 }
 
-/// Runs one full check of `dir`. Exit 1 means zanity found something, which is a finished run
-/// here; a higher code or a signal is a failure.
-fn runZanity(io: Io, zanity: []const u8, dir: []const u8, environ: *const std.process.Environ.Map) !void {
+/// Runs one full check of `dir` and returns the most memory it held, in bytes. Exit 1 means
+/// zanity found something, which is a finished run here; a higher code or a signal is a failure.
+fn runZanity(io: Io, zanity: []const u8, dir: []const u8, environ: *const std.process.Environ.Map) !usize {
     if (!std.fs.path.isAbsolute(zanity)) assert.panic("running zanity from '{s}', a relative path, inside {s}; resolve it before changing directory", .{ zanity, dir });
     if (dir.len == 0) assert.panic("running zanity on an empty corpus path; Corpus.initCorpus() rejects one", .{});
     var child = try std.process.spawn(io, .{
@@ -242,10 +367,11 @@ fn runZanity(io: Io, zanity: []const u8, dir: []const u8, environ: *const std.pr
         .stdout = .ignore,
         // --quiet leaves stderr empty on a finished run, so anything there says why zanity failed.
         .stderr = .inherit,
+        .request_resource_usage_statistics = true,
     });
     const term = try child.wait(io);
     switch (term) {
-        .exited => |code| if (code <= 1) return,
+        .exited => |code| if (code <= 1) return child.resource_usage_statistics.getMaxRss() orelse 0,
         else => {},
     }
     std.debug.print("bench: zanity check in {s} ended with {any}\n", .{ dir, term });
