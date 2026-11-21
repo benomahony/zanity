@@ -1,0 +1,4 @@
+rules: unended-span,dynamic-span-name
+exit: 0
+tracing_java.java:8:53: warning [unended-span]
+tracing_java.java:27:40: warning [dynamic-span-name]

@@ -1,0 +1,4 @@
+rules: untraced-entry-point
+exit: 0
+OrdersController.cs:9:19: warning [untraced-entry-point]
+Program.cs:5:24: warning [untraced-entry-point]

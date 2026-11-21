@@ -1,0 +1,4 @@
+rules: untraced-entry-point
+exit: 0
+OrderController.java:10:12: warning [untraced-entry-point]
+Routes.java:5:29: warning [untraced-entry-point]

@@ -1,0 +1,5 @@
+rules: untraced-entry-point
+exit: 0
+handlers.rs:3:14: warning [untraced-entry-point]
+main.rs:7:10: warning [untraced-entry-point]
+main.rs:27:31: warning [untraced-entry-point]

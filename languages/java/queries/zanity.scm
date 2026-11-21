@@ -766,3 +766,50 @@
 (array_type
   (type_identifier) @_boxed
   (#any-of? @_boxed "Integer" "Long" "Double" "Float" "Short" "Byte" "Character" "Boolean")) @finding.pointer-collection
+
+; A method a web framework calls for a route, as Spring's @GetMapping registers it.
+((method_declaration
+  (modifiers
+    [
+      (marker_annotation
+        name: (identifier) @_route)
+      (annotation
+        name: (identifier) @_route)
+    ])) @route.handler
+  (#any-of? @_route "GetMapping" "PostMapping" "PutMapping" "PatchMapping" "DeleteMapping" "RequestMapping"))
+
+; A method OpenTelemetry's @WithSpan traces, starting a span for each call.
+((method_declaration
+  (modifiers
+    [
+      (marker_annotation
+        name: (identifier) @_span)
+      (annotation
+        name: (identifier) @_span)
+    ])) @span.start
+  (#eq? @_span "WithSpan"))
+
+; A function passed to a call, which runs it: a request handler when the call registers a route.
+(method_invocation
+  arguments: (argument_list
+    (lambda_expression) @call.handler))
+
+; A call whose result something else ends, such as a span: the caller it is returned to, or the
+; object it is stored on.
+[
+  (return_statement
+    (method_invocation) @call.handed_off)
+  (assignment_expression
+    left: (field_access)
+    right: (method_invocation) @call.handed_off)
+]
+
+; The name a call's result is bound to, such as the span a start returns.
+(variable_declarator
+  name: (identifier) @binding.name
+  value: (method_invocation) @binding.value)
+
+; A name stored on an object, which then owns what it holds.
+(assignment_expression
+  left: (field_access)
+  right: (identifier) @binding.handed_off)

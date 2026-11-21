@@ -1268,3 +1268,48 @@
 (struct_declaration
   (declaration_list
     (property_declaration) @layout.unknown))
+
+; A method ASP.NET calls for a route, as [HttpGet] registers it.
+((method_declaration
+  (attribute_list
+    (attribute
+      name: (identifier) @_route))) @route.handler
+  (#any-of? @_route "HttpGet" "HttpPost" "HttpPut" "HttpPatch" "HttpDelete"))
+
+; A function passed to a call, which runs it: a request handler when the call registers a route.
+(invocation_expression
+  arguments: (argument_list
+    (argument
+      (lambda_expression) @call.handler)))
+
+; A value a using declaration or statement disposes, which stops an activity it holds.
+(local_declaration_statement
+  "using"
+  (variable_declaration
+    (variable_declarator
+      (invocation_expression) @call.handed_off)))
+
+(using_statement
+  (variable_declaration
+    (variable_declarator
+      (invocation_expression) @call.handed_off)))
+
+; A call whose result something else ends, such as an activity: the caller it is returned to, or
+; the object it is stored on.
+[
+  (return_statement
+    (invocation_expression) @call.handed_off)
+  (assignment_expression
+    left: (member_access_expression)
+    right: (invocation_expression) @call.handed_off)
+]
+
+; The name a call's result is bound to, such as the activity a start returns.
+(variable_declarator
+  name: (identifier) @binding.name
+  (invocation_expression) @binding.value)
+
+; A name stored on an object, which then owns what it holds.
+(assignment_expression
+  left: (member_access_expression)
+  right: (identifier) @binding.handed_off)

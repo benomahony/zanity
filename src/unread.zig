@@ -31,6 +31,8 @@ pub const looked_up = [_][]const u8{
     "call.context_discarded",
     "call.handed_off",
     "call.handler",
+    "route.handler",
+    "span.start",
     "call.paired",
     "chain.link",
     "comment.outer",

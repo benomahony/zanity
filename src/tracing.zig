@@ -133,11 +133,22 @@ pub fn noteHandlerFunction(self: *File, ctx: Context, name_node: ts.Node, name: 
     if (ctx.family != .function) assert.panic("{s}: noting {f} as a handler, but it is a {t}; call noteHandlerFunction() only from closeFunction()", .{ self.work.facts.path, ctx.node.where(), ctx.family });
     if (name.len == 0) assert.panic("{s}: noting an unnamed handler at {f}; closeFunction() returns before unnamed ones", .{ self.work.facts.path, ctx.node.where() });
     if (!self.checker.enabled.enabled("untraced-entry-point")) return;
-    const traced = self.s.spans.startsWithin(ts.ts_node_start_byte(ctx.node), ts.ts_node_end_byte(ctx.node));
+    const traced = tracedWithin(self, ctx.node);
     if (traced) if (ctx.fact) |id| self.work.facts.markTraced(id);
-    if (traced or !decoratedAsRoute(self, ctx)) return;
+    if (traced) if (self.index.within(ctx.node, self.checker.compiled.id("span.start"))) |start| try tracingCall(self, "tracer", start);
+    const routed = decoratedAsRoute(self, ctx) or self.index.marks(ctx.node, self.checker.compiled.id("route.handler"));
+    if (traced or !routed) return;
     const at = ts.ts_node_start_point(name_node);
     try self.work.facts.untracedHandler("handler", name, .{ at.row, at.column });
+}
+
+/// Whether a span starts within `node`: a call that starts one, or code the query marks as starting
+/// one, such as Rust's `info_span!` or a function under `#[instrument]` or `@WithSpan`.
+fn tracedWithin(self: *File, node: ts.Node) bool {
+    if (ts.ts_node_end_byte(node) > self.source.len) assert.panic("{s}: {f} ends past the {d} bytes of source; pass a node from this file's tree", .{ self.work.facts.path, node.where(), self.source.len });
+    if (ts.ts_node_end_byte(node) < ts.ts_node_start_byte(node)) assert.panic("{s}: {f} ends before it starts", .{ self.work.facts.path, node.where() });
+    if (self.s.spans.startsWithin(ts.ts_node_start_byte(node), ts.ts_node_end_byte(node))) return true;
+    return self.index.within(node, self.checker.compiled.id("span.start")) != null;
 }
 
 /// Whether a decorator over the function registers it as a request handler, as `@app.get(...)` does.
@@ -201,15 +212,35 @@ fn noteRoute(self: *File, ctx: Context, name: []const u8) !void {
     var i = @min(ctx.argument_count, ctx.arguments.len);
     while (i > 1) {
         i -= 1;
-        const handler = ctx.arguments[i] orelse continue;
+        const handler = unwrapped(self, ctx.arguments[i] orelse continue);
         const point = ts.ts_node_start_point(handler);
         if (self.index.marks(handler, self.checker.compiled.id("call.handler"))) {
-            if (self.s.spans.startsWithin(ts.ts_node_start_byte(handler), ts.ts_node_end_byte(handler))) return;
+            if (tracedWithin(self, handler)) return;
             return self.work.facts.untracedHandler("route", shown, .{ point.row, point.column });
         }
         const text = handler.text(self.source);
         if (handlerName(text)) |named| return self.work.facts.route(named, .{ point.row, point.column });
     }
+}
+
+/// The handler a call passes on when `argument` is one taking a single argument, as axum's
+/// `get(list_orders)` passes `list_orders`; otherwise `argument` itself. The last call recorded is
+/// the route's own, which closeCall() records first.
+fn unwrapped(self: *File, argument: ts.Node) ts.Node {
+    if (ts.ts_node_end_byte(argument) > self.source.len) assert.panic("{s}: the argument {f} ends past the {d} bytes of source; pass a node from this file's tree", .{ self.work.facts.path, argument.where(), self.source.len });
+    const key = argument.key();
+    const calls = self.s.calls.items();
+    if (calls.len == 0) assert.panic("{s}: unwrapping {f} with no calls recorded; closeCall() records the route first", .{ self.work.facts.path, argument.where() });
+    var i = calls.len - 1;
+    while (i > 0) {
+        i -= 1;
+        const call = calls[i];
+        if (call.key.start < key.start) return argument;
+        if (call.key.id != key.id) continue;
+        if (call.count != 1) return argument;
+        return call.arguments[0] orelse argument;
+    }
+    return argument;
 }
 
 /// The function `text` names, the part after its last `.` or `:`, when it is a name or a path of

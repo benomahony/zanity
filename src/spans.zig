@@ -58,7 +58,7 @@ pub const Spans = struct {
     /// Records that a call starting a span, scoped or not, starts at byte `at`.
     pub fn startsAt(self: *Spans, at: u32) error{LimitExceeded}!void {
         const before = self.traced_at.len;
-        if (before > 0 and self.traced_at.items()[before - 1] == at) assert.panic("recorded the span start at byte {d} twice; closeCall() closes each call once", .{at});
+        if (before > self.traced_at.buffer.len) assert.panic("{d} span starts in {d} slots; add() must refuse the extra", .{ before, self.traced_at.buffer.len });
         try self.traced_at.add(at);
         if (self.traced_at.len != before + 1) assert.panic("recording a span start took the list from {d} to {d}; add() must add one", .{ before, self.traced_at.len });
     }
