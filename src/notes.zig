@@ -11,6 +11,7 @@ const repeats = @import("repeats.zig");
 const data_layout = @import("data_layout.zig");
 const facts_module = @import("facts.zig");
 const types = @import("types.zig");
+const rules = @import("rules.zig");
 const File = check.File;
 const Part = @import("import_notes.zig").Part;
 
@@ -45,12 +46,12 @@ pub fn note(self: *File, node: ts.Node, id: captures.Id) !bool {
     return true;
 }
 
-/// Handles `id` when it is one of cyclic-import's captures; returns whether it was. An import
+/// Handles `id` when it is one of the import captures cyclic-import and untraced-entry-point read; returns whether it was. An import
 /// statement itself carries nothing: its parts are noted against it.
 fn noteImport(self: *File, node: ts.Node, id: captures.Id) !bool {
     const v = self.v;
     const ours = v.import_statement == id or v.import_module == id or v.import_binding == id or v.import_name == id or v.import_submodule == id or v.import_via == id or v.import_used == id;
-    if (!ours or !self.checker.enabled.enabled("cyclic-import")) return ours;
+    if (!ours or !readsImports(self.checker.enabled)) return ours;
     if (node.id == null) assert.panic("{s}: an import capture matched a null node; captures always name a node", .{self.work.facts.path});
     const imports = &self.s.imports;
     if (v.import_via == id) {
@@ -67,6 +68,13 @@ fn noteImport(self: *File, node: ts.Node, id: captures.Id) !bool {
 
 /// The outermost construct around `node` that a query marks as an import statement, so each part
 /// of one import is noted against the same statement wherever the import is written.
+/// Whether a rule that reads each file's imports is on.
+fn readsImports(enabled: rules.Set) bool {
+    if (enabled.len == 0) assert.panic("asking which rules read imports with none enabled; a check enables at least one", .{});
+    if (enabled.len > rules.all.len) assert.panic("the rule set holds {d} rules but only {d} exist; Set.include() must refuse to add past rules.all.len", .{ enabled.len, rules.all.len });
+    return enabled.enabled("cyclic-import") or enabled.enabled("untraced-entry-point");
+}
+
 fn importStatement(self: *File, node: ts.Node) ts.Node {
     const id = self.v.import_statement orelse return node;
     var outermost = node;

@@ -23,7 +23,7 @@ const revision_bytes = 8;
 /// Comptime branches allowed for hashing every source file of the analyzer into its revision.
 const analyzer_hash_quota = 10_000_000;
 
-const cache_format = "source-analysis-5";
+const cache_format = "source-analysis-6";
 
 /// The source code that produces local findings and facts. Its compile-time digest makes a rebuilt
 /// zanity miss old rows automatically when checker logic, name tables or parser revisions change.
@@ -89,6 +89,7 @@ pub const Snapshot = struct {
     shapes: []const Shape,
     abstractions: []const Definition,
     imports: []const facts_module.Import,
+    untraced: []const Definition,
     implemented: []const u64,
     passed: []const u64,
 };
@@ -141,6 +142,7 @@ pub fn encode(buffer: []u8, context: AnalysisContext, facts: *const Facts, findi
         .shapes = facts.shapes.items(),
         .abstractions = facts.abstractions.items(),
         .imports = facts.imports.items(),
+        .untraced = facts.untraced.items(),
         .implemented = facts.implemented.items(),
         .passed = facts.passed.items(),
     };
@@ -176,6 +178,7 @@ pub fn replay(run: Replay) (ReplayError || error{ OutOfMemory, LimitExceeded })!
     const snapshot = parsed.value;
     try validateHeader(snapshot, run);
     try validateDefinitions(snapshot, run);
+    try validateHandlers(snapshot, run);
     try validateGraph(snapshot);
     try validateUnits(snapshot, run);
     try validateFindings(snapshot);
@@ -203,6 +206,14 @@ fn validateDefinitions(snapshot: Snapshot, run: Replay) ReplayError!void {
     }
     for (snapshot.abstractions) |abstraction| {
         if (!std.mem.eql(u8, abstraction.path, run.path) or !std.mem.eql(u8, abstraction.language, run.language)) return error.InvalidCache;
+    }
+}
+
+fn validateHandlers(snapshot: Snapshot, run: Replay) ReplayError!void {
+    if (run.path.len == 0) assert.panic("validating handlers without their path; facts always belong to a file", .{});
+    if (run.language.len == 0) assert.panic("validating handlers without their language; facts always belong to an adapter", .{});
+    for (snapshot.untraced) |handler| {
+        if (!std.mem.eql(u8, handler.path, run.path) or handler.name.len == 0) return error.InvalidCache;
     }
 }
 
@@ -273,6 +284,7 @@ fn commitFacts(snapshot: Snapshot, run: Replay) error{LimitExceeded}!void {
         .unmarked = try run.text.copy(abstraction.unmarked),
     });
     for (snapshot.imports) |i| try facts.imports.add(.{ .path = run.path, .language = run.language, .spec = try run.text.copy(i.spec), .line = i.line, .column = i.column, .names = i.names, .shown = try run.text.copy(i.shown), .submodule = i.submodule });
+    for (snapshot.untraced) |handler| try facts.untraced.add(.{ .path = run.path, .language = run.language, .name = try run.text.copy(handler.name), .kind = "handler", .line = handler.line, .column = handler.column });
     for (snapshot.implemented) |hash| try facts.implemented.add(hash);
     for (snapshot.passed) |hash| try facts.passed.add(hash);
     try facts.addReferences(snapshot.references);

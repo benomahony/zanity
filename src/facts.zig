@@ -231,6 +231,8 @@ pub const Facts = struct {
     passed: memory.Bounded(u64),
     /// Each file's top-level imports, for cyclic-import.
     imports: memory.Bounded(Import),
+    /// Request handlers that start no span, for untraced-entry-point.
+    untraced: memory.Bounded(Definition),
     /// Whether to keep `units`; only `check --infer` needs them.
     collect_units: bool = false,
 
@@ -249,12 +251,13 @@ pub const Facts = struct {
             .implemented = try .initBounded(gpa, limits.definitions, "implemented interfaces across all files"),
             .passed = try .initBounded(gpa, limits.references, "functions passed as values across all files"),
             .imports = try .initBounded(gpa, limits.imports, "top-level imports across all files"),
+            .untraced = try .initBounded(gpa, limits.functions, "request handlers that start no span across all files"),
         };
     }
 
     /// Empties one run's facts while retaining their allocations.
     pub fn reset(self: *Facts) void {
-        inline for (.{ "definitions", "functions", "calls", "units", "references", "shapes", "abstractions", "implemented", "passed", "imports" }) |field| @field(self, field).clear();
+        inline for (.{ "definitions", "functions", "calls", "units", "references", "shapes", "abstractions", "implemented", "passed", "imports", "untraced" }) |field| @field(self, field).clear();
         self.path = "";
         self.language = "";
         self.collect_units = false;
@@ -305,6 +308,13 @@ pub const Facts = struct {
         if (self.path.len == 0 or self.language.len == 0) assert.panic("recording abstraction '{s}' before the file is known; set facts.path and facts.language first", .{name});
         if (name.len == 0) assert.panic("an abstraction in {s} at {d}:{d} has an empty name; check the @abstraction.name capture", .{ self.path, at[0] + 1, at[1] + 1 });
         try self.abstractions.add(.{ .path = self.path, .language = self.language, .name = try self.text.copy(name), .kind = "abstraction", .line = at[0], .column = at[1] });
+    }
+
+    /// Records a request handler that starts no span by its name.
+    pub fn untracedHandler(self: *Facts, name: []const u8, at: [2]u32) error{LimitExceeded}!void {
+        if (self.path.len == 0 or self.language.len == 0) assert.panic("recording handler '{s}' before the file is known; set facts.path and facts.language first", .{name});
+        if (name.len == 0) assert.panic("a handler in {s} at {d}:{d} has an empty name; check the @function.name capture", .{ self.path, at[0] + 1, at[1] + 1 });
+        try self.untraced.add(.{ .path = self.path, .language = self.language, .name = try self.text.copy(name), .kind = "handler", .line = at[0], .column = at[1] });
     }
 
     pub fn function(self: *Facts, name: []const u8, at: [2]u32, method: bool) error{LimitExceeded}!u32 {

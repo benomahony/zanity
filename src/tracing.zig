@@ -1,5 +1,6 @@
 //! The tracing checks: a span named with text built at runtime, a span start that discards the
-//! context it returns, and a span a function starts and neither ends nor hands to code that does.
+//! context it returns, a span a function starts and neither ends nor hands to code that does, and
+//! a request handler that starts no span in a project that traces.
 const std = @import("std");
 const assert = @import("assert.zig");
 const ts = @import("ts.zig");
@@ -10,6 +11,12 @@ const contains = check.contains;
 const header = check.header;
 
 const TraceSpan = @import("spans.zig").TraceSpan;
+const memory = @import("memory.zig");
+const language = @import("language.zig");
+const facts_module = @import("facts.zig");
+const Facts = facts_module.Facts;
+const Finding = facts_module.Finding;
+const Definition = facts_module.Definition;
 
 /// A tracing call from the language's tables: a span named with text built at runtime, a span
 /// start that discards the context it returns, and the spans functions start and end, for
@@ -117,4 +124,75 @@ fn spanHandedOff(self: *File, use: ts.Node) bool {
     if (self.index.marks(use, compiled.id("call.argument")) or self.index.marks(use, returned) or self.index.marks(use, compiled.id("binding.handed_off"))) return true;
     const parent = self.parentOf(use) orelse return false;
     return self.index.marks(parent, returned);
+}
+
+/// A function a decorator such as `@app.get(...)` registers as a request handler, when neither it
+/// nor its decorators start a span, for untraced-entry-point to report once every file shows
+/// whether the project traces.
+pub fn noteUntracedHandler(self: *File, ctx: Context, name_node: ts.Node, name: []const u8) !void {
+    if (ctx.family != .function) assert.panic("{s}: noting {f} as a handler, but it is a {t}; call noteUntracedHandler() only from closeFunction()", .{ self.work.facts.path, ctx.node.where(), ctx.family });
+    if (name.len == 0) assert.panic("{s}: noting an unnamed handler at {f}; closeFunction() returns before unnamed ones", .{ self.work.facts.path, ctx.node.where() });
+    const t = self.tables;
+    if (t.entry_point_decorators.len == 0 or !self.checker.enabled.enabled("untraced-entry-point")) return;
+    const from = ts.ts_node_start_byte(ctx.node);
+    const body = ts.ts_node_start_byte(ctx.span);
+    if (from >= body) return;
+    var registered = false;
+    const calls = self.s.calls.items();
+    var i = calls.len;
+    while (i > 0) {
+        i -= 1;
+        const call = calls[i];
+        if (call.key.start < from) break;
+        const callee = (call.name orelse continue).text(self.source);
+        if (startsSpan(t, callee, call.receiver)) return;
+        if (call.receiver and call.key.start < body and contains(t.entry_point_decorators, callee)) registered = true;
+    }
+    if (!registered) return;
+    const at = ts.ts_node_start_point(name_node);
+    try self.work.facts.untracedHandler(name, .{ at.row, at.column });
+}
+
+/// Whether a call to `callee` starts a span, scoped or not.
+fn startsSpan(t: *const language.Tables, callee: []const u8, receiver: bool) bool {
+    if (callee.len == 0) assert.panic("asking whether an unnamed call starts a span; @call.name captures the callee's identifier", .{});
+    if (t.ecosystem.len == 0) assert.panic("asking whether '{s}' starts a span with tables for no ecosystem; every language's tables name one", .{callee});
+    if (contains(t.span_start_calls, callee) or contains(t.span_name_first_calls, callee)) return true;
+    return receiver and (contains(t.span_start_methods, callee) or contains(t.span_name_first_methods, callee) or contains(t.span_name_second_methods, callee));
+}
+
+/// Reports each request handler that starts no span, in a language some file of which imports a
+/// tracing SDK and none of which imports an instrumentation that traces handlers by itself.
+pub fn untracedHandlers(facts: *Facts, findings: *memory.Bounded(Finding)) error{LimitExceeded}!void {
+    const before = findings.len;
+    const handlers = facts.untraced.items();
+    std.mem.sort(Definition, handlers, {}, Definition.sourceOrder);
+    for (handlers) |h| {
+        if (h.name.len == 0) assert.panic("{s}:{d}: a handler has no name; untracedHandler() records only named functions", .{ h.path, h.line + 1 });
+        const adapter = language.named(h.language) orelse assert.panic("{s}: a handler was recorded in language '{s}', which zanity doesn't know; facts.language comes from the adapter that checked the file", .{ h.path, h.language });
+        const t = adapter.tables;
+        if (!imported(facts, h.language, t.tracing_modules) or imported(facts, h.language, t.instrumentation_modules)) continue;
+        try findings.add(.{
+            .path = h.path,
+            .line = h.line,
+            .column = h.column,
+            .rule = "untraced-entry-point",
+            .message = try facts.text.format("'{s}' handles requests and starts no span, though this project traces, so its requests are missing from every trace.", .{h.name}),
+            .fix = try facts.text.format("Start a span at the top of '{s}', such as with tracer.start_as_current_span(\"{s}\"):, or instrument the framework once, such as FastAPIInstrumentor.instrument_app(app).", .{ h.name, h.name }),
+        });
+    }
+    if (findings.len - before > handlers.len) assert.panic("untraced-entry-point reported {d} findings for {d} handlers; each can be reported once", .{ findings.len - before, handlers.len });
+}
+
+/// Whether a file in `lang` imports one of `modules` or a submodule of one.
+fn imported(facts: *const Facts, lang: []const u8, modules: []const []const u8) bool {
+    if (lang.len == 0) assert.panic("looking for imports in an unnamed language; facts.language comes from the adapter that checked the file", .{});
+    for (facts.imports.items()) |i| {
+        if (!std.mem.eql(u8, i.language, lang)) continue;
+        for (modules) |m| {
+            if (m.len == 0) assert.panic("{s} lists an empty module; every tracing or instrumentation module needs a name", .{lang});
+            if (std.mem.startsWith(u8, i.spec, m) and (i.spec.len == m.len or i.spec[m.len] == '.')) return true;
+        }
+    }
+    return false;
 }

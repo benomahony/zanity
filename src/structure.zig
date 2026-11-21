@@ -8,6 +8,7 @@ const language = @import("language.zig");
 const check = @import("check.zig");
 const naming = @import("naming.zig");
 const cycles = @import("cycles.zig");
+const tracing = @import("tracing.zig");
 const facts_module = @import("facts.zig");
 const Facts = facts_module.Facts;
 const Finding = facts_module.Finding;
@@ -51,6 +52,7 @@ pub fn checkStructure(facts: *Facts, enabled: rules.Set, findings: *memory.Bound
     if (enabled.enabled("dead-symbol")) try deadSymbols(facts, findings, scratch.live);
     if (enabled.enabled("single-impl-abstraction")) try singleImplementations(facts, findings);
     if (enabled.enabled("cyclic-import")) try cycles.checkCycles(facts, findings, scratch.cycles orelse assert.panic("checking import cycles with no cycle scratch; pass the workspace's to checkStructure()", .{}));
+    if (enabled.enabled("untraced-entry-point")) try tracing.untracedHandlers(facts, findings);
     if (findings.len < before) assert.panic("cross-file structure checks dropped findings from {d} to {d}; they may only add", .{ before, findings.len });
 }
 

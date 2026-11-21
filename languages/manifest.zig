@@ -187,6 +187,14 @@ pub const Tables = struct {
     /// Whether a span start returns the context and the span together, as Go's `tracer.Start` does,
     /// so a call to one of its methods that doesn't is something else, such as `cmd.Start()`.
     span_start_pairs: bool = false,
+    /// Decorator methods that register the function below as a request handler, as FastAPI's
+    /// `@app.get(...)` and Flask's `@app.route(...)` do.
+    entry_point_decorators: []const []const u8 = &.{},
+    /// Modules whose import shows the project traces, such as `opentelemetry`, with their submodules.
+    tracing_modules: []const []const u8 = &.{},
+    /// Modules that trace a framework's handlers without spans of their own, such as
+    /// `opentelemetry.instrumentation`, with their submodules.
+    instrumentation_modules: []const []const u8 = &.{},
     /// Calls that stop the program for a debugger or dump its state for one.
     debug_calls: []const []const u8 = &.{},
     mutating_calls: []const []const u8 = &.{},
