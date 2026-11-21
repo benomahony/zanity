@@ -215,7 +215,7 @@ fn printMemory(io: Io, this: Runs, other: ?Other) !void {
     const o = other orelse return out.flush();
     const theirs = o.runs;
     try out.print("\ncompared with {s}, each running the rules it has of those selected\n", .{o.label});
-    try out.print("{s:<12} {s:>12} {s:>12} {s:>8}\n", .{ "", "this", "compared", "change" });
+    try out.print("{s:<12} {s:>12} {s:>12} {s:>8}\n", .{ "", "current", "compared", "change" });
     const figures = [_]Figure{
         .{ .name = "cold time", .unit = "s", .this = @as(f64, @floatFromInt(this.cold.ns)) / ns, .other = @as(f64, @floatFromInt(theirs.cold.ns)) / ns },
         .{ .name = "warm time", .unit = "s", .this = @as(f64, @floatFromInt(this.warm.ns)) / ns, .other = @as(f64, @floatFromInt(theirs.warm.ns)) / ns },
