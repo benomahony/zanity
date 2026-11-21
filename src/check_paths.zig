@@ -180,7 +180,6 @@ fn checkFiles(ctx: *zclig.Context, ws: *Workspace, selected: rules.Set) !void {
             .facts = &ws.facts,
             .findings = &ws.findings,
             .cache = if (ws.source_cache) |*source_cache| source_cache else null,
-            .cache_buffer = ws.analysis,
             .live = ws.live,
         };
         if (try run.run(try ws.checkWorkers(std.heap.page_allocator, ws.files.len))) |failure| {

@@ -30,6 +30,8 @@ pub const Worker = struct {
     text: memory.Text,
     facts: Facts,
     source: []u8,
+    /// A cached analysis read from the store, then the arena it is parsed into.
+    analysis: []u8,
 
     /// Fills in `worker` where it lies: its facts keep a pointer to its own text, so a worker must
     /// stay where it was made.
@@ -41,6 +43,7 @@ pub const Worker = struct {
             .text = try .initText(gpa, limits.text_bytes),
             .facts = undefined,
             .source = try memory.reserveUninitialized(gpa, u8, std.math.add(usize, limits.file_bytes, 1) catch return error.OutOfMemory),
+            .analysis = try memory.reserveUninitialized(gpa, u8, limits.analysis_bytes),
         };
         worker.facts = try .initFacts(gpa, limits, &worker.text);
     }
@@ -109,7 +112,9 @@ pub const Batch = struct {
     facts: *Facts,
     findings: *memory.Bounded(Finding),
     cache: ?*Store = null,
-    cache_buffer: []u8 = &.{},
+    /// Whether the run started with a store, set before the workers start so they read it
+    /// without the lock; `cache` turns null if the store fails part way.
+    caching: bool = false,
     live: ?*Live,
     mutex: Io.Mutex = .init,
     checked: usize = 0,
@@ -128,6 +133,7 @@ pub const Batch = struct {
             self.order[index] = .{ .index = @intCast(index), .bytes = if (stat) |s| s.size else 0 };
         }
         std.mem.sort(Sized, self.order[0..self.files.len], self.files.len, Sized.largestFirst);
+        self.caching = self.cache != null;
         var group: Io.Group = .init;
         for (workers) |*worker| group.async(self.io, work, .{ self, worker });
         try group.await(self.io);
@@ -176,51 +182,74 @@ pub const Batch = struct {
         const cache_context: cache_module.AnalysisContext = .{ .language = adapter.name, .query = adapter.query, .revision = adapter.revision, .enabled = checker.enabled, .collect_units = self.facts.collect_units };
         const context = cache_module.contextOf(cache_context);
         const cached_file: CachedFile = .{ .key = cache_module.key(context, path), .context = context, .source = @import("store.zig").digest(&.{source}), .path = path, .language = adapter.name };
-        if (try self.replayCached(cached_file)) return;
+        if (try self.replayCached(worker, cached_file)) return;
         worker.startFile(path, adapter.name, self.facts.collect_units);
         const result = analysis.checkFile(checker, .{ .scratch = &worker.scratch, .text = &worker.text, .facts = &worker.facts }, source) catch |e| switch (e) {
             error.LimitExceeded => return self.commitOversized(worker, path, checker),
             else => return e,
         };
+        const encoded: ?[]const u8 = if (self.caching) cache_module.encode(worker.analysis, cache_context, &worker.facts, result.diagnostics) catch null else null;
         self.mutex.lockUncancelable(self.io);
         defer self.mutex.unlock(self.io);
-        if (self.cache) |source_cache| {
-            const room = self.cache_buffer[0 .. self.cache_buffer.len / 2];
-            if (cache_module.encode(room, cache_context, &worker.facts, result.diagnostics)) |payload| {
-                source_cache.keepAnalysis(.{ .key = cached_file.key, .context = cached_file.context, .source = cached_file.source, .path = path, .language = adapter.name, .result = payload }) catch {
-                    self.cache = null;
-                };
-            } else |_| self.cache = null;
-        }
+        self.keepEncoded(cached_file, encoded);
         try self.commit(worker, path, result.diagnostics);
         if (self.checked > self.files.len) assert.panic("committed {d} of {d} files; each file is committed once", .{ self.checked, self.files.len });
     }
 
-    /// Replays one valid cache row while holding the lock that protects both SQLite's prepared
-    /// statements and the run's shared facts. A missing, unavailable or malformed row is a miss.
-    fn replayCached(self: *Batch, file: CachedFile) !bool {
-        self.mutex.lockUncancelable(self.io);
-        defer self.mutex.unlock(self.io);
-        const source_cache = self.cache orelse return false;
-        if (self.cache_buffer.len < 2) assert.panic("replaying cached files with {d} bytes; reserve memory.Limits.analysis_bytes at startup", .{self.cache_buffer.len});
-        if (file.path.len == 0 or file.language.len == 0) assert.panic("replaying a cached file without its path or language; checkFile supplies both", .{});
-        const middle = self.cache_buffer.len / 2;
-        const payload = source_cache.cachedAnalysis(self.cache_buffer[0..middle], file.key, file.source) catch {
+    /// Keeps a checked file's encoded analysis; the caller holds `mutex`. A store that fails, or an
+    /// analysis too large to encode, turns caching off for the rest of the run.
+    fn keepEncoded(self: *Batch, file: CachedFile, encoded: ?[]const u8) void {
+        if (file.path.len == 0 or file.language.len == 0) assert.panic("keeping an analysis without its path or language; checkFile supplies both", .{});
+        if (encoded) |payload| if (payload.len == 0) assert.panic("{s} encoded as no bytes; JSON always holds the snapshot's fields", .{file.path});
+        const source_cache = self.cache orelse return;
+        const payload = encoded orelse {
             self.cache = null;
-            return false;
+            return;
         };
-        const json = payload orelse return false;
-        cache_module.replay(.{ .payload = json, .scratch = self.cache_buffer[middle..], .path = file.path, .language = file.language, .text = self.text, .facts = self.facts, .findings = self.findings }) catch |err| switch (err) {
+        source_cache.keepAnalysis(.{ .key = file.key, .context = file.context, .source = file.source, .path = file.path, .language = file.language, .result = payload }) catch {
+            self.cache = null;
+        };
+    }
+
+    /// Replays one valid cache row into the worker, as checking the file would fill it, then
+    /// commits it as a checked file is. Only reading the row and the commit hold the lock, so
+    /// workers parse rows in parallel. A missing, unavailable or malformed row is a miss.
+    fn replayCached(self: *Batch, worker: *Worker, file: CachedFile) !bool {
+        if (worker.analysis.len < 2) assert.panic("replaying cached files with {d} bytes; reserve memory.Limits.analysis_bytes for each worker", .{worker.analysis.len});
+        if (file.path.len == 0 or file.language.len == 0) assert.panic("replaying a cached file without its path or language; checkFile supplies both", .{});
+        const middle = worker.analysis.len / 2;
+        const json = (try self.cachedRow(worker.analysis[0..middle], file)) orelse return false;
+        worker.startFile(file.path, file.language, self.facts.collect_units);
+        const diagnostics = &worker.scratch.diagnostics;
+        diagnostics.clear();
+        cache_module.replay(.{ .payload = json, .scratch = worker.analysis[middle..], .path = file.path, .language = file.language, .text = &worker.text, .facts = &worker.facts, .diagnostics = diagnostics }) catch |err| switch (err) {
             error.InvalidCache, error.OutOfMemory => {
+                self.mutex.lockUncancelable(self.io);
+                defer self.mutex.unlock(self.io);
                 self.cache = null;
                 return false;
             },
             error.LimitExceeded => return error.LimitExceeded,
         };
-        self.checked += 1;
+        self.mutex.lockUncancelable(self.io);
+        defer self.mutex.unlock(self.io);
+        try self.commit(worker, file.path, diagnostics.items());
         self.cached += 1;
-        if (self.live) |live| live.update("Checking files", self.checked, self.files.len);
         return true;
+    }
+
+    /// Copies the file's cache row into `buffer` while holding the lock that protects SQLite's
+    /// prepared statements; null when there is none, or the store can't be read.
+    fn cachedRow(self: *Batch, buffer: []u8, file: CachedFile) !?[]const u8 {
+        if (buffer.len == 0) assert.panic("reading a cache row into no memory; reserve memory.Limits.analysis_bytes for each worker", .{});
+        if (std.mem.eql(u8, &file.key, &file.source)) assert.panic("{s}'s cache key and source digest are both {s}; one was passed as the other", .{ file.path, &file.key });
+        self.mutex.lockUncancelable(self.io);
+        defer self.mutex.unlock(self.io);
+        const source_cache = self.cache orelse return null;
+        return source_cache.cachedAnalysis(buffer, file.key, file.source) catch {
+            self.cache = null;
+            return null;
+        };
     }
 
     /// Reports a file that ran past one of a file's limits, `memory.exceeded`, as oversized-file,
@@ -248,6 +277,8 @@ pub const Batch = struct {
         for (recorded.definitions.items()) |d| {
             var kept = d;
             kept.name = try worker.retain(self.text, d.name);
+            kept.kind = try worker.retain(self.text, d.kind);
+            kept.scope = try worker.retain(self.text, d.scope);
             kept.unmarked = try worker.retain(self.text, d.unmarked);
             try facts.definitions.add(kept);
         }
@@ -268,6 +299,9 @@ pub const Batch = struct {
         for (recorded.abstractions.items()) |a| {
             var kept = a;
             kept.name = try worker.retain(self.text, a.name);
+            kept.kind = try worker.retain(self.text, a.kind);
+            kept.scope = try worker.retain(self.text, a.scope);
+            kept.unmarked = try worker.retain(self.text, a.unmarked);
             try facts.abstractions.add(kept);
         }
         for (recorded.imports.items()) |i| {
@@ -283,6 +317,7 @@ pub const Batch = struct {
             var kept = u;
             kept.name = try worker.retain(self.text, u.name);
             kept.source = try worker.retain(self.text, u.source);
+            kept.fix = try worker.retain(self.text, u.fix);
             try facts.units.add(kept);
         }
         for (diagnostics) |d| {
