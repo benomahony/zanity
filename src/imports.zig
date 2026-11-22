@@ -101,8 +101,29 @@ fn report(facts: *Facts, findings: *memory.Bounded(Finding), leak: Leak) error{L
     else if (leak.exported == none)
         try text.format("Import {s} from a file {s} exports, not from '{s}'; none of the checked files matches its exports ({s}), so export {s} from one that does.", .{ names, owner, target, leak.owner.exports[0], names })
     else
-        try text.format("Import {s} from '{s}', which {s} exports, not from '{s}'; if '{s}' does not offer {s} yet, re-export {s} there.", .{ names, leak.files[leak.exported], owner, target, leak.files[leak.exported], names, them });
+        try throughExported(text, leak, imp, names);
     try findings.add(.{ .path = imp.path, .line = imp.line, .column = imp.column, .rule = "context-leak", .message = message, .fix = fix, .edit = edit });
+}
+
+/// The fix that sends the import through the file its context exports: re-export the names
+/// there, or, in a language that cannot re-export, call through that file instead.
+fn throughExported(text: *memory.Text, leak: Leak, imp: facts_module.Import, names: []const u8) error{LimitExceeded}![]const u8 {
+    if (leak.exported >= leak.files.len) assert.panic("{s}:{d}: a fix through the exported file of [{s}], which has none among the {d} checked files", .{ imp.path, imp.line + 1, leak.owner.name, leak.files.len });
+    if (names.len == 0) assert.panic("{s}:{d}: a fix for an import that names nothing it takes", .{ imp.path, imp.line + 1 });
+    const exported = leak.files[leak.exported];
+    const target = leak.files[leak.edge.to];
+    const them = if (imp.names == 1) "it" else "them";
+    if (!tablesOf(imp).import_reexports)
+        return text.format("Call through '{s}', which {s} exports, instead of importing {s} from '{s}'; if '{s}' does not offer what you need yet, add a method there that calls {s}.", .{ exported, leak.owner.name, names, target, exported, them });
+    return text.format("Import {s} from '{s}', which {s} exports, not from '{s}'; if '{s}' does not offer {s} yet, re-export {s} there.", .{ names, exported, leak.owner.name, target, exported, names, them });
+}
+
+/// The tables of the language the import is written in.
+fn tablesOf(imp: facts_module.Import) *const language.Tables {
+    if (imp.language.len == 0) assert.panic("{s}:{d}: an import recorded with no language", .{ imp.path, imp.line + 1 });
+    const tables = (language.named(imp.language) orelse assert.panic("{s}: an import was recorded in language '{s}', which zanity doesn't know", .{ imp.path, imp.language })).tables;
+    if (tables.import_style == .none) assert.panic("{s}:{d}: an import recorded in {s}, whose imports zanity does not read", .{ imp.path, imp.line + 1, imp.language });
+    return tables;
 }
 
 /// The edit that takes the import's names from the exported module instead, when that module
@@ -113,7 +134,7 @@ fn reexported(facts: *Facts, leak: Leak) error{LimitExceeded}!?Edit {
     if (leak.exported == none) return null;
     const imports = facts.imports.items();
     const imp = imports[leak.edge.import];
-    const tables = (language.named(imp.language) orelse assert.panic("{s}: an import was recorded in language '{s}', which zanity doesn't know", .{ imp.path, imp.language })).tables;
+    const tables = tablesOf(imp);
     if (tables.import_style != .dotted or tables.import_inner_names) return null;
     if (imp.bound or imp.submodule or imp.names == 0 or imp.spec[0] == '.') return null;
     if (imp.names != std.mem.count(u8, imp.shown, ", ") + 1) return null;
