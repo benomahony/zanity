@@ -339,6 +339,7 @@
     },
     .{
         .ecosystem = "jvm",
+        .password_salt_second_calls = .{"PBEKeySpec"},
         .template_first_methods = .{"compileInline"},
         .storage_read_methods = .{ "executeQuery", "queryForObject", "queryForList", "queryForMap" },
         .instrumentation_markers = .{ "opentelemetry-javaagent", "opentelemetry-spring-boot-starter", "instrumentation.opentelemetry.io/inject-java" },
@@ -401,6 +402,8 @@
     },
     .{
         .ecosystem = "dotnet",
+        .xml_entity_calls = .{"XmlReader.Create"},
+        .password_salt_second_calls = .{ "Rfc2898DeriveBytes", "Rfc2898DeriveBytes.Pbkdf2" },
         .redirect_first_calls = .{ "Redirect", "RedirectPermanent" },
         .template_first_methods = .{"RunCompile"},
         .template_first_calls = .{"Handlebars.Compile"},

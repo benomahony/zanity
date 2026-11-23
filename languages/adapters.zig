@@ -23,7 +23,6 @@ pub const Adapter = struct {
     families: []const QueryFile,
     query: []const u8,
     not_applicable: []const []const u8,
-    untested: []const []const u8,
 };
 
 fn families(comptime entry: manifest.Entry) []const QueryFile {
@@ -69,7 +68,6 @@ pub const all: []const Adapter = blk: {
             .query = querySource(entry),
             .tables = tablesFor(entry.ecosystem),
             .not_applicable = entry.not_applicable,
-            .untested = entry.untested,
         };
     }
     const final = out;

@@ -1,0 +1,4 @@
+rules: conversion-assertion,guaranteed-length
+exit: 0
+weak_assertions.lua:5:3: information [conversion-assertion]
+weak_assertions.lua:11:3: information [guaranteed-length]

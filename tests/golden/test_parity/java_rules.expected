@@ -1,0 +1,5 @@
+rules: constant-password-salt,secret-in-log,sql-built-from-strings
+exit: 1
+Rules.java:9:41: error [constant-password-salt]
+Rules.java:17:32: error [secret-in-log]
+Rules.java:25:32: error [sql-built-from-strings]

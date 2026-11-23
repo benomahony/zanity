@@ -813,3 +813,17 @@
 (assignment_expression
   left: (field_access)
   right: (identifier) @binding.handed_off)
+
+; `new PBEKeySpec(password, salt, n, bits)` calls a constructor, so the type is the call's name.
+(object_creation_expression
+  type: [
+    (type_identifier) @call.name
+    (generic_type
+      (type_identifier) @call.name)
+    (scoped_type_identifier
+      (type_identifier) @call.name .)
+  ]) @call.outer
+
+(object_creation_expression
+  arguments: (argument_list
+    (_) @call.argument))

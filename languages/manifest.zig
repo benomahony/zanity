@@ -5,10 +5,6 @@ pub const Entry = struct {
     scanner: bool,
     queries: []const []const u8,
     not_applicable: []const []const u8 = &.{},
-    /// Rules the language runs that no golden finding exercises in it yet. This only shrinks:
-    /// cover one with a positive fixture and its negative controls, or move it to
-    /// not_applicable when it can't fire in the language.
-    untested: []const []const u8 = &.{},
     /// The grammar's C symbol after `tree_sitter_`, when it differs from the name, as
     /// tree-sitter-c-sharp's `c_sharp` differs from `csharp`.
     symbol: []const u8 = "",

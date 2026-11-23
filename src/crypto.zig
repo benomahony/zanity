@@ -126,8 +126,34 @@ fn fixedByteValue(self: *File, node: ts.Node) bool {
     if (ts.ts_node_end_byte(node) > self.source.len) assert.panic("{s}: fixed-byte candidate {f} ends past the {d}-byte source", .{ self.work.facts.path, node.where(), self.source.len });
     if (self.index.marks(node, self.v.literal_string) and !self.index.marks(node, self.v.string_format)) return true;
     const value = std.mem.trim(u8, node.text(self.source), " \t\r\n");
-    if (quotedByteConversion(value)) return true;
+    if (quotedByteConversion(value) or literalDerived(value)) return true;
     return fixedNumericByteArray(value);
+}
+
+/// Whether `value` is computed from nothing but a string literal: a call taking only the literal,
+/// as `Encoding.UTF8.GetBytes("salt")` is, or a method called on it, as `"salt".getBytes()` is.
+fn literalDerived(value: []const u8) bool {
+    if (value.len < 4 or value[value.len - 1] != ')') return false;
+    const open = std.mem.indexOfScalar(u8, value, '(') orelse return false;
+    if (open >= value.len - 1) assert.panic("'{s}' opens its only call at its last byte, though it ends with ')'", .{value});
+    const inner = std.mem.trim(u8, value[open + 1 .. value.len - 1], " \t");
+    if (inner.len + open + 2 > value.len) assert.panic("the argument of '{s}' came out longer than the call", .{value});
+    if (inner.len > 0 and quoted(inner)) {
+        for (value[0..open]) |c| if (!(std.ascii.isAlphanumeric(c) or c == '_' or c == '.' or c == ':')) return false;
+        return open > 0;
+    }
+    const dot = std.mem.lastIndexOfScalar(u8, value[0..open], '.') orelse return false;
+    return dot > 0 and quoted(value[0..dot]) and inner.len == 0;
+}
+
+/// Whether `text` is one string literal with nothing interpolated into it.
+fn quoted(text: []const u8) bool {
+    if (text.len == 0) assert.panic("asked whether empty text is a string literal; callers check for text first", .{});
+    if (text.len < 2 or (text[0] != '"' and text[0] != '\'')) return false;
+    if (text[text.len - 1] != text[0]) return false;
+    const body = text[1 .. text.len - 1];
+    if (body.len + 2 != text.len) assert.panic("the body of '{s}' is {d} bytes, not two fewer than the literal", .{ text, body.len });
+    return std.mem.indexOfScalar(u8, body, text[0]) == null and std.mem.indexOf(u8, body, "\\(") == null and std.mem.indexOf(u8, body, "${") == null;
 }
 
 fn quotedByteConversion(value: []const u8) bool {

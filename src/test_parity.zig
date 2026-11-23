@@ -46,7 +46,7 @@ test "every language has behavioral fixtures for every common deterministic test
     try std.testing.expectEqual(@as(usize, 0), missing);
 }
 
-test "every rule has a golden finding in every language that runs it, or is listed as not applicable there" {
+test "every rule has a golden finding in every language that runs it, or that language lists it as not applicable" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
     const arena = arena_state.allocator();
@@ -73,24 +73,10 @@ test "every rule has a golden finding in every language that runs it, or is list
     for (rules.all, covered) |rule, in| {
         if (rule.needs.len == 0) continue;
         for (adapters.all, in) |*adapter, found| {
-            const gap = for (adapter.untested) |name| {
-                if (std.mem.eql(u8, name, rule.name)) break true;
-            } else false;
-            const untested = language.applies(adapter, rule.name) and !found;
-            if (gap == untested) continue;
-            const why = if (untested) "no golden finding exercises it; add a positive fixture and its negative controls, list it under not_applicable if it can't fire there" else "it is listed as untested but a golden covers it or it is not applicable; remove it from untested";
-            std.debug.print("\n{s} {s}: {s} in languages/manifest.zon", .{ adapter.name, rule.name, why });
+            if (!language.applies(adapter, rule.name) or found) continue;
+            std.debug.print("\n{s} {s}: no golden finding exercises it; add a positive fixture and its negative controls, or list it under not_applicable in languages/manifest.zon if it can't fire there", .{ adapter.name, rule.name });
             wrong += 1;
         }
     }
     try std.testing.expectEqual(@as(usize, 0), wrong);
-}
-
-test "every rule a language lists as untested is a rule" {
-    var unknown: usize = 0;
-    for (adapters.all) |adapter| for (adapter.untested) |name| if (rules.ruleIndex(name) == null) {
-        std.debug.print("\n{s} lists {s} as untested in languages/manifest.zon, which is no rule; remove it", .{ adapter.name, name });
-        unknown += 1;
-    };
-    try std.testing.expectEqual(@as(usize, 0), unknown);
 }

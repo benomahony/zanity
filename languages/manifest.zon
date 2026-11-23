@@ -13,8 +13,7 @@
         .ecosystem = "zig",
         .scanner = false,
         .queries = .{ "locals", "textobjects", "zanity" },
-        .not_applicable = .{ "field-chain-in-loop", "branching-double", "broad-expected-error", "dead-parameter", "single-impl-abstraction", "NASA05-M1", "NASA05-M3", "NASA05-M4", "NASA05-M5", "discarded-comparison", "unreachable-code", "generic-catch", "return-in-finally", "identity-comparison", "precedence-trap", "generic-throw", "switch-fallthrough", "missing-default", "no-effect-statement", "tls-verification-disabled", "unsafe-deserialization", "shell-command", "sql-built-from-strings", "unawaited-call", "assignment-in-condition", "null-catch", "empty-synchronized", "public-finalizer", "direct-thread", "unsafe-jni", "public-static-field", "public-static-array", "missing-super-finalizer", "missing-super-clone", "public-clone-method", "thread-run", "weak-random", "constant-random-seed", "nested-regex-quantifier", "constant-cbc-iv", "constant-aead-nonce", "constant-password-salt", "rsa-without-oaep", "xml-entity-expansion", "parameter-format-string", "parameter-network-target", "parameter-redirect-target", "parameter-xpath-expression", "parameter-ldap-filter", "parameter-header-value", "parameter-template-source", "parameter-expression-language", "prototype-mutation", "class-name-comparison", "equals-without-hashcode", "hashcode-without-equals", "struts-public-field", "cwe-487", "cwe-609", "cwe-1235", "cwe-567", "variadic-parameter", "goto-statement", "discarded-span-context", "forbidden-call", "cleartext-http", "cleartext-credential-url", "sensitive-query-string", "explicit-finalizer", "insecure-temp-file", "storage-read-in-test", "parameter-log-message", "parameter-allocation-size", "parameter-raw-html", "missing-integer-radix", "parameter-window-opener", "test-double", "call-verification", "database-in-test", "unmanaged-temp-in-test", "undocumented-test" },
-        .untested = .{ "obsolete-call", "secret-in-log" },
+        .not_applicable = .{ "field-chain-in-loop", "branching-double", "broad-expected-error", "dead-parameter", "single-impl-abstraction", "NASA05-M1", "NASA05-M3", "NASA05-M4", "NASA05-M5", "discarded-comparison", "unreachable-code", "generic-catch", "return-in-finally", "identity-comparison", "precedence-trap", "generic-throw", "switch-fallthrough", "missing-default", "no-effect-statement", "tls-verification-disabled", "unsafe-deserialization", "shell-command", "sql-built-from-strings", "unawaited-call", "assignment-in-condition", "null-catch", "empty-synchronized", "public-finalizer", "direct-thread", "unsafe-jni", "public-static-field", "public-static-array", "missing-super-finalizer", "missing-super-clone", "public-clone-method", "thread-run", "weak-random", "constant-random-seed", "nested-regex-quantifier", "constant-cbc-iv", "constant-aead-nonce", "constant-password-salt", "rsa-without-oaep", "xml-entity-expansion", "parameter-format-string", "parameter-network-target", "parameter-redirect-target", "parameter-xpath-expression", "parameter-ldap-filter", "parameter-header-value", "parameter-template-source", "parameter-expression-language", "prototype-mutation", "class-name-comparison", "equals-without-hashcode", "hashcode-without-equals", "struts-public-field", "cwe-487", "cwe-609", "cwe-1235", "cwe-567", "variadic-parameter", "goto-statement", "discarded-span-context", "forbidden-call", "cleartext-http", "cleartext-credential-url", "sensitive-query-string", "explicit-finalizer", "insecure-temp-file", "storage-read-in-test", "parameter-log-message", "parameter-allocation-size", "parameter-raw-html", "missing-integer-radix", "parameter-window-opener", "test-double", "call-verification", "database-in-test", "unmanaged-temp-in-test", "undocumented-test", "obsolete-call" },
     },
     .{
         .name = "go",
@@ -35,7 +34,6 @@
     .{
         .name = "javascript",
         .not_applicable = .{ "padded-struct", "pointer-collection", "single-impl-abstraction", "dynamic-allocation", "restated-type", "redundant-null-check", "conversion-assertion", "guaranteed-length", "float-equality", "generic-catch", "identity-comparison", "generic-throw", "weak-hash", "constant-random-seed", "null-catch", "empty-synchronized", "public-finalizer", "direct-thread", "unsafe-jni", "public-static-field", "public-static-array", "missing-super-finalizer", "missing-super-clone", "public-clone-method", "thread-run", "class-name-comparison", "equals-without-hashcode", "hashcode-without-equals", "struts-public-field", "cwe-487", "cwe-609", "cwe-1235", "cwe-567", "goto-statement", "discarded-span-context", "explicit-finalizer", "parameter-ldap-filter", "parameter-expression-language" },
-        .untested = .{"dead-symbol"},
         .extensions = .{ "js", "mjs", "cjs", "jsx" },
         .ecosystem = "node",
         .scanner = true,
@@ -52,7 +50,6 @@
     .{
         .name = "java",
         .not_applicable = .{ "padded-struct", "branching-double", "dynamic-allocation", "restated-type", "redundant-null-check", "conversion-assertion", "guaranteed-length", "discarded-comparison", "unreachable-code", "debug-leftover", "no-effect-statement", "tls-verification-disabled", "weak-hash", "constant-random-seed", "constant-cbc-iv", "constant-aead-nonce", "unsafe-deserialization", "shell-command", "unawaited-call", "prototype-mutation", "goto-statement", "discarded-span-context", "insecure-temp-file", "parameter-raw-html", "missing-integer-radix", "parameter-window-opener" },
-        .untested = .{ "constant-password-salt", "dead-symbol", "secret-in-log", "sql-built-from-strings" },
         .extensions = .{"java"},
         .ecosystem = "jvm",
         .scanner = false,
@@ -62,7 +59,6 @@
         .name = "csharp",
         .symbol = "c_sharp",
         .not_applicable = .{ "field-chain-in-loop", "dynamic-allocation", "restated-type", "redundant-null-check", "conversion-assertion", "guaranteed-length", "discarded-comparison", "no-effect-statement", "return-in-finally", "identity-comparison", "switch-fallthrough", "public-finalizer", "missing-super-finalizer", "missing-super-clone", "public-clone-method", "thread-run", "struts-public-field", "prototype-mutation", "cwe-487", "discarded-span-context", "cyclic-import", "explicit-finalizer", "insecure-temp-file", "parameter-ldap-filter", "parameter-expression-language", "parameter-header-value", "missing-integer-radix", "parameter-window-opener" },
-        .untested = .{ "broad-expected-error", "constant-password-salt", "dead-symbol", "duplicated-expression", "hardcoded-secret", "message-chain", "nested-regex-quantifier", "obsolete-call", "opaque-check", "single-impl-abstraction", "wide-scope", "xml-entity-expansion" },
         .extensions = .{ "cs", "csx" },
         .ecosystem = "dotnet",
         .scanner = true,
@@ -71,7 +67,6 @@
     .{
         .name = "swift",
         .not_applicable = .{ "field-chain-in-loop", "dynamic-allocation", "restated-type", "redundant-null-check", "conversion-assertion", "guaranteed-length", "discarded-comparison", "no-effect-statement", "branching-double", "return-in-finally", "identity-comparison", "precedence-trap", "generic-throw", "generic-catch", "switch-fallthrough", "missing-default", "unawaited-call", "assignment-in-condition", "null-catch", "empty-synchronized", "public-finalizer", "unsafe-jni", "public-static-array", "missing-super-finalizer", "missing-super-clone", "public-clone-method", "thread-run", "explicit-finalizer", "class-name-comparison", "hashcode-without-equals", "struts-public-field", "prototype-mutation", "goto-statement", "missing-integer-radix", "unmanaged-temp-in-test", "xml-entity-expansion", "parameter-xpath-expression", "parameter-ldap-filter", "parameter-header-value", "parameter-template-source", "parameter-expression-language", "parameter-raw-html", "parameter-window-opener", "cwe-487", "cwe-609", "cwe-1235", "cwe-567", "discarded-span-context", "cyclic-import" },
-        .untested = .{ "dead-parameter", "dead-symbol", "duplicated-expression", "message-chain", "single-impl-abstraction", "wide-scope" },
         .extensions = .{"swift"},
         .ecosystem = "swift",
         .scanner = true,
@@ -80,7 +75,6 @@
     .{
         .name = "lua",
         .not_applicable = .{ "padded-struct", "pointer-collection", "branching-double", "dynamic-allocation", "assertion-side-effect", "restated-type", "redundant-null-check", "single-impl-abstraction", "discarded-comparison", "no-effect-statement", "generic-catch", "generic-throw", "return-in-finally", "identity-comparison", "switch-fallthrough", "missing-default", "assignment-in-condition", "unawaited-call", "unsafe-deserialization", "insecure-temp-file", "xml-entity-expansion", "constant-cbc-iv", "constant-aead-nonce", "rsa-without-oaep", "parameter-xpath-expression", "parameter-ldap-filter", "parameter-expression-language", "parameter-raw-html", "parameter-window-opener", "null-catch", "empty-synchronized", "public-finalizer", "direct-thread", "unsafe-jni", "public-static-field", "public-static-array", "missing-super-finalizer", "missing-super-clone", "public-clone-method", "thread-run", "prototype-mutation", "class-name-comparison", "equals-without-hashcode", "hashcode-without-equals", "struts-public-field", "cwe-487", "cwe-609", "cwe-1235", "cwe-567", "undocumented-test" },
-        .untested = .{ "conversion-assertion", "guaranteed-length" },
         .extensions = .{"lua"},
         .ecosystem = "lua",
         .scanner = true,
