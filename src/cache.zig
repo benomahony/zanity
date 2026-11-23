@@ -224,7 +224,7 @@ fn validateHandlers(snapshot: Snapshot, run: Replay) ReplayError!void {
         if (!std.mem.eql(u8, route.path, run.path) or route.name.len == 0) return error.InvalidCache;
     }
     for (snapshot.tracing) |call| {
-        if (!std.mem.eql(u8, call.path, run.path) or !(std.mem.eql(u8, call.kind, "tracer") or std.mem.eql(u8, call.kind, "instrumentation"))) return error.InvalidCache;
+        if (!std.mem.eql(u8, call.path, run.path) or !(std.mem.eql(u8, call.kind, "tracer") or std.mem.eql(u8, call.kind, "span") or std.mem.eql(u8, call.kind, "instrumentation"))) return error.InvalidCache;
     }
 }
 
@@ -309,7 +309,7 @@ fn commitTracing(snapshot: Snapshot, run: Replay) error{ OutOfMemory, LimitExcee
     const before = facts.untraced.len + facts.routes.len + facts.tracing.len;
     for (snapshot.untraced) |handler| try facts.untraced.add(.{ .path = run.path, .language = run.language, .name = try run.text.copy(handler.name), .kind = if (std.mem.eql(u8, handler.kind, "route")) "route" else "handler", .line = handler.line, .column = handler.column });
     for (snapshot.routes) |route| try facts.routes.add(.{ .path = run.path, .language = run.language, .name = try run.text.copy(route.name), .kind = "route", .line = route.line, .column = route.column });
-    for (snapshot.tracing) |call| try facts.tracing.add(.{ .path = run.path, .language = run.language, .name = try run.text.copy(call.name), .kind = if (std.mem.eql(u8, call.kind, "tracer")) "tracer" else "instrumentation", .line = call.line, .column = call.column });
+    for (snapshot.tracing) |call| try facts.tracing.add(.{ .path = run.path, .language = run.language, .name = try run.text.copy(call.name), .kind = if (std.mem.eql(u8, call.kind, "tracer")) "tracer" else if (std.mem.eql(u8, call.kind, "span")) "span" else "instrumentation", .line = call.line, .column = call.column });
     const added = facts.untraced.len + facts.routes.len + facts.tracing.len - before;
     if (added != snapshot.untraced.len + snapshot.routes.len + snapshot.tracing.len) assert.panic("{s}: replayed {d} tracing facts of {d} cached; each is added once", .{ run.path, added, snapshot.untraced.len + snapshot.routes.len + snapshot.tracing.len });
 }

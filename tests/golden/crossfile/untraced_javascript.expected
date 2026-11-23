@@ -1,4 +1,3 @@
 rules: untraced-entry-point
 exit: 0
-app.js:9:24: warning [untraced-entry-point]
-handlers.js:5:10: warning [untraced-entry-point]
+app.js:5:16: warning [untraced-entry-point]

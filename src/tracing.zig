@@ -136,7 +136,7 @@ pub fn noteHandlerFunction(self: *File, ctx: Context, name_node: ts.Node, name: 
     if (!self.checker.enabled.enabled("untraced-entry-point")) return;
     const traced = tracedWithin(self, ctx.node);
     if (traced) if (ctx.fact) |id| self.work.facts.markTraced(id);
-    if (traced) if (self.index.within(ctx.node, self.checker.compiled.id("span.start"))) |start| try tracingCall(self, "tracer", start);
+    if (traced) if (self.index.within(ctx.node, self.checker.compiled.id("span.start"))) |start| try tracingCall(self, "span", start);
     const routed = decoratedAsRoute(self, ctx) or self.index.marks(ctx.node, self.checker.compiled.id("route.handler"));
     if (traced or !routed) return;
     const at = ts.ts_node_start_point(name_node);
@@ -183,17 +183,18 @@ pub fn noteTracingCall(self: *File, ctx: Context, name: []const u8) !void {
     const at = ctx.callee orelse ctx.name.?;
     if (startsSpan(t, name, receiver) and !unpaired(self, ctx, name)) {
         try self.s.spans.startsAt(ts.ts_node_start_byte(ctx.node));
-        try tracingCall(self, "tracer", at);
+        try tracingCall(self, "span", at);
     } else if (receiver and contains(t.tracer_methods, name)) try tracingCall(self, "tracer", at);
     if (self.calleeIn(ctx, name, t.instrumentation_calls) != null or (receiver and contains(t.instrumentation_methods, name))) try tracingCall(self, "instrumentation", at);
     if (receiver and contains(t.route_methods, name)) try noteRoute(self, ctx, name);
 }
 
-/// Records the file's first call of `kind`, "tracer" or "instrumentation".
+/// Records the file's first call of `kind`, "tracer", "span" or "instrumentation".
 fn tracingCall(self: *File, comptime kind: []const u8, at: ts.Node) !void {
     if (ts.ts_node_end_byte(at) > self.source.len) assert.panic("the {s} call at {f} ends past the {d} bytes of source; pass a node from this file's tree", .{ kind, at.where(), self.source.len });
     if (ts.ts_node_end_byte(at) <= ts.ts_node_start_byte(at)) assert.panic("{s}: the {s} call at {f} is empty; report it at its callee or name", .{ self.work.facts.path, kind, at.where() });
-    const seen = if (comptime std.mem.eql(u8, kind, "tracer")) &self.s.spans.traces else &self.s.spans.instruments;
+    const spans = &self.s.spans;
+    const seen = if (comptime std.mem.eql(u8, kind, "tracer")) &spans.traces else if (comptime std.mem.eql(u8, kind, "span")) &spans.spans_started else &spans.instruments;
     if (seen.*) return;
     seen.* = true;
     const point = ts.ts_node_start_point(at);
@@ -263,55 +264,100 @@ fn startsSpan(t: *const language.Tables, callee: []const u8, receiver: bool) boo
     return receiver and (contains(t.span_start_methods, callee) or contains(t.span_name_first_methods, callee) or contains(t.span_name_second_methods, callee));
 }
 
-/// Reports each request handler that starts no span, in a language some file of which traces and
-/// none of which registers instrumentation that traces handlers by itself: the handlers a decorator
-/// or a route passes inline, and the functions a route names that start no span.
+/// The most handlers a finding names; it counts the rest.
+const shown_handlers = 3;
+
+/// One language's request handlers that start no span: how many, and the first few in source order.
+const Untraced = struct {
+    count: u32 = 0,
+    first: [shown_handlers]Definition = undefined,
+
+    fn add(self: *Untraced, handler: Definition) void {
+        if (handler.name.len == 0) assert.panic("{s}:{d}: counting a handler with no name; handlers are recorded by name or route", .{ handler.path, handler.line + 1 });
+        var i: usize = @min(self.count, shown_handlers);
+        self.count += 1;
+        while (i > 0 and Definition.sourceOrder({}, handler, self.first[i - 1])) : (i -= 1) {
+            if (i < shown_handlers) self.first[i] = self.first[i - 1];
+        }
+        if (i < shown_handlers) self.first[i] = handler;
+        if (self.count == 0) assert.panic("counted {s} but the count stayed 0", .{handler.name});
+    }
+};
+
+/// Reports, once for each language, a project that traces but registers no instrumentation for
+/// its web framework while some of its request handlers start no span: at the call that gets its
+/// tracer, where one line of instrumentation would give every request a server span.
 pub fn untracedHandlers(facts: *Facts, findings: *memory.Bounded(Finding)) error{LimitExceeded}!void {
     const before = findings.len;
-    const handlers = facts.untraced.items();
-    std.mem.sort(Definition, handlers, {}, Definition.sourceOrder);
-    for (handlers) |h| {
-        if (h.name.len == 0) assert.panic("{s}:{d}: a handler has no name; untracedHandler() records only named handlers", .{ h.path, h.line + 1 });
-        if (traces(facts, h.language)) try reportHandler(facts, findings, h, std.mem.eql(u8, h.kind, "route"));
+    var by_language: [language.count]Untraced = @splat(.{});
+    for (facts.untraced.items()) |h| {
+        const adapter = language.named(h.language) orelse assert.panic("{s}: a handler was recorded in language '{s}', which zanity doesn't know; facts.language comes from the adapter that checked the file", .{ h.path, h.language });
+        by_language[language.indexOf(adapter)].add(h);
     }
     const routes = facts.routes.items();
-    if (routes.len == 0) return;
     std.mem.sort(Definition, routes, {}, byName);
-    for (facts.functions.items()) |f| {
+    if (routes.len > 0) for (facts.functions.items()) |f| {
         if (f.traced or firstRoute(routes, f.name) == null) continue;
         const adapter = language.forPath(f.path) orelse continue;
-        if (!routedIn(routes, f.name, adapter.name) or !traces(facts, adapter.name)) continue;
-        try reportHandler(facts, findings, .{ .path = f.path, .language = adapter.name, .name = f.name, .kind = "handler", .line = f.line, .column = f.column }, false);
+        if (!routedIn(routes, f.name, adapter.name)) continue;
+        by_language[language.indexOf(adapter)].add(.{ .path = f.path, .language = adapter.name, .name = f.name, .kind = "handler", .line = f.line, .column = f.column });
+    };
+    var counted: usize = 0;
+    for (by_language) |untraced| counted += untraced.count;
+    if (counted > facts.untraced.len + facts.functions.len) assert.panic("counted {d} untraced handlers among {d} recorded handlers and {d} functions; each is counted once", .{ counted, facts.untraced.len, facts.functions.len });
+    const calls = facts.tracing.items();
+    std.mem.sort(Definition, calls, {}, Definition.sourceOrder);
+    for (adapters.all, by_language) |*adapter, untraced| {
+        if (untraced.count == 0) continue;
+        const tracer = tracerOf(calls, adapter.name) orelse continue;
+        try reportProject(facts, findings, tracer, untraced);
     }
-    if (findings.len < before) assert.panic("untraced-entry-point dropped findings from {d} to {d}; it may only add", .{ before, findings.len });
+    if (findings.len - before > language.count) assert.panic("untraced-entry-point reported {d} findings for {d} languages; it reports each language once", .{ findings.len - before, language.count });
 }
 
-/// Reports a handler, named by its function or, when passed inline, by its route.
-fn reportHandler(facts: *Facts, findings: *memory.Bounded(Finding), h: Definition, inline_route: bool) error{LimitExceeded}!void {
-    if (h.path.len == 0) assert.panic("reporting handler '{s}' with no path; facts always belong to a file", .{h.name});
-    if (h.name.len == 0) assert.panic("reporting an unnamed handler in {s}; handlers are recorded by name or route", .{h.path});
-    const message = if (inline_route)
-        try facts.text.format("The handler for '{s}' starts no span, though this project traces, so its requests are missing from every trace.", .{h.name})
-    else
-        try facts.text.format("'{s}' handles requests and starts no span, though this project traces, so its requests are missing from every trace.", .{h.name});
-    const fix = if (inline_route)
-        try facts.text.format("Start a span at the top of the handler for '{s}', named for the operation, or register the framework's tracing instrumentation once so every handler gets one.", .{h.name})
-    else
-        try facts.text.format("Start a span at the top of '{s}', named for the operation, or register the framework's tracing instrumentation once so every handler gets one.", .{h.name});
-    try findings.add(.{ .path = h.path, .line = h.line, .column = h.column, .rule = "untraced-entry-point", .message = message, .fix = fix });
+/// Reports `untraced` at `tracer`, the call that shows the project traces.
+fn reportProject(facts: *Facts, findings: *memory.Bounded(Finding), tracer: Definition, untraced: Untraced) error{LimitExceeded}!void {
+    if (untraced.count == 0) assert.panic("{s}: reporting no untraced handlers; untracedHandlers() skips a language with none", .{tracer.path});
+    if (tracer.path.len == 0) assert.panic("reporting untraced handlers at a tracer with no path; facts always belong to a file", .{});
+    const start = facts.text.used;
+    for (untraced.first[0..@min(untraced.count, shown_handlers)], 0..) |h, i| {
+        const separator = if (i == 0) "" else ", ";
+        _ = if (std.mem.eql(u8, h.kind, "route"))
+            try facts.text.format("{s}the handler for '{s}' ({s}:{d})", .{ separator, h.name, h.path, h.line + 1 })
+        else
+            try facts.text.format("{s}'{s}' ({s}:{d})", .{ separator, h.name, h.path, h.line + 1 });
+    }
+    if (untraced.count > shown_handlers) _ = try facts.text.format(" and {d} more", .{untraced.count - shown_handlers});
+    const listed = facts.text.buffer[start..facts.text.used];
+    const plural = if (untraced.count == 1) "handler starts no span, so its requests are" else "handlers start no span, so their requests are";
+    try findings.add(.{
+        .path = tracer.path,
+        .line = tracer.line,
+        .column = tracer.column,
+        .rule = "untraced-entry-point",
+        .message = try facts.text.format("This project traces, but registers no instrumentation for its web framework, and {d} request {s} missing from every trace: {s}.", .{ untraced.count, plural, listed }),
+        .fix = try facts.text.format("Register the framework's tracing instrumentation once, here where tracing is set up, such as FastAPIInstrumentor.instrument_app(app), otelhttp.NewHandler(mux, \"server\"), registerInstrumentations(...) or AddAspNetCoreInstrumentation(), so every request gets a server span; start spans inside handlers only for the steps worth seeing on their own.", .{}),
+    });
 }
 
-/// Whether a file in `lang` traces and none registers instrumentation that traces its handlers.
-fn traces(facts: *const Facts, lang: []const u8) bool {
+/// Where a file in `lang` sets up tracing: its first call getting a tracer in source order among
+/// `calls`, or else its first span start; null when no file traces or one registers
+/// instrumentation that traces its handlers.
+fn tracerOf(calls: []const Definition, lang: []const u8) ?Definition {
     if (lang.len == 0) assert.panic("asking whether an unnamed language traces; facts.language comes from the adapter that checked the file", .{});
-    var tracer = false;
-    for (facts.tracing.items()) |call| {
+    var tracer: ?Definition = null;
+    var span: ?Definition = null;
+    for (calls, 0..) |call, i| {
+        if (i > 0 and Definition.sourceOrder({}, call, calls[i - 1])) assert.panic("{s}:{d}: tracing calls are out of source order; untracedHandlers() sorts them first", .{ call.path, call.line + 1 });
         if (!std.mem.eql(u8, call.language, lang)) continue;
-        if (std.mem.eql(u8, call.kind, "instrumentation")) return false;
-        if (!std.mem.eql(u8, call.kind, "tracer")) assert.panic("{s}: a tracing call of kind '{s}'; tracingCall() records only tracer and instrumentation", .{ call.path, call.kind });
-        tracer = true;
+        if (std.mem.eql(u8, call.kind, "instrumentation")) return null;
+        if (std.mem.eql(u8, call.kind, "tracer")) {
+            if (tracer == null) tracer = call;
+        } else if (std.mem.eql(u8, call.kind, "span")) {
+            if (span == null) span = call;
+        } else assert.panic("{s}: a tracing call of kind '{s}'; tracingCall() records only tracer, span and instrumentation", .{ call.path, call.kind });
     }
-    return tracer;
+    return tracer orelse span;
 }
 
 fn byName(_: void, a: Definition, b: Definition) bool {

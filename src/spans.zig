@@ -17,6 +17,7 @@ pub const Spans = struct {
     traced_at: memory.Bounded(u32),
     /// Whether the file has recorded a call that traces, or one that registers instrumentation.
     traces: bool = false,
+    spans_started: bool = false,
     instruments: bool = false,
 
     pub fn initSpans(gpa: std.mem.Allocator, room: usize) std.mem.Allocator.Error!Spans {
@@ -83,6 +84,7 @@ pub const Spans = struct {
         self.ends.clear();
         self.traced_at.clear();
         self.traces = false;
+        self.spans_started = false;
         self.instruments = false;
         if (self.started.len != 0) assert.panic("clearing the span lists left {d} starts; clear() must empty both lists", .{self.started.len});
         if (self.ends.len != 0) assert.panic("clearing the span lists left {d} ends; clear() must empty both lists", .{self.ends.len});

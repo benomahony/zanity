@@ -237,7 +237,7 @@ pub const Facts = struct {
     untraced: memory.Bounded(Definition),
     /// The names of functions registered as request handlers, where they are registered.
     routes: memory.Bounded(Definition),
-    /// Each file's first call getting a tracer or starting a span, kind "tracer", and its first
+    /// Each file's first call getting a tracer, kind "tracer", starting a span, kind "span", and
     /// registering instrumentation, kind "instrumentation".
     tracing: memory.Bounded(Definition),
     /// Whether to keep `units`; only `check --infer` needs them.
@@ -343,11 +343,11 @@ pub const Facts = struct {
         try self.routes.add(.{ .path = self.path, .language = self.language, .name = try self.text.copy(name), .kind = "route", .line = at[0], .column = at[1] });
     }
 
-    /// Records that the file traces, kind "tracer", or registers instrumentation, kind
-    /// "instrumentation", by the call that shows it.
+    /// Records that the file gets a tracer, kind "tracer", starts a span, kind "span", or registers
+    /// instrumentation, kind "instrumentation", by the call that shows it.
     pub fn tracingCall(self: *Facts, kind: []const u8, name: []const u8, at: [2]u32) error{LimitExceeded}!void {
         if (self.path.len == 0 or self.language.len == 0) assert.panic("recording a {s} call before the file is known; set facts.path and facts.language first", .{kind});
-        if (!std.mem.eql(u8, kind, "tracer") and !std.mem.eql(u8, kind, "instrumentation")) assert.panic("recording a tracing call of kind '{s}'; it is \"tracer\" or \"instrumentation\"", .{kind});
+        if (!std.mem.eql(u8, kind, "tracer") and !std.mem.eql(u8, kind, "span") and !std.mem.eql(u8, kind, "instrumentation")) assert.panic("recording a tracing call of kind '{s}'; it is \"tracer\", \"span\" or \"instrumentation\"", .{kind});
         try self.tracing.add(.{ .path = self.path, .language = self.language, .name = try self.text.copy(name), .kind = kind, .line = at[0], .column = at[1] });
     }
 
