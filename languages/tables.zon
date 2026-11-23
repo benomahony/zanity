@@ -103,6 +103,7 @@
     },
     .{
         .ecosystem = "zig",
+        .process_state_calls = .{ "std.posix.chdir", "std.process.changeCurDir" },
         .process_exit_calls = .{ "std.process.exit", "std.process.abort", "std.posix.exit" },
         .field_sizes = .{ .{ .type = "bool", .size = 1, .alignment = 1 }, .{ .type = "u8", .size = 1, .alignment = 1 }, .{ .type = "i8", .size = 1, .alignment = 1 }, .{ .type = "u16", .size = 2, .alignment = 2 }, .{ .type = "i16", .size = 2, .alignment = 2 }, .{ .type = "f16", .size = 2, .alignment = 2 }, .{ .type = "u32", .size = 4, .alignment = 4 }, .{ .type = "i32", .size = 4, .alignment = 4 }, .{ .type = "f32", .size = 4, .alignment = 4 }, .{ .type = "u64", .size = 8, .alignment = 8 }, .{ .type = "i64", .size = 8, .alignment = 8 }, .{ .type = "f64", .size = 8, .alignment = 8 }, .{ .type = "usize", .size = 8, .alignment = 8 }, .{ .type = "isize", .size = 8, .alignment = 8 }, .{ .type = "u128", .size = 16, .alignment = 16 }, .{ .type = "i128", .size = 16, .alignment = 16 }, .{ .type = "?*", .size = 8, .alignment = 8, .prefix = true }, .{ .type = "*", .size = 8, .alignment = 8, .prefix = true }, .{ .type = "[*]", .size = 8, .alignment = 8, .prefix = true }, .{ .type = "[]", .size = 16, .alignment = 8, .prefix = true } },
         .reserved_words = .{ "and", "or", "try", "null", "undefined", "true", "false", "orelse", "catch" },

@@ -1,0 +1,13 @@
+rules: test-double,call-verification,database-in-test,shared-state-in-test,unmanaged-temp-in-test,undocumented-test,assertion-side-effect
+exit: 1
+OrdersTests.cs:11:36: warning [database-in-test]
+OrdersTests.cs:12:21: warning [shared-state-in-test]
+OrdersTests.cs:13:25: warning [unmanaged-temp-in-test]
+OrdersTests.swift:7:9: warning [database-in-test]
+OrdersTests.swift:8:9: warning [shared-state-in-test]
+OrdersTests.swift:9:23: warning [test-double]
+OrdersTests.swift:11:9: warning [call-verification]
+OrdersTests.swift:14:10: warning [undocumented-test]
+orders_test.go:10:10: warning [test-double]
+orders_test.go:18:5: error [assertion-side-effect]
+orders_test.zig:4:9: warning [shared-state-in-test]
