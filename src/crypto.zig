@@ -7,6 +7,7 @@ const check = @import("check.zig");
 const File = check.File;
 const Context = check.Context;
 const header = check.header;
+const contains = check.contains;
 /// The longest `nonce=...` option text fixedNonceOption() reads; a longer one is not a literal nonce.
 const max_option_bytes = 512;
 
@@ -73,14 +74,25 @@ pub fn checkRsaWithoutOaep(self: *File, ctx: Context, name: []const u8) !void {
         ctx.callee orelse ctx.name.?
     else if (self.calleeIn(ctx, name, self.tables.rsa_transformation_calls) != null) transformation: {
         const argument = ctx.arguments[0] orelse return;
-        const text = argument.text(self.source);
-        var lowered: [128]u8 = undefined;
-        if (text.len > lowered.len) return;
-        const normalized = std.ascii.lowerString(lowered[0..text.len], text);
-        if (std.mem.indexOf(u8, normalized, "pkcs1padding") == null) return;
+        if (!pkcs1Padding(self, argument)) return;
         break :transformation argument;
+    } else if (ctx.receiver != null and contains(self.tables.rsa_padding_methods, name)) padding: {
+        for (ctx.arguments) |maybe| if (maybe) |argument| if (pkcs1Padding(self, argument)) break :padding argument;
+        return;
     } else return;
     _ = try self.report(unsafe, "rsa-without-oaep", try self.say("This RSA operation selects PKCS#1 v1.5 padding, which is vulnerable to padding-oracle attacks when decryption failures are observable.", .{}));
+}
+
+/// Whether `argument` names RSA's PKCS#1 v1.5 padding, as `"RSA/ECB/PKCS1Padding"`,
+/// `RSA_PKCS1_PADDING`, `RSAEncryptionPadding.Pkcs1` and `Pkcs1v15Encrypt` do, rather than OAEP.
+fn pkcs1Padding(self: *File, argument: ts.Node) bool {
+    if (ts.ts_node_end_byte(argument) > self.source.len) assert.panic("{s}: the argument {f} ends past the {d} bytes of source; pass a node from this file's tree", .{ self.work.facts.path, argument.where(), self.source.len });
+    const text = argument.text(self.source);
+    var lowered: [128]u8 = undefined;
+    if (text.len > lowered.len) return false;
+    const normalized = std.ascii.lowerString(lowered[0..text.len], text);
+    if (normalized.len != text.len) assert.panic("{s}: lowering '{s}' changed its length", .{ self.work.facts.path, text });
+    return std.mem.indexOf(u8, normalized, "pkcs1") != null and std.mem.indexOf(u8, normalized, "oaep") == null;
 }
 
 fn callAlgorithmContains(self: *File, ctx: Context, needle: []const u8) bool {

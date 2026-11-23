@@ -207,6 +207,7 @@
     },
     .{
         .ecosystem = "node",
+        .rsa_transformation_calls = .{ "crypto.publicEncrypt", "crypto.privateDecrypt", "publicEncrypt", "privateDecrypt" },
         .insecure_temp_calls = .{ "tmp.tmpNameSync", "tmp.tmpName" },
         .process_exit_calls = .{ "process.exit", "process.abort" },
         .instrumentation_markers = .{ "@opentelemetry/auto-instrumentations-node/register", "instrumentation.opentelemetry.io/inject-nodejs" },
@@ -286,6 +287,7 @@
     },
     .{
         .ecosystem = "rust",
+        .rsa_padding_methods = .{ "encrypt", "decrypt" },
         .storage_read_methods = .{ "fetch_one", "fetch_all", "fetch_optional" },
         .process_exit_calls = .{ "std::process::exit", "process::exit", "std::process::abort", "process::abort" },
         .span_name_first_methods = .{ "start", "in_span" },
@@ -397,6 +399,7 @@
     },
     .{
         .ecosystem = "dotnet",
+        .rsa_padding_methods = .{ "Encrypt", "Decrypt", "TryEncrypt", "TryDecrypt" },
         .storage_read_methods = .{ "ExecuteReader", "ExecuteScalar", "QueryFirst", "QueryFirstOrDefault", "QuerySingle", "QuerySingleOrDefault" },
         .instrumentation_markers = .{ "OTEL_DOTNET_AUTO_HOME", "OpenTelemetry.AutoInstrumentation", "instrumentation.opentelemetry.io/inject-dotnet" },
         .span_start_methods = .{"StartActivity"},

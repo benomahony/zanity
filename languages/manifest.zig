@@ -121,6 +121,9 @@ pub const Tables = struct {
     /// RSA encryption/decryption APIs that select PKCS#1 v1.5 directly or by transformation text.
     rsa_pkcs1_calls: []const []const u8 = &.{},
     rsa_transformation_calls: []const []const u8 = &.{},
+    /// Methods on any receiver that take the RSA padding as an argument, such as .NET's
+    /// `rsa.Encrypt(data, RSAEncryptionPadding.Pkcs1)`.
+    rsa_padding_methods: []const []const u8 = &.{},
     /// Formatting calls whose format string is their first or second argument.
     format_first_calls: []const []const u8 = &.{},
     format_second_calls: []const []const u8 = &.{},
