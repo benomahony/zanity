@@ -13,6 +13,7 @@ const header = check.header;
 const TraceSpan = @import("spans.zig").TraceSpan;
 const memory = @import("memory.zig");
 const language = @import("language.zig");
+const adapters = @import("adapters");
 const facts_module = @import("facts.zig");
 const Facts = facts_module.Facts;
 const Finding = facts_module.Finding;
@@ -342,3 +343,38 @@ fn routedIn(routes: []const Definition, name: []const u8, lang: []const u8) bool
     }
     return false;
 }
+
+/// Records that a project file attaches instrumentation for each language one of whose markers it
+/// holds as a whole word, as a Dockerfile's `-javaagent:opentelemetry-javaagent.jar` does for Java.
+pub fn noteInstrumentationMarkers(facts: *Facts, path: []const u8, source: []const u8) error{LimitExceeded}!void {
+    if (path.len == 0) assert.panic("looking for instrumentation in a project file with no path; collect() names every file it keeps", .{});
+    if (std.mem.endsWith(u8, path, "/")) assert.panic("'{s}' names a directory; collect() keeps only files as project files", .{path});
+    for (adapters.all) |*adapter| {
+        const at = for (adapter.tables.instrumentation_markers) |marker| {
+            if (wordAt(source, marker)) |found| break found;
+        } else continue;
+        const line = std.mem.count(u8, source[0..at], "\n");
+        const line_start = if (std.mem.lastIndexOfScalar(u8, source[0..at], '\n')) |n| n + 1 else 0;
+        facts.path = path;
+        facts.language = adapter.name;
+        try facts.tracingCall("instrumentation", source[at .. at + @min(source.len - at, 80)], .{ @intCast(line), @intCast(at - line_start) });
+    }
+}
+
+/// Where `word` first appears in `text` with no letter, digit, `_` or `-` either side of it.
+fn wordAt(text: []const u8, word: []const u8) ?usize {
+    if (word.len == 0) assert.panic("looking for an empty instrumentation marker; remove it from languages/tables.zon", .{});
+    var from: usize = 0;
+    while (std.mem.indexOfPos(u8, text, from, word)) |at| {
+        const end = at + word.len;
+        if (end > text.len) assert.panic("the marker '{s}' found at {d} runs past the {d}-byte text", .{ word, at, text.len });
+        const before = at == 0 or std.mem.indexOfScalar(u8, word_bytes, text[at - 1]) == null;
+        const after = end == text.len or std.mem.indexOfScalar(u8, word_bytes, text[end]) == null;
+        if (before and after) return at;
+        from = at + 1;
+    }
+    return null;
+}
+
+/// The bytes a marker can't touch on either side and still be a whole word.
+const word_bytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-";

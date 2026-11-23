@@ -1,0 +1,2 @@
+fastapi
+opentelemetry-instrumentation-fastapi

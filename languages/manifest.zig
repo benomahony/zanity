@@ -204,6 +204,9 @@ pub const Tables = struct {
     /// spans of their own, such as `otelhttp.NewHandler` and `FastAPIInstrumentor.instrument_app`.
     instrumentation_calls: []const []const u8 = &.{},
     instrumentation_methods: []const []const u8 = &.{},
+    /// Text in a build, deploy or CI file that attaches instrumentation with no code of its own,
+    /// such as the OpenTelemetry Java agent or the Operator's inject annotation, as a whole word.
+    instrumentation_markers: []const []const u8 = &.{},
     /// Calls that stop the program for a debugger or dump its state for one.
     debug_calls: []const []const u8 = &.{},
     mutating_calls: []const []const u8 = &.{},

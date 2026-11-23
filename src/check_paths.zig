@@ -209,6 +209,7 @@ fn checkFiles(ctx: *zclig.Context, ws: *Workspace, selected: rules.Set) !void {
     if (anchor) |a| try vocabulary.checkVocabulary(.{ .anchor = a, .text = ws.facts.text, .enabled = selected, .findings = &ws.findings, .reading = .{ .io = ws.io, .buffer = ws.source }, .renames = &ws.renames }, &ws.facts, ws.files.items());
     if (selected.enabled("recursion")) try graph.recursion(&ws.graph, &ws.facts, &ws.findings);
     if (selected.enabled("dead-parameter")) parameters.dropPassed(&ws.facts, &ws.findings);
+    try project.noteInstrumentation(.{ .io = ws.io, .buffer = ws.source, .facts = &ws.facts, .enabled = selected, .findings = &ws.findings }, ws.project_files.items());
     const sources: structure.Sources = .{ .io = ws.io, .mine = ws.source, .theirs = ws.fixed };
     try structure.checkStructure(&ws.facts, selected, &ws.findings, .{ .sources = sources, .live = &ws.liveness, .cycles = &ws.cycles });
     if (ws.facts.collect_units and selected.enabled("repeated-mechanics")) try structure.clusterUnits(&ws.facts, sources);
