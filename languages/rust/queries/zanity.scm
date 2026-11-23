@@ -99,7 +99,11 @@
 (_
   (attribute_item
     (attribute
-      (identifier) @_test))
+      [
+        (identifier) @_test
+        (scoped_identifier
+          name: (identifier) @_test)
+      ]))
   .
   (function_item) @test.outer
   (#eq? @_test "test"))

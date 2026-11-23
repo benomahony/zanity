@@ -1,0 +1,9 @@
+rules: storage-read-in-test
+exit: 0
+OrdersTest.java:13:22: warning [storage-read-in-test]
+OrdersTests.cs:14:25: warning [storage-read-in-test]
+OrdersTests.swift:10:47: warning [storage-read-in-test]
+orders.test.js:3:21: warning [storage-read-in-test]
+orders_spec.lua:5:25: warning [storage-read-in-test]
+orders_test.go:12:12: warning [storage-read-in-test]
+orders_test.rs:5:23: warning [storage-read-in-test]

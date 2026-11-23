@@ -147,6 +147,7 @@
     },
     .{
         .ecosystem = "go",
+        .storage_read_methods = .{ "Query", "QueryContext", "QueryRow", "QueryRowContext" },
         .process_exit_calls = .{ "os.Exit", "log.Fatal", "log.Fatalf", "log.Fatalln" },
         .instrumentation_markers = .{"instrumentation.opentelemetry.io/inject-go"},
         .field_sizes = .{ .{ .type = "bool", .size = 1, .alignment = 1 }, .{ .type = "int8", .size = 1, .alignment = 1 }, .{ .type = "uint8", .size = 1, .alignment = 1 }, .{ .type = "byte", .size = 1, .alignment = 1 }, .{ .type = "int16", .size = 2, .alignment = 2 }, .{ .type = "uint16", .size = 2, .alignment = 2 }, .{ .type = "int32", .size = 4, .alignment = 4 }, .{ .type = "uint32", .size = 4, .alignment = 4 }, .{ .type = "rune", .size = 4, .alignment = 4 }, .{ .type = "float32", .size = 4, .alignment = 4 }, .{ .type = "int64", .size = 8, .alignment = 8 }, .{ .type = "uint64", .size = 8, .alignment = 8 }, .{ .type = "int", .size = 8, .alignment = 8 }, .{ .type = "uint", .size = 8, .alignment = 8 }, .{ .type = "uintptr", .size = 8, .alignment = 8 }, .{ .type = "float64", .size = 8, .alignment = 8 }, .{ .type = "complex64", .size = 8, .alignment = 4 }, .{ .type = "complex128", .size = 16, .alignment = 8 }, .{ .type = "string", .size = 16, .alignment = 8 }, .{ .type = "error", .size = 16, .alignment = 8 }, .{ .type = "any", .size = 16, .alignment = 8 }, .{ .type = "*", .size = 8, .alignment = 8, .prefix = true }, .{ .type = "[]", .size = 24, .alignment = 8, .prefix = true }, .{ .type = "map[", .size = 8, .alignment = 8, .prefix = true }, .{ .type = "chan ", .size = 8, .alignment = 8, .prefix = true }, .{ .type = "func(", .size = 8, .alignment = 8, .prefix = true } },
@@ -285,6 +286,7 @@
     },
     .{
         .ecosystem = "rust",
+        .storage_read_methods = .{ "fetch_one", "fetch_all", "fetch_optional" },
         .process_exit_calls = .{ "std::process::exit", "process::exit", "std::process::abort", "process::abort" },
         .span_name_first_methods = .{ "start", "in_span" },
         .route_methods = .{"route"},
@@ -334,6 +336,7 @@
     },
     .{
         .ecosystem = "jvm",
+        .storage_read_methods = .{ "executeQuery", "queryForObject", "queryForList", "queryForMap" },
         .instrumentation_markers = .{ "opentelemetry-javaagent", "opentelemetry-spring-boot-starter", "instrumentation.opentelemetry.io/inject-java" },
         .span_start_methods = .{"startSpan"},
         .span_end_methods = .{"end"},
@@ -394,6 +397,7 @@
     },
     .{
         .ecosystem = "dotnet",
+        .storage_read_methods = .{ "ExecuteReader", "ExecuteScalar", "QueryFirst", "QueryFirstOrDefault", "QuerySingle", "QuerySingleOrDefault" },
         .instrumentation_markers = .{ "OTEL_DOTNET_AUTO_HOME", "OpenTelemetry.AutoInstrumentation", "instrumentation.opentelemetry.io/inject-dotnet" },
         .span_start_methods = .{"StartActivity"},
         .span_end_methods = .{ "Stop", "Dispose" },
@@ -459,6 +463,7 @@
     },
     .{
         .ecosystem = "swift",
+        .storage_read_methods = .{ "fetchAll", "fetchOne", "fetchCount" },
         .forbidden_methods = .{"evaluateScript"},
         .field_sizes = .{ .{ .type = "Bool", .size = 1, .alignment = 1 }, .{ .type = "Int8", .size = 1, .alignment = 1 }, .{ .type = "UInt8", .size = 1, .alignment = 1 }, .{ .type = "Int16", .size = 2, .alignment = 2 }, .{ .type = "UInt16", .size = 2, .alignment = 2 }, .{ .type = "Int32", .size = 4, .alignment = 4 }, .{ .type = "UInt32", .size = 4, .alignment = 4 }, .{ .type = "Float", .size = 4, .alignment = 4 }, .{ .type = "Int", .size = 8, .alignment = 8 }, .{ .type = "UInt", .size = 8, .alignment = 8 }, .{ .type = "Int64", .size = 8, .alignment = 8 }, .{ .type = "UInt64", .size = 8, .alignment = 8 }, .{ .type = "Double", .size = 8, .alignment = 8 }, .{ .type = "String", .size = 16, .alignment = 8 } },
         .reserved_words = .{ "nil", "true", "false", "try", "await", "as", "is", "inout" },
@@ -532,6 +537,7 @@
     },
     .{
         .ecosystem = "lua",
+        .storage_read_methods = .{"fetch"},
         .reserved_words = .{ "nil", "true", "false", "and", "or", "not", "function" },
         .pure_calls = .{ "string.lower", "string.upper", "string.len", "string.rep", "math.max", "math.min", "math.abs", "math.floor", "math.ceil", "math.sqrt", "tostring", "tonumber" },
         .growth_calls = .{"table.insert"},
