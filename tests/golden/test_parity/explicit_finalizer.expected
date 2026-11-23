@@ -1,0 +1,3 @@
+rules: explicit-finalizer
+exit: 0
+explicit_finalizer.lua:4:3: warning [explicit-finalizer]
