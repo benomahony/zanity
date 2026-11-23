@@ -1,0 +1,3 @@
+rules: parameter-header-value
+exit: 0
+header_value_js.js:2:47: warning [parameter-header-value]

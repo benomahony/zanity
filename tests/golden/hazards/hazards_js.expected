@@ -1,0 +1,14 @@
+rules: return-in-finally,identity-comparison,precedence-trap,generic-throw,switch-fallthrough,missing-default,no-effect-statement,tls-verification-disabled,weak-hash,unsafe-deserialization,shell-command,sql-built-from-strings,secret-in-log,wall-clock-duration,unawaited-call,deep-nesting,complex-function
+exit: 1
+hazards_js.js:4:9: error [unawaited-call]
+hazards_js.js:7:9: error [return-in-finally]
+hazards_js.js:9:9: error [precedence-trap]
+hazards_js.js:10:9: error [precedence-trap]
+hazards_js.js:11:5: warning [missing-default]
+hazards_js.js:12:9: warning [switch-fallthrough]
+hazards_js.js:13:13: error [unawaited-call]
+hazards_js.js:17:5: warning [no-effect-statement]
+hazards_js.js:18:21: error [tls-verification-disabled]
+hazards_js.js:19:14: error [sql-built-from-strings]
+hazards_js.js:20:15: warning [wall-clock-duration]
+hazards_js.js:21:24: error [secret-in-log]

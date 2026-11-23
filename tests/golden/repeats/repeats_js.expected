@@ -1,0 +1,3 @@
+rules: duplicated-expression
+exit: 0
+repeats_js.js:4:16: warning [duplicated-expression]

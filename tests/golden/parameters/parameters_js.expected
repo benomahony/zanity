@@ -1,0 +1,4 @@
+rules: dead-parameter
+exit: 0
+parameters_js.js:1:24: warning [dead-parameter]
+parameters_js.js:14:28: warning [dead-parameter]

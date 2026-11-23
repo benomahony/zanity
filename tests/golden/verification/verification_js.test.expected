@@ -1,0 +1,4 @@
+rules: call-verification
+exit: 0
+verification_js.test.js:4:5: warning [call-verification]
+verification_js.test.js:5:5: warning [call-verification]

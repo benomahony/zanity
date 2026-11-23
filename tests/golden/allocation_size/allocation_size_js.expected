@@ -1,0 +1,3 @@
+rules: parameter-allocation-size
+exit: 0
+allocation_size_js.js:2:25: warning [parameter-allocation-size]

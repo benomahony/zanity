@@ -1,0 +1,5 @@
+rules: branching-double
+exit: 0
+branching_js.test.js:2:5: warning [branching-double]
+branching_js.test.js:8:45: warning [branching-double]
+branching_js.test.js:13:13: warning [branching-double]
