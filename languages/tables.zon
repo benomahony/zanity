@@ -338,6 +338,7 @@
     },
     .{
         .ecosystem = "jvm",
+        .template_first_methods = .{"compileInline"},
         .storage_read_methods = .{ "executeQuery", "queryForObject", "queryForList", "queryForMap" },
         .instrumentation_markers = .{ "opentelemetry-javaagent", "opentelemetry-spring-boot-starter", "instrumentation.opentelemetry.io/inject-java" },
         .span_start_methods = .{"startSpan"},
@@ -399,6 +400,10 @@
     },
     .{
         .ecosystem = "dotnet",
+        .redirect_first_calls = .{ "Redirect", "RedirectPermanent" },
+        .template_first_methods = .{"RunCompile"},
+        .template_first_calls = .{"Handlebars.Compile"},
+        .allocation_size_first_calls = .{ "GC.AllocateUninitializedArray", "GC.AllocateArray" },
         .rsa_padding_methods = .{ "Encrypt", "Decrypt", "TryEncrypt", "TryDecrypt" },
         .storage_read_methods = .{ "ExecuteReader", "ExecuteScalar", "QueryFirst", "QueryFirstOrDefault", "QuerySingle", "QuerySingleOrDefault" },
         .instrumentation_markers = .{ "OTEL_DOTNET_AUTO_HOME", "OpenTelemetry.AutoInstrumentation", "instrumentation.opentelemetry.io/inject-dotnet" },
