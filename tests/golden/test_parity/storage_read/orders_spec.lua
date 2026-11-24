@@ -1,0 +1,12 @@
+describe("orders", function()
+  it("saves an order", function()
+    orders.save(1)
+    local cursor = conn:execute("SELECT id FROM orders")
+    assert.are.equal(1, cursor:fetch())
+  end)
+
+  it("finds an order", function()
+    orders.save(1)
+    assert.are.equal(1, orders.find(1))
+  end)
+end)

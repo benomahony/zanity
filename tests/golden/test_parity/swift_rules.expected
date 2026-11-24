@@ -1,0 +1,6 @@
+rules: dead-parameter,duplicated-expression,message-chain,wide-scope
+exit: 0
+Rules.swift:2:15: warning [duplicated-expression]
+Rules.swift:10:16: warning [message-chain]
+Rules.swift:16:9: warning [wide-scope]
+Rules.swift:23:37: warning [dead-parameter]

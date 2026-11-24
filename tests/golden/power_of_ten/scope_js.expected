@@ -1,0 +1,3 @@
+rules: wide-scope
+exit: 0
+scope_js.js:2:11: warning [wide-scope]

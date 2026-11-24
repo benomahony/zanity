@@ -1,0 +1,11 @@
+rules: empty-block,constant-condition,float-equality,discarded-comparison,unreachable-code,generic-catch,debug-leftover,hardcoded-secret
+exit: 1
+catalogue_js.js:2:5: warning [empty-block]
+catalogue_js.js:3:5: warning [empty-block]
+catalogue_js.js:4:5: warning [constant-condition]
+catalogue_js.js:7:15: warning [constant-condition]
+catalogue_js.js:8:5: error [discarded-comparison]
+catalogue_js.js:9:5: error [hardcoded-secret]
+catalogue_js.js:10:5: error [debug-leftover]
+catalogue_js.js:14:13: warning [unreachable-code]
+catalogue_js.js:19:5: warning [unreachable-code]

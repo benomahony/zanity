@@ -44,7 +44,9 @@ pub fn checkMessage(self: *File, node: ts.Node, condition: ?ts.Node) !void {
 pub fn checkAgainstCondition(self: *File, node: ts.Node, condition: ts.Node, words: *const MessageWords) !void {
     if (words.len == 0) assert.panic("{s}: comparing the empty message {f} with its condition; checkMessage handles empty messages", .{ self.work.facts.path, node.where() });
     const has_values = words.has_values;
-    const tested = condition.text(self.source);
+    const from = ts.ts_node_start_byte(condition);
+    const inside = ts.ts_node_start_byte(node) > from and ts.ts_node_end_byte(node) <= ts.ts_node_end_byte(condition);
+    const tested = if (inside) std.mem.trim(u8, self.source[from..ts.ts_node_start_byte(node)], " \t\r\n,(") else condition.text(self.source);
     var condition_words: MessageWords = .{};
     condition_words.split(tested);
     if (words.restates(&condition_words)) {

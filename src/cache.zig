@@ -22,7 +22,7 @@ const revision_bytes = 8;
 /// Comptime branches allowed for hashing every source file of the analyzer into its revision.
 const analyzer_hash_quota = 10_000_000;
 
-const cache_format = "source-analysis-5";
+const cache_format = "source-analysis-6";
 
 /// The source code that produces local findings and facts. Its compile-time digest makes a rebuilt
 /// zanity miss old rows automatically when checker logic, name tables or parser revisions change.
@@ -88,6 +88,9 @@ pub const Snapshot = struct {
     shapes: []const Shape,
     abstractions: []const Definition,
     imports: []const facts_module.Import,
+    untraced: []const Definition,
+    routes: []const Definition,
+    tracing: []const Definition,
     implemented: []const u64,
     passed: []const u64,
 };
@@ -140,6 +143,9 @@ pub fn encode(buffer: []u8, context: AnalysisContext, facts: *const Facts, findi
         .shapes = facts.shapes.items(),
         .abstractions = facts.abstractions.items(),
         .imports = facts.imports.items(),
+        .untraced = facts.untraced.items(),
+        .routes = facts.routes.items(),
+        .tracing = facts.tracing.items(),
         .implemented = facts.implemented.items(),
         .passed = facts.passed.items(),
     };
@@ -176,11 +182,13 @@ pub fn replay(run: Replay) (ReplayError || error{ OutOfMemory, LimitExceeded })!
     const snapshot = parsed.value;
     try validateHeader(snapshot, run);
     try validateDefinitions(snapshot, run);
+    try validateHandlers(snapshot, run);
     try validateGraph(snapshot);
     try validateUnits(snapshot, run);
     try validateFindings(snapshot);
-    try commitFacts(snapshot, run);
-    try commitFindings(snapshot, run);
+    try replayFacts(snapshot, run);
+    try replayTracing(snapshot, run);
+    try replayFindings(snapshot, run);
 }
 
 fn validateHeader(snapshot: Snapshot, run: Replay) ReplayError!void {
@@ -203,6 +211,20 @@ fn validateDefinitions(snapshot: Snapshot, run: Replay) ReplayError!void {
     }
     for (snapshot.abstractions) |abstraction| {
         if (!std.mem.eql(u8, abstraction.path, run.path) or !std.mem.eql(u8, abstraction.language, run.language)) return error.InvalidCache;
+    }
+}
+
+fn validateHandlers(snapshot: Snapshot, run: Replay) ReplayError!void {
+    if (run.path.len == 0) assert.panic("validating handlers without their path; facts always belong to a file", .{});
+    if (run.language.len == 0) assert.panic("validating handlers without their language; facts always belong to an adapter", .{});
+    for (snapshot.untraced) |handler| {
+        if (!std.mem.eql(u8, handler.path, run.path) or handler.name.len == 0 or !(std.mem.eql(u8, handler.kind, "handler") or std.mem.eql(u8, handler.kind, "route"))) return error.InvalidCache;
+    }
+    for (snapshot.routes) |route| {
+        if (!std.mem.eql(u8, route.path, run.path) or route.name.len == 0) return error.InvalidCache;
+    }
+    for (snapshot.tracing) |call| {
+        if (!std.mem.eql(u8, call.path, run.path) or !(std.mem.eql(u8, call.kind, "tracer") or std.mem.eql(u8, call.kind, "span") or std.mem.eql(u8, call.kind, "instrumentation"))) return error.InvalidCache;
     }
 }
 
@@ -232,7 +254,7 @@ fn validateFindings(snapshot: Snapshot) ReplayError!void {
     }
 }
 
-fn commitFacts(snapshot: Snapshot, run: Replay) error{LimitExceeded}!void {
+fn replayFacts(snapshot: Snapshot, run: Replay) error{LimitExceeded}!void {
     if (snapshot.path.len == 0 or snapshot.language.len == 0) assert.panic("committing cached facts without their file identity; validateHeader must run first", .{});
     const facts = run.facts;
     const first = facts.functions.len;
@@ -252,7 +274,7 @@ fn commitFacts(snapshot: Snapshot, run: Replay) error{LimitExceeded}!void {
         .delete_start = definition.delete_start,
         .delete_end = definition.delete_end,
     });
-    for (snapshot.functions) |function| try facts.functions.add(.{ .path = run.path, .name = try run.text.copy(function.name), .method = function.method, .line = function.line, .column = function.column, .parameters = function.parameters, .types = try run.text.copy(function.types) });
+    for (snapshot.functions) |function| try facts.functions.add(.{ .path = run.path, .name = try run.text.copy(function.name), .method = function.method, .line = function.line, .column = function.column, .parameters = function.parameters, .types = try run.text.copy(function.types), .traced = function.traced });
     for (snapshot.calls) |call| try facts.calls.add(.{ .caller = @intCast(first + call.caller), .callee = try run.text.copy(call.callee), .reach = call.reach, .arguments = call.arguments, .types = try run.text.copy(call.types) });
     for (snapshot.shapes) |shape| {
         var kept = shape;
@@ -277,10 +299,37 @@ fn commitFacts(snapshot: Snapshot, run: Replay) error{LimitExceeded}!void {
     for (snapshot.passed) |hash| try facts.passed.add(hash);
     try facts.addReferences(snapshot.references);
     for (snapshot.units) |unit| try facts.units.add(.{ .kind = unit.kind, .reports_error = unit.reports_error, .path = run.path, .language = run.language, .name = try run.text.copy(unit.name), .line = unit.line, .column = unit.column, .end_line = unit.end_line, .source = try run.text.copy(unit.source), .fix = try run.text.copy(unit.fix) });
-    if (facts.functions.len != first + snapshot.functions.len) assert.panic("replayed {d} functions from a cache row holding {d}; commitFacts must add each once", .{ facts.functions.len - first, snapshot.functions.len });
+    if (facts.functions.len != first + snapshot.functions.len) assert.panic("replayed {d} functions from a cache row holding {d}; replayFacts must add each once", .{ facts.functions.len - first, snapshot.functions.len });
 }
 
-fn commitFindings(snapshot: Snapshot, run: Replay) (ReplayError || error{LimitExceeded})!void {
+/// Fills the worker with a cached file's handlers, routes and tracing calls, for
+/// untraced-entry-point; Batch.commitTracing then adds them to the run.
+fn replayTracing(snapshot: Snapshot, run: Replay) error{ OutOfMemory, LimitExceeded }!void {
+    if (run.path.len == 0 or run.language.len == 0) assert.panic("committing cached tracing facts without their file; validateHeader must run first", .{});
+    if (snapshot.untraced.len + snapshot.routes.len + snapshot.tracing.len > 0 and !std.mem.eql(u8, snapshot.path, run.path)) assert.panic("replaying {s}'s tracing facts into {s}; validateHeader must reject the row first", .{ snapshot.path, run.path });
+    const Cached = struct {
+        path: []const u8,
+        language: []const u8,
+        text: *memory.Text,
+        /// Points the fact at this run's file, copies its name out of the row's parse, and gives
+        /// it the kind validateHandlers allowed as a string that outlives the row.
+        pub fn keep(c: @This(), fact: Definition, comptime list: []const u8) error{LimitExceeded}!Definition {
+            if (!std.mem.eql(u8, fact.path, c.path)) assert.panic("replaying a tracing fact of {s} into {s}; validateHandlers rejects a row naming another file", .{ fact.path, c.path });
+            const kind = if (comptime std.mem.eql(u8, list, "routes"))
+                "route"
+            else if (comptime std.mem.eql(u8, list, "untraced"))
+                (if (std.mem.eql(u8, fact.kind, "route")) "route" else "handler")
+            else
+                (if (std.mem.eql(u8, fact.kind, "tracer")) "tracer" else if (std.mem.eql(u8, fact.kind, "span")) "span" else "instrumentation");
+            const name = try c.text.copy(fact.name);
+            if (!std.mem.eql(u8, name, fact.name)) assert.panic("{s}: replayed tracing fact '{s}' as '{s}'; Text.copy() copies the bytes unchanged", .{ c.path, fact.name, name });
+            return .{ .path = c.path, .language = c.language, .name = name, .kind = kind, .line = fact.line, .column = fact.column };
+        }
+    };
+    try run.facts.addTracing(.{ .untraced = snapshot.untraced, .routes = snapshot.routes, .tracing = snapshot.tracing }, Cached{ .path = run.path, .language = run.language, .text = run.text });
+}
+
+fn replayFindings(snapshot: Snapshot, run: Replay) (ReplayError || error{LimitExceeded})!void {
     if (snapshot.path.len == 0) assert.panic("committing cached findings without a path; validateHeader must run first", .{});
     const before = run.diagnostics.len;
     for (snapshot.findings) |diagnostic| {
@@ -288,7 +337,7 @@ fn commitFindings(snapshot: Snapshot, run: Replay) (ReplayError || error{LimitEx
         const edit: ?facts_module.Edit = if (diagnostic.edit) |change| .{ .start = change.start, .end = change.end, .replacement = try run.text.copy(change.replacement) } else null;
         try run.diagnostics.add(.{ .line = diagnostic.line, .column = diagnostic.column, .rule = rule.name, .message = try run.text.copy(diagnostic.message), .fix = try run.text.copy(diagnostic.fix), .edit = edit, .subject = diagnostic.subject });
     }
-    if (run.diagnostics.len != before + snapshot.findings.len) assert.panic("replayed {d} findings from a cache row holding {d}; commitFindings must add each once", .{ run.diagnostics.len - before, snapshot.findings.len });
+    if (run.diagnostics.len != before + snapshot.findings.len) assert.panic("replayed {d} findings from a cache row holding {d}; replayFindings must add each once", .{ run.diagnostics.len - before, snapshot.findings.len });
 }
 
 test "the analyzer's revision covers every file its analysis imports, so a changed file misses old rows" {

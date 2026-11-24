@@ -147,9 +147,7 @@ pub fn checkRiskyCall(self: *File, ctx: Context, name: []const u8) !void {
     if (self.calleeIn(ctx, name, t.insecure_temp_calls)) |m| {
         _ = try self.report(at, "insecure-temp-file", try self.say("'{s}' chooses a temporary name before opening it, so another process can create or replace the path first.", .{m}));
     }
-    if (self.calleeIn(ctx, name, t.process_exit_calls)) |m| {
-        _ = try self.report(at, "process-exit", try self.say("'{s}' stops the whole process, so callers cannot recover or finish cleanup.", .{m}));
-    }
+    try checkProcessExit(self, ctx, name, at);
     if (self.calleeIn(ctx, name, t.obsolete_calls)) |m| {
         _ = try self.report(at, "obsolete-call", try self.say("'{s}' is an obsolete API retained only for compatibility and can disappear or preserve outdated behaviour.", .{m}));
     }
@@ -228,6 +226,25 @@ fn checkRiskyArgument(self: *File, ctx: Context, name: []const u8, first: ts.Nod
     }
     if (literal and network) try checkLiteralNetworkEndpoint(self, first);
     if (built and literal and !self.index.marks(first, self.v.string_format)) assert.panic("{s}: {f} is treated both as fixed text and as text put together at runtime, which can't both be true, so the language's query marks it twice; in that language's zanity.scm, keep only one of its two captures (@literal.string for fixed text, @string.built for text built at runtime)", .{ self.work.facts.path, first.where() });
+}
+
+/// A call that stops the process outside the program's entry point.
+fn checkProcessExit(self: *File, ctx: Context, name: []const u8, at: ts.Node) !void {
+    if (ctx.family != .call) assert.panic("{s}: checking {f} for a process exit, but it is a {t}; call only from checkRiskyCall", .{ self.work.facts.path, ctx.node.where(), ctx.family });
+    if (name.len == 0) assert.panic("{s}: checking an unnamed call for a process exit; capture @call.name in the language query", .{self.work.facts.path});
+    const m = self.calleeIn(ctx, name, self.tables.process_exit_calls) orelse return;
+    if (atEntryPoint(self)) return;
+    _ = try self.report(at, "process-exit", try self.say("'{s}' stops the whole process, so callers cannot recover or finish cleanup.", .{m}));
+}
+
+/// Whether the code runs as the program's entry point, at the top level of a script or in `main`,
+/// where stopping the process is the boundary process-exit asks for.
+fn atEntryPoint(self: *File) bool {
+    const function = self.enclosingFunction() orelse return true;
+    const name = function.name orelse return false;
+    if (ts.ts_node_end_byte(name) > self.source.len) assert.panic("{s}: the function name {f} ends past the {d} bytes of source; pass a node from this file's tree", .{ self.work.facts.path, name.where(), self.source.len });
+    if (function.family != .function) assert.panic("{s}: the enclosing construct {f} is a {t}, not a function", .{ self.work.facts.path, function.node.where(), function.family });
+    return std.mem.eql(u8, name.text(self.source), "main");
 }
 
 fn checkMissingIntegerRadix(self: *File, ctx: Context, name: []const u8) !void {

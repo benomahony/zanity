@@ -1,0 +1,3 @@
+rules: untraced-entry-point
+exit: 0
+Program.cs:2:68: warning [untraced-entry-point]

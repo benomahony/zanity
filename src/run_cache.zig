@@ -66,6 +66,10 @@ pub fn runKey(ws: *Workspace, paths: []const []const u8, selected: rules.Set) !?
         part(&state, path);
         part(&state, Io.Dir.cwd().readFile(ws.io, path, ws.source) catch return null);
     }
+    if (selected.enabled("untraced-entry-point")) for (ws.project_files.items()) |path| {
+        part(&state, path);
+        part(&state, Io.Dir.cwd().readFile(ws.io, path, ws.source) catch return null);
+    };
     return .{ .scope = finish(&scope), .state = finish(&state) };
 }
 

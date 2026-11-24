@@ -7,6 +7,7 @@ const check = @import("check.zig");
 const File = check.File;
 const Context = check.Context;
 const header = check.header;
+const contains = check.contains;
 /// The longest `nonce=...` option text fixedNonceOption() reads; a longer one is not a literal nonce.
 const max_option_bytes = 512;
 
@@ -73,14 +74,25 @@ pub fn checkRsaWithoutOaep(self: *File, ctx: Context, name: []const u8) !void {
         ctx.callee orelse ctx.name.?
     else if (self.calleeIn(ctx, name, self.tables.rsa_transformation_calls) != null) transformation: {
         const argument = ctx.arguments[0] orelse return;
-        const text = argument.text(self.source);
-        var lowered: [128]u8 = undefined;
-        if (text.len > lowered.len) return;
-        const normalized = std.ascii.lowerString(lowered[0..text.len], text);
-        if (std.mem.indexOf(u8, normalized, "pkcs1padding") == null) return;
+        if (!pkcs1Padding(self, argument)) return;
         break :transformation argument;
+    } else if (ctx.receiver != null and contains(self.tables.rsa_padding_methods, name)) padding: {
+        for (ctx.arguments) |maybe| if (maybe) |argument| if (pkcs1Padding(self, argument)) break :padding argument;
+        return;
     } else return;
     _ = try self.report(unsafe, "rsa-without-oaep", try self.say("This RSA operation selects PKCS#1 v1.5 padding, which is vulnerable to padding-oracle attacks when decryption failures are observable.", .{}));
+}
+
+/// Whether `argument` names RSA's PKCS#1 v1.5 padding, as `"RSA/ECB/PKCS1Padding"`,
+/// `RSA_PKCS1_PADDING`, `RSAEncryptionPadding.Pkcs1` and `Pkcs1v15Encrypt` do, rather than OAEP.
+fn pkcs1Padding(self: *File, argument: ts.Node) bool {
+    if (ts.ts_node_end_byte(argument) > self.source.len) assert.panic("{s}: the argument {f} ends past the {d} bytes of source; pass a node from this file's tree", .{ self.work.facts.path, argument.where(), self.source.len });
+    const text = argument.text(self.source);
+    var lowered: [128]u8 = undefined;
+    if (text.len > lowered.len) return false;
+    const normalized = std.ascii.lowerString(lowered[0..text.len], text);
+    if (normalized.len != text.len) assert.panic("{s}: lowering '{s}' changed its length", .{ self.work.facts.path, text });
+    return std.mem.indexOf(u8, normalized, "pkcs1") != null and std.mem.indexOf(u8, normalized, "oaep") == null;
 }
 
 fn callAlgorithmContains(self: *File, ctx: Context, needle: []const u8) bool {
@@ -114,8 +126,34 @@ fn fixedByteValue(self: *File, node: ts.Node) bool {
     if (ts.ts_node_end_byte(node) > self.source.len) assert.panic("{s}: fixed-byte candidate {f} ends past the {d}-byte source", .{ self.work.facts.path, node.where(), self.source.len });
     if (self.index.marks(node, self.v.literal_string) and !self.index.marks(node, self.v.string_format)) return true;
     const value = std.mem.trim(u8, node.text(self.source), " \t\r\n");
-    if (quotedByteConversion(value)) return true;
+    if (quotedByteConversion(value) or literalDerived(value)) return true;
     return fixedNumericByteArray(value);
+}
+
+/// Whether `value` is computed from nothing but a string literal: a call taking only the literal,
+/// as `Encoding.UTF8.GetBytes("salt")` is, or a method called on it, as `"salt".getBytes()` is.
+fn literalDerived(value: []const u8) bool {
+    if (value.len < 4 or value[value.len - 1] != ')') return false;
+    const open = std.mem.indexOfScalar(u8, value, '(') orelse return false;
+    if (open >= value.len - 1) assert.panic("'{s}' opens its only call at its last byte, though it ends with ')'", .{value});
+    const inner = std.mem.trim(u8, value[open + 1 .. value.len - 1], " \t");
+    if (inner.len + open + 2 > value.len) assert.panic("the argument of '{s}' came out longer than the call", .{value});
+    if (inner.len > 0 and quoted(inner)) {
+        for (value[0..open]) |c| if (!(std.ascii.isAlphanumeric(c) or c == '_' or c == '.' or c == ':')) return false;
+        return open > 0;
+    }
+    const dot = std.mem.lastIndexOfScalar(u8, value[0..open], '.') orelse return false;
+    return dot > 0 and quoted(value[0..dot]) and inner.len == 0;
+}
+
+/// Whether `text` is one string literal with nothing interpolated into it.
+fn quoted(text: []const u8) bool {
+    if (text.len == 0) assert.panic("asked whether empty text is a string literal; callers check for text first", .{});
+    if (text.len < 2 or (text[0] != '"' and text[0] != '\'')) return false;
+    if (text[text.len - 1] != text[0]) return false;
+    const body = text[1 .. text.len - 1];
+    if (body.len + 2 != text.len) assert.panic("the body of '{s}' is {d} bytes, not two fewer than the literal", .{ text, body.len });
+    return std.mem.indexOfScalar(u8, body, text[0]) == null and std.mem.indexOf(u8, body, "\\(") == null and std.mem.indexOf(u8, body, "${") == null;
 }
 
 fn quotedByteConversion(value: []const u8) bool {

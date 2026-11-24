@@ -1,0 +1,4 @@
+rules: insecure-temp-file
+exit: 1
+insecure_temp_file.js:4:10: error [insecure-temp-file]
+insecure_temp_file.ts:4:10: error [insecure-temp-file]

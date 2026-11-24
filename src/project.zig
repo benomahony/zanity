@@ -12,6 +12,7 @@ const strings = @import("strings.zig");
 const facts_module = @import("facts.zig");
 const release_calls = @import("release_calls.zig");
 const artifacts = @import("artifacts.zig");
+const tracing = @import("tracing.zig");
 const Facts = facts_module.Facts;
 const Finding = facts_module.Finding;
 
@@ -90,6 +91,22 @@ pub fn isProjectFile(relative: []const u8) bool {
 }
 
 pub const ProjectRun = @import("project_run.zig").ProjectRun;
+
+/// Records the instrumentation each of `paths` attaches, for untraced-entry-point, which runs with
+/// the other cross-file checks before checkProjectFiles().
+pub fn noteInstrumentation(run: ProjectRun, paths: []const []const u8) !void {
+    if (run.buffer.len == 0) assert.panic("reading project files into an empty buffer; size it from memory.Limits.file_bytes", .{});
+    if (!run.enabled.enabled("untraced-entry-point")) return;
+    for (paths) |path| {
+        if (path.len == 0) assert.panic("noting instrumentation in a project file with no path; collect() names every file it keeps", .{});
+        const source = try Io.Dir.cwd().readFile(run.io, path, run.buffer);
+        if (source.len == run.buffer.len) {
+            memory.exceeded = "bytes in one project file";
+            return error.LimitExceeded;
+        }
+        try tracing.noteInstrumentationMarkers(run.facts, path, source);
+    }
+}
 
 /// Reports each relaxing setting in `paths`; with units collected, records each setting line and
 /// the files as a whole for --infer.

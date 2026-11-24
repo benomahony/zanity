@@ -1,0 +1,3 @@
+rules: parameter-network-target
+exit: 0
+network_target_js.js:2:18: warning [parameter-network-target]

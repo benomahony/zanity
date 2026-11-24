@@ -1,0 +1,6 @@
+{
+  "name": "orders",
+  "scripts": {
+    "start": "node --require @opentelemetry/auto-instrumentations-node/register app.js"
+  }
+}

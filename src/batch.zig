@@ -271,12 +271,50 @@ pub const Batch = struct {
         try self.commit(worker, path, if (checker.enabled.enabled("oversized-file")) &found else &.{});
     }
 
+    /// Adds one file's handlers, routes and tracing calls to the run's, for untraced-entry-point.
+    fn commitTracing(self: *Batch, worker: *const Worker) error{LimitExceeded}!void {
+        const recorded = worker.facts;
+        if (recorded.path.len == 0) assert.panic("committing tracing facts for no file; startFile() sets the path of the file being checked", .{});
+        if (@intFromPtr(self.facts) == @intFromPtr(&worker.facts)) assert.panic("committing {s}'s tracing facts into the worker's own; commit them to the run's", .{recorded.path});
+        const Retained = struct {
+            worker: *const Worker,
+            text: *memory.Text,
+            path: []const u8,
+            /// Copies the fact's name out of the worker's text, which the next file reuses.
+            pub fn keep(r: @This(), fact: facts_module.Definition, comptime _: []const u8) error{LimitExceeded}!facts_module.Definition {
+                if (!std.mem.eql(u8, fact.path, r.path)) assert.panic("committing a tracing fact of {s} with {s}'s; a worker records facts for one file at a time", .{ fact.path, r.path });
+                var kept = fact;
+                kept.name = try r.worker.retain(r.text, fact.name);
+                if (!std.mem.eql(u8, kept.name, fact.name)) assert.panic("{s}: kept tracing fact '{s}' as '{s}'; retain() copies the text unchanged", .{ r.path, fact.name, kept.name });
+                return kept;
+            }
+        };
+        try self.facts.addTracing(.{ .untraced = recorded.untraced.items(), .routes = recorded.routes.items(), .tracing = recorded.tracing.items() }, Retained{ .worker = worker, .text = self.text, .path = recorded.path });
+    }
+
     /// Adds one file's facts and findings to the run's; the caller holds `mutex`.
     fn commit(self: *Batch, worker: *const Worker, path: []const u8, diagnostics: []const check.Diagnostic) !void {
         if (!std.mem.eql(u8, worker.facts.path, path)) assert.panic("committing {s} with facts recorded for {s}; startFile() must set the path of the file being checked", .{ path, worker.facts.path });
+        const first = try self.commitFacts(worker);
+        for (diagnostics) |d| {
+            const edit: ?facts_module.Edit = if (d.edit) |e| .{ .start = e.start, .end = e.end, .replacement = try worker.retain(self.text, e.replacement) } else null;
+            try self.findings.add(.{ .path = path, .line = d.line, .column = d.column, .rule = d.rule, .message = try worker.retain(self.text, d.message), .fix = try worker.retain(self.text, d.fix), .edit = edit, .subject = d.subject });
+        }
+        self.checked += 1;
+        if (self.live) |live| live.update("Checking files", self.checked, self.files.len);
         const facts = self.facts;
         const recorded = worker.facts;
+        if (facts.functions.len != first + recorded.functions.len) assert.panic("committed {d} functions from a file that recorded {d}; commit() must add each once", .{ facts.functions.len - first, recorded.functions.len });
+    }
+
+    /// Adds one file's facts to the run's, copying the text they point to out of the worker's,
+    /// and returns where its functions start, which its calls and shapes count from.
+    fn commitFacts(self: *Batch, worker: *const Worker) !usize {
+        const facts = self.facts;
+        const recorded = worker.facts;
+        if (recorded.path.len == 0) assert.panic("committing facts for no file; startFile() sets the path of the file being checked", .{});
         const first = facts.functions.len;
+        const defined = facts.definitions.len;
         for (recorded.definitions.items()) |d| {
             var kept = d;
             kept.name = try worker.retain(self.text, d.name);
@@ -313,6 +351,7 @@ pub const Batch = struct {
             kept.shown = try worker.retain(self.text, i.shown);
             try facts.imports.add(kept);
         }
+        try self.commitTracing(worker);
         for (recorded.implemented.items()) |hash| try facts.implemented.add(hash);
         for (recorded.passed.items()) |hash| try facts.passed.add(hash);
         try facts.addReferences(recorded.references.items());
@@ -323,13 +362,8 @@ pub const Batch = struct {
             kept.fix = try worker.retain(self.text, u.fix);
             try facts.units.add(kept);
         }
-        for (diagnostics) |d| {
-            const edit: ?facts_module.Edit = if (d.edit) |e| .{ .start = e.start, .end = e.end, .replacement = try worker.retain(self.text, e.replacement) } else null;
-            try self.findings.add(.{ .path = path, .line = d.line, .column = d.column, .rule = d.rule, .message = try worker.retain(self.text, d.message), .fix = try worker.retain(self.text, d.fix), .edit = edit, .subject = d.subject });
-        }
-        self.checked += 1;
-        if (self.live) |live| live.update("Checking files", self.checked, self.files.len);
-        if (facts.functions.len != first + recorded.functions.len) assert.panic("committed {d} functions from a file that recorded {d}; commit() must add each once", .{ facts.functions.len - first, recorded.functions.len });
+        if (facts.definitions.len != defined + recorded.definitions.len) assert.panic("{s}: committed {d} definitions of {d} recorded; each is added once", .{ recorded.path, facts.definitions.len - defined, recorded.definitions.len });
+        return first;
     }
 
     /// Keeps the failure of the earliest file, so the same run fails the same way however it was scheduled.

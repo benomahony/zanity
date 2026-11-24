@@ -1,4 +1,5 @@
-//! The spans a file's functions start and the calls that end them, for unended-span.
+//! The spans a file's functions start and the calls that end them, for unended-span, and where
+//! any span starts, for untraced-entry-point.
 const std = @import("std");
 const assert = @import("assert.zig");
 const ts = @import("ts.zig");
@@ -12,10 +13,16 @@ pub const TraceSpan = struct { owner: u32, start: ts.Node, at: ts.Node, binding:
 pub const Spans = struct {
     started: memory.Bounded(TraceSpan),
     ends: memory.Bounded(ts.Node),
+    /// Where each call starting a span, scoped or not, starts, in the order the calls close.
+    traced_at: memory.Bounded(u32),
+    /// Whether the file has recorded a call that traces, or one that registers instrumentation.
+    traces: bool = false,
+    spans_started: bool = false,
+    instruments: bool = false,
 
     pub fn initSpans(gpa: std.mem.Allocator, room: usize) std.mem.Allocator.Error!Spans {
         if (room == 0) assert.panic("memory.Limits.per_file is 0, so no span could be recorded; set it above 0", .{});
-        const spans: Spans = .{ .started = try .initBounded(gpa, room, "tracing spans started in one file"), .ends = try .initBounded(gpa, room, "tracing span ends in one file") };
+        const spans: Spans = .{ .started = try .initBounded(gpa, room, "tracing spans started in one file"), .ends = try .initBounded(gpa, room, "tracing span ends in one file"), .traced_at = try .initBounded(gpa, room, "calls starting a span in one file") };
         if (spans.started.len != 0 or spans.ends.len != 0) assert.panic("new span lists hold {d} starts and {d} ends; initBounded() must start them empty", .{ spans.started.len, spans.ends.len });
         return spans;
     }
@@ -49,9 +56,36 @@ pub const Spans = struct {
         return false;
     }
 
+    /// Records that a call starting a span, scoped or not, starts at byte `at`.
+    pub fn startsAt(self: *Spans, at: u32) error{LimitExceeded}!void {
+        const before = self.traced_at.len;
+        if (before > self.traced_at.buffer.len) assert.panic("{d} span starts in {d} slots; add() must refuse the extra", .{ before, self.traced_at.buffer.len });
+        try self.traced_at.add(at);
+        if (self.traced_at.len != before + 1) assert.panic("recording a span start took the list from {d} to {d}; add() must add one", .{ before, self.traced_at.len });
+    }
+
+    /// Whether a span starts within bytes `from..to`, counting only calls that closed after one
+    /// starting before `from`, so a node's own calls close last.
+    pub fn startsWithin(self: *const Spans, from: u32, to: u32) bool {
+        if (to < from) assert.panic("looking for spans in bytes {d}..{d}, which end before they start", .{ from, to });
+        if (self.traced_at.len > self.traced_at.buffer.len) assert.panic("{d} span starts in {d} slots; add() must refuse the extra", .{ self.traced_at.len, self.traced_at.buffer.len });
+        const at = self.traced_at.items();
+        var i = at.len;
+        while (i > 0) {
+            i -= 1;
+            if (at[i] < from) return false;
+            if (at[i] < to) return true;
+        }
+        return false;
+    }
+
     pub fn clear(self: *Spans) void {
         self.started.clear();
         self.ends.clear();
+        self.traced_at.clear();
+        self.traces = false;
+        self.spans_started = false;
+        self.instruments = false;
         if (self.started.len != 0) assert.panic("clearing the span lists left {d} starts; clear() must empty both lists", .{self.started.len});
         if (self.ends.len != 0) assert.panic("clearing the span lists left {d} ends; clear() must empty both lists", .{self.ends.len});
     }

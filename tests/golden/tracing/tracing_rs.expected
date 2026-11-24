@@ -1,0 +1,3 @@
+rules: dynamic-span-name
+exit: 0
+tracing_rs.rs:4:30: warning [dynamic-span-name]

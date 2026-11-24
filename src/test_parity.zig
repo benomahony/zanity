@@ -1,6 +1,7 @@
 //! Native behavioral coverage, independent of which languages external reference tools support.
 const std = @import("std");
 const language = @import("language.zig");
+const rules = @import("rules.zig");
 const adapters = @import("adapters");
 
 /// The common deterministic test checks every language must exercise through the golden CLI suite.
@@ -43,4 +44,39 @@ test "every language has behavioral fixtures for every common deterministic test
         }
     }
     try std.testing.expectEqual(@as(usize, 0), missing);
+}
+
+test "every rule has a golden finding in every language that runs it, or that language lists it as not applicable" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    const io = std.testing.io;
+    var dir = try std.Io.Dir.cwd().openDir(io, "tests/golden", .{ .iterate = true });
+    defer dir.close(io);
+    var walker = try dir.walk(arena);
+    defer walker.deinit();
+    var covered: [rules.all.len][language.count]bool = @splat(@splat(false));
+    while (try walker.next(io)) |entry| {
+        if (entry.kind != .file or !std.mem.endsWith(u8, entry.basename, ".expected")) continue;
+        const bytes = try dir.readFileAlloc(io, entry.path, arena, .unlimited);
+        var lines = std.mem.splitScalar(u8, bytes, '\n');
+        while (lines.next()) |line| {
+            const colon = std.mem.indexOfScalar(u8, line, ':') orelse continue;
+            const adapter = language.forPath(line[0..colon]) orelse continue;
+            const open = std.mem.lastIndexOfScalar(u8, line, '[') orelse continue;
+            if (!std.mem.endsWith(u8, line, "]")) continue;
+            const index = rules.ruleIndex(line[open + 1 .. line.len - 1]) orelse continue;
+            covered[index][language.indexOf(adapter)] = true;
+        }
+    }
+    var wrong: usize = 0;
+    for (rules.all, covered) |rule, in| {
+        if (rule.needs.len == 0) continue;
+        for (adapters.all, in) |*adapter, found| {
+            if (!language.applies(adapter, rule.name) or found) continue;
+            std.debug.print("\n{s} {s}: no golden finding exercises it; add a positive fixture and its negative controls, or list it under not_applicable in languages/manifest.zon if it can't fire there", .{ adapter.name, rule.name });
+            wrong += 1;
+        }
+    }
+    try std.testing.expectEqual(@as(usize, 0), wrong);
 }

@@ -1,0 +1,10 @@
+rules: shell-command,unsafe-deserialization,rsa-without-oaep
+exit: 1
+node_hazards.js:6:10: warning [shell-command]
+node_hazards.js:14:10: error [unsafe-deserialization]
+node_hazards.js:22:31: error [rsa-without-oaep]
+node_hazards.ts:6:10: warning [shell-command]
+node_hazards.ts:14:10: error [unsafe-deserialization]
+node_hazards.ts:22:31: error [rsa-without-oaep]
+rsa_padding.cs:7:34: error [rsa-without-oaep]
+rsa_padding.rs:4:42: error [rsa-without-oaep]

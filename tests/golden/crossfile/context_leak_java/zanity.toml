@@ -1,0 +1,6 @@
+[contexts.billing]
+include = ["src/com/acme/billing/**"]
+exports = ["src/com/acme/billing/Billing.java"]
+
+[contexts.shipping]
+include = ["src/com/acme/shipping/**"]

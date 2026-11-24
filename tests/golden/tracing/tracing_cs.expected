@@ -1,0 +1,4 @@
+rules: unended-span,dynamic-span-name
+exit: 0
+tracing_cs.cs:9:36: warning [unended-span]
+tracing_cs.cs:40:51: warning [dynamic-span-name]

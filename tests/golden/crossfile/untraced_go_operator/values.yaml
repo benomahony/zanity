@@ -1,0 +1,3 @@
+podAnnotations:
+  instrumentation.opentelemetry.io/inject-go: "true"
+  instrumentation.opentelemetry.io/otel-go-auto-target-exe: /app/orders

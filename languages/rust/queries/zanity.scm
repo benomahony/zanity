@@ -99,7 +99,11 @@
 (_
   (attribute_item
     (attribute
-      (identifier) @_test))
+      [
+        (identifier) @_test
+        (scoped_identifier
+          name: (identifier) @_test)
+      ]))
   .
   (function_item) @test.outer
   (#eq? @_test "test"))
@@ -476,3 +480,60 @@
 
 (field_declaration
   type: (_) @layout.field) @layout.member
+
+; A function actix-web calls for a route, as #[get("/orders")] registers it, alone or beside one
+; other attribute.
+(_
+  (attribute_item
+    (attribute
+      (identifier) @_route))
+  .
+  (function_item) @route.handler
+  (#any-of? @_route "get" "post" "put" "patch" "delete" "route"))
+
+(_
+  (attribute_item
+    (attribute
+      (identifier) @_route))
+  .
+  (attribute_item)
+  .
+  (function_item) @route.handler
+  (#any-of? @_route "get" "post" "put" "patch" "delete" "route"))
+
+; A function the tracing crate's #[instrument] wraps in a span, and a span its macros start.
+(_
+  (attribute_item
+    (attribute
+      (identifier) @_span))
+  .
+  (function_item) @span.start
+  (#eq? @_span "instrument"))
+
+(_
+  (attribute_item
+    (attribute
+      (identifier) @_span))
+  .
+  (attribute_item)
+  .
+  (function_item) @span.start
+  (#eq? @_span "instrument"))
+
+((macro_invocation
+  macro: [
+    (identifier) @_span
+    (scoped_identifier
+      name: (identifier) @_span)
+  ]) @span.start
+  (#any-of? @_span "span" "info_span" "debug_span" "trace_span" "warn_span" "error_span"))
+
+; A function passed to a call, which runs it: a request handler when the call registers a route.
+(call_expression
+  arguments: (arguments
+    (closure_expression) @call.handler))
+
+; Text format! builds at runtime.
+((macro_invocation
+  macro: (identifier) @_format) @string.built
+  (#eq? @_format "format"))

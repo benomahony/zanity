@@ -52,7 +52,7 @@ fn unsafeXmlEntityOption(text: []const u8) bool {
     if (len > text.len) assert.panic("normalized {d} XML-option bytes from {d}; normalization only removes whitespace", .{ len, text.len });
     if (len > normalized.len) assert.panic("normalized {d} XML-option bytes into a {d}-byte buffer; reject oversized options first", .{ len, normalized.len });
     const option = normalized[0..len];
-    return std.mem.indexOf(u8, option, "resolve_entities=true") != null or std.mem.indexOf(u8, option, "resolveentities:true") != null or std.mem.indexOf(u8, option, "noent:true") != null;
+    return std.mem.indexOf(u8, option, "resolve_entities=true") != null or std.mem.indexOf(u8, option, "resolveentities:true") != null or std.mem.indexOf(u8, option, "noent:true") != null or std.mem.indexOf(u8, option, "dtdprocessing=dtdprocessing.parse") != null;
 }
 
 fn insecureXmlFeature(self: *File, ctx: Context) ?ts.Node {

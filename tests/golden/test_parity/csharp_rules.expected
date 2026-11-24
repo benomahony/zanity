@@ -1,0 +1,12 @@
+rules: duplicated-expression,message-chain,wide-scope,nested-regex-quantifier,xml-entity-expansion,obsolete-call,constant-password-salt,hardcoded-secret,broad-expected-error,opaque-check
+exit: 1
+Rules.cs:11:11: error [hardcoded-secret]
+Rules.cs:15:19: warning [duplicated-expression]
+Rules.cs:22:23: warning [message-chain]
+Rules.cs:29:13: warning [wide-scope]
+Rules.cs:37:34: error [nested-regex-quantifier]
+Rules.cs:40:63: error [xml-entity-expansion]
+Rules.cs:43:38: warning [obsolete-call]
+Rules.cs:45:75: error [constant-password-salt]
+RulesTests.cs:9:9: warning [broad-expected-error]
+RulesTests.cs:21:9: warning [opaque-check]

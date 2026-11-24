@@ -117,6 +117,9 @@ pub const Tables = struct {
     /// RSA encryption/decryption APIs that select PKCS#1 v1.5 directly or by transformation text.
     rsa_pkcs1_calls: []const []const u8 = &.{},
     rsa_transformation_calls: []const []const u8 = &.{},
+    /// Methods on any receiver that take the RSA padding as an argument, such as .NET's
+    /// `rsa.Encrypt(data, RSAEncryptionPadding.Pkcs1)`.
+    rsa_padding_methods: []const []const u8 = &.{},
     /// Formatting calls whose format string is their first or second argument.
     format_first_calls: []const []const u8 = &.{},
     format_second_calls: []const []const u8 = &.{},
@@ -187,6 +190,22 @@ pub const Tables = struct {
     /// Whether a span start returns the context and the span together, as Go's `tracer.Start` does,
     /// so a call to one of its methods that doesn't is something else, such as `cmd.Start()`.
     span_start_pairs: bool = false,
+    /// Methods that register a request handler for the route their first argument names, passed
+    /// last, as Express's `app.get("/orders", handler)` and Go's `mux.HandleFunc` do.
+    route_methods: []const []const u8 = &.{},
+    /// Decorator methods that register the function below as a request handler, as FastAPI's
+    /// `@app.get(...)` and Flask's `@app.route(...)` do.
+    route_decorators: []const []const u8 = &.{},
+    /// Methods that get a tracer, such as OpenTelemetry's `trace.get_tracer`, so a file calling
+    /// one traces even before it starts a span.
+    tracer_methods: []const []const u8 = &.{},
+    /// Calls and methods that register instrumentation tracing a framework's handlers without
+    /// spans of their own, such as `otelhttp.NewHandler` and `FastAPIInstrumentor.instrument_app`.
+    instrumentation_calls: []const []const u8 = &.{},
+    instrumentation_methods: []const []const u8 = &.{},
+    /// Text in a build, deploy or CI file that attaches instrumentation with no code of its own,
+    /// such as the OpenTelemetry Java agent or the Operator's inject annotation, as a whole word.
+    instrumentation_markers: []const []const u8 = &.{},
     /// Calls that stop the program for a debugger or dump its state for one.
     debug_calls: []const []const u8 = &.{},
     mutating_calls: []const []const u8 = &.{},

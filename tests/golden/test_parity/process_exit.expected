@@ -1,0 +1,9 @@
+rules: process-exit
+exit: 0
+process_exit.go:9:2: warning [process-exit]
+process_exit.go:13:2: warning [process-exit]
+process_exit.js:2:3: warning [process-exit]
+process_exit.lua:4:3: warning [process-exit]
+process_exit.rs:2:5: warning [process-exit]
+process_exit.ts:2:3: warning [process-exit]
+process_exit.zig:4:5: warning [process-exit]

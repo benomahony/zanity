@@ -1,0 +1,6 @@
+[contexts.billing]
+include = ["billing/**"]
+exports = ["billing/billing.zig"]
+
+[contexts.shipping]
+include = ["shipping/**"]
