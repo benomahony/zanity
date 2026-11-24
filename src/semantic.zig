@@ -184,12 +184,35 @@ pub fn contextOutliers(scratch: Room, items: []const Named, margin: f64, out: *m
         vectors.normalise(sum);
         centroids[c] = sum;
     }
-    for (items, home) |item, at| {
+    for (items, home, 0..) |item, at, i| {
         const best = vectors.nearest(item.vector, centroids[0..count]);
         if (best.index == at) continue;
         const score: f64 = best.score - vectors.cosine(item.vector, centroids[at]);
-        try out.add(.{ .rule = "context-outlier", .path = item.path, .line = item.line, .column = item.column, .name = item.name, .score = score, .threshold = margin, .subject = item.subject, .message = try scratch.text.format("'{s}' reads like {s} vocabulary but lives in {s} ({d:.2} nearer {s}'s centroid).", .{ item.name, labels[best.index], labels[at], score, labels[best.index] }) });
+        const other = labels[best.index];
+        const there = items[nearestIn(items, home, i, best.index) orelse assert.panic("'{s}' is nearest {s}, which holds no names", .{ item.name, other })].name;
+        const fix = if (nearestIn(items, home, i, at)) |here|
+            try scratch.text.format("Move '{s}' into {s}, whose '{s}' it reads like, or rename it in {s}'s words, as '{s}' is named.", .{ item.name, other, there, labels[at], items[here].name })
+        else
+            try scratch.text.format("Move '{s}' into {s}, whose '{s}' it reads like.", .{ item.name, other, there });
+        try out.add(.{ .rule = "context-outlier", .path = item.path, .line = item.line, .column = item.column, .name = item.name, .score = score, .threshold = margin, .subject = item.subject, .message = try scratch.text.format("'{s}' reads like {s} vocabulary but lives in {s} ({d:.2} nearer {s}'s centroid).", .{ item.name, other, labels[at], score, other }), .fix = fix });
     }
+}
+
+/// The name in context `context` nearest name `i`, other than `i` itself, or null when it has none.
+fn nearestIn(items: []const Named, home: []const u32, i: usize, context: usize) ?usize {
+    if (home.len != items.len) assert.panic("{d} names placed in contexts for {d} names", .{ home.len, items.len });
+    if (i >= items.len) assert.panic("looking near name {d} of {d}", .{ i, items.len });
+    var found: ?usize = null;
+    var score: f32 = -2;
+    for (items, home, 0..) |other, h, j| {
+        if (h != context or j == i) continue;
+        const s = vectors.cosine(items[i].vector, other.vector);
+        if (s <= score) continue;
+        score = s;
+        found = j;
+    }
+    if (found) |j| if (home[j] != context) assert.panic("'{s}' is nearest in a context it is not in", .{items[j].name});
+    return found;
 }
 
 fn before(a: Coded, b: Coded) bool {
@@ -343,6 +366,7 @@ test "context-outlier reports a name nearer another context's centroid than its 
     try std.testing.expectEqual(@as(usize, 1), f.fired());
     try std.testing.expectEqualStrings("InvoiceTotal", f.found[0].name);
     try std.testing.expect(std.mem.indexOf(u8, f.found[0].message, "billing vocabulary but lives in core") != null);
+    try std.testing.expectEqualStrings("Move 'InvoiceTotal' into billing, whose 'InvoiceLine' it reads like, or rename it in core's words, as 'Order' is named.", f.found[0].fix);
 }
 
 test "context-outlier stays quiet when each name sits in its own context" {
