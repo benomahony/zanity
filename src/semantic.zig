@@ -144,8 +144,35 @@ pub fn nearSynonyms(scratch: Room, items: []const Named, threshold: f64, out: *m
         for (kept, 0..) |m, x| _ = try scratch.text.format("{s}'{s}'", .{ if (x == 0) "" else if (x + 1 == kept.len) " and " else ", ", items[m].name });
         const listed = scratch.text.buffer[start..scratch.text.used];
         const score = sum / pairs;
-        try out.add(.{ .rule = "near-synonym", .path = first.path, .line = first.line, .column = first.column, .name = first.name, .score = score, .threshold = threshold, .subject = first.subject, .message = try scratch.text.format("{s} name the same idea in unrelated words (mean cosine {d:.2}).", .{ listed, score }) });
+        const message = try scratch.text.format("{s} name the same idea in unrelated words (mean cosine {d:.2}).", .{ listed, score });
+        try out.add(.{ .rule = "near-synonym", .path = first.path, .line = first.line, .column = first.column, .name = first.name, .score = score, .threshold = threshold, .subject = first.subject, .message = message, .fix = try renameToCentral(scratch.text, items, kept) });
     }
+}
+
+/// The fix for a cluster of near synonyms: rename every other member, each where it is defined,
+/// to the words of the one nearest all the rest.
+fn renameToCentral(text: *memory.Text, items: []const Named, kept: []const usize) error{LimitExceeded}![]const u8 {
+    if (kept.len < 2) assert.panic("a cluster of {d} near synonyms; it takes two to be synonyms", .{kept.len});
+    var central = kept[0];
+    var best: f64 = -2;
+    for (kept) |a| {
+        var near: f64 = 0;
+        for (kept) |b| near += if (a == b) 0 else vectors.cosine(items[a].vector, items[b].vector);
+        if (near <= best) continue;
+        best = near;
+        central = a;
+    }
+    const start = text.used;
+    _ = try text.format("Rename ", .{});
+    var renamed: usize = 0;
+    for (kept) |m| if (m != central) {
+        const other = items[m];
+        _ = try text.format("{s}'{s}' ({s}:{d})", .{ if (renamed == 0) "" else if (renamed + 2 == kept.len) " and " else ", ", other.name, other.path, other.line + 1 });
+        renamed += 1;
+    };
+    _ = try text.format(" to the words of '{s}', the name nearest the others; if they mean different things, rename them so their words say how.", .{items[central].name});
+    if (renamed + 1 != kept.len) assert.panic("named {d} of {d} near synonyms to rename", .{ renamed, kept.len - 1 });
+    return text.buffer[start..text.used];
 }
 
 fn scopeName(item: Named) []const u8 {
@@ -316,6 +343,7 @@ test "near-synonym reports close names that share no word" {
     try std.testing.expectEqual(@as(usize, 1), f.fired());
     try std.testing.expectApproxEqAbs(@as(f64, 0.96), f.found[0].score, 1e-6);
     try std.testing.expectEqualStrings("'fetch_order' and 'retrieve_purchase' name the same idea in unrelated words (mean cosine 0.96).", f.found[0].message);
+    try std.testing.expectEqualStrings("Rename 'retrieve_purchase' (src/core/a.py:1) to the words of 'fetch_order', the name nearest the others; if they mean different things, rename them so their words say how.", f.found[0].fix);
 }
 
 test "near-synonym ignores names that already share a word" {
@@ -352,6 +380,7 @@ test "near-synonym scores a cluster by its mean cosine, not its weakest pair" {
     try nearSynonyms(f.scratch(), &.{ named("fetch", &east), named("retrieve", &east_ish), named("collect", &.{ 0.9, 0.44 }) }, 0.9, &f.insights);
     try std.testing.expectEqual(@as(usize, 1), f.insights.len);
     try std.testing.expect(f.found[0].score > 0.9 and f.found[0].score < 1.0);
+    try std.testing.expectEqualStrings("Rename 'fetch' (src/core/a.py:1) and 'collect' (src/core/a.py:1) to the words of 'retrieve', the name nearest the others; if they mean different things, rename them so their words say how.", f.found[0].fix);
 }
 
 fn inContext(name: []const u8, scope: []const u8, vector: []const f32) Named {
