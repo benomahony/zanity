@@ -3,6 +3,7 @@
 test {
     _ = @import("golden_test.zig");
     _ = @import("baseline_test.zig");
+    _ = @import("cache_test.zig");
     _ = @import("infer_test.zig");
     _ = @import("embed_test.zig");
     _ = @import("lsp_test.zig");

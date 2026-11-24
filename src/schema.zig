@@ -264,7 +264,7 @@ fn renderVocabulary(w: *std.Io.Writer) !void {
         \\      }}
         \\    }},
         \\    "domains": {{ "$ref": "#/definitions/scopes", "description": "Parts of the code with words of their own, such as [domains.commerce]; contexts apply after them." }},
-        \\    "contexts": {{ "$ref": "#/definitions/scopes", "description": "Bounded contexts with words of their own, such as [contexts.billing]; they apply after domains, and each may define its own Customer." }}
+        \\    "contexts": {{ "$ref": "#/definitions/contexts", "description": "Bounded contexts with words of their own, such as [contexts.billing]; they apply after domains, and each may define its own Customer." }}
         \\  }},
         \\  "definitions": {{
         \\    "words": {{ "type": "array", "uniqueItems": true, "items": {{ "type": "string", "minLength": 1 }} }},
@@ -286,8 +286,22 @@ fn renderVocabulary(w: *std.Io.Writer) !void {
         \\        }}
         \\      }}
         \\    }},
+        \\    "contexts": {{
+        \\      "type": "object",
+        \\      "maxProperties": {d},
+        \\      "additionalProperties": {{
+        \\        "type": "object",
+        \\        "additionalProperties": false,
+        \\        "properties": {{
+        \\          "include": {{ "$ref": "#/definitions/words", "description": "The files it covers, in .gitignore syntax, relative to this file.", "maxItems": {d} }},
+        \\          "exports": {{ "$ref": "#/definitions/words", "description": "The files other contexts may import from it, in .gitignore syntax, relative to this file; context-leak reports imports of its other files. Without it, nothing is checked.", "maxItems": {d} }},
+        \\          "forbidden": {{ "$ref": "#/definitions/words", "description": "Words no name in it may use." }},
+        \\          "synonyms": {{ "$ref": "#/definitions/synonyms" }}
+        \\        }}
+        \\      }}
+        \\    }},
         \\
-    , .{ config.max_directional, config.max_scopes, config.max_scope_globs });
+    , .{ config.max_directional, config.max_scopes, config.max_scope_globs, config.max_scopes, config.max_scope_globs, config.max_scope_globs });
 }
 
 /// The names a rule list may hold: every rule, by name or NASA code, and "all".

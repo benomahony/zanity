@@ -1,0 +1,3 @@
+rules: context-leak
+exit: 0
+src/shipping/dispatch.js:1:1: warning [context-leak]

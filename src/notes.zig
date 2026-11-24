@@ -12,7 +12,8 @@ const data_layout = @import("data_layout.zig");
 const facts_module = @import("facts.zig");
 const types = @import("types.zig");
 const File = check.File;
-const Part = @import("import_notes.zig").Part;
+const import_notes = @import("import_notes.zig");
+const Part = import_notes.Part;
 
 /// Handles `id` when it is one of the noting captures; returns whether it was.
 pub fn note(self: *File, node: ts.Node, id: captures.Id) !bool {
@@ -31,7 +32,7 @@ pub fn note(self: *File, node: ts.Node, id: captures.Id) !bool {
     } else if (v.reference_name == id or self.checker.compiled.id("reference.text") == id or self.checker.compiled.id("reference.key") == id) {
         if (enabled.enabled("dead-symbol")) try noteReference(self, node, text, id);
     } else if (try noteImport(self, node, id)) {
-        // cyclic-import's captures, noted by noteImport().
+        // the import captures, noted by noteImport().
     } else if (v.abstraction_name == id) {
         const at = ts.ts_node_start_point(node);
         if (enabled.enabled("single-impl-abstraction")) try facts.abstraction(text, .{ at.row, at.column });
@@ -45,12 +46,12 @@ pub fn note(self: *File, node: ts.Node, id: captures.Id) !bool {
     return true;
 }
 
-/// Handles `id` when it is one of cyclic-import's captures; returns whether it was. An import
+/// Handles `id` when it is one of the import captures cyclic-import and context-leak read; returns whether it was. An import
 /// statement itself carries nothing: its parts are noted against it.
 fn noteImport(self: *File, node: ts.Node, id: captures.Id) !bool {
     const v = self.v;
     const ours = v.import_statement == id or v.import_module == id or v.import_binding == id or v.import_name == id or v.import_submodule == id or v.import_via == id or v.import_used == id;
-    if (!ours or !self.checker.enabled.enabled("cyclic-import")) return ours;
+    if (!ours or !import_notes.wanted(self.checker.enabled)) return ours;
     if (node.id == null) assert.panic("{s}: an import capture matched a null node; captures always name a node", .{self.work.facts.path});
     const imports = &self.s.imports;
     if (v.import_via == id) {

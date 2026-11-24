@@ -11,6 +11,7 @@ const scope = @import("scope.zig");
 const naming = @import("naming.zig");
 const check = @import("check.zig");
 const nameHash = @import("facts.zig").nameHash;
+const import_notes = @import("import_notes.zig");
 const Diagnostic = check.Diagnostic;
 const File = check.File;
 const Work = check.Work;
@@ -51,7 +52,7 @@ pub fn checkFile(self: *const Checker, work: Work, source: []const u8) !Result {
     try hazards.checkLength(&file, root);
     try scope.checkWideScope(&file);
     const scratch = work.scratch;
-    if (self.enabled.enabled("cyclic-import")) try scratch.imports.flush(work.facts, source);
+    if (import_notes.wanted(self.enabled)) try scratch.imports.flush(work.facts, source);
     const reflects = for (file.tables.reflective_calls) |call| {
         if (scratch.names.mentioned(nameHash(call))) break true;
     } else false;

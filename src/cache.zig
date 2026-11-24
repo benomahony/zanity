@@ -9,7 +9,6 @@ const facts_module = @import("facts.zig");
 const Definition = facts_module.Definition;
 const Diagnostic = check.Diagnostic;
 const Facts = facts_module.Facts;
-const Finding = facts_module.Finding;
 const Function = facts_module.Function;
 const Edge = facts_module.Edge;
 const Shape = facts_module.Shape;
@@ -166,10 +165,11 @@ pub const Replay = struct {
     language: []const u8,
     text: *memory.Text,
     facts: *Facts,
-    findings: *memory.Bounded(Finding),
+    diagnostics: *memory.Bounded(Diagnostic),
 };
 
-/// Adds a cached file to the run exactly as Batch.commit adds a freshly checked one.
+/// Fills a worker's facts and diagnostics from a cached file exactly as checking it would, so
+/// Batch.commit adds it to the run as it adds a freshly checked one.
 pub fn replay(run: Replay) (ReplayError || error{ OutOfMemory, LimitExceeded })!void {
     if (run.payload.len == 0 or run.scratch.len == 0) assert.panic("replaying a cache row without its JSON or parsing memory; split memory.Limits.analysis_bytes between both", .{});
     if (run.path.len == 0 or run.language.len == 0) assert.panic("replaying a cache row without a path or language; Batch passes both from the collected file", .{});
@@ -186,9 +186,9 @@ pub fn replay(run: Replay) (ReplayError || error{ OutOfMemory, LimitExceeded })!
     try validateGraph(snapshot);
     try validateUnits(snapshot, run);
     try validateFindings(snapshot);
-    try commitFacts(snapshot, run);
-    try commitTracing(snapshot, run);
-    try commitFindings(snapshot, run);
+    try replayFacts(snapshot, run);
+    try replayTracing(snapshot, run);
+    try replayFindings(snapshot, run);
 }
 
 fn validateHeader(snapshot: Snapshot, run: Replay) ReplayError!void {
@@ -207,7 +207,7 @@ fn validateDefinitions(snapshot: Snapshot, run: Replay) ReplayError!void {
         if (definition.delete_end < definition.delete_start) return error.InvalidCache;
     }
     for (snapshot.imports) |i| {
-        if (!std.mem.eql(u8, i.path, run.path) or i.spec.len == 0) return error.InvalidCache;
+        if (!std.mem.eql(u8, i.path, run.path) or i.spec.len == 0 or i.spec_end < i.spec_start) return error.InvalidCache;
     }
     for (snapshot.abstractions) |abstraction| {
         if (!std.mem.eql(u8, abstraction.path, run.path) or !std.mem.eql(u8, abstraction.language, run.language)) return error.InvalidCache;
@@ -254,7 +254,7 @@ fn validateFindings(snapshot: Snapshot) ReplayError!void {
     }
 }
 
-fn commitFacts(snapshot: Snapshot, run: Replay) error{LimitExceeded}!void {
+fn replayFacts(snapshot: Snapshot, run: Replay) error{LimitExceeded}!void {
     if (snapshot.path.len == 0 or snapshot.language.len == 0) assert.panic("committing cached facts without their file identity; validateHeader must run first", .{});
     const facts = run.facts;
     const first = facts.functions.len;
@@ -294,16 +294,16 @@ fn commitFacts(snapshot: Snapshot, run: Replay) error{LimitExceeded}!void {
         .importable = abstraction.importable,
         .unmarked = try run.text.copy(abstraction.unmarked),
     });
-    for (snapshot.imports) |i| try facts.imports.add(.{ .path = run.path, .language = run.language, .spec = try run.text.copy(i.spec), .line = i.line, .column = i.column, .names = i.names, .shown = try run.text.copy(i.shown), .submodule = i.submodule });
+    for (snapshot.imports) |i| try facts.imports.add(.{ .path = run.path, .language = run.language, .spec = try run.text.copy(i.spec), .line = i.line, .column = i.column, .names = i.names, .shown = try run.text.copy(i.shown), .submodule = i.submodule, .bound = i.bound, .spec_start = i.spec_start, .spec_end = i.spec_end });
     for (snapshot.implemented) |hash| try facts.implemented.add(hash);
     for (snapshot.passed) |hash| try facts.passed.add(hash);
     try facts.addReferences(snapshot.references);
     for (snapshot.units) |unit| try facts.units.add(.{ .kind = unit.kind, .reports_error = unit.reports_error, .path = run.path, .language = run.language, .name = try run.text.copy(unit.name), .line = unit.line, .column = unit.column, .end_line = unit.end_line, .source = try run.text.copy(unit.source), .fix = try run.text.copy(unit.fix) });
-    if (facts.functions.len != first + snapshot.functions.len) assert.panic("replayed {d} functions from a cache row holding {d}; commitFacts must add each once", .{ facts.functions.len - first, snapshot.functions.len });
+    if (facts.functions.len != first + snapshot.functions.len) assert.panic("replayed {d} functions from a cache row holding {d}; replayFacts must add each once", .{ facts.functions.len - first, snapshot.functions.len });
 }
 
 /// Adds a cached file's handlers, routes and tracing calls, for untraced-entry-point.
-fn commitTracing(snapshot: Snapshot, run: Replay) error{ OutOfMemory, LimitExceeded }!void {
+fn replayTracing(snapshot: Snapshot, run: Replay) error{ OutOfMemory, LimitExceeded }!void {
     if (run.path.len == 0 or run.language.len == 0) assert.panic("committing cached tracing facts without their file; validateHeader must run first", .{});
     const facts = run.facts;
     const before = facts.untraced.len + facts.routes.len + facts.tracing.len;
@@ -314,15 +314,15 @@ fn commitTracing(snapshot: Snapshot, run: Replay) error{ OutOfMemory, LimitExcee
     if (added != snapshot.untraced.len + snapshot.routes.len + snapshot.tracing.len) assert.panic("{s}: replayed {d} tracing facts of {d} cached; each is added once", .{ run.path, added, snapshot.untraced.len + snapshot.routes.len + snapshot.tracing.len });
 }
 
-fn commitFindings(snapshot: Snapshot, run: Replay) (ReplayError || error{LimitExceeded})!void {
+fn replayFindings(snapshot: Snapshot, run: Replay) (ReplayError || error{LimitExceeded})!void {
     if (snapshot.path.len == 0) assert.panic("committing cached findings without a path; validateHeader must run first", .{});
-    const before = run.findings.len;
+    const before = run.diagnostics.len;
     for (snapshot.findings) |diagnostic| {
         const rule = rules.find(diagnostic.rule) orelse return error.InvalidCache;
         const edit: ?facts_module.Edit = if (diagnostic.edit) |change| .{ .start = change.start, .end = change.end, .replacement = try run.text.copy(change.replacement) } else null;
-        try run.findings.add(.{ .path = run.path, .line = diagnostic.line, .column = diagnostic.column, .rule = rule.name, .message = try run.text.copy(diagnostic.message), .fix = try run.text.copy(diagnostic.fix), .edit = edit, .subject = diagnostic.subject });
+        try run.diagnostics.add(.{ .line = diagnostic.line, .column = diagnostic.column, .rule = rule.name, .message = try run.text.copy(diagnostic.message), .fix = try run.text.copy(diagnostic.fix), .edit = edit, .subject = diagnostic.subject });
     }
-    if (run.findings.len != before + snapshot.findings.len) assert.panic("replayed {d} findings from a cache row holding {d}; commitFindings must add each once", .{ run.findings.len - before, snapshot.findings.len });
+    if (run.diagnostics.len != before + snapshot.findings.len) assert.panic("replayed {d} findings from a cache row holding {d}; replayFindings must add each once", .{ run.diagnostics.len - before, snapshot.findings.len });
 }
 
 test "the analyzer's revision covers every file its analysis imports, so a changed file misses old rows" {
@@ -397,9 +397,9 @@ test "a cached analysis replays local findings and cross-file facts" {
 
     var target_text = try memory.Text.initText(arena, 4096);
     var target_facts = try Facts.initFacts(arena, .{ .definitions = 8, .functions = 8, .calls = 8, .references = 8, .text_bytes = 4096 }, &target_text);
-    var findings = try memory.Bounded(Finding).initBounded(arena, 8, "test findings");
+    var findings = try memory.Bounded(Diagnostic).initBounded(arena, 8, "test findings");
     var scratch: [64 * 1024]u8 = undefined;
-    try replay(.{ .payload = payload, .scratch = &scratch, .path = "src/a.py", .language = loaded.adapter.name, .text = &target_text, .facts = &target_facts, .findings = &findings });
+    try replay(.{ .payload = payload, .scratch = &scratch, .path = "src/a.py", .language = loaded.adapter.name, .text = &target_text, .facts = &target_facts, .diagnostics = &findings });
     try std.testing.expectEqual(@as(usize, 1), target_facts.definitions.len);
     try std.testing.expectEqual(@as(usize, 1), target_facts.functions.len);
     try std.testing.expectEqual(@as(usize, 1), target_facts.calls.len);

@@ -1,0 +1,6 @@
+[contexts.billing]
+include = ["src/billing/**"]
+exports = ["src/billing/index.ts"]
+
+[contexts.shipping]
+include = ["src/shipping/**"]

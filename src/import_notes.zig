@@ -6,6 +6,14 @@ const assert = @import("assert.zig");
 const memory = @import("memory.zig");
 const ts = @import("ts.zig");
 const facts_module = @import("facts.zig");
+const rules = @import("rules.zig");
+
+/// Whether a rule that reads imports is on, so each file's imports must be noted.
+pub fn wanted(enabled: rules.Set) bool {
+    if (rules.find("cyclic-import") == null or rules.find("context-leak") == null) assert.panic("the import rules are missing from rules.all; wanted() names both", .{});
+    if (enabled.len > rules.all.len) assert.panic("{d} rules enabled of {d}; Set.include() adds each rule once", .{ enabled.len, rules.all.len });
+    return enabled.enabled("cyclic-import") or enabled.enabled("context-leak");
+}
 
 /// Names a finding quotes from one import.
 const max_shown = 3;
@@ -131,8 +139,11 @@ pub const ImportNotes = struct {
         for (self.entries.items()) |entry| {
             const spec_node = entry.spec orelse continue;
             const used = if (entry.binding != 0) distinctUses(uses, entry.binding) else 0;
-            const spec = std.mem.trim(u8, spec_node.text(source), "\"'`");
+            const written = spec_node.text(source);
+            const spec = std.mem.trim(u8, written, "\"'`");
             if (spec.len == 0) continue;
+            const leading = written.len - std.mem.trimStart(u8, written, "\"'`").len;
+            const spec_start = ts.ts_node_start_byte(spec_node) + @as(u32, @intCast(leading));
             const within = if (entry.within) |start| self.moduleOf(start, source) orelse continue else "";
             try facts.imports.add(.{
                 .path = facts.path,
@@ -143,6 +154,9 @@ pub const ImportNotes = struct {
                 .column = entry.column,
                 .names = entry.named + used,
                 .shown = try shownNames(facts.text, source, uses, entry),
+                .bound = entry.binding != 0,
+                .spec_start = spec_start,
+                .spec_end = spec_start + @as(u32, @intCast(spec.len)),
             });
         }
         if (facts.imports.len - before > self.entries.len) assert.panic("flushed {d} imports from {d} noted", .{ facts.imports.len - before, self.entries.len });

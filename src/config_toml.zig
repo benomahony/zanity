@@ -198,13 +198,24 @@ pub const TomlReader = struct {
             if (items.len > max_directional) return self.cursor.fail("'directional' has more than {d} words; keep the ones names use.", .{max_directional});
             @memcpy(config.directional[0..items.len], items);
             config.directional_len = items.len;
-        } else if (self.table == .scope and std.mem.eql(u8, key, "include")) {
-            const scope = &config.scopes[self.scope - 1];
-            if (items.len > max_scope_globs) return self.cursor.fail("[{s}] has more than {d} include patterns; use broader ones.", .{ scope.name, max_scope_globs });
-            for (items) |glob| if (glob.len == 0) return self.cursor.fail("an include pattern of [{s}] is empty; name the files it covers.", .{scope.name});
-            @memcpy(scope.include[0..items.len], items);
-            scope.include_len = items.len;
-        } else return self.cursor.fail("'{s}' isn't a setting here; [vocabulary] takes forbidden and directional, a domain or context takes include and forbidden, and a synonyms table takes canonical = [aliases].", .{key});
+        } else if (self.table == .scope and (std.mem.eql(u8, key, "include") or std.mem.eql(u8, key, "exports"))) {
+            try self.readScopePatterns(&config.scopes[self.scope - 1], key, items);
+        } else return self.cursor.fail("'{s}' isn't a setting here; [vocabulary] takes forbidden and directional, a domain takes include and forbidden, a context also takes exports, and a synonyms table takes canonical = [aliases].", .{key});
+    }
+
+    /// A domain's or context's `include` patterns, or a context's `exports`.
+    fn readScopePatterns(self: *TomlReader, scope: *Scope, key: []const u8, items: []const []const u8) Error!void {
+        const exports = std.mem.eql(u8, key, "exports");
+        if (!exports and !std.mem.eql(u8, key, "include")) assert.panic("reading '{s}' as a domain's or context's patterns; only include and exports are", .{key});
+        if (exports and !scope.context) return self.cursor.fail("[domains.{s}] can't have exports; only a context has a public surface, so declare it as [contexts.{s}].", .{ scope.name, scope.name });
+        if (items.len > max_scope_globs) return self.cursor.fail("[{s}] has more than {d} {s} patterns; use broader ones.", .{ scope.name, max_scope_globs, key });
+        const covers = if (exports) "the files other contexts may import" else "the files it covers";
+        for (items) |glob| if (glob.len == 0) return self.cursor.fail("an {s} pattern of [{s}] is empty; name {s}.", .{ key, scope.name, covers });
+        const into = if (exports) &scope.exports else &scope.include;
+        @memcpy(into[0..items.len], items);
+        if (exports) scope.exports_len = items.len else scope.include_len = items.len;
+        const stored = if (exports) scope.exports_len else scope.include_len;
+        if (stored != items.len) assert.panic("[{s}] kept {d} {s} patterns of the {d} read", .{ scope.name, stored, key, items.len });
     }
 
     fn readPathSection(self: *TomlReader, config: *Config) Error!void {

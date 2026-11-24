@@ -1,0 +1,6 @@
+[contexts.billing]
+include = ["billing/**"]
+exports = ["billing/__init__.py"]
+
+[contexts.shipping]
+include = ["shipping/**"]

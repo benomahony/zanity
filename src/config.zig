@@ -36,6 +36,7 @@
 //!
 //!     [contexts.billing]                       # also [domains.<name>]; contexts apply after
 //!     include = ["src/billing/**"]             # domains, so a context's words win
+//!     exports = ["src/billing/__init__.py"]    # what another context may import from it
 //!     forbidden = ["discount"]
 //!
 //!     [contexts.billing.synonyms]
@@ -72,11 +73,23 @@ pub const Scope = struct {
     line: u32,
     include: [max_scope_globs][]const u8 = undefined,
     include_len: usize = 0,
+    /// A context's public surface: the files other contexts may import; none leaves it unchecked.
+    exports: [max_scope_globs][]const u8 = undefined,
+    exports_len: usize = 0,
 
     pub fn globs(self: *const Scope) []const []const u8 {
         if (self.include_len > max_scope_globs) assert.panic("[{s}] has {d} include patterns in room for {d}; TomlReader must refuse the pattern past max_scope_globs, so check where it adds include patterns", .{ self.name, self.include_len, max_scope_globs });
         if (self.name.len == 0) assert.panic("a domain or context has no name; TomlReader must reject an empty table name such as [domains.\"\"], so check where it reads table headers", .{});
         return self.include[0..self.include_len];
+    }
+
+    /// Whether the file at `relative`, a path from zanity.toml's directory, is one other contexts
+    /// may import from this one.
+    pub fn exported(self: *const Scope, relative: []const u8) bool {
+        if (self.exports_len > max_scope_globs) assert.panic("[{s}] has {d} exports patterns in room for {d}; TomlReader must refuse the pattern past max_scope_globs", .{ self.name, self.exports_len, max_scope_globs });
+        if (self.exports_len > 0 and !self.context) assert.panic("the domain [{s}] has exports; TomlReader accepts them only in contexts", .{self.name});
+        for (self.exports[0..self.exports_len]) |glob| if (pathMatches(glob, relative)) return true;
+        return false;
     }
 };
 

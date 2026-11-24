@@ -243,7 +243,7 @@ sqlite3 ~/.cache/zanity/zanity.db "
   LIMIT 20;"
 ```
 
-A check that finds nothing changed skips even that. The `run_analyses` table keeps, for each folder, set of paths and rules checked, the state of every file the last check read, and `run_findings` keeps that check's findings as JSON. When this zanity, `zanity.toml` and every file's contents are as they were, the check reports those findings without recomputing anything. With `--infer` or `--semantic` it also keeps the functions and definitions they read, so they run from the answers already in the store. `--fix` always checks, since it needs every file's facts.
+A check that finds nothing changed skips even that. The `run_analyses` table keeps, for each folder, set of paths and rules checked, the state of every file the last check read, and the chunks of that check's findings, which `run_chunks` keeps as JSON: one chunk per file's findings, named by its digest and shared between runs, so a check after an edit writes only the chunks that changed. When this zanity, `zanity.toml` and every file's contents are as they were, the check reports those findings without recomputing anything. With `--infer` or `--semantic` it also keeps the functions and definitions they read, so they run from the answers already in the store. `--fix` always checks, since it needs every file's facts.
 
 ### In an editor with `zanity lsp`
 
@@ -481,9 +481,11 @@ customer = ["client", "user"]
 
 # Parts of the code with words of their own: [domains.<name>] and [contexts.<name>] take
 # include (.gitignore patterns), forbidden and a synonyms table. A context applies after a
-# domain, and the same name may be defined once in each context.
+# domain, and the same name may be defined once in each context. A context's exports are the
+# files other contexts may import from it; context-leak reports imports of the rest.
 [contexts.billing]
 include = ["src/billing/**"]
+exports = ["src/billing/__init__.py"]
 forbidden = ["discount"]
 
 [contexts.billing.synonyms]
@@ -557,7 +559,8 @@ Rules marked *production* hold code to what safety-critical software needs and m
 | `structural-twins` | warning | functions whose bodies have the same structure, differing only in names and values, across files; tests and functions under six lines are left out |
 | `dead-symbol` | warning | a function, method, class or type nothing anywhere refers to; not exported or `pub` API, decorated or annotated code a framework reaches, tests, or entry points such as `main` |
 | `single-impl-abstraction` | information | an interface, trait, protocol or abstract class with exactly one implementation (not Go, whose interfaces are implicit) |
-| `cyclic-import` | warning | files that import each other, directly or through other files, reported once per cycle at the import that uses the fewest names, the cheapest to remove; not Python imports inside a function or under `if TYPE_CHECKING:`, JavaScript's `import()`, or TypeScript's `import type`, which make no cycle at run time, imports of a package such as `"react"`, or `import "./setup.js"`, run only for its side effects. TypeScript's `./rules.js` names `rules.ts`, as the compiler reads it, and Java's `com.acme.Policy.Kind` names `Policy.java`; `import com.acme.*` names a package, not a file. Rust's `use` paths are read from the crate root for `crate::`, the parent module for `super::` and the file's own module otherwise; a module is part of the modules it sits in, so `use super::Config` makes no cycle. Python, Zig, JavaScript, TypeScript, Java and Rust |
+| `cyclic-import` | warning | files that import each other, directly or through other files, reported once per cycle at the import that uses the fewest names, the cheapest to remove; not Python imports inside a function or under `if TYPE_CHECKING:`, JavaScript's `import()`, or TypeScript's `import type`, which make no cycle at run time, imports of a package such as `"react"`, or `import "./setup.js"`, run only for its side effects. TypeScript's `./rules.js` names `rules.ts`, as the compiler reads it, and Java's `com.acme.Policy.Kind` names `Policy.java`; `import com.acme.*` names a package, not a file. Rust's `use` paths are read from the crate root for `crate::`, the parent module for `super::` and the file's own module otherwise; a module is part of the modules it sits in, so `use super::Config` makes no cycle. Python, Zig, JavaScript, TypeScript, Java, Rust and Lua |
+| `context-leak` | warning | an import from one `[contexts.*]` of a file in another that its `exports` doesn't list, such as `from billing.ledger import post_entry` in `shipping/` when billing exports only `billing/__init__.py`; not imports within one context, from code in no context or only a domain, of a context with no `exports`, or that make no edge at run time, as cyclic-import reads them. The fix names the exported file to import from, and `--fix` rewrites a Python `from` import to the exported module when that module imports the same names from the same file. Python, Zig, JavaScript, TypeScript, Java, Rust and Lua |
 | `extractable-block` | information | in a long function, the longest run of statements that reads at most four names from before it, sets at most one read after it, and doesn't return or break out, so it can become a function of its own; with long-function on, it becomes that finding's fix |
 | `swallowed-error` | warning | an error handler that does nothing |
 | `empty-block` | warning | an empty block where code was expected |

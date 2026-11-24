@@ -64,6 +64,12 @@ pub const Import = struct {
     /// Whether `spec` joins a module to a name taken from it, which is an import only where that
     /// name is a module's own file, as `from . import billing` imports billing.py.
     submodule: bool = false,
+    /// Whether it binds the whole module to a name, as `import billing` does, rather than only
+    /// taking names from it.
+    bound: bool = false,
+    /// Where `spec` is written in the file, as bytes `spec_start..spec_end`, so a fix can rewrite it.
+    spec_start: u32 = 0,
+    spec_end: u32 = 0,
 };
 
 pub const Function = struct {

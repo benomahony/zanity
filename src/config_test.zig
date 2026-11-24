@@ -134,6 +134,8 @@ test "mistakes in zanity.toml name the line and what to write" {
     try expectProblem("[contexts]\n", "zanity.toml:1: '[contexts]' needs a name, such as [contexts.billing].");
     try expectProblem("[vocabulary.words]\n", "zanity.toml:1: '[vocabulary.words]' isn't a table zanity knows; the only one inside [vocabulary] is synonyms.");
     try expectProblem("[contexts.billing]\ninclude = [\"\"]\n", "zanity.toml:2: an include pattern of [billing] is empty; name the files it covers.");
+    try expectProblem("[contexts.billing]\nexports = [\"\"]\n", "zanity.toml:2: an exports pattern of [billing] is empty; name the files other contexts may import.");
+    try expectProblem("[domains.commerce]\nexports = [\"src/api.py\"]\n", "zanity.toml:2: [domains.commerce] can't have exports; only a context has a public surface, so declare it as [contexts.commerce].");
     try expectProblem("[paths]\n", "zanity.toml:1: '[paths]' needs a pattern for the files it covers, such as [paths.\"tests/**\"].");
     try expectProblem("[paths.\"\"]\n", "zanity.toml:1: a [paths] pattern is empty; name the files it covers, such as \"tests/**\".");
     try expectProblem("[paths.\"tests/\"]\nrules = [\"recursion\"]\n", "zanity.toml:2: 'rules' isn't a [paths] setting; the only one is disable.");
@@ -223,6 +225,7 @@ test "a zanity.toml's vocabulary bans words, maps aliases and scopes them to con
         \\
         \\[contexts.billing]
         \\include = ["src/billing/**"]
+        \\exports = ["src/billing/__init__.py"]
         \\forbidden = ["discount"]
         \\
         \\[contexts.billing.synonyms]
@@ -238,4 +241,6 @@ test "a zanity.toml's vocabulary bans words, maps aliases and scopes them to con
     try std.testing.expectEqual(@as(usize, 1), c.scopes_len);
     try std.testing.expectEqualStrings("billing", c.scopes[0].name);
     try std.testing.expect(c.scopes[0].context);
+    try std.testing.expect(c.scopes[0].exported("src/billing/__init__.py"));
+    try std.testing.expect(!c.scopes[0].exported("src/billing/ledger.py"));
 }

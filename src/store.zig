@@ -122,13 +122,12 @@ pub const Store = struct {
     use_context: *sqlite.sqlite3_stmt,
     trim_contexts: *sqlite.sqlite3_stmt,
     drop_unused_analyses: *sqlite.sqlite3_stmt,
-    find_run_analysis: *sqlite.sqlite3_stmt,
-    list_run_findings: *sqlite.sqlite3_stmt,
+    list_run_chunks: *sqlite.sqlite3_stmt,
     save_run_analysis: *sqlite.sqlite3_stmt,
-    clear_run_findings: *sqlite.sqlite3_stmt,
-    save_run_findings: *sqlite.sqlite3_stmt,
+    has_run_chunk: *sqlite.sqlite3_stmt,
+    save_run_chunk: *sqlite.sqlite3_stmt,
     trim_run_analyses: *sqlite.sqlite3_stmt,
-    trim_run_findings: *sqlite.sqlite3_stmt,
+    trim_run_chunks: *sqlite.sqlite3_stmt,
     false_positive: *sqlite.sqlite3_stmt,
     save_label: *sqlite.sqlite3_stmt,
     find_label: *sqlite.sqlite3_stmt,
@@ -383,7 +382,9 @@ fn openLocalCache(path: [:0]const u8) !*sqlite.sqlite3 {
     errdefer _ = sqlite.sqlite3_close_v2(db);
     if (sqlite.sqlite3_busy_timeout(db, busy_timeout_ms) != sqlite.ok) return sqlite.captureDatabaseFailure(db);
     const version = try sqlite.userVersion(db);
-    if (version < store_sql.schema_version) if (sqlite.sqlite3_exec(db, store_sql.migration, null, null, null) != sqlite.ok) return sqlite.captureDatabaseFailure(db);
+    inline for (store_sql.migrations, 0..) |migration, to| if (version < to and migration.len > 0) {
+        if (sqlite.sqlite3_exec(db, migration, null, null, null) != sqlite.ok) return sqlite.captureDatabaseFailure(db);
+    };
     if (sqlite.sqlite3_exec(db, store_sql.schema, null, null, null) != sqlite.ok) return sqlite.captureDatabaseFailure(db);
     if (version < store_sql.schema_version) if (sqlite.sqlite3_exec(db, std.fmt.comptimePrint("PRAGMA user_version = {d};", .{store_sql.schema_version}), null, null, null) != sqlite.ok) return sqlite.captureDatabaseFailure(db);
     if (db != handle.?) assert.panic("opened local-cache connection 0x{x}, expected SQLite's handle 0x{x}; openLocalCache() must return that handle", .{ @intFromPtr(db), @intFromPtr(handle.?) });

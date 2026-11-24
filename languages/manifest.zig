@@ -277,6 +277,10 @@ pub const Tables = struct {
     /// `com.acme.Outer.Inner` names `com/acme/Outer.java`, so the longest leading part of it that
     /// is a file is tried too.
     import_inner_names: bool = false,
+    /// Whether a file can offer what it imports to its own importers, as Python's
+    /// `from billing.ledger import post_entry` in `billing/__init__.py` or Rust's `pub use`;
+    /// Java cannot, so another context reaches a class only through one the context exports.
+    import_reexports: bool = true,
     /// Whether a top-level name that is not importable can be named only in its own file, as in
     /// Zig, and not across a package, as in Go.
     file_private: bool = false,

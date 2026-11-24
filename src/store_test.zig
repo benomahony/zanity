@@ -115,20 +115,23 @@ test "a store from before schema versions drops its old analyses and keeps worki
     const before = "DROP TABLE source_analyses; CREATE TABLE source_analyses (analysis_hash TEXT PRIMARY KEY, used_at TEXT NOT NULL); INSERT INTO source_analyses VALUES ('a', 'b'); PRAGMA user_version = 0;";
     if (sqlite.sqlite3_exec(old.db, before, null, null, null) != sqlite.ok) return sqlite.captureDatabaseFailure(old.db);
     const store = try openStore(arena, dir);
-    try std.testing.expectEqual(@as(f64, 2), try scalar(store.db, "SELECT user_version FROM pragma_user_version"));
+    try std.testing.expectEqual(@as(f64, @import("store_sql.zig").schema_version), try scalar(store.db, "SELECT user_version FROM pragma_user_version"));
     try std.testing.expectEqual(@as(f64, 0), try scalar(store.db, "SELECT count(*) FROM source_analyses"));
     try store.keepAnalysis(.{ .key = digest(&.{"analysis"}), .context = digest(&.{"context"}), .source = digest(&.{"source"}), .path = "src/a.py", .language = "lang-a", .result = "{\"findings\":[]}" });
     try std.testing.expectEqual(@as(f64, 1), try scalar(store.db, "SELECT count(*) FROM source_analyses WHERE context_hash != ''"));
 }
 
 const Chunks = struct {
-    parts: [3][]const u8,
+    parts: []const []const u8,
+    encoded: usize = 0,
     seen: usize = 0,
 
-    fn encode(self: *Chunks, chunk: usize) !?[]const u8 {
-        if (chunk > self.parts.len) assert.panic("asked for chunk {d} after {d} chunks ran out", .{ chunk, self.parts.len });
+    fn encode(self: *Chunks) !?[]const u8 {
+        if (self.encoded > self.parts.len) assert.panic("asked for chunk {d} after {d} chunks ran out", .{ self.encoded, self.parts.len });
         if (self.seen != 0) assert.panic("encoding chunks after reading {d} back", .{self.seen});
-        return if (chunk < self.parts.len) self.parts[chunk] else null;
+        if (self.encoded == self.parts.len) return null;
+        self.encoded += 1;
+        return self.parts[self.encoded - 1];
     }
 
     fn visit(self: *Chunks, json: []const u8) !void {
@@ -139,28 +142,49 @@ const Chunks = struct {
     }
 };
 
-test "a run's findings are found again in the order they were kept, only while its files are unchanged" {
+fn keepRun(store: *const Store, scope: []const u8, parts: []const []const u8) !void {
+    if (scope.len == 0 or parts.len == 0) assert.panic("keeping a test run needs a scope and chunks, not '{s}' and {d}", .{ scope, parts.len });
+    var chunks: Chunks = .{ .parts = parts };
+    var names: [4096]u8 = undefined;
+    try store_runs.keepRunAnalysis(store, .{ .run = .{ .scope = digest(&.{scope}), .state = digest(&.{"files"}) }, .checked = 7, .keep = 2, .chunks = &names }, &chunks, Chunks.encode);
+    if (chunks.encoded != parts.len) assert.panic("the store encoded {d} of {d} chunks; it asks until encode() returns null", .{ chunks.encoded, parts.len });
+}
+
+test "a run's chunks are found again in order while its files are unchanged, and runs share them" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
     const arena = arena_state.allocator();
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
-    const dir = try tmp.dir.realPathFileAlloc(std.testing.io, ".", arena);
-    var environ: std.process.Environ.Map = .init(arena);
-    try environ.put("ZANITY_STORE", try std.fs.path.join(arena, &.{ dir, "store.db" }));
-    const store = try Store.initStore(std.heap.page_allocator, std.testing.io, &environ, 8 << 20);
-    var chunks: Chunks = .{ .parts = .{ "{\"n\":0}", "{\"n\":1}", "{\"n\":2}" } };
+    const store = try openStore(arena, try tmp.dir.realPathFileAlloc(std.testing.io, ".", arena));
+    const parts = [_][]const u8{ "{\"n\":0}", "{\"n\":1}", "{\"n\":2}" };
+    try keepRun(&store, "scope", &parts);
+    var chunks: Chunks = .{ .parts = &parts };
     const run: store_runs.RunScope = .{ .scope = digest(&.{"scope"}), .state = digest(&.{"files"}) };
-    try store_runs.keepRunAnalysis(&store, .{ .run = run, .checked = 7, .keep = 2 }, &chunks, Chunks.encode);
     try std.testing.expectEqual(@as(?u32, 7), try store_runs.eachRunChunk(&store, run, &chunks, Chunks.visit));
     try std.testing.expectEqual(@as(usize, 3), chunks.seen);
     try std.testing.expectEqual(@as(?u32, null), try store_runs.eachRunChunk(&store, .{ .scope = run.scope, .state = digest(&.{"edited"}) }, &chunks, Chunks.visit));
-    for ([_][]const u8{ "other", "another" }) |name| {
-        chunks.seen = 0;
-        try store_runs.keepRunAnalysis(&store, .{ .run = .{ .scope = digest(&.{name}), .state = run.state }, .checked = 1, .keep = 2 }, &chunks, Chunks.encode);
-    }
+    try keepRun(&store, "other", &parts);
+    try std.testing.expectEqual(@as(f64, 3), try scalar(store.db, "SELECT count(*) FROM run_chunks"));
+    try keepRun(&store, "another", &.{"{\"n\":3}"});
     try std.testing.expectEqual(@as(f64, 2), try scalar(store.db, "SELECT count(*) FROM run_analyses"));
-    try std.testing.expectEqual(@as(f64, 6), try scalar(store.db, "SELECT count(*) FROM run_findings"));
+    try std.testing.expectEqual(@as(f64, 4), try scalar(store.db, "SELECT count(*) FROM run_chunks"));
+    try keepRun(&store, "other", &.{"{\"n\":3}"});
+    try std.testing.expectEqual(@as(f64, 1), try scalar(store.db, "SELECT count(*) FROM run_chunks"));
+}
+
+test "a run whose chunk the store has lost is checked again" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const store = try openStore(arena, try tmp.dir.realPathFileAlloc(std.testing.io, ".", arena));
+    const parts = [_][]const u8{ "{\"n\":0}", "{\"n\":1}" };
+    try keepRun(&store, "scope", &parts);
+    if (sqlite.sqlite3_exec(store.db, "DELETE FROM run_chunks WHERE result = '{\"n\":1}'", null, null, null) != sqlite.ok) return sqlite.captureDatabaseFailure(store.db);
+    var chunks: Chunks = .{ .parts = &parts };
+    try std.testing.expectEqual(@as(?u32, null), try store_runs.eachRunChunk(&store, .{ .scope = digest(&.{"scope"}), .state = digest(&.{"files"}) }, &chunks, Chunks.visit));
 }
 
 /// The first column of the first row `sql` returns, for reading back what a test kept.

@@ -1,0 +1,3 @@
+rules: context-leak
+exit: 0
+shipping/dispatch.py:1:1: warning [context-leak]

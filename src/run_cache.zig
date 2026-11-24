@@ -144,40 +144,73 @@ fn forget(ws: *Workspace, text_start: usize) void {
 /// Keeps the findings checking the files produced, for the next run with the same key. A store
 /// that can't hold them only costs the next run its shortcut.
 pub fn keep(ws: *Workspace, run: Key) void {
-    if (ws.analysis.len == 0) assert.panic("keeping a run in no memory; reserve memory.Limits.analysis_bytes at startup", .{});
+    if (ws.analysis.len < 2) assert.panic("keeping a run in {d} bytes; reserve memory.Limits.analysis_bytes at startup", .{ws.analysis.len});
     if (ws.checked > ws.files.len) assert.panic("keeping a run that checked {d} of {d} files; count each file once", .{ ws.checked, ws.files.len });
     const source_cache = if (ws.source_cache) |*cache| cache else return;
     const checked = std.math.cast(u32, ws.checked) orelse return;
-    store_runs.keepRunAnalysis(source_cache, .{ .run = run, .checked = checked, .keep = kept_runs }, ws, encodeChunk) catch return;
+    const middle = ws.analysis.len / 2;
+    var encoder: Encoder = .{ .ws = ws, .out = ws.analysis[0..middle] };
+    store_runs.keepRunAnalysis(source_cache, .{ .run = run, .checked = checked, .keep = kept_runs, .chunks = ws.analysis[middle..] }, &encoder, Encoder.next) catch return;
 }
 
-fn encodeChunk(ws: *Workspace, chunk: usize) !?[]const u8 {
-    const findings = ws.findings.items();
-    const facts = &ws.facts;
-    const units: []Unit = if (facts.collect_units) facts.units.items() else &.{};
-    const definitions: []Definition = if (ws.embedding != null) facts.definitions.items() else &.{};
-    if (ws.analysis.len == 0) assert.panic("encoding a cached run into no memory; reserve memory.Limits.analysis_bytes at startup", .{});
-    const start = std.math.mul(usize, chunk, chunk_items) catch return null;
-    if (start >= @max(findings.len, units.len, definitions.len) and chunk > 0) return null;
-    var out: Io.Writer = .fixed(ws.analysis);
-    try std.json.Stringify.value(Chunk{
-        .format = run_format,
-        .findings = window(Finding, findings, start),
-        .units = window(Unit, units, start),
-        .definitions = window(Definition, definitions, start),
-    }, .{}, &out);
-    if (out.buffered().len == 0) assert.panic("chunk {d} of a run encoded as nothing; JSON always holds the chunk's fields", .{chunk});
-    return out.buffered();
-}
+/// Cuts a run's findings, then the units and definitions --infer and --semantic read, into chunks
+/// of one path's consecutive items, so a chunk stays the same JSON while its file and what other
+/// files say about it are unchanged, and the store keeps it once for every run.
+const Encoder = struct {
+    ws: *Workspace,
+    out: []u8,
+    list: enum { findings, units, definitions, done } = .findings,
+    at: usize = 0,
+    chunks: usize = 0,
 
-/// The items of chunk starting at `start`, which is past the end once a shorter list runs out.
-fn window(comptime T: type, items: []T, start: usize) []T {
-    if (start % chunk_items != 0) assert.panic("a chunk starts at item {d}, not a multiple of {d}", .{ start, chunk_items });
-    const from = @min(items.len, start);
-    const to = @min(items.len, start + chunk_items);
-    if (to < from) assert.panic("chunk at {d} ends at {d}, before it starts at {d}", .{ start, to, from });
-    return items[from..to];
-}
+    fn next(self: *Encoder) !?[]const u8 {
+        if (self.out.len == 0) assert.panic("encoding a cached run into no memory; reserve memory.Limits.analysis_bytes at startup", .{});
+        if (self.list == .done and self.at != 0) assert.panic("the run encoder finished its lists at item {d}; moving to a list starts it at 0", .{self.at});
+        const facts = &self.ws.facts;
+        const units: []Unit = if (facts.collect_units) facts.units.items() else &.{};
+        const definitions: []Definition = if (self.ws.embedding != null) facts.definitions.items() else &.{};
+        for (0..4) |_| {
+            const chunk: Chunk = switch (self.list) {
+                .findings => .{ .format = run_format, .findings = self.group(Finding, self.ws.findings.items()) orelse continue },
+                .units => .{ .format = run_format, .findings = &.{}, .units = self.group(Unit, units) orelse continue },
+                .definitions => .{ .format = run_format, .findings = &.{}, .definitions = self.group(Definition, definitions) orelse continue },
+                .done => {
+                    if (self.chunks > 0) return null;
+                    self.chunks += 1;
+                    return try self.encode(.{ .format = run_format, .findings = &.{} });
+                },
+            };
+            self.chunks += 1;
+            return try self.encode(chunk);
+        }
+        assert.panic("the run encoder passed its {d} lists without ending; each pass moves to the next list", .{4});
+    }
+
+    /// The next run of `items` with one path, at most chunk_items long; null once the list is
+    /// used up, which moves the encoder to the next list.
+    fn group(self: *Encoder, comptime T: type, items: []T) ?[]T {
+        if (self.at > items.len) assert.panic("the run encoder is at item {d} of {d}; it only moves past items it encoded", .{ self.at, items.len });
+        if (self.at == items.len) {
+            self.list = @fromBackingInt(@intCast(@backingInt(self.list) + 1));
+            self.at = 0;
+            return null;
+        }
+        const start = self.at;
+        var end = start + 1;
+        while (end < items.len and end - start < chunk_items and std.mem.eql(u8, items[end].path, items[start].path)) end += 1;
+        if (end <= start) assert.panic("a chunk of the run from item {d} ends at {d}; each chunk holds at least one item", .{ start, end });
+        self.at = end;
+        return items[start..end];
+    }
+
+    fn encode(self: *Encoder, chunk: Chunk) ![]const u8 {
+        if (!std.mem.eql(u8, chunk.format, run_format)) assert.panic("encoding a run chunk in format '{s}', not {s}; every chunk is in this zanity's format", .{ chunk.format, run_format });
+        var out: Io.Writer = .fixed(self.out);
+        try std.json.Stringify.value(chunk, .{}, &out);
+        if (out.buffered().len == 0) assert.panic("chunk {d} of a run encoded as nothing; JSON always holds the chunk's fields", .{self.chunks});
+        return out.buffered();
+    }
+};
 
 /// Adds `bytes` with its length first, so no two lists of parts hash alike.
 fn part(hash: *Sha256, bytes: []const u8) void {

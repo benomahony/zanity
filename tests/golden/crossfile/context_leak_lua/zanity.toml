@@ -1,0 +1,6 @@
+[contexts.billing]
+include = ["billing/**"]
+exports = ["billing/api.lua"]
+
+[contexts.shipping]
+include = ["shipping/**"]

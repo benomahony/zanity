@@ -165,3 +165,55 @@ test "--fix renames a non-canonical name in every file that writes it, unless th
         try std.testing.expectEqualStrings(expected, try tmp.dir.readFileAlloc(io, f[0], arena, .unlimited));
     }
 }
+
+test "context-leak tells Java, which cannot re-export, to call through the exported class" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    const io = std.testing.io;
+    const zanity = try Io.Dir.cwd().realPathFileAlloc(io, paths.zanity, arena);
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.createDirPath(io, "src/com/acme/billing");
+    try tmp.dir.createDirPath(io, "src/com/acme/shipping");
+    const files = [_][2][]const u8{
+        .{ "zanity.toml", "[contexts.billing]\ninclude = [\"src/com/acme/billing/**\"]\nexports = [\"src/com/acme/billing/Billing.java\"]\n\n[contexts.shipping]\ninclude = [\"src/com/acme/shipping/**\"]\n" },
+        .{ "src/com/acme/billing/Billing.java", "package com.acme.billing;\n\npublic class Billing {\n    public static int post(int amount) {\n        return Ledger.postEntry(amount);\n    }\n}\n" },
+        .{ "src/com/acme/billing/Ledger.java", "package com.acme.billing;\n\npublic class Ledger {\n    public static int postEntry(int amount) {\n        return amount;\n    }\n}\n" },
+        .{ "src/com/acme/shipping/Dispatch.java", "package com.acme.shipping;\n\nimport com.acme.billing.Ledger;\n\npublic class Dispatch {\n    public static int dispatch(int cost) {\n        return Ledger.postEntry(cost);\n    }\n}\n" },
+    };
+    for (files) |f| try tmp.dir.writeFile(io, .{ .sub_path = f[0], .data = f[1] });
+    const work = try std.fs.path.join(arena, &.{ ".zig-cache", "tmp", &tmp.sub_path });
+    const run = try std.process.run(arena, io, .{ .argv = &.{ zanity, "check", "--plain", "--rules", "context-leak", "." }, .cwd = .{ .path = work } });
+    try expectOutput(run.stdout, &.{"fix=\"Call through 'src/com/acme/billing/Billing.java', which billing exports, instead of importing Ledger from 'src/com/acme/billing/Ledger.java'; if 'src/com/acme/billing/Billing.java' does not offer what you need yet, add a method there that calls it.\""}, &.{"re-export"});
+}
+
+test "--fix takes a leaked name from the context's exported module only when that module re-exports the same name" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    const io = std.testing.io;
+    const zanity = try Io.Dir.cwd().realPathFileAlloc(io, paths.zanity, arena);
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.createDirPath(io, "billing");
+    try tmp.dir.createDirPath(io, "tax");
+    try tmp.dir.createDirPath(io, "shipping");
+    const files = [_][3][]const u8{
+        .{ "zanity.toml", "[contexts.billing]\ninclude = [\"billing/**\"]\nexports = [\"billing/__init__.py\"]\n\n[contexts.tax]\ninclude = [\"tax/**\"]\nexports = [\"tax/__init__.py\"]\n\n[contexts.shipping]\ninclude = [\"shipping/**\"]\n", "" },
+        .{ "billing/__init__.py", "from billing.ledger import post_entry\n", "" },
+        .{ "billing/ledger.py", "def post_entry(amount):\n    return amount\n", "" },
+        .{ "tax/__init__.py", "def rate(amount):\n    return amount\n", "" },
+        .{ "tax/rates.py", "def rate(amount):\n    return amount * 2\n", "" },
+        .{ "shipping/dispatch.py", "from billing.ledger import post_entry\nfrom tax.rates import rate\nimport billing.ledger\n\n\ndef dispatch(cost):\n    return post_entry(rate(cost)) + billing.ledger.post_entry(cost)\n", "from billing import post_entry\nfrom tax.rates import rate\nimport billing.ledger\n\n\ndef dispatch(cost):\n    return post_entry(rate(cost)) + billing.ledger.post_entry(cost)\n" },
+    };
+    for (files) |f| try tmp.dir.writeFile(io, .{ .sub_path = f[0], .data = f[1] });
+    const work = try std.fs.path.join(arena, &.{ ".zig-cache", "tmp", &tmp.sub_path });
+    const run = try std.process.run(arena, io, .{ .argv = &.{ zanity, "check", "--fix", "--plain", "--rules", "context-leak", "." }, .cwd = .{ .path = work } });
+    try expectOutput(run.stdout, &.{ "fix=\"Import rate from 'tax/__init__.py', which tax exports, not from 'tax/rates.py'", "line=3" }, &.{"line=1\t"});
+    try expectOutput(run.stderr, &.{"fixed 1 finding in 1 file"}, &.{});
+    for (files) |f| {
+        const expected = if (f[2].len > 0) f[2] else f[1];
+        try std.testing.expectEqualStrings(expected, try tmp.dir.readFileAlloc(io, f[0], arena, .unlimited));
+    }
+}
