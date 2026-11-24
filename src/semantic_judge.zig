@@ -5,7 +5,9 @@ const store = @import("store.zig");
 const store_vectors = @import("store_vectors.zig");
 const embed = @import("embed.zig");
 const rules = @import("rules.zig");
+const strings = @import("strings.zig");
 const semantic = @import("semantic.zig");
+const intent = @import("intent.zig");
 const facts_module = @import("facts.zig");
 const Unit = facts_module.Unit;
 const Definition = facts_module.Definition;
@@ -23,7 +25,7 @@ pub const Embedded = struct {
 const Judging = struct {
     named: memory.Bounded(semantic.Named),
     bodies: memory.Bounded(semantic.Coded),
-    described: memory.Bounded(semantic.Described),
+    described: memory.Bounded(intent.Described),
     insights: memory.Bounded(semantic.Insight),
     seen: std.DynamicBitSetUnmanaged,
     centroids: []f32,
@@ -56,6 +58,23 @@ fn twinned(findings: []const Finding, unit: *const Unit) bool {
     return found;
 }
 
+/// Gathers the bodies semantic-coupling compares and the functions intent-mismatch reads. A
+/// function a framework or the operating system calls by a fixed name, such as `main`, has a
+/// name its author didn't choose, which says nothing for its docstring and body to agree with.
+fn collectFunctions(e: *const embed.Embedding, j: *Judging, settled: []const Finding) error{LimitExceeded}!void {
+    if (e.dimensions == 0) assert.panic("collecting {d} functions to compare before any vector was fetched; fetch() runs first", .{e.units.len});
+    const before = j.bodies.len + j.described.len;
+    for (e.units.items()) |row| {
+        const u = row.unit;
+        const subject = e.entryHash(row.body);
+        if (u.kind != .@"test" and u.end_line - u.line + 1 >= rules.min_twin_lines and !twinned(settled, u)) try j.bodies.add(.{ .name = u.name, .path = u.path, .line = u.line, .column = u.column, .vector = e.vector(row.body), .subject = subject, .source = u.source });
+        const doc = row.doc orelse continue;
+        if (strings.contains(&rules.entry_points, u.name)) continue;
+        try j.described.add(.{ .name = u.name, .path = u.path, .line = u.line, .column = u.column, .vectors = .{ e.vector(row.name), e.vector(doc), e.vector(row.body) }, .doc = embed.docOf(u.source), .subject = subject });
+    }
+    if (j.bodies.len + j.described.len - before > 2 * e.units.len) assert.panic("collected {d} functions to compare from {d}; each is added at most once to each list", .{ j.bodies.len + j.described.len - before, e.units.len });
+}
+
 pub fn judge(e: *embed.Embedding, run: Embedded) !void {
     if (run.enabled.len == 0) assert.panic("judging embeddings with no rules enabled; a check enables at least one", .{});
     if (e.entries.len != 0) assert.panic("judging {d} texts collected before; judge() collects them", .{e.entries.len});
@@ -70,19 +89,13 @@ pub fn judge(e: *embed.Embedding, run: Embedded) !void {
         const d = row.definition;
         try j.named.add(.{ .name = d.name, .path = d.path, .line = d.line, .column = d.column, .scope = d.scope, .vector = e.vector(row.name), .subject = e.entryHash(row.name) });
     }
-    const settled = run.findings.items();
-    for (e.units.items()) |row| {
-        const u = row.unit;
-        const subject = e.entryHash(row.body);
-        if (u.kind != .@"test" and u.end_line - u.line + 1 >= rules.min_twin_lines and !twinned(settled, u)) try j.bodies.add(.{ .name = u.name, .path = u.path, .line = u.line, .column = u.column, .vector = e.vector(row.body), .subject = subject, .source = u.source });
-        if (row.doc) |doc| try j.described.add(.{ .name = u.name, .path = u.path, .line = u.line, .column = u.column, .vectors = .{ e.vector(row.name), e.vector(doc), e.vector(row.body) }, .subject = subject });
-    }
+    try collectFunctions(e, &j, run.findings.items());
     const scratch: semantic.Room = .{ .parent = e.parent, .cluster = e.cluster, .centroids = j.centroids, .scores = j.scores, .refs = j.refs, .text = &e.text };
     const t = run.thresholds;
     if (run.enabled.enabled("near-synonym")) try semantic.nearSynonyms(scratch, j.named.items(), t.@"near-synonym", &j.insights);
     if (run.enabled.enabled("context-outlier")) try semantic.contextOutliers(scratch, j.named.items(), t.@"context-outlier", &j.insights);
     if (run.enabled.enabled("semantic-coupling")) try semantic.semanticCoupling(scratch, j.bodies.items(), t.@"semantic-coupling", &j.insights);
-    if (run.enabled.enabled("intent-mismatch")) try semantic.intentMismatch(scratch, j.described.items(), t.@"intent-mismatch", &j.insights);
+    if (run.enabled.enabled("intent-mismatch")) try intent.intentMismatch(scratch, j.described.items(), t.@"intent-mismatch", &j.insights);
     try report(e, j.insights.items(), run.findings);
 }
 

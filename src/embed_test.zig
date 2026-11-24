@@ -53,6 +53,14 @@ const purchases =
     \\    invoice.paid = True
     \\    return invoice
     \\
+    \\
+    \\
+    \\def main():
+    \\    """Send a charge to a card."""
+    \\    lines = order.lines
+    \\    fetched = lines.fetch()
+    \\    return fetched
+    \\
 ;
 
 const EmbedRun = struct {
@@ -104,11 +112,11 @@ test "--semantic reports names that mean the same, names in the wrong context an
     defer project.tmp.cleanup();
     defer project.child.kill(io);
     const first = try project.run(arena, io, &.{ "check", ".", "--semantic", "--plain" });
-    try expectOutput(first.stdout, &.{ "'retrieve_purchase' and 'fetch_order' name the same idea in unrelated words", "'retrieve_purchase' reads like core vocabulary but lives in billing", "'charge_card' reads like billing vocabulary but lives in core", "'charge_invoice' does what 'send_invoice' in src/core/orders.py:20 does", "'order_lines_fetch': its docstring disagrees with its body and name" }, &.{});
-    try expectOutput(first.stderr, &.{"0 from the store, 18 embedded by google/embeddinggemma-2"}, &.{});
+    try expectOutput(first.stdout, &.{ "'retrieve_purchase' and 'fetch_order' name the same idea in unrelated words", "'retrieve_purchase' reads like core vocabulary but lives in billing", "'charge_card' reads like billing vocabulary but lives in core", "'charge_invoice' does what 'send_invoice' in src/core/orders.py:20 does", "'order_lines_fetch': its docstring disagrees with its body and name", "fix=\"Rewrite the docstring \\\"Send a charge to a card.\\\" to say what 'order_lines_fetch' does, which its body does too.\"" }, &.{"'main': its"});
+    try expectOutput(first.stderr, &.{"0 from the store, 20 embedded by google/embeddinggemma-2"}, &.{});
     const second = try project.run(arena, io, &.{ "check", ".", "--semantic", "--plain" });
     try std.testing.expectEqualStrings(first.stdout, second.stdout);
-    try expectOutput(second.stderr, &.{"18 from the store, 0 embedded"}, &.{});
+    try expectOutput(second.stderr, &.{"20 from the store, 0 embedded"}, &.{});
 }
 
 test "zanity search lists the function closest to the query as path:line:col: text" {

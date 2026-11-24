@@ -43,15 +43,6 @@ pub const Coded = struct {
     source: []const u8 = "",
 };
 
-pub const Described = struct {
-    name: []const u8,
-    path: []const u8,
-    line: u32 = 0,
-    column: u32 = 0,
-    vectors: [3][]const f32,
-    subject: store.Digest = @splat('0'),
-};
-
 pub const Insight = struct {
     rule: []const u8,
     path: []const u8,
@@ -257,37 +248,12 @@ pub fn semanticCoupling(scratch: Room, items: []const Coded, threshold: f64, out
     }
 }
 
-const parts = [3][]const u8{ "name", "docstring", "body" };
+pub const east = [_]f32{ 1, 0 };
+pub const east_ish = [_]f32{ 0.96, 0.28 };
+pub const north = [_]f32{ 0, 1 };
 
-pub fn intentMismatch(scratch: Room, items: []const Described, margin: f64, out: *memory.Bounded(Insight)) !void {
-    if (!(margin > 0 and margin <= 1)) assert.panic("intent-mismatch at a margin of {d}", .{margin});
-    if (items.len > 0 and items[0].vectors[0].len == 0) assert.panic("'{s}' has a name vector with no values", .{items[0].name});
-    for (items) |item| {
-        var odd: usize = 0;
-        var score: f64 = -2;
-        for (0..3) |x| {
-            const a = item.vectors[(x + 1) % 3];
-            const b = item.vectors[(x + 2) % 3];
-            const s: f64 = vectors.cosine(a, b) - @max(vectors.cosine(item.vectors[x], a), vectors.cosine(item.vectors[x], b));
-            if (s <= score) continue;
-            score = s;
-            odd = x;
-        }
-        const message = try scratch.text.format("'{s}': its {s} disagrees with its {s} and {s}, which agree with each other ({d:.2} apart).", .{ item.name, parts[odd], parts[(odd + 1) % 3], parts[(odd + 2) % 3], score });
-        const fix = switch (odd) {
-            0 => "Rename it to say what its docstring and body say it does.",
-            1 => "Update the docstring to say what the name and body say it does.",
-            else => "Check the body does what its name and docstring promise, and fix whichever is wrong.",
-        };
-        try out.add(.{ .rule = "intent-mismatch", .path = item.path, .line = item.line, .column = item.column, .name = item.name, .score = score, .threshold = margin, .subject = item.subject, .message = message, .fix = fix });
-    }
-}
-
-const east = [_]f32{ 1, 0 };
-const east_ish = [_]f32{ 0.96, 0.28 };
-const north = [_]f32{ 0, 1 };
-
-const Fixture = struct {
+/// Room for one rule's insights in a test, and the scratch it works in.
+pub const Fixture = struct {
     parent: [8]u32 = undefined,
     cluster: [8]u32 = undefined,
     centroids: [64]f32 = undefined,
@@ -298,7 +264,7 @@ const Fixture = struct {
     found: [8]Insight = undefined,
     insights: memory.Bounded(Insight) = undefined,
 
-    fn scratch(self: *Fixture) Room {
+    pub fn scratch(self: *Fixture) Room {
         if (self.bytes.len == 0 or self.found.len == 0) assert.panic("a fixture with no room for insights", .{});
         self.text = .{ .buffer = &self.bytes };
         if (self.text.used != 0) assert.panic("a fresh fixture has {d} bytes of text in use", .{self.text.used});
@@ -306,7 +272,7 @@ const Fixture = struct {
         return .{ .parent = &self.parent, .cluster = &self.cluster, .centroids = &self.centroids, .scores = &self.scores, .refs = &self.refs, .text = &self.text };
     }
 
-    fn fired(self: *Fixture) usize {
+    pub fn fired(self: *Fixture) usize {
         if (self.insights.len > self.found.len) assert.panic("{d} insights in room for {d}", .{ self.insights.len, self.found.len });
         var count: usize = 0;
         for (self.insights.items()) |i| count += @intFromBool(i.fired());
@@ -422,12 +388,4 @@ test "semantic-coupling leaves bodies in the same file to structural rules" {
     const bodies = [_]Coded{ .{ .name = "charge", .path = "a.py", .vector = &east }, .{ .name = "bill", .path = "a.py", .vector = &east_ish } };
     try semanticCoupling(f.scratch(), &bodies, 0.9, &f.insights);
     try std.testing.expectEqual(@as(usize, 0), f.insights.len);
-}
-
-test "intent-mismatch names the one of name, docstring and body that disagrees" {
-    var f: Fixture = .{};
-    const described = [_]Described{ .{ .name = "send_invoice", .path = "a.py", .vectors = .{ &north, &east, &east_ish } }, .{ .name = "charge", .path = "a.py", .vectors = .{ &east, &east_ish, &.{ 0.98, 0.2 } } } };
-    try intentMismatch(f.scratch(), &described, 0.15, &f.insights);
-    try std.testing.expectEqual(@as(usize, 1), f.fired());
-    try std.testing.expect(std.mem.indexOf(u8, f.found[0].message, "its name disagrees with its docstring and body") != null);
 }

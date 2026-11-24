@@ -19,12 +19,6 @@ test {
     _ = @import("ignore.zig");
     _ = @import("catalogue_test.zig");
     _ = @import("docs_test.zig");
-    _ = @import("infer.zig");
-    _ = @import("embed.zig");
-    _ = @import("vectors.zig");
-    _ = @import("semantic.zig");
-    _ = @import("body_calls.zig");
-    _ = @import("cmd_search.zig");
     _ = @import("scope.zig");
     _ = @import("schema.zig");
     _ = @import("assert.zig");
@@ -46,4 +40,14 @@ test {
     _ = @import("release_fix_test.zig");
     _ = @import("release_checks.zig");
     _ = @import("rename.zig");
+}
+
+test "embedding, inference and search" {
+    _ = @import("infer.zig");
+    _ = @import("embed.zig");
+    _ = @import("vectors.zig");
+    _ = @import("semantic.zig");
+    _ = @import("intent.zig");
+    _ = @import("body_calls.zig");
+    _ = @import("cmd_search.zig");
 }
