@@ -244,7 +244,7 @@ pub fn semanticCoupling(scratch: Room, items: []const Coded, threshold: f64, out
         if (best[j] == i and before(b, a)) continue;
         const score = scores[i];
         if (score >= threshold and shareHelper(items, i, j)) continue;
-        try out.add(.{ .rule = "semantic-coupling", .path = a.path, .line = a.line, .column = a.column, .name = a.name, .score = score, .threshold = threshold, .subject = a.subject, .message = try scratch.text.format("'{s}' does what '{s}' in {s}:{d} does (cosine {d:.2}), though their code differs.", .{ a.name, b.name, b.path, b.line + 1, score }) });
+        try out.add(.{ .rule = "semantic-coupling", .path = a.path, .line = a.line, .column = a.column, .name = a.name, .score = score, .threshold = threshold, .subject = a.subject, .message = try scratch.text.format("'{s}' does what '{s}' in {s}:{d} does (cosine {d:.2}), though their code differs.", .{ a.name, b.name, b.path, b.line + 1, score }), .fix = try scratch.text.format("Keep one of '{s}' ({s}:{d}) and '{s}' ({s}:{d}), call it where the other is called and delete the other; if they differ on purpose, rename each to say how.", .{ a.name, a.path, a.line + 1, b.name, b.path, b.line + 1 }) });
     }
 }
 
@@ -363,6 +363,7 @@ test "semantic-coupling pairs bodies in different files once, at the first" {
     try semanticCoupling(f.scratch(), &bodies, 0.9, &f.insights);
     try std.testing.expectEqual(@as(usize, 1), f.fired());
     try std.testing.expectEqualStrings("charge", f.found[0].name);
+    try std.testing.expectEqualStrings("Keep one of 'charge' (a.py:1) and 'bill' (b.py:1), call it where the other is called and delete the other; if they differ on purpose, rename each to say how.", f.found[0].fix);
 }
 
 test "semantic-coupling leaves a function and the one it calls alone, since a wrapper reads like what it wraps" {
