@@ -117,8 +117,8 @@ fn residentCheck(self: *LanguageServer, into: *Results, resident: *Resident) !?[
             try self.show(1, try self.scratch.text.format("zanity check failed in {s}: {s} {s}", .{ self.root, failure.message, failure.hint }));
             return null;
         },
-        // zanity.toml asks the model, which only the command line's check does.
-        error.InferenceEnabled => return spawnedCheck(self, into),
+        // zanity.toml asks the model or embeds, which only the command line's check does.
+        error.InferenceEnabled, error.EmbeddingEnabled => return spawnedCheck(self, into),
         else => return e,
     };
     const rows = resident.rows();

@@ -152,7 +152,7 @@ pub fn connectEmbedding(ctx: *zclig.Context, ws: *Workspace, selected: *rules.Se
     const settings = ws.settings orelse assert.panic("connecting --semantic before zanity.toml was read; read it first", .{});
     const server: embed.Endpoint = .{ .environ = environ, .url = settings.semantic.url, .model = settings.semantic.model, .api_key_env = settings.semantic.api_key_env };
     ws.embedding = embed.Embedding.initEmbedding(std.heap.page_allocator, ws.io, ws.limits, server) catch |e| switch (e) {
-        error.StoreUnavailable => return ctx.fail(.io, try storeProblem(ws), "Check that the cache directory is writable, or set ZANITY_STORE to a file zanity can create."),
+        error.StoreUnavailable => return ctx.fail(.io, try storeProblem(ws, check_paths.embedding_store), "Check that the cache directory is writable, or set ZANITY_STORE to a file zanity can create."),
         else => return e,
     };
     ws.embedding.?.batch = settings.semantic.batch orelse embed.default_batch;
@@ -171,7 +171,7 @@ fn connectInference(ctx: *zclig.Context, ws: *Workspace, selected: *rules.Set, a
     const server: infer.Server = .{ .environ = environ, .url = settings.url, .model = settings.model, .api_key_env = settings.api_key_env };
     ws.inference = infer.Inference.initInference(std.heap.page_allocator, ws.io, ws.limits, server) catch |e| switch (e) {
         error.MissingApiKey => return ctx.fail(.usage, try ws.text.format("--infer asks TypeSafe's API, which needs an API key in {s}.", .{server.keyVariable()}), try ws.text.format("Set {s}; or point [infer] url in zanity.toml at another System One server, such as a local Kev; or run without --infer.", .{server.keyVariable()})),
-        error.StoreUnavailable => return ctx.fail(.io, try storeProblem(ws), "Check that the cache directory is writable, or set ZANITY_STORE to a file zanity can create."),
+        error.StoreUnavailable => return ctx.fail(.io, try storeProblem(ws, check_paths.infer_store), "Check that the cache directory is writable, or set ZANITY_STORE to a file zanity can create."),
         else => return e,
     };
     ws.inference.?.concurrency = settings.concurrency orelse infer.default_concurrency;

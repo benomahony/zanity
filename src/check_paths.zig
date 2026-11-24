@@ -123,7 +123,7 @@ pub fn checkPaths(ctx: *zclig.Context, ws: *Workspace, options: CheckOptions, se
     const units = ws.facts.units;
     if (ws.inference) |*inference| inference.judge(units.items(), &ws.findings, selected) catch |e| switch (e) {
         error.AskFailed => return ctx.fail(.io, infer.failure, infer.advice),
-        error.StoreUnavailable => return ctx.fail(.io, try storeProblem(ws), "Check that the cache directory is writable and not full, then run again."),
+        error.StoreUnavailable => return ctx.fail(.io, try storeProblem(ws, infer_store), "Check that the cache directory is writable and not full, then run again."),
         else => return e,
     };
     if (ws.inference) |*inference| try inference.summarise(ctx);
@@ -231,7 +231,7 @@ fn judgeEmbeddings(ctx: *zclig.Context, ws: *Workspace, embedding: *embed.Embedd
     const units = ws.facts.units;
     semantic_judge.judge(embedding, .{ .units = units.items(), .definitions = definitions.items(), .findings = &ws.findings, .enabled = selected, .thresholds = thresholds(ws.settings) }) catch |e| switch (e) {
         error.EmbedFailed => return ctx.fail(.io, embed.failure, embed.advice),
-        error.StoreUnavailable => return ctx.fail(.io, try storeProblem(ws), "Check that the cache directory is writable and not full, then run again."),
+        error.StoreUnavailable => return ctx.fail(.io, try storeProblem(ws, embedding_store), "Check that the cache directory is writable and not full, then run again."),
         else => return e,
     };
     if (embedding.judging) try embedding.summarise(ctx);
@@ -255,11 +255,16 @@ fn reportInference(state: *anyopaque, done: usize, total: usize) void {
     live.update("Asking the model", done, total);
 }
 
-/// Says why the answer store could not be used, in SQLite's words when it gave some.
-pub fn storeProblem(ws: *Workspace) ![]const u8 {
+pub const infer_store = "--infer could not use its answer store";
+pub const embedding_store = "--semantic could not use its vector store";
+
+/// Says why the store could not be used by `user`, such as "--infer could not use its answer
+/// store", in SQLite's words when it gave some.
+pub fn storeProblem(ws: *Workspace, user: []const u8) ![]const u8 {
+    if (user.len == 0) assert.panic("describing a store failure without saying what could not use it", .{});
     if (sqlite.failure_len > sqlite.failure.len) assert.panic("the store kept {d} bytes of failure message in room for {d}; the store must cut its message to fit its buffer", .{ sqlite.failure_len, sqlite.failure.len });
     const reason = sqlite.failure[0..sqlite.failure_len];
-    const text = try ws.text.format("--infer could not use its answer store{s}{s}.", .{ if (reason.len > 0) ": " else "", reason });
+    const text = try ws.text.format("{s}{s}{s}.", .{ user, if (reason.len > 0) ": " else "", reason });
     if (text.len == 0) assert.panic("describing a store failure produced no text; storeProblem() must write the store's message, so check its format call", .{});
     return text;
 }

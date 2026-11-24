@@ -99,6 +99,27 @@ test "zanity lsp asks the model when zanity.toml turns on [infer], as zanity che
     try expectOutput(try serve(arena, io, &.{ zanity, "lsp" }, &messages), &.{ "\"method\":\"window/showMessage\"", "API key" }, &.{"\"method\":\"textDocument/publishDiagnostics\""});
 }
 
+test "zanity lsp compares meanings when zanity.toml turns on [semantic], as zanity check does" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    const io = std.testing.io;
+    const zanity = try Io.Dir.cwd().realPathFileAlloc(io, paths.zanity, arena);
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(io, .{ .sub_path = "checks.py", .data = "def f(x):\n    \"\"\"Return x.\"\"\"\n    return x\n" });
+    try tmp.dir.writeFile(io, .{ .sub_path = "zanity.toml", .data = "[semantic]\nenabled = true\n" });
+    const work = try tmp.dir.realPathFileAlloc(io, ".", arena);
+    const messages = [_][]const u8{
+        try std.fmt.allocPrint(arena, "{{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{{\"rootUri\":\"file://{s}\",\"capabilities\":{{}}}}}}", .{work}),
+        "{\"jsonrpc\":\"2.0\",\"method\":\"initialized\",\"params\":{}}",
+        "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"shutdown\"}",
+        "{\"jsonrpc\":\"2.0\",\"method\":\"exit\"}",
+    };
+    // serve() gives the server no cache directory, so a check that embeds must say it has no vector store.
+    try expectOutput(try serve(arena, io, &.{ zanity, "lsp" }, &messages), &.{ "\"method\":\"window/showMessage\"", "--semantic could not use its vector store" }, &.{ "\"method\":\"textDocument/publishDiagnostics\"", "--infer" });
+}
+
 test "zanity lsp initializes with no workspace root, as editors send for files outside any project" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();

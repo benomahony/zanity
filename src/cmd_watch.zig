@@ -92,7 +92,7 @@ fn spawnedWatchCheck(ctx: *zclig.Context, ws: *Workspace, options: CheckOptions)
 /// cross-file rules remain correct; unchanged source analysis comes from the cache.
 pub fn watchCheck(ctx: *zclig.Context, ws: *Workspace, options: CheckOptions, asked_for_agent: bool) ![]const Row {
     const paths = options.paths;
-    if (options.infer or options.fix) return spawnedWatchCheck(ctx, ws, options);
+    if (options.infer or options.semantic or options.fix) return spawnedWatchCheck(ctx, ws, options);
     if (paths.len == 0) assert.panic("watching no paths; zclig supplies '.' when none are given", .{});
     if (paths.len > ws.args.len) assert.panic("watching {d} paths from a command line of {d} arguments; each path is an argument", .{ paths.len, ws.args.len });
     var watcher: watch.Watcher = undefined;
@@ -115,6 +115,7 @@ pub fn watchCheck(ctx: *zclig.Context, ws: *Workspace, options: CheckOptions, as
         if (terminal) try out.writer.writeAll(watch.clear_screen);
         const counts = checkAgain(ctx, &resident, options) catch |e| switch (e) {
             error.InferenceEnabled => return ctx.fail(.usage, try checks.text.format("{s} turned on [infer] while zanity check --watch was running without it.", .{resident.settings.dir}), "Restart zanity check --watch, so each check asks the model."),
+            error.EmbeddingEnabled => return ctx.fail(.usage, try checks.text.format("{s} turned on [semantic] while zanity check --watch was running without it.", .{resident.settings.dir}), "Restart zanity check --watch, so each check compares meanings."),
             else => return e,
         };
         if (triage.failsReview(options, counts, checks.review)) ctx.status = .failure;
@@ -154,11 +155,13 @@ pub fn checkAgain(ctx: *zclig.Context, resident: *Resident, options: CheckOption
     ctx.status = .success;
     ctx.failure = null;
     resident.settings = try loadSettings(ctx, checks, resident.settings_arena.allocator());
-    // A resident check never asks the model, so it must not stand in for one zanity.toml asks for.
-    if (resident.settings.infer and !options.infer) return error.InferenceEnabled;
-    checks.settings = &resident.settings;
-    rules.custom = resident.settings.questionRules();
-    var selected = if (options.rules) |list| try parseRules(ctx, checks, list) else resident.settings.selection(options.production);
+    // A resident check never asks the model or embeds, so it must not stand in for one zanity.toml asks for.
+    const settings = &resident.settings;
+    if (settings.infer and !options.infer) return error.InferenceEnabled;
+    if (settings.semantic.enabled and !options.semantic) return error.EmbeddingEnabled;
+    checks.settings = settings;
+    rules.custom = settings.questionRules();
+    var selected = if (options.rules) |list| try parseRules(ctx, checks, list) else settings.selection(options.production);
     if (options.rules != null and options.production) selected.includeTier(.production);
     resident.live = Live.initLive(console(ctx, ctx.runtime.err), checks.io, !ctx.quiet);
     checks.live = &resident.live;
