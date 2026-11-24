@@ -101,7 +101,6 @@ fn reportToAgent(ctx: *zclig.Context, ws: *Workspace, options: CheckOptions, cou
     return &.{};
 }
 
-/// Whether a coding agent is running zanity, by the variable it sets in its commands' environment.
 /// Whether this check is a rerun of `zanity check --watch`, which saving a file starts again.
 fn watching(ws: *const Workspace) bool {
     const environ = ws.environ orelse return false;
@@ -112,6 +111,7 @@ fn watching(ws: *const Workspace) bool {
     return std.mem.eql(u8, value, "1");
 }
 
+/// Whether a coding agent is running zanity, by the variable it sets in its commands' environment.
 fn agentRunning(ws: *const Workspace) bool {
     if (ws.chose_format) assert.panic("asked whether an agent runs zanity after the command line chose a format; speaksToAgent() checks chose_format first", .{});
     const environ = ws.environ orelse return false;
