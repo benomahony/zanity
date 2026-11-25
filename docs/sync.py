@@ -5,11 +5,15 @@ The getting started page is the README from its first paragraph to its rules; th
 rules section. Every rule in zanity.schema.json must appear on the rules page. The test checks
 page lists every rule marked `.tests` or asked of tests and fixtures, as rules.zig defines it.
 
-Usage: python3 docs/sync.py
+Usage: python3 docs/sync.py [--check]
+
+--check writes nothing and fails if any page differs from what its source would write, so a page
+edited by hand, or a source edited without rerunning this, fails `zig build test`.
 """
 
 import json
 import re
+import sys
 from pathlib import Path
 
 DOCS = Path(__file__).parent.resolve()
@@ -182,9 +186,17 @@ def main() -> None:
             body += undescribed("\n".join(body)) + catalogue_questions()
         written[name] = page((title, description, layout), body, order)
     written["test-checks.smd"] = page(("Test checks", "Every check zanity makes of tests, fixtures and test helpers.", "page.shtml"), checks_of_tests(), 3)
-    for name, text in written.items():
-        (CONTENT / name).write_text(text)
-        print(CONTENT / name)
+    pages = {CONTENT / name: text for name, text in written.items()}
+    if sys.argv[1:] == ["--check"]:
+        stale = [path for path, text in pages.items() if path.read_text() != text]
+        for path in stale:
+            source = "src/rules.zig" if path.name == "test-checks.smd" else "README.md"
+            print(f"docs/content/{path.name} differs from what {source} writes; edit {source}, not the page, then run: python3 docs/sync.py", file=sys.stderr)
+        sys.exit(1 if stale else 0)
+    assert not sys.argv[1:], f"unknown arguments {sys.argv[1:]}; pass nothing to write the pages or --check to compare them"
+    for path, text in pages.items():
+        path.write_text(text)
+        print(path)
 
 
 if __name__ == "__main__":

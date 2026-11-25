@@ -47,16 +47,23 @@ pub fn build(b: *std.Build) void {
     if (b.option([]const u8, "rules", "The rules zig build bench's zanity check runs, as --rules takes them; all by default")) |list| bench.addArg(b.fmt("--rules={s}", .{list}));
     bench.has_side_effects = true;
     b.step("bench", "Time zanity check and its peak memory, cold and warm, against the fastest this machine could parse the corpus").dependOn(&bench.step);
+    const repo_root = b.path(".");
 
     // `zig build test` is the fast loop: the code's own tests, with no zanity binary to build.
     const unit = b.addRunArtifact(b.addTest(.{ .root_module = module(b, "src/tests.zig", target, test_optimize) }));
-    unit.setCwd(b.path("."));
+    unit.setCwd(repo_root);
     unit.has_side_effects = true;
     // The same check CI runs first, so an unformatted file fails here before it is pushed.
     const fmt = b.addFmt(.{ .paths = &.{ b.path("build.zig"), b.path("build.zig.zon"), b.path("src"), b.path("languages") }, .check = true });
     const test_step = b.step("test", "Check formatting and run the unit tests");
     test_step.dependOn(&fmt.step);
     test_step.dependOn(&unit.step);
+    // The site's pages are written from README.md and src/rules.zig, so a page edited by hand
+    // fails here instead of in the Docs workflow, which rewrites it.
+    const docs = b.addSystemCommand(&.{ "python3", "docs/sync.py", "--check" });
+    docs.setCwd(repo_root);
+    docs.has_side_effects = true;
+    test_step.dependOn(&docs.step);
 
     // `zig build test-integration` runs the built zanity: the golden fixtures, the CLI, and
     // zanity checking its own source, which must pass every rule.
@@ -67,7 +74,7 @@ pub fn build(b: *std.Build) void {
     // Its runner prints each test's time and the slowest tests, so a slow CI run shows its cause.
     const integration = b.addRunArtifact(b.addTest(.{ .root_module = integration_module, .test_runner = .{ .path = b.path("src/test_runner.zig"), .mode = .simple } }));
     integration.step.dependOn(b.getInstallStep());
-    integration.setCwd(b.path("."));
+    integration.setCwd(repo_root);
     integration.has_side_effects = true;
     // Under a coding agent, check would speak to it; the tests expect the output anyone else gets.
     integration.removeEnvironmentVariable("CLAUDECODE");
